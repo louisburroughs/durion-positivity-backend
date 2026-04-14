@@ -1,25 +1,22 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.dto.CustomerDTO;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.service.CustomerService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.positivity.customer.internal.dto.CustomerDTO;
-import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.enums.PartyType;
-import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.service.CustomerService;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing Customer entities.
@@ -40,9 +37,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public List<CustomerDTO> getAllCustomers() {
         log.debug("Fetching all customers");
-        return commercialRepository.findAll().stream()
-                .map(this::toDTO)
-                .toList();
+        return commercialRepository.findAll().stream().map(this::toDTO).toList();
     }
 
     /**
@@ -55,9 +50,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     public Page<CustomerDTO> getAllCustomers(@NonNull Pageable pageable) {
         log.debug("Fetching all person customers with paging: {}", pageable);
         Page<CommercialParty> page = commercialRepository.findAll(pageable);
-        List<CustomerDTO> dtos = page.getContent().stream()
-                .map(this::toDTO)
-                .toList();
+        List<CustomerDTO> dtos = page.getContent().stream().map(this::toDTO).toList();
         return new PageImpl<>(dtos, pageable, page.getTotalElements());
     }
 
@@ -71,9 +64,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     public Page<CustomerDTO> getAllCommercialCustomers(@NonNull Pageable pageable) {
         log.debug("Fetching all commercial customers with paging: {}", pageable);
         Page<CommercialParty> page = commercialRepository.findAll(pageable);
-        List<CustomerDTO> dtos = page.getContent().stream()
-                .map(this::toDTO)
-                .toList();
+        List<CustomerDTO> dtos = page.getContent().stream().map(this::toDTO).toList();
         return new PageImpl<>(dtos, pageable, page.getTotalElements());
     }
 
@@ -85,9 +76,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public List<CustomerDTO> getAllCommercialCustomers() {
         log.debug("Fetching all commercial customers");
-        return commercialRepository.findAll().stream()
-                .map(this::toDTO)
-                .toList();
+        return commercialRepository.findAll().stream().map(this::toDTO).toList();
     }
 
     /**
@@ -100,8 +89,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
     public Optional<CustomerDTO> getCustomerById(@NonNull UUID id) {
         log.debug("Fetching customer with id: {}", id);
         // Try commercial repository
-        return commercialRepository.findById(id)
-                .map(this::toDTO);
+        return commercialRepository.findById(id).map(this::toDTO);
     }
 
     /**
@@ -122,7 +110,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
         }
 
         return null; // This service only handles commercial parties, return null or throw exception
-                     // for unsupported types
+        // for unsupported types
     }
 
     /**

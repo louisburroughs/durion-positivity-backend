@@ -3,9 +3,23 @@ package com.positivity.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.service.PersonService;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -16,22 +30,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
-import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.PersonParty;
-import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PartyRelationshipRepository;
-import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.PersonService;
 
 /**
  * Contract behavior integration tests for Party Management services.
@@ -51,334 +49,330 @@ import com.positivity.customer.service.PersonService;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private PersonService personService;
+    @Autowired
+    private PersonService personService;
 
-        @Autowired
-        private PersonPartyRepository personRepository;
+    @Autowired
+    private PersonPartyRepository personRepository;
 
-        @Autowired
-        private ContactPointRepository contactPointRepository;
+    @Autowired
+    private ContactPointRepository contactPointRepository;
 
-        @Autowired
-        private ContactRepository contactRepository;
+    @Autowired
+    private ContactRepository contactRepository;
 
-        @Autowired
-        private CommercialPartyRepository commercialPartyRepository;
+    @Autowired
+    private CommercialPartyRepository commercialPartyRepository;
 
-        @Autowired
-        private PartyRelationshipRepository partyRelationshipRepository;
+    @Autowired
+    private PartyRelationshipRepository partyRelationshipRepository;
 
-        @BeforeEach
-        void setUp() {
-                // Clean up before each test
-                partyRelationshipRepository.deleteAll();
-                contactRepository.deleteAll();
-                commercialPartyRepository.deleteAll();
-                contactPointRepository.deleteAll();
-                personRepository.deleteAll();
-        }
+    @BeforeEach
+    void setUp() {
+        // Clean up before each test
+        partyRelationshipRepository.deleteAll();
+        contactRepository.deleteAll();
+        commercialPartyRepository.deleteAll();
+        contactPointRepository.deleteAll();
+        personRepository.deleteAll();
+    }
 
-        // ==========================================================================
-        // Issue #111: Create Individual PersonParty Record - Acceptance Criteria Tests
-        // ==========================================================================
+    // ==========================================================================
+    // Issue #111: Create Individual PersonParty Record - Acceptance Criteria Tests
+    // ==========================================================================
 
-        /**
-         * AC1: Minimal create (name + preferred method) returns 201 and persists a
-         * PersonParty.
-         */
-        @Test
-        @Order(1)
-        void ac1_minimalCreate_persistsPerson() {
-                // Given: minimal valid request
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("John")
-                                .lastName("Doe")
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .build();
+    /**
+     * AC1: Minimal create (name + preferred method) returns 201 and persists a
+     * PersonParty.
+     */
+    @Test
+    @Order(1)
+    void ac1_minimalCreate_persistsPerson() {
+        // Given: minimal valid request
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .build();
 
-                // When: creating person
-                CreatePersonResponse response = personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        // When: creating person
+        CreatePersonResponse response =
+                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // Then: person is persisted
-                assertThat(response.getPersonId()).isNotNull();
-                assertThat(response.getFirstName()).isEqualTo("John");
-                assertThat(response.getLastName()).isEqualTo("Doe");
-                assertThat(response.getPreferredContactMethod()).isEqualTo(PreferredContactMethod.EMAIL);
+        // Then: person is persisted
+        assertThat(response.getPersonId()).isNotNull();
+        assertThat(response.getFirstName()).isEqualTo("John");
+        assertThat(response.getLastName()).isEqualTo("Doe");
+        assertThat(response.getPreferredContactMethod()).isEqualTo(PreferredContactMethod.EMAIL);
 
-                // Verify in database
-                PersonParty savedPerson = personRepository.findByPersonId(response.getPersonId()).orElse(null);
-                assertThat(savedPerson).isNotNull();
-                assertThat(savedPerson.getFirstName()).isEqualTo("John");
-                assertThat(savedPerson.getLastName()).isEqualTo("Doe");
-        }
+        // Verify in database
+        PersonParty savedPerson =
+                personRepository.findByPersonId(response.getPersonId()).orElse(null);
+        assertThat(savedPerson).isNotNull();
+        assertThat(savedPerson.getFirstName()).isEqualTo("John");
+        assertThat(savedPerson.getLastName()).isEqualTo("Doe");
+    }
 
-        /**
-         * AC2: Create with two emails and two phone numbers persists four
-         * ContactPoints.
-         */
-        @Test
-        @Order(2)
-        void ac2_createWithContactPoints_persistsAllContactPoints() {
-                // Given: request with multiple contact points
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("Jane")
-                                .lastName("Smith")
-                                .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
-                                .emails(List.of(
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("jane.primary@example.com")
-                                                                .isPrimary(true)
-                                                                .build(),
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("jane.secondary@example.com")
-                                                                .isPrimary(false)
-                                                                .build()))
-                                .phones(List.of(
-                                                CreatePersonRequest.PhoneInput.builder()
-                                                                .value("+1-555-123-4567")
-                                                                .type(ContactPointType.PHONE_MOBILE)
-                                                                .isPrimary(true)
-                                                                .build(),
-                                                CreatePersonRequest.PhoneInput.builder()
-                                                                .value("+1-555-987-6543")
-                                                                .type(ContactPointType.PHONE_WORK)
-                                                                .isPrimary(false)
-                                                                .build()))
-                                .build();
+    /**
+     * AC2: Create with two emails and two phone numbers persists four
+     * ContactPoints.
+     */
+    @Test
+    @Order(2)
+    void ac2_createWithContactPoints_persistsAllContactPoints() {
+        // Given: request with multiple contact points
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("Jane")
+                .lastName("Smith")
+                .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
+                .emails(List.of(
+                        CreatePersonRequest.EmailInput.builder()
+                                .value("jane.primary@example.com")
+                                .isPrimary(true)
+                                .build(),
+                        CreatePersonRequest.EmailInput.builder()
+                                .value("jane.secondary@example.com")
+                                .isPrimary(false)
+                                .build()))
+                .phones(List.of(
+                        CreatePersonRequest.PhoneInput.builder()
+                                .value("+1-555-123-4567")
+                                .type(ContactPointType.PHONE_MOBILE)
+                                .isPrimary(true)
+                                .build(),
+                        CreatePersonRequest.PhoneInput.builder()
+                                .value("+1-555-987-6543")
+                                .type(ContactPointType.PHONE_WORK)
+                                .isPrimary(false)
+                                .build()))
+                .build();
 
-                // When: creating person
-                CreatePersonResponse response = personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        // When: creating person
+        CreatePersonResponse response =
+                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // Then: 4 contact points persisted
-                assertThat(response.getContactPointsCreated()).isEqualTo(4);
+        // Then: 4 contact points persisted
+        assertThat(response.getContactPointsCreated()).isEqualTo(4);
 
-                // Verify in database
-                PersonParty personParty = personRepository.findByPersonId(response.getPersonId()).orElseThrow();
-                List<ContactPoint> contactPoints = contactPointRepository
-                                .findByPersonPartyId(personParty.getPersonPartyId());
-                assertThat(contactPoints).hasSize(4);
+        // Verify in database
+        PersonParty personParty =
+                personRepository.findByPersonId(response.getPersonId()).orElseThrow();
+        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(personParty.getPersonPartyId());
+        assertThat(contactPoints).hasSize(4);
 
-                // Verify email contact points
-                List<ContactPoint> emails = contactPoints.stream()
-                                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
-                                .toList();
-                assertThat(emails).hasSize(2);
-                assertThat(emails).anyMatch(e -> e.getValue().equals("jane.primary@example.com") && e.isPrimary());
-                assertThat(emails).anyMatch(e -> e.getValue().equals("jane.secondary@example.com") && !e.isPrimary());
+        // Verify email contact points
+        List<ContactPoint> emails = contactPoints.stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
+                .toList();
+        assertThat(emails).hasSize(2);
+        assertThat(emails).anyMatch(e -> e.getValue().equals("jane.primary@example.com") && e.isPrimary());
+        assertThat(emails).anyMatch(e -> e.getValue().equals("jane.secondary@example.com") && !e.isPrimary());
 
-                // Verify phone contact points
-                List<ContactPoint> phones = contactPoints.stream()
-                                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
-                                                || cp.getContactType() == ContactPointType.PHONE_WORK)
-                                .toList();
-                assertThat(phones).hasSize(2);
-        }
+        // Verify phone contact points
+        List<ContactPoint> phones = contactPoints.stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
+                        || cp.getContactType() == ContactPointType.PHONE_WORK)
+                .toList();
+        assertThat(phones).hasSize(2);
+    }
 
-        /**
-         * AC3: Missing lastName returns 400 and persists nothing.
-         */
-        @Test
-        @Order(3)
-        void ac3_missingLastName_returns400AndPersistsNothing() {
-                UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                // Given: request without lastName
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("John")
-                                .lastName(null) // Missing
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .build();
+    /**
+     * AC3: Missing lastName returns 400 and persists nothing.
+     */
+    @Test
+    @Order(3)
+    void ac3_missingLastName_returns400AndPersistsNothing() {
+        UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        // Given: request without lastName
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("John")
+                .lastName(null) // Missing
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .build();
 
-                // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request, requestId))
-                                .isInstanceOf(ResponseStatusException.class)
-                                .satisfies(ex -> {
-                                        ResponseStatusException rse = (ResponseStatusException) ex;
-                                        assertThat(rse.getStatusCode().value()).isEqualTo(400);
-                                });
+        // When/Then: expect validation error
+        assertThatThrownBy(() -> personService.createPerson(request, requestId))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode().value()).isEqualTo(400);
+                });
 
-                // Verify nothing persisted
-                assertThat(personRepository.count()).isZero();
-        }
+        // Verify nothing persisted
+        assertThat(personRepository.count()).isZero();
+    }
 
-        /**
-         * AC4: Invalid email format returns 400 and persists nothing.
-         */
-        @Test
-        @Order(4)
-        void ac4_invalidEmailFormat_returns400AndPersistsNothing() {
-                UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                // Given: request with invalid email
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("John")
-                                .lastName("Doe")
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .emails(List.of(
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("not-an-email") // Invalid
-                                                                .isPrimary(true)
-                                                                .build()))
-                                .build();
+    /**
+     * AC4: Invalid email format returns 400 and persists nothing.
+     */
+    @Test
+    @Order(4)
+    void ac4_invalidEmailFormat_returns400AndPersistsNothing() {
+        UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        // Given: request with invalid email
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .emails(List.of(CreatePersonRequest.EmailInput.builder()
+                        .value("not-an-email") // Invalid
+                        .isPrimary(true)
+                        .build()))
+                .build();
 
-                // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request, requestId))
-                                .isInstanceOf(ResponseStatusException.class)
-                                .satisfies(ex -> {
-                                        ResponseStatusException rse = (ResponseStatusException) ex;
-                                        assertThat(rse.getStatusCode().value()).isEqualTo(400);
-                                        assertThat(rse.getReason()).contains("Invalid email");
-                                });
+        // When/Then: expect validation error
+        assertThatThrownBy(() -> personService.createPerson(request, requestId))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode().value()).isEqualTo(400);
+                    assertThat(rse.getReason()).contains("Invalid email");
+                });
 
-                // Verify nothing persisted
-                assertThat(personRepository.count()).isZero();
-        }
+        // Verify nothing persisted
+        assertThat(personRepository.count()).isZero();
+    }
 
-        // ==========================================================================
-        // Additional Tests for Issue #111
-        // ==========================================================================
+    // ==========================================================================
+    // Additional Tests for Issue #111
+    // ==========================================================================
 
-        @Test
-        @Order(5)
-        void getPerson_existingPerson_returnsPersonWithContactPoints() {
-                // Given: an existing person with contact points
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("Test")
-                                .lastName("User")
-                                .preferredContactMethod(PreferredContactMethod.SMS)
-                                .emails(List.of(
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("test@example.com")
-                                                                .isPrimary(true)
-                                                                .build()))
-                                .build();
-                CreatePersonResponse created = personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    @Test
+    @Order(5)
+    void getPerson_existingPerson_returnsPersonWithContactPoints() {
+        // Given: an existing person with contact points
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("Test")
+                .lastName("User")
+                .preferredContactMethod(PreferredContactMethod.SMS)
+                .emails(List.of(CreatePersonRequest.EmailInput.builder()
+                        .value("test@example.com")
+                        .isPrimary(true)
+                        .build()))
+                .build();
+        CreatePersonResponse created =
+                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // When: getting person by ID
-                GetPersonResponse response = personService.getPerson(created.getPersonId());
+        // When: getting person by ID
+        GetPersonResponse response = personService.getPerson(created.getPersonId());
 
-                // Then: person with contact points returned
-                assertThat(response.getPersonId()).isEqualTo(created.getPersonId());
-                assertThat(response.getFirstName()).isEqualTo("Test");
-                assertThat(response.getLastName()).isEqualTo("User");
-                assertThat(response.getContactPoints()).hasSize(1);
-                assertThat(response.getContactPoints().get(0).getValue()).isEqualTo("test@example.com");
-        }
+        // Then: person with contact points returned
+        assertThat(response.getPersonId()).isEqualTo(created.getPersonId());
+        assertThat(response.getFirstName()).isEqualTo("Test");
+        assertThat(response.getLastName()).isEqualTo("User");
+        assertThat(response.getContactPoints()).hasSize(1);
+        assertThat(response.getContactPoints().get(0).getValue()).isEqualTo("test@example.com");
+    }
 
-        @Test
-        @Order(6)
-        void getPerson_nonExistentPerson_returns404() {
-                // Given: non-existent person ID
-                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    @Test
+    @Order(6)
+    void getPerson_nonExistentPerson_returns404() {
+        // Given: non-existent person ID
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                // When/Then: expect not found
-                assertThatThrownBy(() -> personService.getPerson(nonExistentId))
-                                .isInstanceOf(ResponseStatusException.class)
-                                .satisfies(ex -> {
-                                        ResponseStatusException rse = (ResponseStatusException) ex;
-                                        assertThat(rse.getStatusCode().value()).isEqualTo(404);
-                                });
-        }
+        // When/Then: expect not found
+        assertThatThrownBy(() -> personService.getPerson(nonExistentId))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode().value()).isEqualTo(404);
+                });
+    }
 
-        @Test
-        @Order(7)
-        void searchPersons_byName_returnsMatchingPersons() {
-                // Given: multiple persons
-                CreatePersonRequest request1 = CreatePersonRequest.builder()
-                                .firstName("Alice")
-                                .lastName("Johnson")
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .build();
-                CreatePersonRequest request2 = CreatePersonRequest.builder()
-                                .firstName("Bob")
-                                .lastName("Johnson")
-                                .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
-                                .build();
-                CreatePersonRequest request3 = CreatePersonRequest.builder()
-                                .firstName("Charlie")
-                                .lastName("Brown")
-                                .preferredContactMethod(PreferredContactMethod.SMS)
-                                .build();
-                personService.createPerson(request1, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                personService.createPerson(request2, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                personService.createPerson(request3, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    @Test
+    @Order(7)
+    void searchPersons_byName_returnsMatchingPersons() {
+        // Given: multiple persons
+        CreatePersonRequest request1 = CreatePersonRequest.builder()
+                .firstName("Alice")
+                .lastName("Johnson")
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .build();
+        CreatePersonRequest request2 = CreatePersonRequest.builder()
+                .firstName("Bob")
+                .lastName("Johnson")
+                .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
+                .build();
+        CreatePersonRequest request3 = CreatePersonRequest.builder()
+                .firstName("Charlie")
+                .lastName("Brown")
+                .preferredContactMethod(PreferredContactMethod.SMS)
+                .build();
+        personService.createPerson(request1, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        personService.createPerson(request2, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        personService.createPerson(request3, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // When: searching by last name
-                List<GetPersonResponse> results = personService.searchPersons("Johnson", null, null, 20, 0);
+        // When: searching by last name
+        List<GetPersonResponse> results = personService.searchPersons("Johnson", null, null, 20, 0);
 
-                // Then: only Johnsons returned
-                assertThat(results).hasSize(2);
-                assertThat(results).allMatch(p -> p.getLastName().equals("Johnson"));
-        }
+        // Then: only Johnsons returned
+        assertThat(results).hasSize(2);
+        assertThat(results).allMatch(p -> p.getLastName().equals("Johnson"));
+    }
 
-        @Test
-        @Order(8)
-        void emailNormalization_storesLowercase() {
-                // Given: request with mixed-case email
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("Test")
-                                .lastName("User")
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .emails(List.of(
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("Test.User@EXAMPLE.COM")
-                                                                .isPrimary(true)
-                                                                .build()))
-                                .build();
+    @Test
+    @Order(8)
+    void emailNormalization_storesLowercase() {
+        // Given: request with mixed-case email
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("Test")
+                .lastName("User")
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .emails(List.of(CreatePersonRequest.EmailInput.builder()
+                        .value("Test.User@EXAMPLE.COM")
+                        .isPrimary(true)
+                        .build()))
+                .build();
 
-                // When: creating person
-                CreatePersonResponse response = personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        // When: creating person
+        CreatePersonResponse response =
+                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // Then: email stored in lowercase
-                PersonParty personParty = personRepository.findByPersonId(response.getPersonId()).orElseThrow();
-                List<ContactPoint> contacts = contactPointRepository
-                                .findByPersonPartyId(personParty.getPersonPartyId());
-                assertThat(contacts).hasSize(1);
-                assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
-        }
+        // Then: email stored in lowercase
+        PersonParty personParty =
+                personRepository.findByPersonId(response.getPersonId()).orElseThrow();
+        List<ContactPoint> contacts = contactPointRepository.findByPersonPartyId(personParty.getPersonPartyId());
+        assertThat(contacts).hasSize(1);
+        assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
+    }
 
-        @Test
-        @Order(9)
-        void searchPersons_includesCommercialIdentitySummary() {
-                CreatePersonRequest request = CreatePersonRequest.builder()
-                                .firstName("Jane")
-                                .lastName("Smith")
-                                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                                .emails(List.of(
-                                                CreatePersonRequest.EmailInput.builder()
-                                                                .value("jane@example.com")
-                                                                .isPrimary(true)
-                                                                .build()))
-                                .build();
-                CreatePersonResponse created = personService.createPerson(
-                                request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    @Test
+    @Order(9)
+    void searchPersons_includesCommercialIdentitySummary() {
+        CreatePersonRequest request = CreatePersonRequest.builder()
+                .firstName("Jane")
+                .lastName("Smith")
+                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                .emails(List.of(CreatePersonRequest.EmailInput.builder()
+                        .value("jane@example.com")
+                        .isPrimary(true)
+                        .build()))
+                .build();
+        CreatePersonResponse created =
+                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                CommercialParty party = new CommercialParty();
-                party.setCustomerNumber("CUST-2001");
-                party.setPartyNumber("PARTY-2001");
-                party.setLegalName("Acme Logistics");
-                party.setDisplayName("Acme Logistics");
+        CommercialParty party = new CommercialParty();
+        party.setCustomerNumber("CUST-2001");
+        party.setPartyNumber("PARTY-2001");
+        party.setLegalName("Acme Logistics");
+        party.setDisplayName("Acme Logistics");
 
-                Contact contact = new Contact();
-                contact.setPersonId(created.getPersonId());
-                contact.setFirstName("Jane");
-                contact.setLastName("Smith");
-                contact.setEmail("jane@example.com");
-                contact.setActive(true);
-                contact.setCommercialParty(party);
-                party.getContacts().add(contact);
-                commercialPartyRepository.save(party);
+        Contact contact = new Contact();
+        contact.setPersonId(created.getPersonId());
+        contact.setFirstName("Jane");
+        contact.setLastName("Smith");
+        contact.setEmail("jane@example.com");
+        contact.setActive(true);
+        contact.setCommercialParty(party);
+        party.getContacts().add(contact);
+        commercialPartyRepository.save(party);
 
-                List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);
+        List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);
 
-                assertThat(results).hasSize(1);
-                GetPersonResponse result = results.getFirst();
-                assertThat(result.isIndividualCustomer()).isTrue();
-                assertThat(result.isCommercialContact()).isTrue();
-                assertThat(result.getCommercialAccountCount()).isEqualTo(1);
-        }
+        assertThat(results).hasSize(1);
+        GetPersonResponse result = results.getFirst();
+        assertThat(result.isIndividualCustomer()).isTrue();
+        assertThat(result.isCommercialContact()).isTrue();
+        assertThat(result.getCommercialAccountCount()).isEqualTo(1);
+    }
 }

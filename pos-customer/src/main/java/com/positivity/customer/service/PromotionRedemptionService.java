@@ -2,10 +2,9 @@ package com.positivity.customer.service;
 
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;
-import org.jspecify.annotations.NonNull;
-
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /** Manages promotion redemption recording for the CRM domain. Issue: #94 */
 public interface PromotionRedemptionService {

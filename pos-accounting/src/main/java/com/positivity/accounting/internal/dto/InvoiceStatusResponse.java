@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.enums.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,9 +32,13 @@ public class InvoiceStatusResponse {
      * totalPaid.
      */
     @Tolerate
-    public InvoiceStatusResponse(UUID invoiceId, PaymentStatus status,
-            BigDecimal totalPaid, BigDecimal invoiceTotal,
-            String latestTransactionReference, Instant lastUpdated) {
+    public InvoiceStatusResponse(
+            UUID invoiceId,
+            PaymentStatus status,
+            BigDecimal totalPaid,
+            BigDecimal invoiceTotal,
+            String latestTransactionReference,
+            Instant lastUpdated) {
         this.invoiceId = invoiceId;
         this.status = status;
         this.totalPaid = totalPaid;

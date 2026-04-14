@@ -1,20 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
@@ -24,9 +9,21 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.service.DefaultGLMappingService;
 import com.positivity.accounting.service.GLAccountService;
-
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of DefaultGLMappingService.
@@ -58,21 +55,20 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
         mapping.setCreditAccount(glAccountRepository.getReferenceById(request.getCreditAccountId()));
         DefaultGLMapping saved = repository.save(mapping);
 
-        log.info("Created default GL mapping {} for eventType '{}'",
-                saved.getMappingId(), saved.getEventType());
+        log.info("Created default GL mapping {} for eventType '{}'", saved.getMappingId(), saved.getEventType());
 
         return toResponse(saved);
     }
 
     @Override
     @NonNull
-    public DefaultGLMappingResponse updateDefaultMapping(@NonNull UUID mappingId,
-            @NonNull DefaultGLMappingRequest request) {
+    public DefaultGLMappingResponse updateDefaultMapping(
+            @NonNull UUID mappingId, @NonNull DefaultGLMappingRequest request) {
         log.debug("Updating default GL mapping {}", mappingId);
 
-        DefaultGLMapping existing = repository.findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Default GL mapping not found: " + mappingId));
+        DefaultGLMapping existing = repository
+                .findById(mappingId)
+                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
 
         // Validate GL accounts
         validateGLAccounts(request.getDebitAccountId(), request.getCreditAccountId());
@@ -92,9 +88,9 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     public void deactivateDefaultMapping(@NonNull UUID mappingId) {
         log.debug("Deactivating default GL mapping {}", mappingId);
 
-        DefaultGLMapping mapping = repository.findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Default GL mapping not found: " + mappingId));
+        DefaultGLMapping mapping = repository
+                .findById(mappingId)
+                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
 
         mapping.setActive(false);
         repository.save(mapping);
@@ -106,9 +102,9 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     @NonNull
     @Transactional(readOnly = true)
     public DefaultGLMappingResponse getDefaultMapping(@NonNull UUID mappingId) {
-        DefaultGLMapping mapping = repository.findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Default GL mapping not found: " + mappingId));
+        DefaultGLMapping mapping = repository
+                .findById(mappingId)
+                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
         return toResponse(mapping);
     }
 
@@ -134,9 +130,10 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     @Override
     @Nullable
     @Transactional(readOnly = true)
-    public DefaultGLMappingResponse findActiveDefaultForEvent(@NonNull String eventType,
-            @Nullable UUID organizationId) {
-        return repository.findActiveDefaultForEvent(eventType, organizationId)
+    public DefaultGLMappingResponse findActiveDefaultForEvent(
+            @NonNull String eventType, @Nullable UUID organizationId) {
+        return repository
+                .findActiveDefaultForEvent(eventType, organizationId)
                 .map(this::toResponse)
                 .orElse(null);
     }
@@ -177,8 +174,10 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
      * For single mapping lookups (getDefaultMapping, findActiveDefaultForEvent).
      */
     private DefaultGLMappingResponse toResponse(DefaultGLMapping mapping) {
-        GLAccount debitAccount = glAccountRepository.findById(mapping.getDebitAccountId()).orElse(null);
-        GLAccount creditAccount = glAccountRepository.findById(mapping.getCreditAccountId()).orElse(null);
+        GLAccount debitAccount =
+                glAccountRepository.findById(mapping.getDebitAccountId()).orElse(null);
+        GLAccount creditAccount =
+                glAccountRepository.findById(mapping.getCreditAccountId()).orElse(null);
         return DefaultGLMappingMapper.toResponse(mapping, debitAccount, creditAccount);
     }
 

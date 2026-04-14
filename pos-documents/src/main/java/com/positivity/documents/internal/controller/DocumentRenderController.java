@@ -32,8 +32,13 @@ public class DocumentRenderController {
     @PostMapping(value = "/render", produces = MediaType.APPLICATION_PDF_VALUE)
     @EmitEvent(id = "DOCUMENT_RENDER", apiVersion = "1")
     @PreAuthorize("hasAuthority('documents:render')")
-    @Operation(summary = "Render document to PDF", description = "Renders input content and template context into a PDF document.")
-    @ApiResponse(responseCode = "200", description = "PDF rendered successfully", content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary")))
+    @Operation(
+            summary = "Render document to PDF",
+            description = "Renders input content and template context into a PDF document.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "PDF rendered successfully",
+            content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary")))
     @ApiResponse(responseCode = "400", description = "Invalid render request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<byte[]> renderDocument(@RequestBody @Valid RenderRequest request) {

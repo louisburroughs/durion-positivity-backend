@@ -1,9 +1,23 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.service.PersonService;
+import com.positivity.events.EmitEvent;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,23 +29,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.service.PersonService;
-import com.positivity.events.EmitEvent;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST controller for managing Person resources in the CRM domain.
@@ -75,17 +72,21 @@ public class CrmPersonController {
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
     @Operation(summary = "Create a new person", description = "Creates an individual person record in the CRM system")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Person created successfully", content = @Content(schema = @Schema(implementation = CreatePersonResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request - validation failed"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+        @ApiResponse(
+                responseCode = "201",
+                description = "Person created successfully",
+                content = @Content(schema = @Schema(implementation = CreatePersonResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid request - validation failed"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<CreatePersonResponse> createPerson(
-            @Valid @RequestBody CreatePersonRequest request,
-            Principal principal) {
+            @Valid @RequestBody CreatePersonRequest request, Principal principal) {
 
-        log.info("Creating person: firstName={}, lastName={}, user={}",
-                request.getFirstName(), request.getLastName(),
+        log.info(
+                "Creating person: firstName={}, lastName={}, user={}",
+                request.getFirstName(),
+                request.getLastName(),
                 principal != null ? principal.getName() : "anonymous");
 
         UUID userId = extractUserId(principal);
@@ -103,12 +104,17 @@ public class CrmPersonController {
     @GetMapping("/{personId}")
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_GET", apiVersion = "1")
-    @Operation(summary = "Get a person by ID", description = "Retrieves an individual person record by their unique identifier")
+    @Operation(
+            summary = "Get a person by ID",
+            description = "Retrieves an individual person record by their unique identifier")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Person found", content = @Content(schema = @Schema(implementation = GetPersonResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Person not found"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+        @ApiResponse(
+                responseCode = "200",
+                description = "Person found",
+                content = @Content(schema = @Schema(implementation = GetPersonResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Person not found"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<GetPersonResponse> getPerson(
             @Parameter(description = "The person's unique identifier") @PathVariable UUID personId) {
@@ -134,9 +140,9 @@ public class CrmPersonController {
     @EmitEvent(id = "CRM_PERSON_SEARCH", apiVersion = "1")
     @Operation(summary = "Search persons", description = "Searches for persons matching the specified criteria")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Search results returned"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+        @ApiResponse(responseCode = "200", description = "Search results returned"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<List<GetPersonResponse>> searchPersons(
             @Parameter(description = "Search by name (first or last)") @RequestParam(required = false) String name,
@@ -145,8 +151,13 @@ public class CrmPersonController {
             @Parameter(description = "Maximum results to return") @RequestParam(defaultValue = "20") int limit,
             @Parameter(description = "Starting offset for pagination") @RequestParam(defaultValue = "0") int offset) {
 
-        log.debug("Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
-                name, email, phone, limit, offset);
+        log.debug(
+                "Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
+                name,
+                email,
+                phone,
+                limit,
+                offset);
 
         List<GetPersonResponse> results = personService.searchPersons(name, email, phone, limit, offset);
         return ResponseEntity.ok(results);

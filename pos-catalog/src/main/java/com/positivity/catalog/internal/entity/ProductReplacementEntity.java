@@ -54,5 +54,4 @@ public class ProductReplacementEntity {
     private Instant updatedAt;
 
     private Instant deletedAt;
-
 }

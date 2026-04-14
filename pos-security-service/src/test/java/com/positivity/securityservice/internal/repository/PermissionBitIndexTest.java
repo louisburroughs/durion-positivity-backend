@@ -1,11 +1,19 @@
 package com.positivity.securityservice.internal.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.positivity.securityservice.internal.config.PermissionBitIndexValidator;
-import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
+import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.service.PermissionRegistryService;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,15 +27,6 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Integration and unit tests for PERM-002: Permission.bitIndex JPA field
@@ -117,7 +116,7 @@ class PermissionBitIndexTest {
      * Issue: PERM-002
      */
     @Nested
-    @ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
+    @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
     @DisplayName("PermissionBitIndexValidator")
     class ValidatorTests {
 
@@ -133,9 +132,7 @@ class PermissionBitIndexTest {
             PermissionBitIndexValidator validator = new PermissionBitIndexValidator(mockPermissionRepository);
             validator.run(mock(ApplicationArguments.class));
 
-            assertThat(output.toString())
-                    .contains("WARN")
-                    .contains("accounting:je:view");
+            assertThat(output.toString()).contains("WARN").contains("accounting:je:view");
         }
 
         @Test
@@ -155,8 +152,7 @@ class PermissionBitIndexTest {
         void permissionBitIndexValidatorLogsWarnForUnknownPermission(CapturedOutput output) {
             Permission unknown = buildPermission("custom:unknown:action", null);
             when(mockPermissionRepository.findAll()).thenReturn(List.of(unknown));
-            new PermissionBitIndexValidator(mockPermissionRepository)
-                    .run(mock(ApplicationArguments.class));
+            new PermissionBitIndexValidator(mockPermissionRepository).run(mock(ApplicationArguments.class));
             assertThat(output.toString())
                     .contains("WARN")
                     .contains("custom:unknown:action")
@@ -199,14 +195,15 @@ class PermissionBitIndexTest {
         @Test
         @DisplayName("known permissions get correct bitIndex on registration")
         void registeredPermissionGetsCorrectBitIndex() {
-            PermissionRegistrationRequest.PermissionDefinition def1 = new PermissionRegistrationRequest.PermissionDefinition(
-                    "accounting:je:view", "View journal entries");
-            PermissionRegistrationRequest.PermissionDefinition def2 = new PermissionRegistrationRequest.PermissionDefinition(
-                    "accounting:je:create", "Create journal entries");
+            PermissionRegistrationRequest.PermissionDefinition def1 =
+                    new PermissionRegistrationRequest.PermissionDefinition(
+                            "accounting:je:view", "View journal entries");
+            PermissionRegistrationRequest.PermissionDefinition def2 =
+                    new PermissionRegistrationRequest.PermissionDefinition(
+                            "accounting:je:create", "Create journal entries");
 
-            PermissionRegistrationRequest request = new PermissionRegistrationRequest(
-                    "accounting", "pos-accounting",
-                    List.of(def1, def2), "1.0");
+            PermissionRegistrationRequest request =
+                    new PermissionRegistrationRequest("accounting", "pos-accounting", List.of(def1, def2), "1.0");
             permissionRegistryService.registerPermissions(request);
 
             Optional<Permission> viewPerm = permissionRepository.findByName("accounting:je:view");
@@ -222,12 +219,12 @@ class PermissionBitIndexTest {
         @DisplayName("all catalog permissions get correct bitIndex when registered via service")
         void allCatalogPermissionsGetCorrectBitIndexWhenRegistered() {
             List<PermissionRegistrationRequest.PermissionDefinition> defs = Arrays.stream(PermissionCode.values())
-                    .map(pc -> new PermissionRegistrationRequest.PermissionDefinition(pc.code(),
-                            "Catalog: " + pc.name()))
+                    .map(pc ->
+                            new PermissionRegistrationRequest.PermissionDefinition(pc.code(), "Catalog: " + pc.name()))
                     .toList();
 
-            PermissionRegistrationRequest request = new PermissionRegistrationRequest(
-                    "catalog", "pos-test", defs, "1.0");
+            PermissionRegistrationRequest request =
+                    new PermissionRegistrationRequest("catalog", "pos-test", defs, "1.0");
             PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
 
             assertThat(response.getRegisteredPermissions())
@@ -248,12 +245,12 @@ class PermissionBitIndexTest {
         @Test
         @DisplayName("unknown permission name gets null bitIndex on registration")
         void registeredUnknownPermissionHasNullBitIndex() {
-            PermissionRegistrationRequest.PermissionDefinition def = new PermissionRegistrationRequest.PermissionDefinition(
-                    "custom:resource:action", "Unknown permission");
+            PermissionRegistrationRequest.PermissionDefinition def =
+                    new PermissionRegistrationRequest.PermissionDefinition(
+                            "custom:resource:action", "Unknown permission");
 
-            PermissionRegistrationRequest request = new PermissionRegistrationRequest(
-                    "custom", "pos-custom",
-                    List.of(def), "1.0");
+            PermissionRegistrationRequest request =
+                    new PermissionRegistrationRequest("custom", "pos-custom", List.of(def), "1.0");
             permissionRegistryService.registerPermissions(request);
 
             Optional<Permission> perm = permissionRepository.findByName("custom:resource:action");

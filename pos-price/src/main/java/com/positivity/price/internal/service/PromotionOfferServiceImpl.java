@@ -1,16 +1,5 @@
 package com.positivity.price.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
 import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
@@ -28,8 +17,16 @@ import com.positivity.price.service.EligibilityDecision;
 import com.positivity.price.service.EligibilityEvaluationService;
 import com.positivity.price.service.PromotionOfferService;
 import com.positivity.security.common.SecurityContextHelper;
-
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of promotion offer lifecycle service.
@@ -85,7 +82,8 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
     @NonNull
     @Transactional(readOnly = true)
     public PromotionOffer getOfferById(@NonNull UUID promotionOfferId) {
-        return promotionOfferRepository.findById(promotionOfferId)
+        return promotionOfferRepository
+                .findById(promotionOfferId)
                 .orElseThrow(() -> new PromotionOfferNotFoundException(promotionOfferId));
     }
 
@@ -93,7 +91,8 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
     @NonNull
     @Transactional(readOnly = true)
     public PromotionOffer getOfferByCode(@NonNull String promoCode) {
-        return promotionOfferRepository.findByPromoCode(promoCode)
+        return promotionOfferRepository
+                .findByPromoCode(promoCode)
                 .orElseThrow(() -> new PromotionOfferNotFoundException(promoCode));
     }
 
@@ -139,7 +138,8 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         String promoCode = request.getPromotionCode();
         var ctx = request.getEstimateContext();
 
-        PromotionOffer offer = promotionOfferRepository.findByPromoCode(promoCode)
+        PromotionOffer offer = promotionOfferRepository
+                .findByPromoCode(promoCode)
                 .orElseThrow(() -> new PromotionCodeNotFoundException(promoCode));
 
         if (offer.getStatus() != PromotionStatus.ACTIVE) {
@@ -148,14 +148,11 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
 
         LocalDate today = LocalDate.now(clock);
         if (today.isBefore(offer.getStartDate()) || today.isAfter(offer.getEndDate())) {
-            throw new PromotionNotApplicableException(
-                    "Promotion '" + promoCode + "' is outside its valid date range");
+            throw new PromotionNotApplicableException("Promotion '" + promoCode + "' is outside its valid date range");
         }
 
         EligibilityDecision decision = eligibilityEvaluationService.evaluateEligibility(
-                offer.getPromotionOfferId(),
-                ctx.getCustomerId(),
-                ctx.getVehicleId());
+                offer.getPromotionOfferId(), ctx.getCustomerId(), ctx.getVehicleId());
         if (!decision.isEligible()) {
             throw new PromotionNotApplicableException(
                     "Promotion '" + promoCode + "' is not applicable: " + decision.reasonCode());
@@ -164,17 +161,18 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         // Usage is consumed at apply-time to enforce limits for estimate-time
         // application attempts.
         if (promotionOfferRepository.incrementUsageCountIfUnderLimit(offer.getPromotionOfferId()) == 0) {
-            throw new PromotionNotApplicableException(
-                    "Promotion '" + promoCode + "' has reached its usage limit");
+            throw new PromotionNotApplicableException("Promotion '" + promoCode + "' has reached its usage limit");
         }
 
         BigDecimal subtotal = ctx.getSubtotal();
-        BigDecimal discountAmount = switch (offer.getDiscountType()) {
-            case PERCENT_LABOR, PERCENT_PARTS -> subtotal.multiply(offer.getDiscountValue())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                    .negate();
-            case FIXED_INVOICE -> offer.getDiscountValue().negate();
-        };
+        BigDecimal discountAmount =
+                switch (offer.getDiscountType()) {
+                    case PERCENT_LABOR, PERCENT_PARTS ->
+                        subtotal.multiply(offer.getDiscountValue())
+                                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                                .negate();
+                    case FIXED_INVOICE -> offer.getDiscountValue().negate();
+                };
 
         PricingAdjustment adjustment = PricingAdjustment.builder()
                 .type("PROMOTION")
@@ -192,8 +190,13 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
                 .build();
 
         String userId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        log.info("Promotion applied: estimateId={}, promotionId={}, promotionCode={}, userId={}, discountAmount={}",
-                ctx.getEstimateId(), offer.getPromotionOfferId(), promoCode, userId, discountAmount);
+        log.info(
+                "Promotion applied: estimateId={}, promotionId={}, promotionCode={}, userId={}, discountAmount={}",
+                ctx.getEstimateId(),
+                offer.getPromotionOfferId(),
+                promoCode,
+                userId,
+                discountAmount);
 
         return response;
     }

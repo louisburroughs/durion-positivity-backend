@@ -1,6 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,9 +27,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "principal_roles", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "principal_id", "role_id" })
-})
+@Table(
+        name = "principal_roles",
+        uniqueConstraints = {@UniqueConstraint(columnNames = {"principal_id", "role_id"})})
 public class PrincipalRole {
 
     @Id

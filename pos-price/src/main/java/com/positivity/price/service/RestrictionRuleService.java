@@ -1,11 +1,10 @@
 package com.positivity.price.service;
 
+import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
+import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-
-import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
-import com.positivity.price.internal.dto.RestrictionRuleResponse;
 
 /**
  * Manages the lifecycle of RestrictionRule entities.

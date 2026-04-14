@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Accounting Event ingestion and processing status.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide</a>

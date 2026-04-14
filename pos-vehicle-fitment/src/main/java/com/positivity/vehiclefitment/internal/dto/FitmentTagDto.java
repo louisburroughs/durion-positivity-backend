@@ -22,7 +22,10 @@ public class FitmentTagDto {
     @NotNull(message = "tagType is required")
     private TagType tagType;
 
-    @Schema(description = "Tag value for the selected category", requiredMode = Schema.RequiredMode.REQUIRED, example = "Toyota")
+    @Schema(
+            description = "Tag value for the selected category",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "Toyota")
     @NotBlank(message = "tagValue is required")
     @Size(max = 120, message = "tagValue must not exceed 120 characters")
     private String tagValue;

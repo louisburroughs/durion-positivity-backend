@@ -15,8 +15,6 @@ public class TaxClientConfig {
     public RestClient taxServiceRestClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.tax.base-url:http://pos-tax:8091}") String taxServiceBaseUrl) {
-        return restClientBuilder
-                .baseUrl(taxServiceBaseUrl)
-                .build();
+        return restClientBuilder.baseUrl(taxServiceBaseUrl).build();
     }
 }

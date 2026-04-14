@@ -46,7 +46,8 @@ public class StorageLocationController {
     @GetMapping
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_LIST", apiVersion = "1")
-    public Page<StorageLocationResponse> list(@PathVariable UUID siteId,
+    public Page<StorageLocationResponse> list(
+            @PathVariable UUID siteId,
             @RequestParam(required = false) StorageLocationType type,
             @RequestParam(required = false) StorageLocationStatus status,
             Pageable pageable) {
@@ -63,7 +64,8 @@ public class StorageLocationController {
     @PatchMapping("/{storageLocationId}")
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_UPDATE", apiVersion = "1")
-    public StorageLocationResponse patch(@PathVariable UUID siteId,
+    public StorageLocationResponse patch(
+            @PathVariable UUID siteId,
             @PathVariable UUID storageLocationId,
             @RequestBody StorageLocationPatchRequest patch) {
         return storageLocationService.patchStorageLocation(siteId, storageLocationId, patch);

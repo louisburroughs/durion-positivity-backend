@@ -1,13 +1,12 @@
 package com.positivity.inventory.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.service.InventoryLeadTimeService;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -20,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     private final Clock clock;
-
 
     private final DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
@@ -49,9 +47,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
                 "INVENTORY",
                 "HIGH");
         LeadTimeCandidate manufacturerCandidate = toCandidate(
-                normalizedAvailabilityRepository.findLeadTimeAggregateByProductId(productId),
-                "SUPPLY_CHAIN",
-                "MEDIUM");
+                normalizedAvailabilityRepository.findLeadTimeAggregateByProductId(productId), "SUPPLY_CHAIN", "MEDIUM");
 
         LeadTimeCandidate selected = distributorCandidate != null ? distributorCandidate : manufacturerCandidate;
         if (selected == null) {
@@ -71,9 +67,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     }
 
     private LeadTimeCandidate toCandidate(
-            DistributorNormalizedInventoryRepository.LeadTimeAggregate aggregate,
-            String source,
-            String confidence) {
+            DistributorNormalizedInventoryRepository.LeadTimeAggregate aggregate, String source, String confidence) {
         if (aggregate == null) {
             return null;
         }
@@ -81,9 +75,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     }
 
     private LeadTimeCandidate toCandidate(
-            NormalizedAvailabilityRepository.LeadTimeAggregate aggregate,
-            String source,
-            String confidence) {
+            NormalizedAvailabilityRepository.LeadTimeAggregate aggregate, String source, String confidence) {
         if (aggregate == null) {
             return null;
         }
@@ -91,11 +83,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     }
 
     private LeadTimeCandidate toCandidate(
-            Integer minDays,
-            Integer maxDays,
-            Instant asOf,
-            String source,
-            String confidence) {
+            Integer minDays, Integer maxDays, Instant asOf, String source, String confidence) {
         if (minDays == null && maxDays == null) {
             return null;
         }
@@ -109,11 +97,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
         }
 
         return new LeadTimeCandidate(
-                resolvedMin,
-                resolvedMax,
-                asOf != null ? asOf : Instant.now(clock),
-                source,
-                confidence);
+                resolvedMin, resolvedMax, asOf != null ? asOf : Instant.now(clock), source, confidence);
     }
 
     private String formatDisplayText(Integer minDays, Integer maxDays) {
@@ -131,10 +115,5 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     }
 
     private record LeadTimeCandidate(
-            Integer minDays,
-            Integer maxDays,
-            Instant asOf,
-            String source,
-            String confidence) {
-    }
+            Integer minDays, Integer maxDays, Instant asOf, String source, String confidence) {}
 }

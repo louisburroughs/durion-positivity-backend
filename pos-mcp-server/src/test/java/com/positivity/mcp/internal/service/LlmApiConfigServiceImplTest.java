@@ -10,14 +10,12 @@ import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,8 +57,7 @@ class LlmApiConfigServiceImplTest {
     }
 
     private static LlmApiConfigRequest buildRequest() {
-        return new LlmApiConfigRequest("openai-gpt4", "gpt-4",
-                "https://api.openai.com", "sk-test", Map.of());
+        return new LlmApiConfigRequest("openai-gpt4", "gpt-4", "https://api.openai.com", "sk-test", Map.of());
     }
 
     // ─── list() ─────────────────────────────────────────────────────────────
@@ -165,8 +162,8 @@ class LlmApiConfigServiceImplTest {
     void update_whenFoundAndNewApiIdNotConflicting_updatesAndSaves() {
         LlmApiConfig entity = buildConfig(EXISTING_ID);
         // entity has apiId "openai-gpt4"; request changes to "openai-gpt4-turbo"
-        LlmApiConfigRequest request = new LlmApiConfigRequest("openai-gpt4-turbo", "gpt-4-turbo",
-                "https://api.openai.com", "sk-test", Map.of());
+        LlmApiConfigRequest request = new LlmApiConfigRequest(
+                "openai-gpt4-turbo", "gpt-4-turbo", "https://api.openai.com", "sk-test", Map.of());
         LlmApiConfig saved = buildConfig(EXISTING_ID);
         saved.setApiId("openai-gpt4-turbo");
         when(repository.findById(EXISTING_ID)).thenReturn(Optional.of(entity));
@@ -194,8 +191,8 @@ class LlmApiConfigServiceImplTest {
     void update_whenNewApiIdConflictsWithExisting_throwsIllegalArgumentException() {
         LlmApiConfig entity = buildConfig(EXISTING_ID); // apiId = "openai-gpt4"
         // request attempts to change apiId to "azure-gpt4" which already exists
-        LlmApiConfigRequest request = new LlmApiConfigRequest("azure-gpt4", "gpt-4",
-                "https://api.azure.com", "sk-azure", Map.of());
+        LlmApiConfigRequest request =
+                new LlmApiConfigRequest("azure-gpt4", "gpt-4", "https://api.azure.com", "sk-azure", Map.of());
         when(repository.findById(EXISTING_ID)).thenReturn(Optional.of(entity));
         when(repository.existsByApiId("azure-gpt4")).thenReturn(true);
 

@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * ArchUnit architecture validation tests for all POS modules.
- * 
+ *
  * These tests verify that:
  * 1. Only service layer packages are exposed as public APIs
  * 2. Internal packages are properly encapsulated
@@ -40,18 +40,19 @@ class ArchitectureTests {
 
     private static JavaClasses allClasses;
     private static final String DTO_SUFFIX_MAX_PROPERTY = "archunit.dtoSuffix.max";
-    private static final DescribedPredicate<JavaCall<?>> NO_ARG_NOW_CALLS = new DescribedPredicate<>(
-            "call no-arg Instant/LocalDateTime now methods") {
-        @Override
-        public boolean test(JavaCall<?> input) {
-            if (!"now".equals(input.getName())) {
-                return false;
-            }
-            boolean supportedOwner = input.getTargetOwner().isEquivalentTo(Instant.class)
-                    || input.getTargetOwner().isEquivalentTo(LocalDateTime.class);
-            return supportedOwner && input.getTarget().getRawParameterTypes().isEmpty();
-        }
-    };
+    private static final DescribedPredicate<JavaCall<?>> NO_ARG_NOW_CALLS =
+            new DescribedPredicate<>("call no-arg Instant/LocalDateTime now methods") {
+                @Override
+                public boolean test(JavaCall<?> input) {
+                    if (!"now".equals(input.getName())) {
+                        return false;
+                    }
+                    boolean supportedOwner = input.getTargetOwner().isEquivalentTo(Instant.class)
+                            || input.getTargetOwner().isEquivalentTo(LocalDateTime.class);
+                    return supportedOwner
+                            && input.getTarget().getRawParameterTypes().isEmpty();
+                }
+            };
 
     @BeforeAll
     static void setup() {
@@ -64,8 +65,10 @@ class ArchitectureTests {
     @Test
     void internalPackagesShouldNotBeAccessedFromOtherModules() {
         ArchRule rule = classes()
-                .that().resideInAPackage("com.positivity..")
-                .and().resideOutsideOfPackages("..internal..")
+                .that()
+                .resideInAPackage("com.positivity..")
+                .and()
+                .resideOutsideOfPackages("..internal..")
                 .should(new ArchCondition<>("not depend on internal packages of other modules") {
                     @Override
                     public void check(JavaClass originClass, ConditionEvents events) {
@@ -89,9 +92,7 @@ class ArchitectureTests {
                                 continue;
                             }
 
-                            events.add(SimpleConditionEvent.violated(
-                                    dependency,
-                                    dependency.getDescription()));
+                            events.add(SimpleConditionEvent.violated(dependency, dependency.getDescription()));
                         }
                     }
                 })
@@ -104,8 +105,10 @@ class ArchitectureTests {
     @Test
     void controllersShouldNotDirectlyAccessRepositories() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..internal.controller..")
-                .should().dependOnClassesThat()
+                .that()
+                .resideInAPackage("..internal.controller..")
+                .should()
+                .dependOnClassesThat()
                 .resideInAPackage("..internal.repository..")
                 .because("controllers must go through service layer - no direct repository access");
 
@@ -116,8 +119,10 @@ class ArchitectureTests {
     @Test
     void controllersShouldNotDirectlyAccessEntities() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..internal.controller..")
-                .should().dependOnClassesThat()
+                .that()
+                .resideInAPackage("..internal.controller..")
+                .should()
+                .dependOnClassesThat()
                 .resideInAPackage("..internal.entity..")
                 .because("controllers should work with DTOs - no direct entity access");
 
@@ -128,13 +133,11 @@ class ArchitectureTests {
     @Test
     void repositoriesShouldOnlyBeAccessedFromServiceLayer() {
         ArchRule rule = noClasses()
-                .that().resideOutsideOfPackages(
-                        "..service..",
-                        "..dao..",
-                        "..internal.dao..",
-                        "..internal.repository..",
-                        "..internal.config..")
-                .should().dependOnClassesThat()
+                .that()
+                .resideOutsideOfPackages(
+                        "..service..", "..dao..", "..internal.dao..", "..internal.repository..", "..internal.config..")
+                .should()
+                .dependOnClassesThat()
                 .resideInAPackage("..internal.repository..")
                 .because("repositories should only be accessed from service/dao layers");
 
@@ -145,8 +148,10 @@ class ArchitectureTests {
     @Test
     void entitiesShouldNotDependOnServices() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..internal.entity..")
-                .should().dependOnClassesThat()
+                .that()
+                .resideInAPackage("..internal.entity..")
+                .should()
+                .dependOnClassesThat()
                 .resideInAPackage("..service..")
                 .because("entities should be independent of business logic - no service dependencies");
 
@@ -157,10 +162,14 @@ class ArchitectureTests {
     @Test
     void onlyServicePackagesShouldBePublic() {
         ArchRule rule = classes()
-                .that().resideInAPackage("..internal..")
-                .and().arePublic()
-                .and().resideOutsideOfPackages("..internal.service..")
-                .should().haveSimpleNameNotEndingWith("Service")
+                .that()
+                .resideInAPackage("..internal..")
+                .and()
+                .arePublic()
+                .and()
+                .resideOutsideOfPackages("..internal.service..")
+                .should()
+                .haveSimpleNameNotEndingWith("Service")
                 .because(
                         "internal service implementations are allowed in ..internal.service.., while other internal public classes should avoid exposing service suffixes");
 
@@ -173,8 +182,10 @@ class ArchitectureTests {
     @Test
     void servicesShouldNotDependOnControllers() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..service..")
-                .should().dependOnClassesThat()
+                .that()
+                .resideInAPackage("..service..")
+                .should()
+                .dependOnClassesThat()
                 .resideInAPackage("..internal.controller..")
                 .because("services should not depend on controllers - inverted dependency");
 
@@ -185,7 +196,8 @@ class ArchitectureTests {
     @Test
     void dtosInInternalPackageShouldOnlyBeUsedWithinModule() {
         ArchRule rule = classes()
-                .that().resideInAPackage("com.positivity..")
+                .that()
+                .resideInAPackage("com.positivity..")
                 .should(new ArchCondition<>("not depend on internal DTOs of other modules") {
                     @Override
                     public void check(JavaClass originClass, ConditionEvents events) {
@@ -209,9 +221,7 @@ class ArchitectureTests {
                                 continue;
                             }
 
-                            events.add(SimpleConditionEvent.violated(
-                                    dependency,
-                                    dependency.getDescription()));
+                            events.add(SimpleConditionEvent.violated(dependency, dependency.getDescription()));
                         }
                     }
                 })
@@ -223,9 +233,12 @@ class ArchitectureTests {
     @Test
     void springBootApplicationClassesShouldBeInRootPackage() {
         ArchRule rule = classes()
-                .that().areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
-                .should().resideInAPackage("com.positivity.(*)")
-                .andShould().resideOutsideOfPackages("..internal..", "..service..")
+                .that()
+                .areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
+                .should()
+                .resideInAPackage("com.positivity.(*)")
+                .andShould()
+                .resideOutsideOfPackages("..internal..", "..service..")
                 .because("@SpringBootApplication classes must be at root package for proper component scanning");
 
         rule.check(allClasses);
@@ -234,7 +247,8 @@ class ArchitectureTests {
     @Test
     void productionCodeShouldNotUseNoArgNowCalls() {
         ArchRule rule = noClasses()
-                .should().callMethodWhere(NO_ARG_NOW_CALLS)
+                .should()
+                .callMethodWhere(NO_ARG_NOW_CALLS)
                 .because("time access must use explicit Clock injection or explicit Clock argument");
 
         rule.check(allClasses);

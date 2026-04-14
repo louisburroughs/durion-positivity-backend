@@ -1,7 +1,14 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
+import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
+import com.positivity.accounting.internal.dto.PostingCategoryResponse;
+import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
+import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import com.positivity.accounting.service.PostingCategoryService;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,15 +20,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
-import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
-import com.positivity.accounting.internal.dto.PostingCategoryResponse;
-import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
-import com.positivity.accounting.internal.entity.PostingCategory;
-import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.accounting.internal.repository.PostingCategoryRepository;
-import com.positivity.accounting.service.PostingCategoryService;
 
 /**
  * Service for Posting Category management.
@@ -62,7 +60,8 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
 
         // Validate uniqueness
         if (postingCategoryRepository.existsByCategoryName(normalizedCategoryName)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
                     "Posting category with name '" + normalizedCategoryName + "' already exists");
         }
 
@@ -75,8 +74,10 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
 
         PostingCategory saved = postingCategoryRepository.save(category);
         if (log.isInfoEnabled()) {
-            log.info("Created posting category: {} with ID(mask): {}",
-                    maskText(saved.getCategoryName()), maskUuid(saved.getPostingCategoryId()));
+            log.info(
+                    "Created posting category: {} with ID(mask): {}",
+                    maskText(saved.getCategoryName()),
+                    maskUuid(saved.getPostingCategoryId()));
         }
 
         return toResponse(saved);
@@ -96,9 +97,10 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
             log.info("Retrieving posting category(mask): {}", maskUuid(postingCategoryId));
         }
 
-        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
+        PostingCategory category = postingCategoryRepository
+                .findById(postingCategoryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         return toResponse(category);
     }
@@ -115,22 +117,22 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     @Override
     @Transactional
     public PostingCategoryResponse updatePostingCategory(
-            @NonNull UUID postingCategoryId,
-            @NonNull PostingCategoryUpdateRequest request) {
+            @NonNull UUID postingCategoryId, @NonNull PostingCategoryUpdateRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Updating posting category(mask): {}", maskUuid(postingCategoryId));
         }
 
-        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
+        PostingCategory category = postingCategoryRepository
+                .findById(postingCategoryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         // Validate uniqueness if name is changing
         String trimmedName = request.getCategoryName().trim();
-        if (!category.getCategoryName().equals(trimmedName) &&
-                postingCategoryRepository.existsByCategoryName(trimmedName)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Posting category with name '" + trimmedName + "' already exists");
+        if (!category.getCategoryName().equals(trimmedName)
+                && postingCategoryRepository.existsByCategoryName(trimmedName)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Posting category with name '" + trimmedName + "' already exists");
         }
 
         category.setCategoryName(trimmedName);
@@ -157,13 +159,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     @Override
     @Transactional(readOnly = true)
     public PostingCategoryListResponse listPostingCategories(
-            int page,
-            int size,
-            @NonNull String sort,
-            Boolean isActive) {
+            int page, int size, @NonNull String sort, Boolean isActive) {
         if (log.isInfoEnabled()) {
-            log.info("Listing posting categories: page={}, size={}, isActive={}",
-                    page, size, isActive);
+            log.info("Listing posting categories: page={}, size={}, isActive={}", page, size, isActive);
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
@@ -171,16 +169,14 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
 
         if (isActive != null) {
             categoryPage = postingCategoryRepository.findAll(
-                    (root, query, cb) -> cb.equal(root.get("isActive"), isActive),
-                    pageable);
+                    (root, query, cb) -> cb.equal(root.get("isActive"), isActive), pageable);
         } else {
             categoryPage = postingCategoryRepository.findAll(pageable);
         }
 
         PostingCategoryListResponse response = new PostingCategoryListResponse();
-        response.setResults(categoryPage.getContent().stream()
-                .map(this::toResponse)
-                .toList());
+        response.setResults(
+                categoryPage.getContent().stream().map(this::toResponse).toList());
         response.setTotalCount(categoryPage.getTotalElements());
         response.setPageNumber(page);
         response.setPageSize(size);
@@ -205,16 +201,18 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
             log.info("Deactivating posting category(mask): {}", maskUuid(postingCategoryId));
         }
 
-        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
+        PostingCategory category = postingCategoryRepository
+                .findById(postingCategoryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         // Check for active mappings
         long activeMappingCount = glMappingRepository.countByPostingCategoryIdAndDeactivatedAtIsNull(postingCategoryId);
         if (activeMappingCount > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Posting category '" + category.getCategoryName() +
-                            "' has " + activeMappingCount + " active GL mappings and cannot be deactivated");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Posting category '" + category.getCategoryName() + "' has " + activeMappingCount
+                            + " active GL mappings and cannot be deactivated");
         }
 
         category.setIsActive(false);

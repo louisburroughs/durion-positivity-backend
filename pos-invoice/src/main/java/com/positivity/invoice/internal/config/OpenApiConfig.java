@@ -16,8 +16,6 @@ public class OpenApiConfig {
                         .title("POS Invoice API")
                         .version("v1")
                         .description("API documentation for invoice and billing rules management")
-                        .contact(new Contact()
-                                .name("Durion Team")
-                                .email("platform@durionpos.org")));
+                        .contact(new Contact().name("Durion Team").email("platform@durionpos.org")));
     }
 }

@@ -39,7 +39,6 @@ public class TemplateRegistrationException extends RuntimeException {
 
     @Override
     public String toString() {
-        return String.format("TemplateRegistrationException[templateId=%s, message=%s]",
-                templateId, getMessage());
+        return String.format("TemplateRegistrationException[templateId=%s, message=%s]", templateId, getMessage());
     }
 }

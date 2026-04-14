@@ -1,11 +1,10 @@
 package com.positivity.documents;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for DocumentTemplateInitializerSupport.
@@ -21,10 +20,21 @@ class DocumentTemplateInitializerSupportTest {
         AtomicInteger callCount = new AtomicInteger(0);
 
         List<TemplateRegistration> templates = List.of(
-                TemplateRegistration.builder().templateId("T1").description("Template 1").content("test1").build(),
-                TemplateRegistration.builder().templateId("T2").description("Template 2").content("test2").build(),
-                TemplateRegistration.builder().templateId("T3").description("Template 3").content("test3").build()
-        );
+                TemplateRegistration.builder()
+                        .templateId("T1")
+                        .description("Template 1")
+                        .content("test1")
+                        .build(),
+                TemplateRegistration.builder()
+                        .templateId("T2")
+                        .description("Template 2")
+                        .content("test2")
+                        .build(),
+                TemplateRegistration.builder()
+                        .templateId("T3")
+                        .description("Template 3")
+                        .content("test3")
+                        .build());
 
         // Act
         int successCount = support.registerTemplates(templates, reg -> callCount.incrementAndGet());
@@ -41,10 +51,21 @@ class DocumentTemplateInitializerSupportTest {
         AtomicInteger callCount = new AtomicInteger(0);
 
         List<TemplateRegistration> templates = List.of(
-                TemplateRegistration.builder().templateId("T1").description("Template 1").content("test1").build(),
-                TemplateRegistration.builder().templateId("T2").description("Template 2").content("test2").build(),
-                TemplateRegistration.builder().templateId("T3").description("Template 3").content("test3").build()
-        );
+                TemplateRegistration.builder()
+                        .templateId("T1")
+                        .description("Template 1")
+                        .content("test1")
+                        .build(),
+                TemplateRegistration.builder()
+                        .templateId("T2")
+                        .description("Template 2")
+                        .content("test2")
+                        .build(),
+                TemplateRegistration.builder()
+                        .templateId("T3")
+                        .description("Template 3")
+                        .content("test3")
+                        .build());
 
         // Fail on second template
         // Act
@@ -80,20 +101,20 @@ class DocumentTemplateInitializerSupportTest {
         DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
 
         // Act & Assert
-        assertThrows(NullPointerException.class,
-                () -> support.registerTemplates(null, reg -> {}));
+        assertThrows(NullPointerException.class, () -> support.registerTemplates(null, reg -> {}));
     }
 
     @Test
     void registerTemplates_NullFunction_ThrowsNPE() {
         // Arrange
         DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
-        List<TemplateRegistration> templates = List.of(
-                TemplateRegistration.builder().templateId("T1").description("test").content("test").build()
-        );
+        List<TemplateRegistration> templates = List.of(TemplateRegistration.builder()
+                .templateId("T1")
+                .description("test")
+                .content("test")
+                .build());
 
         // Act & Assert
-        assertThrows(NullPointerException.class,
-                () -> support.registerTemplates(templates, null));
+        assertThrows(NullPointerException.class, () -> support.registerTemplates(templates, null));
     }
 }

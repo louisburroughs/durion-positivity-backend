@@ -1,10 +1,13 @@
 package com.positivity.workorder.config;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -23,11 +26,6 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Test security configuration that replaces the gateway filter chain with a
@@ -109,8 +107,7 @@ public class TestSecurityConfig {
     @Primary
     @Order(0)
     public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
+        http.csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(registry -> registry.anyRequest().permitAll());
         return http.build();
@@ -128,8 +125,9 @@ public class TestSecurityConfig {
 
     private static class TestAutoAuthFilter extends OncePerRequestFilter {
         @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                FilterChain filterChain) throws ServletException, IOException {
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
             String username = request.getHeader("X-User");
             if (username == null || username.isBlank()) {
                 username = "workorder-test-user";
@@ -145,12 +143,10 @@ public class TestSecurityConfig {
                 }
             }
 
-            List<SimpleGrantedAuthority> authorities =
-                    Boolean.TRUE.equals(request.getAttribute(NO_PICK_AUTH_ATTR))
-                            ? NO_PICK_AUTHORITIES
-                            : TEST_AUTHORITIES;
-            var authentication = new UsernamePasswordAuthenticationToken(
-                    username, null, authorities);
+            List<SimpleGrantedAuthority> authorities = Boolean.TRUE.equals(request.getAttribute(NO_PICK_AUTH_ATTR))
+                    ? NO_PICK_AUTHORITIES
+                    : TEST_AUTHORITIES;
+            var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
             authentication.setDetails(Map.of(
                     "username", username,
                     "userId", userId));

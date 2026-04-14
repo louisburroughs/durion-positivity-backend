@@ -1,20 +1,19 @@
 package com.positivity.customer.contract;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Contract behavior integration tests for CRM Snapshot endpoint.
@@ -70,8 +69,10 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         party.setLegalName("Snapshot Test Corp");
         party.setDisplayName("Snapshot Corp");
         party.setPartyNumber("SNAP-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        party.setCustomerNumber(
-                "CUST-SNAP-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
+        party.setCustomerNumber("CUST-SNAP-"
+                + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                        .toString()
+                        .substring(0, 8));
         party.setStatus(AccountStatus.ACTIVE);
 
         Contact contact = new Contact();
@@ -106,8 +107,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Issue CAP-252: billingRules must not be null — currently fails RED
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", party.getPartyId())
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.account").isNotEmpty())
                 .andExpect(jsonPath("$.billingRules").isNotEmpty());
@@ -132,8 +133,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Issue CAP-252: billingRules.poRequired must exist — currently fails RED
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", party.getPartyId())
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.billingRules.poRequired").exists());
     }
@@ -160,8 +161,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Issue CAP-252: all assertions below fail RED because billingRules is null
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", party.getPartyId())
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.billingRules.poRequired").value(false))
                 .andExpect(jsonPath("$.billingRules.taxExempt").value(false))
@@ -192,15 +193,11 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         String url = "/v1/crm/snapshot/party/" + party.getPartyId();
 
         // First request — primes the cache (source may be null or CRM_API)
-        mockMvc.perform(get(url)
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+        mockMvc.perform(get(url).header("X-User", TEST_USER).header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk());
 
         // Issue CAP-252: second request must return source=CACHE — currently fails RED
-        mockMvc.perform(get(url)
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+        mockMvc.perform(get(url).header("X-User", TEST_USER).header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.snapshotMetadata.source").value("CACHE"));
     }
@@ -223,8 +220,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", unknownId)
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isNotFound());
     }
 
@@ -245,8 +242,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("SS-007: unauthenticated request to snapshot endpoint returns 401")
     void snapshotByParty_unauthenticated_returns401() throws Exception {
-        mockMvc.perform(
-                get("/v1/crm/snapshot/party/{partyId}", UUID.fromString("00000000-0000-0000-0000-000000000001")))
+        mockMvc.perform(get(
+                        "/v1/crm/snapshot/party/{partyId}", UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .andExpect(status().isUnauthorized());
     }
 }

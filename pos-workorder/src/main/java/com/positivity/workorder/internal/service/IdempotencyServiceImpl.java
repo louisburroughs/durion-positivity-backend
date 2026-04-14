@@ -1,49 +1,46 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.workorder.internal.entity.IdempotencyKey;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.service.IdempotencyService;
-
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
-
 /**
  * Service for managing idempotency keys to prevent duplicate workorder
  * processing.
- * 
+ *
  * <p>
  * This service provides methods to check if a request has been processed before
  * (based on idempotency key), register new keys, and clean up expired keys.
  * Idempotency keys expire after 24 hours.
  * </p>
- * 
+ *
  * <p>
  * <strong>Usage pattern:</strong>
  * </p>
- * 
+ *
  * <pre>{@code
  * // In controller or service:
  * Optional<UUID> existing = idempotencyService.getExistingWorkorderId(idempotencyKey);
  * if (existing.isPresent()) {
  *     return existing.get(); // Return existing workorder
  * }
- * 
+ *
  * // Create new workorder
  * Workorder workorder = createWorkorderInternal(...);
- * 
+ *
  * // Register the idempotency key
  * idempotencyService.registerKey(idempotencyKey, workorder.getId());
- * 
+ *
  * return workorder;
  * }</pre>
  */
@@ -70,7 +67,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Check if an idempotency key exists and return the associated workorder ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the workorder ID if the key has been processed
      *         before, empty otherwise
@@ -105,7 +102,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated change request
      * ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the change request ID if the key has been
      *         processed
@@ -129,7 +126,9 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now(clock)) && key.getChangeRequestId() != null) {
-                log.info("Idempotency key {} already processed for change request {}", scopedKey,
+                log.info(
+                        "Idempotency key {} already processed for change request {}",
+                        scopedKey,
                         key.getChangeRequestId());
                 return Optional.of(key.getChangeRequestId());
             } else if (key.getExpiresAt().isBefore(Instant.now(clock))) {
@@ -141,7 +140,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Check if an idempotency key exists and return the associated labor entry ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the labor entry ID if the key has been processed
      *         before, empty otherwise
@@ -175,7 +174,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Register a new idempotency key associated with a workorder.
-     * 
+     *
      * @param keyValue    the idempotency key value
      * @param workorderId the ID of the created workorder
      */
@@ -201,7 +200,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a change request.
-     * 
+     *
      * @param keyValue        the idempotency key value
      * @param changeRequestId the ID of the created change request
      */
@@ -213,13 +212,13 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     @Override
     @Transactional
-    public void markKeyProcessedForChangeRequest(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID changeRequestId) {
+    public void markKeyProcessedForChangeRequest(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID changeRequestId) {
         markKeyProcessedForChangeRequestInternal(operation, keyValue, changeRequestId);
-        }
+    }
 
-        private void markKeyProcessedForChangeRequestInternal(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID changeRequestId) {
+    private void markKeyProcessedForChangeRequestInternal(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID changeRequestId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey(scopedKey, null, changeRequestId, expiresAt);
@@ -229,7 +228,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Register a new idempotency key associated with a labor entry.
-     * 
+     *
      * @param keyValue     the idempotency key value
      * @param laborEntryId the ID of the created labor entry
      */
@@ -243,10 +242,10 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional
     public void registerLaborKey(@NonNull String operation, @NonNull String keyValue, @NonNull UUID laborEntryId) {
         registerLaborKeyInternal(operation, keyValue, laborEntryId);
-        }
+    }
 
-        private void registerLaborKeyInternal(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID laborEntryId) {
+    private void registerLaborKeyInternal(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID laborEntryId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();
@@ -261,7 +260,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated part usage event
      * ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the part usage event ID if the key has been
      *         processed
@@ -285,7 +284,9 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now(clock)) && key.getPartUsageEventId() != null) {
-                log.info("Idempotency key {} already processed for part usage event {}", scopedKey,
+                log.info(
+                        "Idempotency key {} already processed for part usage event {}",
+                        scopedKey,
                         key.getPartUsageEventId());
                 return Optional.of(key.getPartUsageEventId());
             } else if (key.getExpiresAt().isBefore(Instant.now(clock))) {
@@ -297,7 +298,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a part usage event.
-     * 
+     *
      * @param keyValue         the idempotency key value
      * @param partUsageEventId the ID of the created part usage event
      */
@@ -309,13 +310,13 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     @Override
     @Transactional
-    public void markKeyProcessedForPartUsage(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID partUsageEventId) {
+    public void markKeyProcessedForPartUsage(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID partUsageEventId) {
         markKeyProcessedForPartUsageInternal(operation, keyValue, partUsageEventId);
-        }
+    }
 
-        private void markKeyProcessedForPartUsageInternal(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID partUsageEventId) {
+    private void markKeyProcessedForPartUsageInternal(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID partUsageEventId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();
@@ -330,7 +331,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated part adjustment
      * event ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the part adjustment event ID if the key has been
      *         processed
@@ -346,16 +347,18 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingPartAdjustmentEventId(@NonNull String operation, @NonNull String keyValue) {
         return getExistingPartAdjustmentEventIdInternal(operation, keyValue);
-        }
+    }
 
-        private Optional<UUID> getExistingPartAdjustmentEventIdInternal(@NonNull String operation,
-            @NonNull String keyValue) {
+    private Optional<UUID> getExistingPartAdjustmentEventIdInternal(
+            @NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now(clock)) && key.getPartAdjustmentEventId() != null) {
-                log.info("Idempotency key {} already processed for part adjustment event {}", scopedKey,
+                log.info(
+                        "Idempotency key {} already processed for part adjustment event {}",
+                        scopedKey,
                         key.getPartAdjustmentEventId());
                 return Optional.of(key.getPartAdjustmentEventId());
             } else if (key.getExpiresAt().isBefore(Instant.now(clock))) {
@@ -401,7 +404,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a part adjustment event.
-     * 
+     *
      * @param keyValue              the idempotency key value
      * @param partAdjustmentEventId the ID of the created part adjustment event
      */
@@ -413,13 +416,13 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     @Override
     @Transactional
-    public void markKeyProcessedForPartAdjustment(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID partAdjustmentEventId) {
+    public void markKeyProcessedForPartAdjustment(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID partAdjustmentEventId) {
         markKeyProcessedForPartAdjustmentInternal(operation, keyValue, partAdjustmentEventId);
-        }
+    }
 
-        private void markKeyProcessedForPartAdjustmentInternal(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID partAdjustmentEventId) {
+    private void markKeyProcessedForPartAdjustmentInternal(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID partAdjustmentEventId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();
@@ -447,10 +450,10 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional
     public void registerInvoiceKey(@NonNull String operation, @NonNull String keyValue, @NonNull UUID invoiceId) {
         registerInvoiceKeyInternal(operation, keyValue, invoiceId);
-        }
+    }
 
-        private void registerInvoiceKeyInternal(@NonNull String operation, @NonNull String keyValue,
-            @NonNull UUID invoiceId) {
+    private void registerInvoiceKeyInternal(
+            @NonNull String operation, @NonNull String keyValue, @NonNull UUID invoiceId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();
@@ -468,12 +471,12 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Clean up expired idempotency keys.
-     * 
+     *
      * <p>
      * This method should be called periodically (e.g., via a scheduled task)
      * to remove old keys and prevent unbounded table growth.
      * </p>
-     * 
+     *
      * @return count of deleted keys
      */
     @Override

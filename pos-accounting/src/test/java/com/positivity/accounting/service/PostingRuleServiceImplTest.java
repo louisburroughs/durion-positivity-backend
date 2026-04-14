@@ -7,6 +7,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
+import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
+import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
+import com.positivity.accounting.internal.entity.PostingRuleSet;
+import com.positivity.accounting.internal.entity.PostingRuleVersion;
+import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
+import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
+import com.positivity.accounting.internal.service.PostingRuleServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -14,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,16 +35,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-
-import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
-import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
-import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
-import com.positivity.accounting.internal.entity.PostingRuleSet;
-import com.positivity.accounting.internal.entity.PostingRuleVersion;
-import com.positivity.accounting.internal.enums.PostingRuleSetState;
-import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
-import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-import com.positivity.accounting.internal.service.PostingRuleServiceImpl;
 
 /**
  * Unit tests for PostingRuleServiceImpl.
@@ -124,10 +122,9 @@ class PostingRuleServiceImplTest {
 
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
-            when(versionRepository.findById(versionId))
-                    .thenReturn(Optional.of(testVersion));
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
-                    eq(ruleSetId), eq(PostingRuleSetState.PUBLISHED)))
+                            eq(ruleSetId), eq(PostingRuleSetState.PUBLISHED)))
                     .thenReturn(List.of());
             when(versionRepository.save(any(PostingRuleVersion.class))).thenReturn(testVersion);
 
@@ -165,8 +162,7 @@ class PostingRuleServiceImplTest {
 
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
-            when(versionRepository.findById(versionId))
-                    .thenReturn(Optional.of(testVersion));
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
             when(versionRepository.save(any(PostingRuleVersion.class))).thenReturn(testVersion);
 
             PostingRuleVersionResponse result = service.archiveRuleSet(ruleSetId);
@@ -204,8 +200,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("getPostingRuleSetAsResponse - returns DTO for existing rule set")
     void getPostingRuleSetAsResponse_success() {
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
 
         PostingRuleSetResponse result = service.getPostingRuleSetAsResponse(ruleSetId);
 
@@ -216,8 +211,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("listVersionsAsResponse - returns versions with pagination")
     void listVersionsAsResponse_returnsPaginated() {
-        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
-                .thenReturn(List.of(testVersion));
+        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         List<PostingRuleVersionResponse> result = service.listVersionsAsResponse(ruleSetId, 0, 10);
 
@@ -227,8 +221,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("listVersionsAsResponse - returns empty when page is out of range")
     void listVersionsAsResponse_emptyWhenOutOfRange() {
-        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
-                .thenReturn(List.of(testVersion));
+        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         List<PostingRuleVersionResponse> result = service.listVersionsAsResponse(ruleSetId, 5, 10);
 
@@ -240,8 +233,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("updatePostingRuleSet - updates when no published version exists")
     void updatePostingRuleSet_success() {
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
         when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                 .thenReturn(List.of(testVersion)); // testVersion is DRAFT
         when(ruleSetRepository.save(any(PostingRuleSet.class))).thenReturn(testRuleSet);
@@ -260,10 +252,8 @@ class PostingRuleServiceImplTest {
     @DisplayName("updatePostingRuleSet - throws when published version exists")
     void updatePostingRuleSet_publishedVersionExists() {
         testVersion.setState(PostingRuleSetState.PUBLISHED);
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
-        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
-                .thenReturn(List.of(testVersion));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
+        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         assertThatThrownBy(() -> service.updatePostingRuleSet(ruleSetId, testRuleSet))
                 .isInstanceOf(IllegalStateException.class)
@@ -279,10 +269,8 @@ class PostingRuleServiceImplTest {
         existing.setVersionNumber(2);
         existing.setState(PostingRuleSetState.ARCHIVED);
 
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
-        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
-                .thenReturn(List.of(existing));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
+        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(existing));
         when(versionRepository.save(any(PostingRuleVersion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PostingRuleVersion newVersion = new PostingRuleVersion();
@@ -348,7 +336,7 @@ class PostingRuleServiceImplTest {
 
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
-                    eq(ruleSetId), eq(PostingRuleSetState.PUBLISHED)))
+                            eq(ruleSetId), eq(PostingRuleSetState.PUBLISHED)))
                     .thenReturn(List.of(existing));
             when(versionRepository.save(any(PostingRuleVersion.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -427,8 +415,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("listVersions - returns versions for rule set")
     void listVersions_returnsVersions() {
-        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
-                .thenReturn(List.of(testVersion));
+        when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         List<PostingRuleVersion> result = service.listVersions(ruleSetId);
 
@@ -438,8 +425,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("getPostingRuleSet - returns rule set entity")
     void getPostingRuleSet_success() {
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
 
         PostingRuleSet result = service.getPostingRuleSet(ruleSetId);
 
@@ -449,8 +435,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("getPostingRuleSet - throws when not found")
     void getPostingRuleSet_notFound() {
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.empty());
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPostingRuleSet(ruleSetId))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -468,8 +453,7 @@ class PostingRuleServiceImplTest {
                 .createdBy("admin")
                 .build();
 
-        when(ruleSetRepository.findByIdWithVersions(ruleSetId))
-                .thenReturn(Optional.of(testRuleSet));
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
         when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                 .thenReturn(List.of(testVersion)); // DRAFT - no published version
         when(ruleSetRepository.save(any(PostingRuleSet.class))).thenReturn(testRuleSet);

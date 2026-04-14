@@ -2,15 +2,14 @@ package com.positivity.accounting.internal.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import lombok.*;
 
 /**
  * Request DTO for applying a payment to one or more invoices.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114</a>

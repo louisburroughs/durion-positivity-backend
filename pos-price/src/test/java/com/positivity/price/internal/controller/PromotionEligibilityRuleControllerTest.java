@@ -74,8 +74,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", promotionId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validRulePayload())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRulePayload())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ruleId").exists())
                 .andExpect(jsonPath("$.conditionType").value("ACCOUNT_ID_LIST"))
@@ -101,8 +101,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", promotionId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -140,7 +140,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID ruleId = seedRule(promotionId, ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN, "acc-123");
 
         mockMvc.perform(withGatewayAuth(
-                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId, ruleId)))
+                        delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId, ruleId)))
                 .andExpect(status().isNoContent());
     }
 
@@ -151,12 +151,14 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * Issue: #96
      */
     @Test
-    @DisplayName("ERC-005: DELETE /v1/promotions/offers/{promotionId}/rules/{ruleId} non-existent → 404 ELIGIBILITY_RULE_NOT_FOUND")
+    @DisplayName(
+            "ERC-005: DELETE /v1/promotions/offers/{promotionId}/rules/{ruleId} non-existent → 404 ELIGIBILITY_RULE_NOT_FOUND")
     void givenNonExistentRuleId_whenDeleteRule_thenReturns404() throws Exception {
         UUID promotionId = seedPromotion();
 
-        mockMvc.perform(withGatewayAuth(
-                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId,
+        mockMvc.perform(withGatewayAuth(delete(
+                        "/v1/promotions/offers/{promotionId}/rules/{ruleId}",
+                        promotionId,
                         UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ELIGIBILITY_RULE_NOT_FOUND"));
@@ -170,11 +172,12 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID ruleId = seedRule(owningPromotionId, ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN, "acc-xyz");
 
         mockMvc.perform(withGatewayAuth(
-                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", otherPromotionId, ruleId)))
+                        delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", otherPromotionId, ruleId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ELIGIBILITY_RULE_NOT_FOUND"));
 
-        org.assertj.core.api.Assertions.assertThat(promotionEligibilityRuleRepository.existsById(ruleId)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(promotionEligibilityRuleRepository.existsById(ruleId))
+                .isTrue();
     }
 
     // ========== EVALUATE ==========
@@ -186,13 +189,14 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * Issue: #96
      */
     @Test
-    @DisplayName("ERC-006: POST /v1/promotions/offers/{promotionId}/rules/evaluate with accountId → 200 with isEligible")
+    @DisplayName(
+            "ERC-006: POST /v1/promotions/offers/{promotionId}/rules/evaluate with accountId → 200 with isEligible")
     void givenEligibleContext_whenEvaluate_thenReturnsEligible() throws Exception {
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(evaluatePayload(UUID.fromString("00000000-0000-0000-0000-000000000001"), null))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evaluatePayload(UUID.fromString("00000000-0000-0000-0000-000000000001"), null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasonCode").exists());
     }
@@ -213,15 +217,11 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     @DisplayName("ERC-007: POST /v1/promotions/offers/{promotionId}/rules/evaluate with no accountId → 200 ineligible")
     void givenMissingAccountId_whenEvaluate_thenReturnsIneligible() throws Exception {
         UUID promotionId = seedPromotion();
-        seedRule(
-                promotionId,
-                ConditionType.ACCOUNT_FLEET_SIZE,
-                RuleOperator.GREATER_THAN_OR_EQUAL_TO,
-                "100");
+        seedRule(promotionId, ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "100");
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isEligible").value(false));
     }
@@ -242,10 +242,11 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     @Test
     @DisplayName("ERC-008: POST /v1/promotions/offers/{promotionId}/rules with non-existent promotionId → 404")
     void givenNonExistentPromotion_whenAddRule_thenReturns404() throws Exception {
-        mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules",
-                UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validRulePayload())))
+        mockMvc.perform(withGatewayAuth(post(
+                                "/v1/promotions/offers/{promotionId}/rules",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRulePayload())))
                 .andExpect(status().isNotFound());
     }
 
@@ -309,8 +310,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
             first = false;
         }
         if (vehicleId != null) {
-            if (!first)
-                sb.append(", ");
+            if (!first) sb.append(", ");
             sb.append("\"vehicleId\": \"").append(vehicleId).append("\"");
         }
         sb.append("}");
@@ -318,12 +318,13 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     }
 
     @Test
-    @DisplayName("ERC-401: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth → 401 Unauthorized")
+    @DisplayName(
+            "ERC-401: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth → 401 Unauthorized")
     void evaluateEligibility_withoutAuth_returns401() throws Exception {
         UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         mockMvc.perform(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"accountId\":null,\"vehicleId\":null}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountId\":null,\"vehicleId\":null}"))
                 .andExpect(status().isUnauthorized());
     }
 }

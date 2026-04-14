@@ -1,24 +1,21 @@
 package com.positivity.workorder.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Response DTO for labor entry operations.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #159 - Record Labor Performed
  */
@@ -84,7 +81,10 @@ public class WorkorderLaborEntryResponse {
     public static WorkorderLaborEntryResponse fromEntity(@NonNull WorkorderLaborEntry entry) {
         return WorkorderLaborEntryResponse.builder()
                 .id(entry.getId())
-            .workorderId(entry.getWorkorder() == null ? null : entry.getWorkorder().getId())
+                .workorderId(
+                        entry.getWorkorder() == null
+                                ? null
+                                : entry.getWorkorder().getId())
                 .workorderServiceId(entry.getWorkorderServiceId())
                 .technicianId(entry.getTechnicianId())
                 .startTime(entry.getStartTime())

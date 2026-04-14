@@ -1,39 +1,36 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.service.GLPostingService;
 import com.positivity.accounting.service.JournalEntryService;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
 /**
  * Service for posting GL entries related to accounting transactions.
- * 
+ *
  * Responsibilities:
  * - Create and post journal entries for Credit Memos, Payment Applications,
  * etc.
  * - Validate entry balance before posting
  * - Link journal entries to source events
  * - Support prior period adjustment flagging
- * 
+ *
  * Design:
  * - Wraps JournalEntryService for domain-specific GL posting
  * - Ensures all GL entries are balanced and posted atomically
  * - Provides helper methods for common posting patterns
- * 
+ *
  * @see JournalEntryServiceImpl
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
@@ -46,146 +43,150 @@ import java.util.UUID;
 public class GLPostingServiceImpl implements GLPostingService {
     private final Clock clock;
 
+    private final JournalEntryService journalEntryService;
 
-        private final JournalEntryService journalEntryService;
+    /**
+     * Post a Credit Memo reversal to GL.
+     *
+     * Creates journal entry with:
+     * - Debit: Revenue (credit amount)
+     * - Debit: Tax Liability (tax reversed)
+     * - Credit: Accounts Receivable (total amount)
+     *
+     * @param creditMemoId        Credit Memo identifier (source event)
+     * @param revenueAccountId    GL account for revenue reversal
+     * @param taxPayableAccountId GL account for tax reversal
+     * @param arAccountId         GL account for AR reduction
+     * @param creditAmount        Credit amount (revenue portion)
+     * @param taxReversed         Tax amount reversed
+     * @param description         Entry description
+     * @param isPriorPeriod       True if prior period adjustment
+     * @param originalPeriodId    Original period ID if prior period
+     * @return Posted journal entry
+     */
+    @Override
+    public JournalEntry postCreditMemoReversal(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description,
+            boolean isPriorPeriod,
+            String originalPeriodId) {
 
-        /**
-         * Post a Credit Memo reversal to GL.
-         * 
-         * Creates journal entry with:
-         * - Debit: Revenue (credit amount)
-         * - Debit: Tax Liability (tax reversed)
-         * - Credit: Accounts Receivable (total amount)
-         * 
-         * @param creditMemoId        Credit Memo identifier (source event)
-         * @param revenueAccountId    GL account for revenue reversal
-         * @param taxPayableAccountId GL account for tax reversal
-         * @param arAccountId         GL account for AR reduction
-         * @param creditAmount        Credit amount (revenue portion)
-         * @param taxReversed         Tax amount reversed
-         * @param description         Entry description
-         * @param isPriorPeriod       True if prior period adjustment
-         * @param originalPeriodId    Original period ID if prior period
-         * @return Posted journal entry
-         */
-        @Override
-        public JournalEntry postCreditMemoReversal(
-                        @NonNull UUID creditMemoId,
-                        @NonNull UUID revenueAccountId,
-                        @NonNull UUID taxPayableAccountId,
-                        @NonNull UUID arAccountId,
-                        @NonNull BigDecimal creditAmount,
-                        @NonNull BigDecimal taxReversed,
-                        @NonNull String description,
-                        boolean isPriorPeriod,
-                        String originalPeriodId) {
+        BigDecimal totalAmount = creditAmount.add(taxReversed);
 
-                BigDecimal totalAmount = creditAmount.add(taxReversed);
+        log.info(
+                "Posting Credit Memo GL entry {}: debit revenue {}, debit tax {}, credit AR {}",
+                creditMemoId,
+                creditAmount,
+                taxReversed,
+                totalAmount);
 
-                log.info("Posting Credit Memo GL entry {}: debit revenue {}, debit tax {}, credit AR {}",
-                                creditMemoId, creditAmount, taxReversed, totalAmount);
+        // Create journal entry
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(LocalDateTime.now(clock));
+        entry.setDescription(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""));
+        entry.setSourceEventId(creditMemoId);
 
-                // Create journal entry
-                JournalEntry entry = new JournalEntry();
-                entry.setTransactionDate(LocalDateTime.now(clock));
-                entry.setDescription(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""));
-                entry.setSourceEventId(creditMemoId);
+        // Create journal entry lines
+        List<JournalEntryLine> lines = new ArrayList<>();
 
-                // Create journal entry lines
-                List<JournalEntryLine> lines = new ArrayList<>();
+        // Line 1: Debit Revenue (reverse revenue recognition)
+        JournalEntryLine revenueLine = new JournalEntryLine();
+        revenueLine.setGlAccountId(revenueAccountId);
+        revenueLine.setDebitAmount(creditAmount);
+        revenueLine.setCreditAmount(BigDecimal.ZERO);
+        revenueLine.setDescription("Revenue Reversal - CM#" + creditMemoId);
+        lines.add(revenueLine);
 
-                // Line 1: Debit Revenue (reverse revenue recognition)
-                JournalEntryLine revenueLine = new JournalEntryLine();
-                revenueLine.setGlAccountId(revenueAccountId);
-                revenueLine.setDebitAmount(creditAmount);
-                revenueLine.setCreditAmount(BigDecimal.ZERO);
-                revenueLine.setDescription("Revenue Reversal - CM#" + creditMemoId);
-                lines.add(revenueLine);
+        // Line 2: Debit Tax Liability (reverse tax payable)
+        JournalEntryLine taxLine = new JournalEntryLine();
+        taxLine.setGlAccountId(taxPayableAccountId);
+        taxLine.setDebitAmount(taxReversed);
+        taxLine.setCreditAmount(BigDecimal.ZERO);
+        taxLine.setDescription("Tax Reversal - CM#" + creditMemoId);
+        lines.add(taxLine);
 
-                // Line 2: Debit Tax Liability (reverse tax payable)
-                JournalEntryLine taxLine = new JournalEntryLine();
-                taxLine.setGlAccountId(taxPayableAccountId);
-                taxLine.setDebitAmount(taxReversed);
-                taxLine.setCreditAmount(BigDecimal.ZERO);
-                taxLine.setDescription("Tax Reversal - CM#" + creditMemoId);
-                lines.add(taxLine);
+        // Line 3: Credit AR (reduce accounts receivable)
+        JournalEntryLine arLine = new JournalEntryLine();
+        arLine.setGlAccountId(arAccountId);
+        arLine.setDebitAmount(BigDecimal.ZERO);
+        arLine.setCreditAmount(totalAmount);
+        arLine.setDescription("AR Reduction - CM#" + creditMemoId);
+        lines.add(arLine);
 
-                // Line 3: Credit AR (reduce accounts receivable)
-                JournalEntryLine arLine = new JournalEntryLine();
-                arLine.setGlAccountId(arAccountId);
-                arLine.setDebitAmount(BigDecimal.ZERO);
-                arLine.setCreditAmount(totalAmount);
-                arLine.setDescription("AR Reduction - CM#" + creditMemoId);
-                lines.add(arLine);
+        entry.setLines(lines);
 
-                entry.setLines(lines);
+        // Create and post entry
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
 
-                // Create and post entry
-                JournalEntry created = journalEntryService.createJournalEntry(entry);
-                JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
+        log.info("Posted Credit Memo GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-                log.info("Posted Credit Memo GL entry: journal entry ID {}",
-                                posted.getJournalEntryId());
+        return posted;
+    }
 
-                return posted;
-        }
+    /**
+     * Post a payment application to GL.
+     *
+     * Creates journal entry with:
+     * - Debit: Cash/Bank
+     * - Credit: Accounts Receivable
+     *
+     * @param paymentApplicationId Payment application ID (source event)
+     * @param cashAccountId        GL account for cash/bank
+     * @param arAccountId          GL account for AR
+     * @param amount               Payment amount
+     * @param description          Entry description
+     * @return Posted journal entry
+     */
+    @Override
+    public JournalEntry postPaymentApplication(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID cashAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description) {
 
-        /**
-         * Post a payment application to GL.
-         * 
-         * Creates journal entry with:
-         * - Debit: Cash/Bank
-         * - Credit: Accounts Receivable
-         * 
-         * @param paymentApplicationId Payment application ID (source event)
-         * @param cashAccountId        GL account for cash/bank
-         * @param arAccountId          GL account for AR
-         * @param amount               Payment amount
-         * @param description          Entry description
-         * @return Posted journal entry
-         */
-        @Override
-        public JournalEntry postPaymentApplication(
-                        @NonNull UUID paymentApplicationId,
-                        @NonNull UUID cashAccountId,
-                        @NonNull UUID arAccountId,
-                        @NonNull BigDecimal amount,
-                        @NonNull String description) {
+        log.info(
+                "Posting payment application GL entry {}: debit cash {}, credit AR {}",
+                paymentApplicationId,
+                amount,
+                amount);
 
-                log.info("Posting payment application GL entry {}: debit cash {}, credit AR {}",
-                                paymentApplicationId, amount, amount);
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(LocalDateTime.now(clock));
+        entry.setDescription(description);
+        entry.setSourceEventId(paymentApplicationId);
 
-                JournalEntry entry = new JournalEntry();
-                entry.setTransactionDate(LocalDateTime.now(clock));
-                entry.setDescription(description);
-                entry.setSourceEventId(paymentApplicationId);
+        List<JournalEntryLine> lines = new ArrayList<>();
 
-                List<JournalEntryLine> lines = new ArrayList<>();
+        // Debit: Cash
+        JournalEntryLine cashLine = new JournalEntryLine();
+        cashLine.setGlAccountId(cashAccountId);
+        cashLine.setDebitAmount(amount);
+        cashLine.setCreditAmount(BigDecimal.ZERO);
+        cashLine.setDescription("Cash Receipt - PA#" + paymentApplicationId);
+        lines.add(cashLine);
 
-                // Debit: Cash
-                JournalEntryLine cashLine = new JournalEntryLine();
-                cashLine.setGlAccountId(cashAccountId);
-                cashLine.setDebitAmount(amount);
-                cashLine.setCreditAmount(BigDecimal.ZERO);
-                cashLine.setDescription("Cash Receipt - PA#" + paymentApplicationId);
-                lines.add(cashLine);
+        // Credit: AR
+        JournalEntryLine arLine = new JournalEntryLine();
+        arLine.setGlAccountId(arAccountId);
+        arLine.setDebitAmount(BigDecimal.ZERO);
+        arLine.setCreditAmount(amount);
+        arLine.setDescription("AR Reduction - PA#" + paymentApplicationId);
+        lines.add(arLine);
 
-                // Credit: AR
-                JournalEntryLine arLine = new JournalEntryLine();
-                arLine.setGlAccountId(arAccountId);
-                arLine.setDebitAmount(BigDecimal.ZERO);
-                arLine.setCreditAmount(amount);
-                arLine.setDescription("AR Reduction - PA#" + paymentApplicationId);
-                lines.add(arLine);
+        entry.setLines(lines);
 
-                entry.setLines(lines);
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
 
-                JournalEntry created = journalEntryService.createJournalEntry(entry);
-                JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
+        log.info("Posted payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-                log.info("Posted payment application GL entry: journal entry ID {}",
-                                posted.getJournalEntryId());
-
-                return posted;
-        }
+        return posted;
+    }
 }

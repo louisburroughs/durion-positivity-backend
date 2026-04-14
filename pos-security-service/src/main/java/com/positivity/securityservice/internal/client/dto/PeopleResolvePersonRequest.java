@@ -4,9 +4,4 @@ import lombok.Builder;
 
 @Builder
 public record PeopleResolvePersonRequest(
-        String email,
-        String phone,
-        String lastName,
-        String firstName,
-        Integer threshold) {
-}
+        String email, String phone, String lastName, String firstName, Integer threshold) {}

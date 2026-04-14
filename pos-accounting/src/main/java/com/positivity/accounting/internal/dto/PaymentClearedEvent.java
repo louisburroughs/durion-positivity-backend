@@ -1,11 +1,9 @@
 package com.positivity.accounting.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,7 +16,7 @@ import lombok.Setter;
  * authorization, check clearing).
  * Consumed by Accounting domain to create ReceivablePayment record available
  * for application.
- * 
+ *
  * @see com.positivity.accounting.internal.entity.ReceivablePayment
  * @see com.positivity.accounting.internal.service.PaymentApplicationServiceImpl#handlePaymentCleared
  */
@@ -91,7 +89,7 @@ public class PaymentClearedEvent {
 
     /**
      * Validate required fields for event processing.
-     * 
+     *
      * @throws IllegalArgumentException if required fields are missing
      */
     public void validate() {

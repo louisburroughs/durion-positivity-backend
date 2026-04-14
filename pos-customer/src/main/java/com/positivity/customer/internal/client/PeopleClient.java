@@ -1,19 +1,16 @@
 package com.positivity.customer.internal.client;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import java.util.UUID;
-
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.shared.id.UUIDv7Generator;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Client for resolving/creating canonical person records in pos-people.
@@ -43,7 +40,8 @@ public class PeopleClient {
         request.setFirstName(firstName);
 
         try {
-            ResolvePersonResponse response = restClient.post()
+            ResolvePersonResponse response = restClient
+                    .post()
                     .uri("/v1/people/resolve")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -57,8 +55,10 @@ public class PeopleClient {
         } catch (Exception exception) {
             if (allowLocalFallback) {
                 UUID fallback = UUIDv7Generator.generate();
-                log.warn("Falling back to generated personId={} because pos-people resolve failed: {}",
-                        fallback, exception.getMessage());
+                log.warn(
+                        "Falling back to generated personId={} because pos-people resolve failed: {}",
+                        fallback,
+                        exception.getMessage());
                 return fallback;
             }
             throw exception;

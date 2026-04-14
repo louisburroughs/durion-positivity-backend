@@ -1,19 +1,17 @@
 package com.positivity.accounting.internal.entity;
 
-import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -39,6 +37,7 @@ public class InvoiceStatusView {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
     @Column(nullable = false, unique = true)
     private UUID invoiceId;
 
@@ -104,8 +103,8 @@ public class InvoiceStatusView {
     @Column(name = "discrepancy_reason", length = 1000)
     private String discrepancyReason;
 
-    public InvoiceStatusView(UUID invoiceId, PaymentStatus currentStatus,
-            BigDecimal totalPaid, BigDecimal invoiceTotal) {
+    public InvoiceStatusView(
+            UUID invoiceId, PaymentStatus currentStatus, BigDecimal totalPaid, BigDecimal invoiceTotal) {
         this.invoiceId = invoiceId;
         this.currentStatus = currentStatus;
         this.totalPaid = totalPaid;

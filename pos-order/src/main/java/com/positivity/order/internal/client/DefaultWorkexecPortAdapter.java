@@ -13,8 +13,8 @@ public class DefaultWorkexecPortAdapter implements WorkexecPort {
     }
 
     @Override
-    public @NonNull WorkorderCancelResult cancelWorkorder(@NonNull UUID workOrderId,
-            @NonNull CancelWorkorderCommand command) {
+    public @NonNull WorkorderCancelResult cancelWorkorder(
+            @NonNull UUID workOrderId, @NonNull CancelWorkorderCommand command) {
         return new WorkorderCancelResult(true, "Cancelled by default adapter");
     }
 }

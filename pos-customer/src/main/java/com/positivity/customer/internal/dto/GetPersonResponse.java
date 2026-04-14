@@ -1,17 +1,15 @@
 package com.positivity.customer.internal.dto;
 
+import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.enums.PreferredContactMethod;
 
 /**
  * Response DTO for retrieving person details.
@@ -48,7 +46,9 @@ public class GetPersonResponse {
     @Schema(description = "Whether this CRM record represents an individual customer", example = "true")
     private boolean individualCustomer;
 
-    @Schema(description = "Whether this person is an active contact on one or more commercial accounts", example = "false")
+    @Schema(
+            description = "Whether this person is an active contact on one or more commercial accounts",
+            example = "false")
     private boolean commercialContact;
 
     @Schema(description = "Number of active commercial accounts where this person is a contact", example = "0")

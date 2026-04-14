@@ -19,5 +19,4 @@ public interface TimekeepingIngestionService {
      * @param event the work session corrected event
      */
     void recordCorrection(@NonNull WorkSessionCorrectedEvent event);
-
 }

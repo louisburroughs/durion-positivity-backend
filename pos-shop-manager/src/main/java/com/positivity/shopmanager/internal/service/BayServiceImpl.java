@@ -1,11 +1,10 @@
 package com.positivity.shopmanager.internal.service;
 
+import com.positivity.shopmanager.internal.client.LocationClient;
+import com.positivity.shopmanager.service.BayService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import com.positivity.shopmanager.internal.client.LocationClient;
-import com.positivity.shopmanager.service.BayService;
 
 @RequiredArgsConstructor
 @Slf4j

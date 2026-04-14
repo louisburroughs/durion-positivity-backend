@@ -20,18 +20,17 @@ import com.positivity.invoice.internal.repository.RefundRecordRepository;
 import com.positivity.invoice.service.PaymentReversalService;
 import com.positivity.invoice.service.RefundPaymentResult;
 import com.positivity.security.common.SecurityContextHelper;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -72,10 +71,12 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull VoidReason reason,
             @Nullable String notes) {
         requireAuthority(VOID_PAYMENT);
-        PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
+        PaymentIntent paymentIntent = paymentIntentRepository
+                .findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
 
-        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null
+                || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException("PaymentIntent not found for invoice: " + invoiceId);
         }
 
@@ -92,9 +93,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             }
         }
 
-        GatewayVoidRequest voidRequest = new GatewayVoidRequest(
-                paymentIntent.getGatewayReference(),
-                paymentIntent.getAuthorizedAmount());
+        GatewayVoidRequest voidRequest =
+                new GatewayVoidRequest(paymentIntent.getGatewayReference(), paymentIntent.getAuthorizedAmount());
         GatewayPaymentResult voidResult = paymentGatewayPort.voidRemainder(voidRequest);
         if (!voidResult.isSuccessful()) {
             throw new PaymentGatewayException(
@@ -114,10 +114,12 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull RefundReason reason,
             @Nullable String notes) {
         requireAuthority(REFUND_PAYMENT);
-        PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
+        PaymentIntent paymentIntent = paymentIntentRepository
+                .findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
 
-        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null
+                || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException("PaymentIntent not found for invoice: " + invoiceId);
         }
 
@@ -168,8 +170,12 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         RefundRecord saved = refundRecordRepository.save(refundRecord);
         RefundPaymentResult resultDto = new RefundPaymentResult();
         resultDto.setRefundId(saved.getId());
-        resultDto.setInvoiceId(saved.getInvoice() == null ? null : saved.getInvoice().getId());
-        resultDto.setPaymentIntentId(saved.getPaymentIntent() == null ? null : saved.getPaymentIntent().getId());
+        resultDto.setInvoiceId(
+                saved.getInvoice() == null ? null : saved.getInvoice().getId());
+        resultDto.setPaymentIntentId(
+                saved.getPaymentIntent() == null
+                        ? null
+                        : saved.getPaymentIntent().getId());
         resultDto.setAmount(saved.getAmount());
         resultDto.setReason(saved.getReason());
         resultDto.setNotes(saved.getNotes());

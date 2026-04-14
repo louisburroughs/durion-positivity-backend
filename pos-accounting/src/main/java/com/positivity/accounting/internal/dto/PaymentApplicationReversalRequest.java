@@ -6,7 +6,7 @@ import lombok.*;
 
 /**
  * Request DTO for reversing a payment application.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Reversibility</a>

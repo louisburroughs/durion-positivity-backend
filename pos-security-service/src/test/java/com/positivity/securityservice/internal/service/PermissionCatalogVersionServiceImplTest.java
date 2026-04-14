@@ -2,17 +2,15 @@ package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.enums.PermissionCode;
 import java.util.List;
 import java.util.Set;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
-import com.positivity.securityservice.internal.enums.PermissionCode;
 
 /**
  * Unit tests for {@link PermissionCatalogVersionServiceImpl}.
@@ -56,8 +54,7 @@ class PermissionCatalogVersionServiceImplTest {
     void getPermissionCount_returns215() {
         int count = sut.getPermissionCount();
 
-        assertThat(count)
-                .isEqualTo(PermissionCode.values().length);
+        assertThat(count).isEqualTo(PermissionCode.values().length);
     }
 
     // ── decodePermissions() ──────────────────────────────────────────────────
@@ -101,11 +98,10 @@ class PermissionCatalogVersionServiceImplTest {
         // Issue PERM-005: encode three permissions whose codes are not naturally
         // ordered
         // by enum declaration — result must still be alphabetically sorted.
-        String encoded = PermissionBitsetCodec.encode(
-                Set.of(
-                        PermissionCode.ACCOUNTING__JE__VIEW,
-                        PermissionCode.ACCOUNTING__JE__CREATE,
-                        PermissionCode.ACCOUNTING__JE__POST));
+        String encoded = PermissionBitsetCodec.encode(Set.of(
+                PermissionCode.ACCOUNTING__JE__VIEW,
+                PermissionCode.ACCOUNTING__JE__CREATE,
+                PermissionCode.ACCOUNTING__JE__POST));
 
         List<String> result = sut.decodePermissions(encoded, PermissionCode.CATALOG_VERSION);
 

@@ -1,8 +1,8 @@
 package com.positivity.people.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,10 +28,13 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     private final String apiSecret;
 
-    public EventTypeInitializer(RestClient.Builder restClientBuilder,
+    public EventTypeInitializer(
+            RestClient.Builder restClientBuilder,
             @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret) {
-        this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
+        this.restClient = restClientBuilder
+                .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
+                .build();
         this.initializerSupport = new EventTypeInitializerSupport("pos-people");
         this.apiSecret = apiSecret;
     }
@@ -47,7 +50,8 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);
@@ -62,5 +66,4 @@ public class EventTypeInitializer implements ApplicationRunner {
             log.warn("Failed to register event type {}: {}", registration.getTypeCode(), e.getMessage());
         }
     }
-
 }

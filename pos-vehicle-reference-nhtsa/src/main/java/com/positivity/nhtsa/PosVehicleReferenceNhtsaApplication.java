@@ -15,5 +15,4 @@ public class PosVehicleReferenceNhtsaApplication {
     public RestClient restClient() {
         return RestClient.create();
     }
-
 }

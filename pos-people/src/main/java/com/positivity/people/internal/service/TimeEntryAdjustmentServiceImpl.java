@@ -1,7 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
@@ -10,6 +8,7 @@ import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.TimeEntryAdjustmentService;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -29,8 +28,11 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
     private final TimeEntryRepository timeEntryRepository;
 
-    public TimeEntryAdjustmentServiceImpl(TimeEntryAdjustmentRepository adjustmentRepository,
-            TimeEntryAuditRepository auditRepository, TimeEntryRepository timeEntryRepository, Clock clock) {
+    public TimeEntryAdjustmentServiceImpl(
+            TimeEntryAdjustmentRepository adjustmentRepository,
+            TimeEntryAuditRepository auditRepository,
+            TimeEntryRepository timeEntryRepository,
+            Clock clock) {
         this.clock = clock;
         this.adjustmentRepository = adjustmentRepository;
         this.auditRepository = auditRepository;
@@ -49,8 +51,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
             throw new IllegalArgumentException("timeEntryId is required");
         }
 
-        Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
-                .findById(request.getTimeEntryId());
+        Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional =
+                timeEntryRepository.findById(request.getTimeEntryId());
         if (entryOptional.isEmpty()) {
             throw new NotFoundException("Time entry not found");
         }
@@ -70,7 +72,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
             throw new IllegalArgumentException("Both proposedStartAt and proposedEndAt must be provided together");
         }
 
-        com.positivity.people.internal.entity.TimeEntryAdjustment adjustment = new com.positivity.people.internal.entity.TimeEntryAdjustment();
+        com.positivity.people.internal.entity.TimeEntryAdjustment adjustment =
+                new com.positivity.people.internal.entity.TimeEntryAdjustment();
         adjustment.setTimeEntry(entry);
         adjustment.setReasonCode(request.getReasonCode());
         adjustment.setNotes(request.getNotes());
@@ -93,14 +96,16 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @Transactional(readOnly = true)
     @NonNull
     public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
-        return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream().map(this::toDto).toList();
+        return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream()
+                .map(this::toDto)
+                .toList();
     }
 
     @Override
     @Transactional
     public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, String correlationId) {
-        Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
-                .findById(adjustmentId);
+        Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt =
+                adjustmentRepository.findById(adjustmentId);
         if (opt.isEmpty()) {
             throw new NotFoundException("Adjustment not found: " + adjustmentId);
         }
@@ -128,7 +133,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
     private com.positivity.people.internal.dto.TimeEntryAdjustment toDto(
             com.positivity.people.internal.entity.TimeEntryAdjustment adjustment) {
-        com.positivity.people.internal.dto.TimeEntryAdjustment dto = new com.positivity.people.internal.dto.TimeEntryAdjustment();
+        com.positivity.people.internal.dto.TimeEntryAdjustment dto =
+                new com.positivity.people.internal.dto.TimeEntryAdjustment();
         dto.setAdjustmentId(adjustment.getAdjustmentId());
         dto.setTimeEntryId(adjustment.getTimeEntryId());
         dto.setReasonCode(adjustment.getReasonCode());
@@ -143,5 +149,4 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
         dto.setDecidedAt(adjustment.getDecidedAt());
         return dto;
     }
-
 }

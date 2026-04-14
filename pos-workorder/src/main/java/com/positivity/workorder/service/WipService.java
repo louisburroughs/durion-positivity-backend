@@ -2,11 +2,10 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 /**
  * Public service API for Work-In-Progress (WIP) visibility.
@@ -28,9 +27,8 @@ public interface WipService {
      * @param pageable      pagination and sort parameters
      * @return page of summary WIP views
      */
-    Page<WorkorderStatusView> getWipWorkorders(@NonNull String locationId,
-            boolean multiLocation,
-            @NonNull Pageable pageable);
+    Page<WorkorderStatusView> getWipWorkorders(
+            @NonNull String locationId, boolean multiLocation, @NonNull Pageable pageable);
 
     /**
      * Return the full WIP detail for a single workorder.

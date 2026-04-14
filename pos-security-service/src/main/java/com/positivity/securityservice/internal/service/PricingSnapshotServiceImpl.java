@@ -68,14 +68,14 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
     @Override
     @Transactional(readOnly = true)
     public PricingSnapshotDto getSnapshot(@NonNull UUID snapshotId) {
-        PricingSnapshot snapshot = pricingSnapshotRepository.findById(snapshotId)
+        PricingSnapshot snapshot = pricingSnapshotRepository
+                .findById(snapshotId)
                 .orElseThrow(() -> new IllegalArgumentException("Pricing snapshot not found: " + snapshotId));
 
-        List<PricingRuleTraceEntryDto> steps = pricingRuleTraceEntryRepository
-                .findBySnapshot_SnapshotIdOrderByRuleIdAsc(snapshotId)
-                .stream()
-                .map(this::toDto)
-                .toList();
+        List<PricingRuleTraceEntryDto> steps =
+                pricingRuleTraceEntryRepository.findBySnapshot_SnapshotIdOrderByRuleIdAsc(snapshotId).stream()
+                        .map(this::toDto)
+                        .toList();
 
         return PricingSnapshotDto.builder()
                 .snapshotId(snapshot.getSnapshotId())

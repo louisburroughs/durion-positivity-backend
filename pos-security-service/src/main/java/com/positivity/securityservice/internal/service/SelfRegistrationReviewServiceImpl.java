@@ -41,7 +41,8 @@ public class SelfRegistrationReviewServiceImpl implements SelfRegistrationReview
         reviewCase.setNotes(request.notes());
         if (request.crmMatchSummary() != null) {
             reviewCase.setCrmCandidateCount(request.crmMatchSummary().getCandidateCount());
-            reviewCase.setCrmSharedIdentityCandidateCount(request.crmMatchSummary().getSharedIdentityCandidateCount());
+            reviewCase.setCrmSharedIdentityCandidateCount(
+                    request.crmMatchSummary().getSharedIdentityCandidateCount());
             reviewCase.setCrmExactEmailMatch(request.crmMatchSummary().isExactEmailMatch());
             reviewCase.setCrmExactPhoneMatch(request.crmMatchSummary().isExactPhoneMatch());
             reviewCase.setCrmExactNameMatch(request.crmMatchSummary().isExactNameMatch());
@@ -52,8 +53,7 @@ public class SelfRegistrationReviewServiceImpl implements SelfRegistrationReview
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<SelfRegistrationReviewCaseResponse> listCases(
-            @Nullable SelfRegistrationCaseStatus status,
-            @Nullable SelfRegistrationCaseType caseType) {
+            @Nullable SelfRegistrationCaseStatus status, @Nullable SelfRegistrationCaseType caseType) {
         List<SelfRegistrationReviewCase> cases;
         if (status == null && caseType == null) {
             cases = selfRegistrationReviewCaseRepository.findAll().stream()
@@ -81,9 +81,7 @@ public class SelfRegistrationReviewServiceImpl implements SelfRegistrationReview
     @Override
     @Transactional
     public @NonNull SelfRegistrationReviewCaseResponse resolveCase(
-            @NonNull UUID caseId,
-            @NonNull ResolveSelfRegistrationReviewCaseRequest request,
-            @NonNull String actorId) {
+            @NonNull UUID caseId, @NonNull ResolveSelfRegistrationReviewCaseRequest request, @NonNull String actorId) {
         SelfRegistrationReviewCase reviewCase = findCase(caseId);
         reviewCase.setStatus(SelfRegistrationCaseStatus.RESOLVED);
         reviewCase.setResolvedAt(clock.instant());
@@ -93,7 +91,8 @@ public class SelfRegistrationReviewServiceImpl implements SelfRegistrationReview
     }
 
     private SelfRegistrationReviewCase findCase(UUID caseId) {
-        return selfRegistrationReviewCaseRepository.findById(caseId)
+        return selfRegistrationReviewCaseRepository
+                .findById(caseId)
                 .orElseThrow(() -> new SelfRegistrationReviewCaseNotFoundException(caseId));
     }
 

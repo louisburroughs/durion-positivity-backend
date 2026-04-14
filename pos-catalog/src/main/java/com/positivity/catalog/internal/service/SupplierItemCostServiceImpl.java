@@ -26,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SupplierItemCostServiceImpl implements SupplierItemCostService {
 
     private static final String NOT_FOUND_BY_ID = "Supplier item cost not found for id=";
-    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE = "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
+    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE =
+            "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
 
     private final SupplierItemCostRepository supplierItemCostRepository;
 
@@ -37,9 +38,14 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
     @Override
     @Transactional
     public SupplierItemCostDto createCostStructure(@NonNull SupplierItemCostCreateRequestDto request) {
-        validateRequest(request.getSupplierId(), request.getItemId(), request.getCurrencyCode(), request.getBaseCost(),
+        validateRequest(
+                request.getSupplierId(),
+                request.getItemId(),
+                request.getCurrencyCode(),
+                request.getBaseCost(),
                 request.getTiers());
-        supplierItemCostRepository.findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
+        supplierItemCostRepository
+                .findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
                 .ifPresent(existing -> {
                     throw duplicateSupplierItemCostException();
                 });
@@ -64,22 +70,29 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
     @Override
     @Transactional(readOnly = true)
     public SupplierItemCostDto getCostStructure(@NonNull UUID id) {
-        return supplierItemCostRepository.findById(id)
+        return supplierItemCostRepository
+                .findById(id)
                 .map(this::toDto)
                 .orElseThrow(() -> new CatalogNotFoundException(NOT_FOUND_BY_ID + id));
     }
 
     @Override
     @Transactional
-    public SupplierItemCostDto updateCostStructure(@NonNull UUID id,
-            @NonNull SupplierItemCostUpdateRequestDto request) {
-        validateRequest(request.getSupplierId(), request.getItemId(), request.getCurrencyCode(), request.getBaseCost(),
+    public SupplierItemCostDto updateCostStructure(
+            @NonNull UUID id, @NonNull SupplierItemCostUpdateRequestDto request) {
+        validateRequest(
+                request.getSupplierId(),
+                request.getItemId(),
+                request.getCurrencyCode(),
+                request.getBaseCost(),
                 request.getTiers());
 
-        SupplierItemCostEntity existing = supplierItemCostRepository.findById(id)
+        SupplierItemCostEntity existing = supplierItemCostRepository
+                .findById(id)
                 .orElseThrow(() -> new CatalogNotFoundException(NOT_FOUND_BY_ID + id));
 
-        supplierItemCostRepository.findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
+        supplierItemCostRepository
+                .findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
                 .filter(found -> !found.getId().equals(id))
                 .ifPresent(found -> {
                     throw duplicateSupplierItemCostException();
@@ -97,20 +110,23 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
     @Override
     @Transactional
     public void deleteCostStructure(@NonNull UUID id) {
-        SupplierItemCostEntity existing = supplierItemCostRepository.findById(id)
+        SupplierItemCostEntity existing = supplierItemCostRepository
+                .findById(id)
                 .orElseThrow(() -> new CatalogNotFoundException(NOT_FOUND_BY_ID + id));
         supplierItemCostRepository.delete(existing);
     }
 
-    private void validateRequest(UUID supplierId, UUID itemId, String currencyCode, BigDecimal baseCost,
-            List<CostTierDto> tiers) {
+    private void validateRequest(
+            UUID supplierId, UUID itemId, String currencyCode, BigDecimal baseCost, List<CostTierDto> tiers) {
         if (supplierId == null) {
             throw new CatalogValidationException("INVALID_TIER_STRUCTURE: supplierId is required.");
         }
         if (itemId == null) {
             throw new CatalogValidationException("INVALID_TIER_STRUCTURE: itemId is required.");
         }
-        if (currencyCode == null || currencyCode.isBlank() || currencyCode.trim().length() != 3) {
+        if (currencyCode == null
+                || currencyCode.isBlank()
+                || currencyCode.trim().length() != 3) {
             throw new CatalogValidationException("INVALID_TIER_STRUCTURE: currencyCode must be a 3-letter ISO code.");
         }
         if (baseCost != null && baseCost.signum() < 0) {
@@ -159,8 +175,8 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
         }
     }
 
-    private void validateTierSequenceConstraints(Integer minQuantity, Integer maxQuantity, int expectedMinQuantity,
-            int index, int size) {
+    private void validateTierSequenceConstraints(
+            Integer minQuantity, Integer maxQuantity, int expectedMinQuantity, int index, int size) {
         if (minQuantity < expectedMinQuantity) {
             throw new CatalogValidationException("INVALID_TIER_STRUCTURE: tier ranges cannot overlap.");
         }

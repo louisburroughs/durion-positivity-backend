@@ -1,5 +1,16 @@
 package com.positivity.workorder.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.controller.SubstituteLinkController;
@@ -11,6 +22,8 @@ import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkExcept
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.service.SubstituteLinkService;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,20 +33,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Controller-layer tests for {@link SubstituteLinkController}.
@@ -112,8 +111,8 @@ class SubstituteLinkControllerTest {
 
         // Act & Assert
         mockMvc.perform(post(CREATE_URL, PRODUCT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.substituteType").value("EQUIVALENT"));
@@ -139,8 +138,8 @@ class SubstituteLinkControllerTest {
 
         // Act & Assert
         mockMvc.perform(post(CREATE_URL, PRODUCT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
     }
 
@@ -199,9 +198,9 @@ class SubstituteLinkControllerTest {
                 .thenReturn(response);
 
         mockMvc.perform(put(UPDATE_URL, PRODUCT_ID)
-                .param("linkId", LINK_ID.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .param("linkId", LINK_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.version").value(1));
@@ -226,9 +225,9 @@ class SubstituteLinkControllerTest {
 
         // Act & Assert
         mockMvc.perform(put(UPDATE_URL, PRODUCT_ID)
-                .param("linkId", LINK_ID.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .param("linkId", LINK_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
     }
 
@@ -254,8 +253,7 @@ class SubstituteLinkControllerTest {
                 .thenReturn(response);
 
         // Act & Assert
-        mockMvc.perform(delete(DELETE_URL, PRODUCT_ID)
-                .param("substitute", SUBSTITUTE_PART_ID.toString()))
+        mockMvc.perform(delete(DELETE_URL, PRODUCT_ID).param("substitute", SUBSTITUTE_PART_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isNotEmpty())
                 .andExpect(jsonPath("$.isActive").value(false));
@@ -268,8 +266,7 @@ class SubstituteLinkControllerTest {
                 .when(substituteLinkService)
                 .deleteLink(any(), any());
 
-        mockMvc.perform(delete(DELETE_URL, PRODUCT_ID)
-                .param("substitute", SUBSTITUTE_PART_ID.toString()))
+        mockMvc.perform(delete(DELETE_URL, PRODUCT_ID).param("substitute", SUBSTITUTE_PART_ID.toString()))
                 .andExpect(status().isNotFound());
     }
 
@@ -286,9 +283,9 @@ class SubstituteLinkControllerTest {
                 .thenThrow(new SubstituteLinkNotFoundException(UUID.randomUUID()));
 
         mockMvc.perform(put(UPDATE_URL, PRODUCT_ID)
-                .param("linkId", LINK_ID.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .param("linkId", LINK_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
     }
 
@@ -301,12 +298,10 @@ class SubstituteLinkControllerTest {
     @DisplayName("AC8: POST /v1/workorders/{workorderId}/suggestSubstitutes returns 200")
     void whenSuggestSubstitutes_thenReturns200() throws Exception {
         // Arrange
-        when(substituteLinkService.suggestSubstitutes(eq(WORKORDER_ID)))
-                .thenReturn(List.of());
+        when(substituteLinkService.suggestSubstitutes(eq(WORKORDER_ID))).thenReturn(List.of());
 
         // Act & Assert
-        mockMvc.perform(post(SUGGEST_URL, WORKORDER_ID)
-                .contentType(MediaType.APPLICATION_JSON))
+        mockMvc.perform(post(SUGGEST_URL, WORKORDER_ID).contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());

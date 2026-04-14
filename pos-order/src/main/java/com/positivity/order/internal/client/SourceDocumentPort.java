@@ -1,9 +1,8 @@
 package com.positivity.order.internal.client;
 
 import com.positivity.order.internal.entity.SourceType;
-import org.jspecify.annotations.NonNull;
-
 import java.util.List;
+import org.jspecify.annotations.NonNull;
 
 public interface SourceDocumentPort {
     @NonNull

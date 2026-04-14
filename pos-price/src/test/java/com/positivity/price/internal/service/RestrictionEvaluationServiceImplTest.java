@@ -63,7 +63,8 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of());
+                        item.productId(), item.locationTag(), item.serviceTag()))
+                .thenReturn(List.of());
 
         var results = service.evaluate(request);
 
@@ -80,7 +81,8 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(false)));
+                        item.productId(), item.locationTag(), item.serviceTag()))
+                .thenReturn(List.of(rule(false)));
 
         var results = service.evaluate(request);
 
@@ -97,7 +99,8 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.QUOTE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(true)));
+                        item.productId(), item.locationTag(), item.serviceTag()))
+                .thenReturn(List.of(rule(true)));
 
         var results = service.evaluate(request);
 
@@ -117,7 +120,8 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
+                        item.productId(), item.locationTag(), item.serviceTag()))
+                .thenThrow(new RuntimeException("down"));
 
         var results = service.evaluate(request);
 
@@ -138,10 +142,10 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.COMMIT_SALE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
+                        item.productId(), item.locationTag(), item.serviceTag()))
+                .thenThrow(new RuntimeException("down"));
 
-        assertThatThrownBy(() -> service.evaluate(request))
-                .isInstanceOf(RestrictionServiceUnavailableException.class);
+        assertThatThrownBy(() -> service.evaluate(request)).isInstanceOf(RestrictionServiceUnavailableException.class);
     }
 
     /**
@@ -173,13 +177,14 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.CHECKOUT, 1);
         var item = request.items().get(0);
         doAnswer(invocation -> {
-            new java.util.concurrent.Semaphore(0).tryAcquire(100L, TimeUnit.MILLISECONDS);
-            return List.of(rule(false));
-        }).when(repository).findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-                item.productId(), item.locationTag(), item.serviceTag());
+                    new java.util.concurrent.Semaphore(0).tryAcquire(100L, TimeUnit.MILLISECONDS);
+                    return List.of(rule(false));
+                })
+                .when(repository)
+                .findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
+                        item.productId(), item.locationTag(), item.serviceTag());
 
-        assertThatThrownBy(() -> service.evaluate(request))
-                .isInstanceOf(RestrictionServiceUnavailableException.class);
+        assertThatThrownBy(() -> service.evaluate(request)).isInstanceOf(RestrictionServiceUnavailableException.class);
     }
 
     // ---- helpers ----
@@ -187,10 +192,7 @@ class RestrictionEvaluationServiceImplTest {
     private RestrictionEvaluationRequest evaluationRequest(EvaluationContext context, int itemCount) {
         List<RestrictionEvaluationItem> items = IntStream.range(0, itemCount)
                 .mapToObj(i -> new RestrictionEvaluationItem(
-                        UUID.randomUUID(),
-                        LocationTag.RETAIL_STORE,
-                        ServiceTag.WORKORDER,
-                        context))
+                        UUID.randomUUID(), LocationTag.RETAIL_STORE, ServiceTag.WORKORDER, context))
                 .toList();
         return new RestrictionEvaluationRequest(items);
     }

@@ -1,4 +1,3 @@
 package com.positivity.catalog;
 
-public abstract class BaseContractIntegrationTest extends BaseIntegrationTest {
-}
+public abstract class BaseContractIntegrationTest extends BaseIntegrationTest {}

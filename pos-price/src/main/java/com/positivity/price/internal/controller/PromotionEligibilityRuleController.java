@@ -28,7 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 /** Controller for promotion eligibility rule operations. Issue: #96 */
 @RestController
 @RequestMapping("/v1/promotions/offers/{promotionId}/rules")
-@Tag(name = "Promotion Eligibility Rules", description = "Promotion eligibility rule management and evaluation operations")
+@Tag(
+        name = "Promotion Eligibility Rules",
+        description = "Promotion eligibility rule management and evaluation operations")
 @SecurityRequirement(name = "BearerAuth")
 public class PromotionEligibilityRuleController {
 
@@ -49,8 +51,7 @@ public class PromotionEligibilityRuleController {
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<EligibilityRuleResponse> addRule(
-            @PathVariable("promotionId") UUID promotionId,
-            @Valid @RequestBody AddEligibilityRuleRequest request) {
+            @PathVariable("promotionId") UUID promotionId, @Valid @RequestBody AddEligibilityRuleRequest request) {
         var rule = eligibilityEvaluationService.addRule(promotionId, request);
         var response = PromotionEligibilityRuleMapper.toResponse(rule);
         URI location = URI.create("/v1/promotions/offers/" + promotionId + "/rules/" + response.getRuleId());
@@ -82,8 +83,7 @@ public class PromotionEligibilityRuleController {
     @ApiResponse(responseCode = "404", description = "Promotion offer or rule not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<Void> deleteRule(
-            @PathVariable("promotionId") UUID promotionId,
-            @PathVariable("ruleId") UUID ruleId) {
+            @PathVariable("promotionId") UUID promotionId, @PathVariable("ruleId") UUID ruleId) {
         eligibilityEvaluationService.deleteRule(promotionId, ruleId);
         return ResponseEntity.noContent().build();
     }
@@ -99,8 +99,7 @@ public class PromotionEligibilityRuleController {
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<EligibilityDecisionResponse> evaluateEligibility(
-            @PathVariable("promotionId") UUID promotionId,
-            @RequestBody EligibilityContext context) {
+            @PathVariable("promotionId") UUID promotionId, @RequestBody EligibilityContext context) {
         var decision = eligibilityEvaluationService.evaluateEligibility(
                 promotionId,
                 context == null ? null : context.getAccountId(),

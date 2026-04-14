@@ -11,38 +11,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import org.mockito.ArgumentCaptor;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Profile;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-
-import jakarta.persistence.EntityNotFoundException;
-
 import com.positivity.accounting.internal.dto.AccountingStatusChangedEvent;
 import com.positivity.accounting.internal.dto.AccountingStatusView;
 import com.positivity.accounting.internal.entity.AccountingStatusSyncAudit;
@@ -51,6 +19,35 @@ import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.repository.AccountingStatusSyncAuditRepository;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.service.AccountingStatusSyncServiceImpl;
+import jakarta.persistence.EntityNotFoundException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 /**
  * Unit tests for {@link AccountingStatusSyncServiceImpl} covering
@@ -112,8 +109,7 @@ class AccountingStatusSyncServiceTest {
         void whenPostedEventReceived_thenStatusViewIsUpdatedWithPostingReference() {
             // Arrange
             // Issue CAP-251 #5: mock existing invoice record; impl will load and update it
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
 
             AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
                     .invoiceId(INVOICE_ID)
@@ -126,8 +122,7 @@ class AccountingStatusSyncServiceTest {
             // Act & Assert — RED: stub throws UnsupportedOperationException
             // GREEN: must update InvoiceStatusView.accountingStatus=POSTED,
             // accountingStatusUpdatedAt=event.timestamp, postingReference="GL-REF-001"
-            assertThatCode(() -> service.processStatusEvent(event))
-                    .doesNotThrowAnyException();
+            assertThatCode(() -> service.processStatusEvent(event)).doesNotThrowAnyException();
 
             assertThat(existingStatusView.getAccountingStatus()).isEqualTo(AccountingStatus.POSTED);
             assertThat(existingStatusView.getPostingReference()).isEqualTo(event.getPostingReference());
@@ -146,8 +141,7 @@ class AccountingStatusSyncServiceTest {
         @Test
         @DisplayName("silently ignores backward transition: POSTED → PENDING_POSTING (no-op + warn)")
         void whenBackwardTransitionFromPosted_thenNoExceptionThrownAndSaveNotCalled() {
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
             existingStatusView.setAccountingStatus(AccountingStatus.POSTED);
             when(idempotencyService.isKeyProcessed("evt-backward-001")).thenReturn(false);
 
@@ -230,10 +224,10 @@ class AccountingStatusSyncServiceTest {
             // Arrange
             // Issue CAP-251 #5: InvoiceStatusView will expose accountingStatusUpdatedAt in
             // GREEN
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
             setViewerSecurityContext();
-            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(2, ChronoUnit.HOURS));
+            existingStatusView.setAccountingStatusUpdatedAt(
+                    Instant.now(TEST_CLOCK).minus(2, ChronoUnit.HOURS));
 
             // Act — RED: stub throws UnsupportedOperationException
             // GREEN: must return AccountingStatusView with stale=true
@@ -255,10 +249,10 @@ class AccountingStatusSyncServiceTest {
         @DisplayName("returns stale=false when accountingStatusUpdatedAt is 30 minutes before now")
         void whenAccountingStatusUpdatedAtIsThirtyMinutesAgo_thenStaleIsFalse() {
             // Arrange
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
             setViewerSecurityContext();
-            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
+            existingStatusView.setAccountingStatusUpdatedAt(
+                    Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
 
             // Act — RED: stub throws UnsupportedOperationException
             // GREEN: must return AccountingStatusView with stale=false
@@ -320,8 +314,7 @@ class AccountingStatusSyncServiceTest {
         @DisplayName("updates accountingStatus for archived invoice without error")
         void whenArchivedInvoiceReceivesStatusEvent_thenStatusUpdatedSuccessfully() {
             // Arrange
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
 
             AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
                     .invoiceId(INVOICE_ID)
@@ -334,8 +327,7 @@ class AccountingStatusSyncServiceTest {
             // Act & Assert — RED: stub throws UnsupportedOperationException
             // GREEN: must not throw; archived invoices are eligible for accounting status
             // sync
-            assertThatCode(() -> service.processStatusEvent(event))
-                    .doesNotThrowAnyException();
+            assertThatCode(() -> service.processStatusEvent(event)).doesNotThrowAnyException();
 
             verify(statusViewRepository).save(any());
         }
@@ -364,11 +356,9 @@ class AccountingStatusSyncServiceTest {
         @ParameterizedTest(name = "status={0}")
         @MethodSource("v1StatusValues")
         @DisplayName("processStatusEvent does not reject v1 status value")
-        void whenV1StatusReceived_thenEventIsProcessedWithoutEnumMappingError(
-                AccountingStatus status) {
+        void whenV1StatusReceived_thenEventIsProcessedWithoutEnumMappingError(AccountingStatus status) {
             // Arrange
-            when(statusViewRepository.findByInvoiceId(INVOICE_ID))
-                    .thenReturn(Optional.of(existingStatusView));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
 
             AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
                     .invoiceId(INVOICE_ID)
@@ -380,8 +370,7 @@ class AccountingStatusSyncServiceTest {
 
             // Act & Assert — RED: stub throws UnsupportedOperationException
             // GREEN: must accept all 8 v1 enum values without throwing
-            assertThatCode(() -> service.processStatusEvent(event))
-                    .doesNotThrowAnyException();
+            assertThatCode(() -> service.processStatusEvent(event)).doesNotThrowAnyException();
         }
 
         @Test
@@ -525,7 +514,8 @@ class AccountingStatusSyncServiceTest {
         @DisplayName("returns stale=false when accountingStatusUpdatedAt is within 1 hour")
         void whenRecentlyUpdated_thenStaleIsFalse() {
             setDetailViewerSecurityContext();
-            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
+            existingStatusView.setAccountingStatusUpdatedAt(
+                    Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
             when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
 
             AccountingStatusView result = service.getInvoiceAccountingStatusDetail(INVOICE_ID);
@@ -558,7 +548,8 @@ class AccountingStatusSyncServiceTest {
         void whenInvoiceFound_thenReturnsStatusView() {
             setRefreshStatusSecurityContext();
             existingStatusView.setAccountingStatus(AccountingStatus.POSTED);
-            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.MINUTES));
+            existingStatusView.setAccountingStatusUpdatedAt(
+                    Instant.now(TEST_CLOCK).minus(10, ChronoUnit.MINUTES));
             when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
 
             AccountingStatusView result = service.refreshAccountingStatus(INVOICE_ID);
@@ -649,8 +640,7 @@ class AccountingStatusSyncServiceTest {
                     .eventId("evt-notfound-001")
                     .build();
 
-            assertThatThrownBy(() -> service.processStatusEvent(event))
-                    .isInstanceOf(EntityNotFoundException.class);
+            assertThatThrownBy(() -> service.processStatusEvent(event)).isInstanceOf(EntityNotFoundException.class);
         }
     }
 
@@ -684,8 +674,8 @@ class AccountingStatusSyncServiceTest {
                 IdempotencyService idempotencyService,
                 Clock clock,
                 AccountingStatusSyncAuditRepository auditRepository) {
-            return new AccountingStatusSyncServiceImpl(statusViewRepository, idempotencyService, clock,
-                    auditRepository);
+            return new AccountingStatusSyncServiceImpl(
+                    statusViewRepository, idempotencyService, clock, auditRepository);
         }
     }
 
@@ -701,8 +691,7 @@ class AccountingStatusSyncServiceTest {
     private void setViewerSecurityContext() {
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
-                "viewer", "password",
-                List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_STATUS"))));
+                "viewer", "password", List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_STATUS"))));
         SecurityContextHolder.setContext(ctx);
     }
 
@@ -713,8 +702,7 @@ class AccountingStatusSyncServiceTest {
     private void setDetailViewerSecurityContext() {
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
-                "detail-viewer", "password",
-                List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_DETAIL"))));
+                "detail-viewer", "password", List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_DETAIL"))));
         SecurityContextHolder.setContext(ctx);
     }
 
@@ -725,8 +713,7 @@ class AccountingStatusSyncServiceTest {
     private void setRefreshStatusSecurityContext() {
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
-                "refresher", "password",
-                List.of(new SimpleGrantedAuthority("REFRESH_ACCOUNTING_STATUS"))));
+                "refresher", "password", List.of(new SimpleGrantedAuthority("REFRESH_ACCOUNTING_STATUS"))));
         SecurityContextHolder.setContext(ctx);
     }
 }

@@ -1,15 +1,13 @@
 package com.positivity.workorder.entity;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import com.positivity.workorder.internal.entity.StringListJsonConverter;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.positivity.workorder.internal.entity.StringListJsonConverter;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link StringListJsonConverter} — JPA AttributeConverter for
@@ -62,9 +60,7 @@ class StringListJsonConverterTest {
     @Test
     @DisplayName("convertToDatabaseColumn: list with UUID-like strings → serialises correctly")
     void convertToDatabaseColumn_uuidStrings_serialisesCorrectly() {
-        List<String> contactIds = List.of(
-                "01952f4e-a003-7000-8000-crm0000003",
-                "01952f4e-a004-7000-8000-crm0000004");
+        List<String> contactIds = List.of("01952f4e-a003-7000-8000-crm0000003", "01952f4e-a004-7000-8000-crm0000004");
         String result = converter.convertToDatabaseColumn(contactIds);
         assertThat(result)
                 .contains("01952f4e-a003-7000-8000-crm0000003")

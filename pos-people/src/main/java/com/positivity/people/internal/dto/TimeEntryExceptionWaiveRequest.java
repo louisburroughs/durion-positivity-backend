@@ -10,5 +10,4 @@ public class TimeEntryExceptionWaiveRequest {
     @NotBlank(message = "waiveReason is required")
     @Schema(description = "Reason for waiving the exception", requiredMode = Schema.RequiredMode.REQUIRED)
     private String waiveReason;
-
 }

@@ -3,12 +3,19 @@ package com.positivity.accounting.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.InvoiceStatusView;
+import com.positivity.accounting.internal.enums.PaymentStatus;
+import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
+import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
+import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,15 +26,6 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.positivity.accounting.internal.config.TestSecurityConfig;
-import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
-import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
-import com.positivity.accounting.internal.entity.InvoiceStatusView;
-import com.positivity.accounting.internal.enums.PaymentStatus;
-import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
-import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
-import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
 
 /**
  * Integration tests for InvoicePaymentStatusService.
@@ -154,7 +152,8 @@ class InvoicePaymentStatusServiceTest {
         paymentStatusService.processPaymentApplied(request);
 
         // Assert - Failed payments don't count toward total
-        InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(INV_004).orElseThrow();
+        InvoiceStatusView statusView =
+                statusViewRepository.findByInvoiceId(INV_004).orElseThrow();
         assertEquals(PaymentStatus.UNPAID, statusView.getCurrentStatus());
         assertEquals(0, statusView.getTotalPaid().compareTo(BigDecimal.ZERO));
     }
@@ -174,7 +173,9 @@ class InvoicePaymentStatusServiceTest {
         InvoiceStatusResponse response2 = paymentStatusService.processPaymentApplied(request);
 
         // Assert - Only one payment event should be created
-        long eventCount = paymentEventRepository.findByInvoiceIdOrderByTimestampDesc(INV_005).size();
+        long eventCount = paymentEventRepository
+                .findByInvoiceIdOrderByTimestampDesc(INV_005)
+                .size();
         assertEquals(1, eventCount);
 
         // Both responses should be identical

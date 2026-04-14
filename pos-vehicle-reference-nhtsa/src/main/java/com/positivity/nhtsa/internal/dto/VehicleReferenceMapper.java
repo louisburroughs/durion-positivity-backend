@@ -6,8 +6,7 @@ import com.positivity.nhtsa.internal.entity.Model;
 import com.positivity.nhtsa.internal.entity.VehicleType;
 
 public final class VehicleReferenceMapper {
-    private VehicleReferenceMapper() {
-    }
+    private VehicleReferenceMapper() {}
 
     public static ManufacturerResponse toManufacturerResponse(Manufacturer manufacturer) {
         return ManufacturerResponse.builder()
@@ -20,7 +19,10 @@ public final class VehicleReferenceMapper {
         return MakeResponse.builder()
                 .id(make.getId())
                 .name(make.getName())
-                .manufacturerId(make.getManufacturer() == null ? null : make.getManufacturer().getId())
+                .manufacturerId(
+                        make.getManufacturer() == null
+                                ? null
+                                : make.getManufacturer().getId())
                 .build();
     }
 
@@ -35,7 +37,10 @@ public final class VehicleReferenceMapper {
     public static VehicleTypeResponse toVehicleTypeResponse(VehicleType vehicleType) {
         return VehicleTypeResponse.builder()
                 .id(vehicleType.getId())
-                .makeId(vehicleType.getMake() == null ? null : vehicleType.getMake().getId())
+                .makeId(
+                        vehicleType.getMake() == null
+                                ? null
+                                : vehicleType.getMake().getId())
                 .vehicleTypeId(vehicleType.getVehicleTypeId())
                 .vehicleTypeName(vehicleType.getVehicleTypeName())
                 .build();

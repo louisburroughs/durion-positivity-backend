@@ -1,8 +1,5 @@
 package com.positivity.inventory.contract;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -16,8 +13,9 @@ import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.enums.PickListStatus;
 import com.positivity.inventory.service.PickListService;
-
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -53,199 +51,198 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("PickList Contract Behavior — Story #28")
 class PickListContractBehaviorIT extends BaseContractIntegrationTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        @Autowired
-        private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-        @Autowired
-        private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-        @MockitoBean
-        private PickListService pickListService;
+    @MockitoBean
+    private PickListService pickListService;
 
-        // ─── CH1: POST /v1/inventory/pick-lists — 201 Created ───────────────────────
+    // ─── CH1: POST /v1/inventory/pick-lists — 201 Created ───────────────────────
 
-        /**
-         * CH1: Verifies that POST /v1/inventory/pick-lists with a valid request body
-         * and gateway auth returns 201 Created with pickListId and status=DRAFT.
-         *
-         * <p>
-         * RED: {@code PickListController} does not exist — request returns 404.
-         *
-         * Issue: #28
-         */
-        @Test
-        @DisplayName("POST /v1/inventory/pick-lists with valid body + gateway auth → 201 Created")
-        void CH1_createPickList_validBodyAndAuth_returns201() throws Exception {
-                // Issue #28: CH1 — create endpoint must return 201 with pickListId and
-                // status=DRAFT
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    /**
+     * CH1: Verifies that POST /v1/inventory/pick-lists with a valid request body
+     * and gateway auth returns 201 Created with pickListId and status=DRAFT.
+     *
+     * <p>
+     * RED: {@code PickListController} does not exist — request returns 404.
+     *
+     * Issue: #28
+     */
+    @Test
+    @DisplayName("POST /v1/inventory/pick-lists with valid body + gateway auth → 201 Created")
+    void CH1_createPickList_validBodyAndAuth_returns201() throws Exception {
+        // Issue #28: CH1 — create endpoint must return 201 with pickListId and
+        // status=DRAFT
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                PickListResponse mockResponse = new PickListResponse(
-                                pickListId,
-                                workorderId,
-                                PickListStatus.DRAFT,
-                                1,
-                                Instant.now(TEST_CLOCK).plusSeconds(3600),
-                                Instant.now(TEST_CLOCK),
-                                Instant.now(TEST_CLOCK));
+        PickListResponse mockResponse = new PickListResponse(
+                pickListId,
+                workorderId,
+                PickListStatus.DRAFT,
+                1,
+                Instant.now(TEST_CLOCK).plusSeconds(3600),
+                Instant.now(TEST_CLOCK),
+                Instant.now(TEST_CLOCK));
 
-                when(pickListService.createPickList(any(CreatePickListRequest.class)))
-                                .thenReturn(mockResponse);
+        when(pickListService.createPickList(any(CreatePickListRequest.class))).thenReturn(mockResponse);
 
-                String requestBody = objectMapper.writeValueAsString(
-                                new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600), 1,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001")));
+        String requestBody = objectMapper.writeValueAsString(new CreatePickListRequest(
+                workorderId,
+                Instant.now(TEST_CLOCK).plusSeconds(3600),
+                1,
+                UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
-                mockMvc.perform(withGatewayAuth(post("/v1/inventory/pick-lists"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(requestBody))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
-                                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
-                                .andExpect(jsonPath("$.status").value("DRAFT"));
-        }
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/pick-lists"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
+                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
 
-        // ─── CH2: POST /v1/inventory/pick-lists — 403 with missing authority ─────────
+    // ─── CH2: POST /v1/inventory/pick-lists — 403 with missing authority ─────────
 
-        /**
-         * CH2: Verifies that POST /v1/inventory/pick-lists with an authenticated user
-         * but without the required inventory authority returns 403 Forbidden per
-         * ADR-0011 and ADR-0014.
-         *
-         * Issue: #28
-         */
-        @Test
-        @DisplayName("POST /v1/inventory/pick-lists without required authority → 403 Forbidden")
-        void CH2_createPickList_missingRequiredAuthority_returns403() throws Exception {
-                // Issue #28: authenticated user + unrelated authority must yield 403
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                String requestBody = objectMapper.writeValueAsString(
-                                new CreatePickListRequest(workorderId, null, 0, null));
+    /**
+     * CH2: Verifies that POST /v1/inventory/pick-lists with an authenticated user
+     * but without the required inventory authority returns 403 Forbidden per
+     * ADR-0011 and ADR-0014.
+     *
+     * Issue: #28
+     */
+    @Test
+    @DisplayName("POST /v1/inventory/pick-lists without required authority → 403 Forbidden")
+    void CH2_createPickList_missingRequiredAuthority_returns403() throws Exception {
+        // Issue #28: authenticated user + unrelated authority must yield 403
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        String requestBody = objectMapper.writeValueAsString(new CreatePickListRequest(workorderId, null, 0, null));
 
-                mockMvc.perform(post("/v1/inventory/pick-lists")
-                                .header("X-User", "test-user")
-                                .header("X-Authorities", "unrelated:authority")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(requestBody))
-                                .andExpect(status().isForbidden());
-        }
+        mockMvc.perform(post("/v1/inventory/pick-lists")
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "unrelated:authority")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden());
+    }
 
-        // ─── CH3: GET /v1/inventory/pick-lists/{id} — 200 OK ────────────────────────
+    // ─── CH3: GET /v1/inventory/pick-lists/{id} — 200 OK ────────────────────────
 
-        /**
-         * CH3: Verifies that GET /v1/inventory/pick-lists/{id} with a valid ID and
-         * gateway auth returns 200 OK with the pick list JSON.
-         *
-         * <p>
-         * RED: {@code PickListController} does not exist — request returns 404.
-         *
-         * Issue: #28
-         */
-        @Test
-        @DisplayName("GET /v1/inventory/pick-lists/{id} with valid ID + gateway auth → 200 OK")
-        void CH3_getPickList_validId_returns200() throws Exception {
-                // Issue #28: CH3 — get endpoint must return 200 with full pick list response
-                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    /**
+     * CH3: Verifies that GET /v1/inventory/pick-lists/{id} with a valid ID and
+     * gateway auth returns 200 OK with the pick list JSON.
+     *
+     * <p>
+     * RED: {@code PickListController} does not exist — request returns 404.
+     *
+     * Issue: #28
+     */
+    @Test
+    @DisplayName("GET /v1/inventory/pick-lists/{id} with valid ID + gateway auth → 200 OK")
+    void CH3_getPickList_validId_returns200() throws Exception {
+        // Issue #28: CH3 — get endpoint must return 200 with full pick list response
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                PickListResponse mockResponse = new PickListResponse(
-                                pickListId,
-                                workorderId,
-                                PickListStatus.DRAFT,
-                                0,
-                                null,
-                                Instant.now(TEST_CLOCK),
-                                Instant.now(TEST_CLOCK));
+        PickListResponse mockResponse = new PickListResponse(
+                pickListId,
+                workorderId,
+                PickListStatus.DRAFT,
+                0,
+                null,
+                Instant.now(TEST_CLOCK),
+                Instant.now(TEST_CLOCK));
 
-                when(pickListService.getPickList(eq(pickListId))).thenReturn(mockResponse);
+        when(pickListService.getPickList(eq(pickListId))).thenReturn(mockResponse);
 
-                mockMvc.perform(withGatewayAuth(get("/v1/inventory/pick-lists/{id}", pickListId)))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
-                                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
-                                .andExpect(jsonPath("$.status").value("DRAFT"));
-        }
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/pick-lists/{id}", pickListId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
+                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
 
-        // ─── CH4: GET /v1/inventory/pick-lists?workorderId=... — 200 OK ─────────────
+    // ─── CH4: GET /v1/inventory/pick-lists?workorderId=... — 200 OK ─────────────
 
-        /**
-         * CH4: Verifies that GET /v1/inventory/pick-lists?workorderId={id} with a
-         * valid workorderId returns 200 OK with a JSON array.
-         *
-         * <p>
-         * RED: {@code PickListController} does not exist — request returns 404.
-         *
-         * Issue: #28
-         */
-        @Test
-        @DisplayName("GET /v1/inventory/pick-lists?workorderId=... with valid workorderId → 200 OK with array")
-        void CH4_getPickListsForWorkorder_validWorkorderId_returns200WithArray() throws Exception {
-                // Issue #28: CH4 — list endpoint must return 200 with JSON array
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    /**
+     * CH4: Verifies that GET /v1/inventory/pick-lists?workorderId={id} with a
+     * valid workorderId returns 200 OK with a JSON array.
+     *
+     * <p>
+     * RED: {@code PickListController} does not exist — request returns 404.
+     *
+     * Issue: #28
+     */
+    @Test
+    @DisplayName("GET /v1/inventory/pick-lists?workorderId=... with valid workorderId → 200 OK with array")
+    void CH4_getPickListsForWorkorder_validWorkorderId_returns200WithArray() throws Exception {
+        // Issue #28: CH4 — list endpoint must return 200 with JSON array
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                PickListResponse mockEntry = new PickListResponse(
-                                pickListId,
-                                workorderId,
-                                PickListStatus.DRAFT,
-                                0,
-                                null,
-                                Instant.now(TEST_CLOCK),
-                                Instant.now(TEST_CLOCK));
+        PickListResponse mockEntry = new PickListResponse(
+                pickListId,
+                workorderId,
+                PickListStatus.DRAFT,
+                0,
+                null,
+                Instant.now(TEST_CLOCK),
+                Instant.now(TEST_CLOCK));
 
-                when(pickListService.getPickListsForWorkorder(eq(workorderId))).thenReturn(List.of(mockEntry));
+        when(pickListService.getPickListsForWorkorder(eq(workorderId))).thenReturn(List.of(mockEntry));
 
-                mockMvc.perform(withGatewayAuth(get("/v1/inventory/pick-lists")
-                                .param("workorderId", workorderId.toString())))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$[0].pickListId").value(pickListId.toString()))
-                                .andExpect(jsonPath("$[0].workorderId").value(workorderId.toString()));
-        }
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/pick-lists").param("workorderId", workorderId.toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].pickListId").value(pickListId.toString()))
+                .andExpect(jsonPath("$[0].workorderId").value(workorderId.toString()));
+    }
 
-        // ─── CH5: PATCH /v1/inventory/pick-lists/{id}/status — 200 OK ───────────────
+    // ─── CH5: PATCH /v1/inventory/pick-lists/{id}/status — 200 OK ───────────────
 
-        /**
-         * CH5: Verifies that PATCH /v1/inventory/pick-lists/{id}/status with
-         * status=READY_TO_PICK returns 200 OK with updated status.
-         *
-         * <p>
-         * Note: The story describes the target state as "RELEASED"; the nearest enum
-         * value is {@link PickListStatus#READY_TO_PICK}.
-         *
-         * <p>
-         * RED: {@code PickListController} does not exist — request returns 404.
-         *
-         * Issue: #28
-         */
-        @Test
-        @DisplayName("PATCH /v1/inventory/pick-lists/{id}/status with status=READY_TO_PICK → 200 OK")
-        void CH5_updatePickListStatus_readyToPick_returns200() throws Exception {
-                // Issue #28: CH5 — status update endpoint must return 200 with updated status
-                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    /**
+     * CH5: Verifies that PATCH /v1/inventory/pick-lists/{id}/status with
+     * status=READY_TO_PICK returns 200 OK with updated status.
+     *
+     * <p>
+     * Note: The story describes the target state as "RELEASED"; the nearest enum
+     * value is {@link PickListStatus#READY_TO_PICK}.
+     *
+     * <p>
+     * RED: {@code PickListController} does not exist — request returns 404.
+     *
+     * Issue: #28
+     */
+    @Test
+    @DisplayName("PATCH /v1/inventory/pick-lists/{id}/status with status=READY_TO_PICK → 200 OK")
+    void CH5_updatePickListStatus_readyToPick_returns200() throws Exception {
+        // Issue #28: CH5 — status update endpoint must return 200 with updated status
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                PickListResponse mockResponse = new PickListResponse(
-                                pickListId,
-                                workorderId,
-                                PickListStatus.READY_TO_PICK,
-                                0,
-                                null,
-                                Instant.now(TEST_CLOCK),
-                                Instant.now(TEST_CLOCK));
+        PickListResponse mockResponse = new PickListResponse(
+                pickListId,
+                workorderId,
+                PickListStatus.READY_TO_PICK,
+                0,
+                null,
+                Instant.now(TEST_CLOCK),
+                Instant.now(TEST_CLOCK));
 
-                when(pickListService.updatePickListStatus(eq(pickListId), eq(PickListStatus.READY_TO_PICK)))
-                                .thenReturn(mockResponse);
+        when(pickListService.updatePickListStatus(eq(pickListId), eq(PickListStatus.READY_TO_PICK)))
+                .thenReturn(mockResponse);
 
-                String requestBody = objectMapper.writeValueAsString(Map.of("status", "READY_TO_PICK"));
+        String requestBody = objectMapper.writeValueAsString(Map.of("status", "READY_TO_PICK"));
 
-                mockMvc.perform(withGatewayAuth(patch("/v1/inventory/pick-lists/{id}/status", pickListId))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(requestBody))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
-                                .andExpect(jsonPath("$.status").value("READY_TO_PICK"));
-        }
+        mockMvc.perform(withGatewayAuth(patch("/v1/inventory/pick-lists/{id}/status", pickListId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pickListId").value(pickListId.toString()))
+                .andExpect(jsonPath("$.status").value("READY_TO_PICK"));
+    }
 }

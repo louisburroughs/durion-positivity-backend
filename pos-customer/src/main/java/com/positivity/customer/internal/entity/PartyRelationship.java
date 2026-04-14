@@ -1,18 +1,7 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.shared.id.UUIDv7Id;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -29,10 +18,18 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Party relationship entity representing the association between a commercial
@@ -54,11 +51,13 @@ import lombok.ToString;
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "party_relationship", indexes = {
-        @Index(name = "idx_party_rel_from_party", columnList = "from_party_id"),
-        @Index(name = "idx_party_rel_to_person", columnList = "to_person_id"),
-        @Index(name = "idx_party_rel_primary_billing", columnList = "from_party_id, is_primary_billing_contact")
-})
+@Table(
+        name = "party_relationship",
+        indexes = {
+            @Index(name = "idx_party_rel_from_party", columnList = "from_party_id"),
+            @Index(name = "idx_party_rel_to_person", columnList = "to_person_id"),
+            @Index(name = "idx_party_rel_primary_billing", columnList = "from_party_id, is_primary_billing_contact")
+        })
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Relationship between a commercial account and an individual with roles")
 public class PartyRelationship {

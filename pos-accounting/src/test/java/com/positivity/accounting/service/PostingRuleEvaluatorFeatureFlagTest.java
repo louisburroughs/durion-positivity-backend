@@ -1,32 +1,10 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
-import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -36,7 +14,24 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-
+import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -81,7 +76,8 @@ class PostingRuleEvaluatorFeatureFlagTest {
     @BeforeEach
     void setUp() {
         defaultGLMappingProperties = new DefaultGLMappingProperties();
-        evaluator = new PostingRuleEvaluatorImpl(TEST_CLOCK,
+        evaluator = new PostingRuleEvaluatorImpl(
+                TEST_CLOCK,
                 versionRepository,
                 ruleSetRepository,
                 glMappingResolver,
@@ -131,8 +127,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
      * forcing the evaluator into the default‑mapping fallback path.
      */
     private void stubNoPostingRules() {
-        when(ruleSetRepository.findByEventType(anyString()))
-                .thenReturn(Collections.emptyList());
+        when(ruleSetRepository.findByEventType(anyString())).thenReturn(Collections.emptyList());
     }
 
     // ── Test groups ─────────────────────────────────────────────────────────
@@ -151,8 +146,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "500.00");
@@ -241,8 +235,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
 
             // Global mapping (organizationId = null)
             DefaultGLMapping globalMapping = createDefaultMapping(null);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(globalMapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "250.00");
@@ -253,8 +246,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             // Assert
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getJournalEntryDraft()).isNotNull();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("mappingType", "defaultGLMapping");
+            assertThat(result.getEvaluationDetails()).containsEntry("mappingType", "defaultGLMapping");
         }
 
         @Test
@@ -268,8 +260,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             // Repository returns a global mapping, but the filter in
             // loadDefaultGLMapping will reject it because organizationId is null
             DefaultGLMapping globalMapping = createDefaultMapping(null);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(globalMapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "250.00");
@@ -292,8 +283,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping orgMapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(orgMapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "750.00");
@@ -321,8 +311,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             // Event with empty payload — no amount field
@@ -347,8 +336,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             // Event without amount
@@ -379,8 +367,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "1500.00");
@@ -410,8 +397,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "0");
@@ -455,8 +441,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "999.99");
@@ -476,8 +461,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
                     .map(line -> line.getCreditAmount() != null ? line.getCreditAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            assertThat(totalDebits)
-                    .isEqualByComparingTo(totalCredits).isEqualByComparingTo(new BigDecimal("999.99"));
+            assertThat(totalDebits).isEqualByComparingTo(totalCredits).isEqualByComparingTo(new BigDecimal("999.99"));
         }
 
         @Test
@@ -490,8 +474,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "100.00");
@@ -516,8 +499,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "100.00");
@@ -542,8 +524,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             stubNoPostingRules();
 
             DefaultGLMapping mapping = createDefaultMapping(testOrganizationId);
-            when(defaultGLMappingRepository.findActiveDefaultForEvent(
-                    "billing.invoicePosted", testOrganizationId))
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "100.00");

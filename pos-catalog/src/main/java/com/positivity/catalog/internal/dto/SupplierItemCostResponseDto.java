@@ -1,4 +1,3 @@
 package com.positivity.catalog.internal.dto;
 
-public class SupplierItemCostResponseDto extends SupplierItemCostDto {
-}
+public class SupplierItemCostResponseDto extends SupplierItemCostDto {}

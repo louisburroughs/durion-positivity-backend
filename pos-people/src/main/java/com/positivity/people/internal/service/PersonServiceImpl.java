@@ -43,19 +43,23 @@ public class PersonServiceImpl implements PersonService {
     private int defaultMatchingThreshold;
 
     @Override
-    @NonNull public List<Person> getAllPeople() {
+    @NonNull
+    public List<Person> getAllPeople() {
         return personRepository.findAll().stream().map(this::toDto).toList();
     }
 
     @Override
-    @NonNull public Optional<Person> getPersonById(@NonNull UUID id) {
+    @NonNull
+    public Optional<Person> getPersonById(@NonNull UUID id) {
         return personRepository.findById(id).map(this::toDto);
     }
 
     @Override
     @Transactional
-    @NonNull public Person savePerson(@NonNull Person person) {
-        if (person.getUsername() != null && !person.getUsername().isBlank()
+    @NonNull
+    public Person savePerson(@NonNull Person person) {
+        if (person.getUsername() != null
+                && !person.getUsername().isBlank()
                 && !validateUsernameWithSecurityService(person.getUsername())) {
             throw new IllegalArgumentException("Username is not valid or does not exist in security service");
         }
@@ -66,7 +70,8 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     @Transactional
-    @NonNull public ResolvePersonResponse resolvePerson(@NonNull ResolvePersonRequest request) {
+    @NonNull
+    public ResolvePersonResponse resolvePerson(@NonNull ResolvePersonRequest request) {
         String email = normalizeEmail(request.getEmail());
         String phone = normalizePhone(request.getPhone());
         String lastName = normalizeText(request.getLastName());
@@ -80,47 +85,52 @@ public class PersonServiceImpl implements PersonService {
         Map<UUID, ScoredCandidate> candidates = new HashMap<>();
 
         if (email != null) {
-            personRepository.findByPrimaryEmailIgnoreCase(email)
-                .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
-            personRepository.findBySecondaryEmailIgnoreCase(email)
-                .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            personRepository
+                    .findByPrimaryEmailIgnoreCase(email)
+                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            personRepository
+                    .findBySecondaryEmailIgnoreCase(email)
+                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
         }
 
         if (phone != null) {
-            personRepository.findByPhoneNumbersContains(phone)
-                .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
+            personRepository
+                    .findByPhoneNumbersContains(phone)
+                    .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
         }
 
         if (lastName != null) {
-            personRepository.findByLastNameIgnoreCase(lastName)
-                .forEach(person -> addScore(candidates, person, LAST_NAME_WEIGHT, "LAST_NAME"));
+            personRepository
+                    .findByLastNameIgnoreCase(lastName)
+                    .forEach(person -> addScore(candidates, person, LAST_NAME_WEIGHT, "LAST_NAME"));
         }
 
         if (firstName != null) {
-            personRepository.findByFirstNameIgnoreCase(firstName)
-                .forEach(person -> addScore(candidates, person, FIRST_NAME_WEIGHT, "FIRST_NAME"));
+            personRepository
+                    .findByFirstNameIgnoreCase(firstName)
+                    .forEach(person -> addScore(candidates, person, FIRST_NAME_WEIGHT, "FIRST_NAME"));
         }
 
-        Optional<ScoredCandidate> best = candidates.values()
-            .stream()
-            .max(Comparator.comparingInt(ScoredCandidate::getScore)
-                .thenComparing(candidate -> candidate.getPerson().getUpdatedAt(),
-                        Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(candidate -> candidate.getPerson().getId()));
+        Optional<ScoredCandidate> best = candidates.values().stream()
+                .max(Comparator.comparingInt(ScoredCandidate::getScore)
+                        .thenComparing(
+                                candidate -> candidate.getPerson().getUpdatedAt(),
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(candidate -> candidate.getPerson().getId()));
 
         if (best.isPresent() && best.get().getScore() >= threshold) {
             ScoredCandidate matched = best.get();
             return ResolvePersonResponse.builder()
-                .personId(matched.getPerson().getId())
-                .matchedExisting(true)
-                .score(matched.getScore())
-                .thresholdApplied(threshold)
-                .matchedBy(new ArrayList<>(matched.getMatchedBy()))
-                .firstName(matched.getPerson().getFirstName())
-                .lastName(matched.getPerson().getLastName())
-                .primaryEmail(matched.getPerson().getPrimaryEmail())
-                .phoneNumbers(matched.getPerson().getPhoneNumbers())
-                .build();
+                    .personId(matched.getPerson().getId())
+                    .matchedExisting(true)
+                    .score(matched.getScore())
+                    .thresholdApplied(threshold)
+                    .matchedBy(new ArrayList<>(matched.getMatchedBy()))
+                    .firstName(matched.getPerson().getFirstName())
+                    .lastName(matched.getPerson().getLastName())
+                    .primaryEmail(matched.getPerson().getPrimaryEmail())
+                    .phoneNumbers(matched.getPerson().getPhoneNumbers())
+                    .build();
         }
 
         com.positivity.people.internal.entity.Person entity = new com.positivity.people.internal.entity.Person();
@@ -129,23 +139,22 @@ public class PersonServiceImpl implements PersonService {
         entity.setPrimaryEmail(email);
         if (phone != null) {
             entity.setPhoneNumbers(new ArrayList<>(List.of(phone)));
-        }
-        else {
+        } else {
             entity.setPhoneNumbers(new ArrayList<>());
         }
 
         com.positivity.people.internal.entity.Person created = personRepository.save(entity);
         return ResolvePersonResponse.builder()
-            .personId(created.getId())
-            .matchedExisting(false)
-            .score(0)
-            .thresholdApplied(threshold)
-            .matchedBy(List.of("CREATED"))
-            .firstName(created.getFirstName())
-            .lastName(created.getLastName())
-            .primaryEmail(created.getPrimaryEmail())
-            .phoneNumbers(created.getPhoneNumbers())
-            .build();
+                .personId(created.getId())
+                .matchedExisting(false)
+                .score(0)
+                .thresholdApplied(threshold)
+                .matchedBy(List.of("CREATED"))
+                .firstName(created.getFirstName())
+                .lastName(created.getLastName())
+                .primaryEmail(created.getPrimaryEmail())
+                .phoneNumbers(created.getPhoneNumbers())
+                .build();
     }
 
     @Override
@@ -163,8 +172,11 @@ public class PersonServiceImpl implements PersonService {
         return Math.max(0, threshold);
     }
 
-    private void addScore(Map<UUID, ScoredCandidate> candidates, com.positivity.people.internal.entity.Person person,
-            int score, String reason) {
+    private void addScore(
+            Map<UUID, ScoredCandidate> candidates,
+            com.positivity.people.internal.entity.Person person,
+            int score,
+            String reason) {
         ScoredCandidate candidate = candidates.computeIfAbsent(person.getId(), ignored -> new ScoredCandidate(person));
         candidate.add(score, reason);
     }
@@ -249,7 +261,5 @@ public class PersonServiceImpl implements PersonService {
         private Set<String> getMatchedBy() {
             return matchedBy;
         }
-
     }
-
 }

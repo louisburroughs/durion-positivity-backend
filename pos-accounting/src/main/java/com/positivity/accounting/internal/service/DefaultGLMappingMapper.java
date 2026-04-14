@@ -1,11 +1,10 @@
 package com.positivity.accounting.internal.service;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Mapper for DefaultGLMapping entity to DTO conversion.
@@ -18,14 +17,14 @@ public final class DefaultGLMappingMapper {
 
     /**
      * Converts a DefaultGLMapping entity to a response DTO.
-     * 
+     *
      * @param mapping       the entity
      * @param debitAccount  the debit GL account (for denormalized fields)
      * @param creditAccount the credit GL account (for denormalized fields)
      * @return the response DTO
      */
-    public static DefaultGLMappingResponse toResponse(@NonNull DefaultGLMapping mapping,
-            GLAccount debitAccount, GLAccount creditAccount) {
+    public static DefaultGLMappingResponse toResponse(
+            @NonNull DefaultGLMapping mapping, GLAccount debitAccount, GLAccount creditAccount) {
         return DefaultGLMappingResponse.builder()
                 .mappingId(mapping.getMappingId())
                 .eventType(mapping.getEventType())
@@ -47,7 +46,7 @@ public final class DefaultGLMappingMapper {
 
     /**
      * Converts a request DTO to a DefaultGLMapping entity.
-     * 
+     *
      * @param request the request DTO
      * @return the entity
      */
@@ -64,7 +63,7 @@ public final class DefaultGLMappingMapper {
 
     /**
      * Updates an existing entity with data from a request DTO.
-     * 
+     *
      * @param entity  the entity to update
      * @param request the request DTO
      */

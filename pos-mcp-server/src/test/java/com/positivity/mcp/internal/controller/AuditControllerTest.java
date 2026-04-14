@@ -1,22 +1,20 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.service.AuditLedgerService;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -60,7 +58,7 @@ class AuditControllerTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
     private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-7000-8000-000000000200");
-    private static final UUID EVENT_ID       = UUID.fromString("00000000-0000-7000-8000-000000000203");
+    private static final UUID EVENT_ID = UUID.fromString("00000000-0000-7000-8000-000000000203");
 
     private static final Instant FIXED_INSTANT = Instant.parse("2026-01-01T12:00:00Z");
 
@@ -85,14 +83,13 @@ class AuditControllerTest {
     @WithMockUser(authorities = "nlti:audit:read")
     @DisplayName("GET /v1/nlt/audit?correlationId → 200 with page containing eventId")
     void queryAudit_withCorrelationId_returns200WithPage() throws Exception {
-        AuditEventResponse eventResponse = new AuditEventResponse(
-                EVENT_ID, CORRELATION_ID, "REQUEST", FIXED_INSTANT, "audit-user", null);
+        AuditEventResponse eventResponse =
+                new AuditEventResponse(EVENT_ID, CORRELATION_ID, "REQUEST", FIXED_INSTANT, "audit-user", null);
         Page<AuditEventResponse> page = new PageImpl<>(List.of(eventResponse));
         when(auditLedgerService.query(any(), any())).thenReturn(page);
 
         // Issue NLTI-007: controller must delegate to service and return 200 with page
-        mockMvc.perform(get("/v1/nlt/audit")
-                .param("correlationId", CORRELATION_ID.toString()))
+        mockMvc.perform(get("/v1/nlt/audit").param("correlationId", CORRELATION_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].eventId").value(EVENT_ID.toString()));
     }
@@ -113,8 +110,8 @@ class AuditControllerTest {
 
         // Issue NLTI-007: date-range filter must produce a 200 response
         mockMvc.perform(get("/v1/nlt/audit")
-                .param("from", "2026-01-01T00:00:00Z")
-                .param("to",   "2026-01-01T23:59:59Z"))
+                        .param("from", "2026-01-01T00:00:00Z")
+                        .param("to", "2026-01-01T23:59:59Z"))
                 .andExpect(status().isOk());
     }
 
@@ -133,9 +130,7 @@ class AuditControllerTest {
         when(auditLedgerService.query(any(), any())).thenReturn(new PageImpl<>(List.of()));
 
         // Issue NLTI-007: eventType filter must produce a 200 response
-        mockMvc.perform(get("/v1/nlt/audit")
-                .param("eventType", "REQUEST"))
-                .andExpect(status().isOk());
+        mockMvc.perform(get("/v1/nlt/audit").param("eventType", "REQUEST")).andExpect(status().isOk());
 
         ArgumentCaptor<AuditQuery> queryCaptor = ArgumentCaptor.forClass(AuditQuery.class);
         verify(auditLedgerService).query(queryCaptor.capture(), any());
@@ -150,12 +145,12 @@ class AuditControllerTest {
                 .thenThrow(new InvalidAuditEventTypeException(
                         "Invalid eventType 'requestx'. Supported values: REQUEST, INTENT"));
 
-        mockMvc.perform(get("/v1/nlt/audit")
-                .param("eventType", "requestx"))
+        mockMvc.perform(get("/v1/nlt/audit").param("eventType", "requestx"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("ERROR"))
                 .andExpect(jsonPath("$.code").value("INVALID_EVENT_TYPE"))
-                .andExpect(jsonPath("$.message").value("Invalid eventType 'requestx'. Supported values: REQUEST, INTENT"));
+                .andExpect(
+                        jsonPath("$.message").value("Invalid eventType 'requestx'. Supported values: REQUEST, INTENT"));
     }
 
     // ─── ADR-0017: missing authority → 403 ────────────────────────────────────
@@ -172,8 +167,7 @@ class AuditControllerTest {
     @DisplayName("GET /v1/nlt/audit without nlti:audit:read → 403 Forbidden")
     void queryAudit_withoutAuthority_returns403() throws Exception {
         // Issue NLTI-007: RBAC enforcement via @PreAuthorize("hasAuthority('nlti:audit:read')")
-        mockMvc.perform(get("/v1/nlt/audit"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/nlt/audit")).andExpect(status().isForbidden());
     }
 
     // ─── ADR-0017: no authentication → 401 ───────────────────────────────────
@@ -188,8 +182,7 @@ class AuditControllerTest {
     @DisplayName("GET /v1/nlt/audit unauthenticated → 401 Unauthorized")
     void queryAudit_unauthenticated_returns401() throws Exception {
         // Issue NLTI-007: no @WithMockUser → Spring Security → 401
-        mockMvc.perform(get("/v1/nlt/audit"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/nlt/audit")).andExpect(status().isUnauthorized());
     }
 
     // ─── Test slice configuration ─────────────────────────────────────────────

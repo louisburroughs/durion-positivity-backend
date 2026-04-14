@@ -12,7 +12,9 @@ public class EligibilityDecisionResponse {
     @JsonProperty("isEligible")
     private boolean isEligible;
 
-    @Schema(description = "Detailed ineligibility reason when eligibility is false", example = "MISSING_ACCOUNT_CONTEXT")
+    @Schema(
+            description = "Detailed ineligibility reason when eligibility is false",
+            example = "MISSING_ACCOUNT_CONTEXT")
     private EligibilityReasonCode reasonCode;
 
     public boolean isEligible() {

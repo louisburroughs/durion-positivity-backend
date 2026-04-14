@@ -2,7 +2,7 @@ package com.positivity.inventory.internal.enums;
 
 /**
  * Two-tier approval hierarchy for inventory adjustments.
- * 
+ *
  * <p>
  * Tiers are evaluated in order:
  * <ul>

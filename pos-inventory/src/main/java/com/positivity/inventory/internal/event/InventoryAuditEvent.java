@@ -1,7 +1,6 @@
 package com.positivity.inventory.internal.event;
 
 import java.time.Instant;
-
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -49,5 +48,4 @@ public record InventoryAuditEvent(
         @NonNull AuditActorRef actor,
         @NonNull String correlationId,
         @NonNull AuditAggregateRef aggregate,
-        @NonNull Object payload) {
-}
+        @NonNull Object payload) {}

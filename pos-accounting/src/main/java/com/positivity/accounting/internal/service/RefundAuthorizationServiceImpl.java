@@ -6,12 +6,10 @@ import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
 import com.positivity.accounting.service.RefundAuthorizationService;
-
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 /**
  * Service for validating refund authorization.
@@ -25,17 +23,20 @@ public class RefundAuthorizationServiceImpl implements RefundAuthorizationServic
 
     /**
      * Validates refund authorization and determines appropriate refund method.
-     * 
+     *
      * @param actorRole     the actor's role
      * @param paymentStatus the original payment status
      * @param refundType    the type of refund
      * @return refund authorization result
      */
     @Override
-    public RefundAuthorizationResult validate(String actorRole, RefundPaymentStatus paymentStatus,
-            RefundType refundType) {
-        log.info("Validating refund for role {} with payment status {} and type {}",
-                actorRole, paymentStatus, refundType);
+    public RefundAuthorizationResult validate(
+            String actorRole, RefundPaymentStatus paymentStatus, RefundType refundType) {
+        log.info(
+                "Validating refund for role {} with payment status {} and type {}",
+                actorRole,
+                paymentStatus,
+                refundType);
 
         // Get active policy
         Optional<RefundPolicyConfig> policyOpt = policyRepository.findActivePolicy();
@@ -59,8 +60,7 @@ public class RefundAuthorizationServiceImpl implements RefundAuthorizationServic
         // Determine refund method based on payment status
         RefundMethod refundMethod = determineRefundMethod(paymentStatus, refundType, policy);
 
-        log.info("Refund authorized with method {} under policy version {}",
-                refundMethod, policy.getVersion());
+        log.info("Refund authorized with method {} under policy version {}", refundMethod, policy.getVersion());
         return RefundAuthorizationResult.builder()
                 .authorized(true)
                 .refundMethod(refundMethod)
@@ -68,9 +68,8 @@ public class RefundAuthorizationServiceImpl implements RefundAuthorizationServic
                 .build();
     }
 
-    private RefundMethod determineRefundMethod(RefundPaymentStatus paymentStatus,
-            RefundType refundType,
-            RefundPolicyConfig policy) {
+    private RefundMethod determineRefundMethod(
+            RefundPaymentStatus paymentStatus, RefundType refundType, RefundPolicyConfig policy) {
         if (paymentStatus == RefundPaymentStatus.SETTLED) {
             // Settled payments: use credit memo or cash refund
             if (refundType == RefundType.CREDIT_MEMO) {

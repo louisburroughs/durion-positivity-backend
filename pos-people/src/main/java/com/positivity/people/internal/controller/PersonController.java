@@ -1,8 +1,19 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.people.internal.dto.Person;
+import com.positivity.people.internal.dto.ResolvePersonRequest;
+import com.positivity.people.internal.dto.ResolvePersonResponse;
+import com.positivity.people.service.PersonService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,21 +24,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import jakarta.validation.Valid;
-
-import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.dto.Person;
-import com.positivity.people.internal.dto.ResolvePersonRequest;
-import com.positivity.people.internal.dto.ResolvePersonResponse;
-import com.positivity.people.service.PersonService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
@@ -51,9 +47,14 @@ public class PersonController {
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @GetMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:view')")
-    public ResponseEntity<Person> getPersonById(@Parameter(description = "ID of the person to retrieve",
-            example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
-        return personService.getPersonById(personId).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Person> getPersonById(
+            @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID personId) {
+        return personService
+                .getPersonById(personId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Create a new person", description = "Add a new person to the system.")
@@ -85,8 +86,9 @@ public class PersonController {
     @PutMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:edit')")
     public ResponseEntity<Person> updatePerson(
-            @Parameter(description = "ID of the person to update",
-                    example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId,
+            @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID personId,
             @Parameter(description = "Updated person object") @Valid @RequestBody Person person) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -102,13 +104,14 @@ public class PersonController {
     @EmitEvent(id = "PEOPLE_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:delete')")
-    public ResponseEntity<Void> deletePerson(@Parameter(description = "ID of the person to delete",
-            example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
+    public ResponseEntity<Void> deletePerson(
+            @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID personId) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         personService.deletePerson(personId);
         return ResponseEntity.noContent().build();
     }
-
 }

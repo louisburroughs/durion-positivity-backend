@@ -3,7 +3,6 @@ package com.positivity.people.internal.config;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.auditing.DateTimeProvider;
@@ -22,5 +21,4 @@ public class JpaAuditingConfig {
     DateTimeProvider auditingDateTimeProvider(Clock systemUtcClock) {
         return () -> Optional.of(Instant.now(systemUtcClock));
     }
-
 }

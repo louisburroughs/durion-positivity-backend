@@ -16,10 +16,5 @@ public record CustomerPersonSearchResponse(
         Instant createdAt,
         Instant updatedAt) {
 
-    public record ContactPointDto(
-            UUID contactPointId,
-            String contactType,
-            String value,
-            boolean isPrimary) {
-    }
+    public record ContactPointDto(UUID contactPointId, String contactType, String value, boolean isPrimary) {}
 }

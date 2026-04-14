@@ -21,22 +21,21 @@ public interface PurchaseOrderService {
     PurchaseOrderResponse getPurchaseOrder(@NonNull UUID poId);
 
     @NonNull
-    Page<PurchaseOrderResponse> listPurchaseOrders(@NonNull ListPurchaseOrdersRequest filter,
-            @NonNull Pageable pageable);
+    Page<PurchaseOrderResponse> listPurchaseOrders(
+            @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable);
 
     @NonNull
-    PurchaseOrderResponse approvePurchaseOrder(@NonNull UUID poId, @NonNull ApprovePurchaseOrderRequest request,
-            @NonNull String actorId);
+    PurchaseOrderResponse approvePurchaseOrder(
+            @NonNull UUID poId, @NonNull ApprovePurchaseOrderRequest request, @NonNull String actorId);
 
     @NonNull
-    PurchaseOrderResponse revisePurchaseOrder(@NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request,
-            @NonNull String actorId);
+    PurchaseOrderResponse revisePurchaseOrder(
+            @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId);
 
     @NonNull
     PurchaseOrderResponse cancelPurchaseOrder(@NonNull UUID poId, @NonNull String actorId);
 
     @NonNull
-    ReceivePurchaseOrderResponse receivePurchaseOrder(@NonNull UUID poId,
-            @NonNull ReceivePurchaseOrderRequest request,
-            @NonNull String actorId);
+    ReceivePurchaseOrderResponse receivePurchaseOrder(
+            @NonNull UUID poId, @NonNull ReceivePurchaseOrderRequest request, @NonNull String actorId);
 }

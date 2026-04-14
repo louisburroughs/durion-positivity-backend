@@ -2,12 +2,6 @@ package com.positivity.documents.internal.service;
 
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.exception.TemplateNotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -16,6 +10,11 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.stereotype.Service;
 
 @Service
 public class TemplateService {
@@ -24,25 +23,23 @@ public class TemplateService {
 
     private static final Logger log = LoggerFactory.getLogger(TemplateService.class);
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_.]+)}");
-    private static final Pattern EACH_PATTERN = Pattern.compile("\\{\\{#each\\s+([a-zA-Z0-9_.]+)}}([\\s\\S]*?)\\{\\{/each}}", Pattern.MULTILINE);
-    private static final Pattern IF_PATTERN = Pattern.compile("\\{\\{#if\\s+([a-zA-Z0-9_.]+)}}([\\s\\S]*?)\\{\\{/if}}", Pattern.MULTILINE);
+    private static final Pattern EACH_PATTERN =
+            Pattern.compile("\\{\\{#each\\s+([a-zA-Z0-9_.]+)}}([\\s\\S]*?)\\{\\{/each}}", Pattern.MULTILINE);
+    private static final Pattern IF_PATTERN =
+            Pattern.compile("\\{\\{#if\\s+([a-zA-Z0-9_.]+)}}([\\s\\S]*?)\\{\\{/if}}", Pattern.MULTILINE);
     private static final Pattern TEMPLATE_ID_PATTERN = Pattern.compile("[A-Z0-9_-]+");
 
     private final ResourceLoader resourceLoader;
     private final String templateBasePath;
     private final Map<String, String> templateCache = new ConcurrentHashMap<>();
 
-    public TemplateService(
-            ResourceLoader resourceLoader,
-            PdfConfiguration pdfConfiguration) {
+    public TemplateService(ResourceLoader resourceLoader, PdfConfiguration pdfConfiguration) {
         this.resourceLoader = resourceLoader;
         this.templateBasePath = pdfConfiguration.templateBasePath();
     }
 
     public String resolveTemplate(String templateId) {
-        String normalized = (templateId == null || templateId.isBlank())
-                ? DEFAULT_TEMPLATE_ID
-                : templateId.trim();
+        String normalized = (templateId == null || templateId.isBlank()) ? DEFAULT_TEMPLATE_ID : templateId.trim();
 
         if (!TEMPLATE_ID_PATTERN.matcher(normalized).matches()) {
             throw new TemplateNotFoundException("Template not found: " + normalized);
@@ -60,7 +57,8 @@ public class TemplateService {
         while (variableMatcher.find()) {
             String key = variableMatcher.group(1);
             Object value = resolvePath(context, key);
-            variableMatcher.appendReplacement(output, Matcher.quoteReplacement(value == null ? "" : String.valueOf(value)));
+            variableMatcher.appendReplacement(
+                    output, Matcher.quoteReplacement(value == null ? "" : String.valueOf(value)));
         }
         variableMatcher.appendTail(output);
         return output.toString();
@@ -129,8 +127,8 @@ public class TemplateService {
 
     private String loadTemplate(String templateId) {
         String normalizedBasePath = templateBasePath.endsWith("/")
-            ? templateBasePath.substring(0, templateBasePath.length() - 1)
-            : templateBasePath;
+                ? templateBasePath.substring(0, templateBasePath.length() - 1)
+                : templateBasePath;
         Resource resource = resourceLoader.getResource(normalizedBasePath + "/" + templateId + ".html");
         if (!resource.exists()) {
             throw new TemplateNotFoundException("Template not found: " + templateId);

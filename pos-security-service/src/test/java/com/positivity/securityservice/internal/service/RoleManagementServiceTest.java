@@ -6,28 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
@@ -47,7 +25,27 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Story #62 RED unit tests for {@link RoleManagementServiceImpl}.
@@ -98,10 +96,13 @@ class RoleManagementServiceTest {
 
     @Mock
     private RoleRepository roleRepository;
+
     @Mock
     private PermissionRepository permissionRepository;
+
     @Mock
     private RoleAssignmentRepository roleAssignmentRepository;
+
     @Mock
     private UserRepository userRepository;
 
@@ -129,10 +130,9 @@ class RoleManagementServiceTest {
         @Test
         @DisplayName("valid name returns created role with non-null ID and actor from context")
         void createRole_validName_returnsCreatedRoleWithId() {
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(
-                            "admin-user", "n/a",
-                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+            SecurityContextHolder.getContext()
+                    .setAuthentication(new UsernamePasswordAuthenticationToken(
+                            "admin-user", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
             Role saved = new Role();
             saved.setId(ROLE_ID);
@@ -295,10 +295,9 @@ class RoleManagementServiceTest {
         @DisplayName("existing role and permission — completes without exception")
         void assignPermissionToRole_succeeds() {
             String permissionKey = "security:roles:create";
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(
-                            "rbac-admin", "n/a",
-                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+            SecurityContextHolder.getContext()
+                    .setAuthentication(new UsernamePasswordAuthenticationToken(
+                            "rbac-admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
             Role role = new Role();
             role.setId(ROLE_ID);
@@ -311,9 +310,7 @@ class RoleManagementServiceTest {
 
             sut.assignPermissionToRole(ROLE_ID, permissionKey);
 
-            assertThat(role.getPermissions())
-                    .extracting(Permission::getName)
-                    .contains(permissionKey);
+            assertThat(role.getPermissions()).extracting(Permission::getName).contains(permissionKey);
             assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
             assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
             verify(roleRepository).save(role);
@@ -354,10 +351,9 @@ class RoleManagementServiceTest {
     @DisplayName("revokePermissionFromRole() completes without exception")
     void revokePermissionFromRole_succeeds() {
         String permissionKey = "security:roles:create";
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(
-                        "rbac-admin", "n/a",
-                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "rbac-admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
         Role role = new Role();
         role.setId(ROLE_ID);
@@ -368,9 +364,7 @@ class RoleManagementServiceTest {
 
         sut.revokePermissionFromRole(ROLE_ID, permissionKey);
 
-        assertThat(role.getPermissions())
-                .extracting(Permission::getName)
-                .doesNotContain(permissionKey);
+        assertThat(role.getPermissions()).extracting(Permission::getName).doesNotContain(permissionKey);
         assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
         assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
         verify(roleRepository).save(role);
@@ -486,7 +480,8 @@ class RoleManagementServiceTest {
             assignment.setUser(user);
             assignment.setRole(role);
             assignment.setScopeType(ScopeType.GLOBAL);
-            assignment.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
+            assignment.setEffectiveStartDate(
+                    java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(roleAssignmentRepository.findByUserAndRole(user, role)).thenReturn(List.of(assignment));
@@ -510,8 +505,7 @@ class RoleManagementServiceTest {
             when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
             RolePermissionsRequest request = new RolePermissionsRequest(unknownId, Set.of("perm:x"));
 
-            assertThatThrownBy(() -> sut.updateRolePermissions(request))
-                    .isInstanceOf(RoleNotFoundException.class);
+            assertThatThrownBy(() -> sut.updateRolePermissions(request)).isInstanceOf(RoleNotFoundException.class);
         }
 
         @Test
@@ -537,8 +531,7 @@ class RoleManagementServiceTest {
         UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");
         when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sut.deleteRole(unknownId))
-                .isInstanceOf(RoleNotFoundException.class);
+        assertThatThrownBy(() -> sut.deleteRole(unknownId)).isInstanceOf(RoleNotFoundException.class);
     }
 
     // ── revokePermissionFromRole error path ───────────────────────────────────
@@ -575,8 +568,7 @@ class RoleManagementServiceTest {
     void getRoleByName_notFound_throwsRoleNotFoundException() {
         when(roleRepository.findByName("Unknown")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sut.getRoleByName("Unknown"))
-                .isInstanceOf(RoleNotFoundException.class);
+        assertThatThrownBy(() -> sut.getRoleByName("Unknown")).isInstanceOf(RoleNotFoundException.class);
     }
 
     // ── revokeRoleAssignment error path ───────────────────────────────────────
@@ -658,8 +650,7 @@ class RoleManagementServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user))
-                    .thenReturn(List.of(assignment));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
 
             boolean result = sut.userHasPermission(USER_ID, "security:roles:create", "loc-Z");
 
@@ -687,8 +678,7 @@ class RoleManagementServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user))
-                    .thenReturn(List.of(assignment));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
 
             boolean result = sut.userHasPermission(USER_ID, "security:other:permission", "loc-1");
 
@@ -706,9 +696,7 @@ class RoleManagementServiceTest {
         @DisplayName("GLOBAL scope with location IDs throws IllegalArgumentException")
         void createRoleAssignment_globalScopeWithLocationIds_throwsIllegalArgument() {
             RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL,
-                    Set.of("loc-1"),
-                    LocalDateTime.now(TEST_CLOCK), null);
+                    USER_ID, ROLE_ID, ScopeType.GLOBAL, Set.of("loc-1"), LocalDateTime.now(TEST_CLOCK), null);
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -719,12 +707,10 @@ class RoleManagementServiceTest {
         @DisplayName("user not found throws UserNotFoundException")
         void createRoleAssignment_userNotFound_throwsUserNotFoundException() {
             RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
+                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> sut.createRoleAssignment(request)).isInstanceOf(UserNotFoundException.class);
         }
 
         @Test
@@ -733,13 +719,11 @@ class RoleManagementServiceTest {
             User user = new User();
             user.setId(USER_ID);
             RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
+                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(RoleNotFoundException.class);
+            assertThatThrownBy(() -> sut.createRoleAssignment(request)).isInstanceOf(RoleNotFoundException.class);
         }
 
         @Test
@@ -754,20 +738,18 @@ class RoleManagementServiceTest {
             role.setName("Tester");
             role.setPermissions(new HashSet<>());
 
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, null, null); // null start date
+            RoleAssignmentRequest request =
+                    new RoleAssignmentRequest(USER_ID, ROLE_ID, ScopeType.GLOBAL, null, null, null); // null start date
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL)).thenReturn(List.of());
-            when(roleAssignmentRepository.save(any(RoleAssignment.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
+            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.GLOBAL))
+                    .thenReturn(List.of());
+            when(roleAssignmentRepository.save(any(RoleAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
 
             RoleAssignmentDto result = sut.createRoleAssignment(request);
 
-            assertThat(result.getEffectiveStartDate())
-                    .isEqualTo(LocalDateTime.now(TEST_CLOCK));
+            assertThat(result.getEffectiveStartDate()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
         }
 
         @Test
@@ -786,13 +768,12 @@ class RoleManagementServiceTest {
             // effectiveEndDate = null (open-ended) → overlaps with any new request
 
             RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
+                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL)).thenReturn(List.of(existing));
+            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.GLOBAL))
+                    .thenReturn(List.of(existing));
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request))
                     .isInstanceOf(IllegalStateException.class)
@@ -815,14 +796,17 @@ class RoleManagementServiceTest {
             existing.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.LOCATION,
+                    USER_ID,
+                    ROLE_ID,
+                    ScopeType.LOCATION,
                     Set.of("loc-1"), // overlaps with existing
-                    LocalDateTime.now(TEST_CLOCK), null);
+                    LocalDateTime.now(TEST_CLOCK),
+                    null);
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.LOCATION)).thenReturn(List.of(existing));
+            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.LOCATION))
+                    .thenReturn(List.of(existing));
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request))
                     .isInstanceOf(IllegalStateException.class)
@@ -876,8 +860,7 @@ class RoleManagementServiceTest {
         ra2.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user))
-                .thenReturn(List.of(ra1, ra2));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(ra1, ra2));
 
         Set<PermissionDto> permissions = sut.getUserPermissions(USER_ID);
 

@@ -1,25 +1,23 @@
 package com.positivity.inventory.internal.entity;
 
-import jakarta.persistence.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.shared.id.UUIDv7Id;
-
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Represents an inventory adjustment proposed from a cycle count.
- * 
+ *
  * <p>
  * Tracks the complete lifecycle from proposal through approval/rejection to
  * posting.
@@ -160,7 +158,7 @@ public class CycleCountAdjustment {
 
     /**
      * Calculates the absolute monetary value of the variance.
-     * 
+     *
      * @return absolute value of (quantityChange * costAtTimeOfAdjustment)
      */
     public BigDecimal getVarianceValue() {
@@ -169,7 +167,7 @@ public class CycleCountAdjustment {
 
     /**
      * Calculates the percentage variance relative to quantity on-hand.
-     * 
+     *
      * @return percentage variance, or 100% if quantityOnHandBefore is 0
      */
     public BigDecimal getVariancePercentage() {

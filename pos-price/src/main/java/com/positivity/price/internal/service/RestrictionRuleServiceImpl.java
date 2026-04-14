@@ -32,7 +32,8 @@ public class RestrictionRuleServiceImpl implements RestrictionRuleService {
 
     @Override
     public @NonNull RestrictionRuleResponse getRuleById(@NonNull UUID ruleId) {
-        RestrictionRule entity = repository.findById(ruleId)
+        RestrictionRule entity = repository
+                .findById(ruleId)
                 .orElseThrow(() -> new RestrictionRuleNotFoundException("Rule not found: " + ruleId));
         return toResponse(entity);
     }
@@ -45,7 +46,8 @@ public class RestrictionRuleServiceImpl implements RestrictionRuleService {
     @Override
     @Transactional
     public @NonNull RestrictionRuleResponse deactivateRule(@NonNull UUID ruleId) {
-        RestrictionRule entity = repository.findById(ruleId)
+        RestrictionRule entity = repository
+                .findById(ruleId)
                 .orElseThrow(() -> new RestrictionRuleNotFoundException("Rule not found: " + ruleId));
         if (!entity.isActive()) {
             throw new IllegalStateException("Rule already inactive: " + ruleId);

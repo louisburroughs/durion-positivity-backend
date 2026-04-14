@@ -21,31 +21,52 @@ public class CreatePromotionOfferRequest {
     @Size(max = 64, message = "promoCode must not exceed 64 characters")
     private String promoCode;
 
-    @Schema(description = "Display name for the promotion", requiredMode = Schema.RequiredMode.REQUIRED, example = "Summer Labor Discount")
+    @Schema(
+            description = "Display name for the promotion",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "Summer Labor Discount")
     @NotBlank(message = "name is required")
     @Size(max = 255, message = "name must not exceed 255 characters")
     private String name;
 
-    @Schema(description = "Optional promotion description", example = "20% off labor for seasonal service", nullable = true)
+    @Schema(
+            description = "Optional promotion description",
+            example = "20% off labor for seasonal service",
+            nullable = true)
     @Nullable
     @Size(max = 255, message = "description must not exceed 255 characters")
     private String description;
 
-    @Schema(description = "Discount strategy to apply", requiredMode = Schema.RequiredMode.REQUIRED, example = "PERCENT_LABOR")
+    @Schema(
+            description = "Discount strategy to apply",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "PERCENT_LABOR")
     @NotNull(message = "discountType is required")
     private DiscountType discountType;
 
-    @Schema(description = "Discount value based on selected discount type", requiredMode = Schema.RequiredMode.REQUIRED, example = "20.00")
+    @Schema(
+            description = "Discount value based on selected discount type",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "20.00")
     @NotNull(message = "discountValue is required")
     @DecimalMin(value = "0.01", message = "discountValue must be at least 0.01")
-    @Digits(integer = 10, fraction = 2, message = "discountValue must have up to 10 integer digits and 2 decimal places")
+    @Digits(
+            integer = 10,
+            fraction = 2,
+            message = "discountValue must have up to 10 integer digits and 2 decimal places")
     private BigDecimal discountValue;
 
-    @Schema(description = "Date when promotion becomes valid", requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-03-01")
+    @Schema(
+            description = "Date when promotion becomes valid",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "2026-03-01")
     @NotNull(message = "startDate is required")
     private LocalDate startDate;
 
-    @Schema(description = "Date when promotion expires", requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-03-31")
+    @Schema(
+            description = "Date when promotion expires",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "2026-03-31")
     @NotNull(message = "endDate is required")
     private LocalDate endDate;
 
@@ -54,7 +75,10 @@ public class CreatePromotionOfferRequest {
     @Positive(message = "usageLimit must be positive when provided")
     private Integer usageLimit;
 
-    @Schema(description = "Optional store/location code that scopes the promotion", example = "NYC-001", nullable = true)
+    @Schema(
+            description = "Optional store/location code that scopes the promotion",
+            example = "NYC-001",
+            nullable = true)
     @Nullable
     @Size(max = 255, message = "storeCode must not exceed 255 characters")
     private String storeCode;

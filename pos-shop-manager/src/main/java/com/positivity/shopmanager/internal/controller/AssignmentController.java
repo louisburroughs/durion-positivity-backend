@@ -30,8 +30,7 @@ public class AssignmentController {
     @PreAuthorize("hasAuthority('shop:bay:assign')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_CREATED", apiVersion = "1")
     public @NonNull AssignmentResponse createAssignment(
-            @PathVariable UUID appointmentId,
-            @RequestBody @NonNull CreateAssignmentRequest request) {
+            @PathVariable UUID appointmentId, @RequestBody @NonNull CreateAssignmentRequest request) {
         var augmented = CreateAssignmentRequest.builder()
                 .appointmentId(appointmentId)
                 .mechanics(request.getMechanics())

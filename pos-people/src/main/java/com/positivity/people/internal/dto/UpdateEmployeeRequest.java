@@ -5,9 +5,8 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
 import java.time.LocalDate;
+import lombok.Data;
 
 @Data
 public class UpdateEmployeeRequest {
@@ -42,5 +41,4 @@ public class UpdateEmployeeRequest {
     public void setDuplicatePolicy(DuplicatePolicy duplicatePolicy) {
         this.duplicatePolicy = duplicatePolicy == null ? DuplicatePolicy.STRICT : duplicatePolicy;
     }
-
 }

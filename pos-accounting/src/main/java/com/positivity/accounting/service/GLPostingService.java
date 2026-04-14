@@ -1,20 +1,19 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
 import java.util.UUID;
-
-import com.positivity.accounting.internal.entity.JournalEntry;
 
 public interface GLPostingService {
 
     /**
      * Post a Credit Memo reversal to GL.
-     * 
+     *
      * Creates journal entry with:
      * - Debit: Revenue (credit amount)
      * - Debit: Tax Liability (tax reversed)
      * - Credit: Accounts Receivable (total amount)
-     * 
+     *
      * @param creditMemoId        Credit Memo identifier (source event)
      * @param revenueAccountId    GL account for revenue reversal
      * @param taxPayableAccountId GL account for tax reversal
@@ -39,11 +38,11 @@ public interface GLPostingService {
 
     /**
      * Post a payment application to GL.
-     * 
+     *
      * Creates journal entry with:
      * - Debit: Cash/Bank
      * - Credit: Accounts Receivable
-     * 
+     *
      * @param paymentApplicationId Payment application ID (source event)
      * @param cashAccountId        GL account for cash/bank
      * @param arAccountId          GL account for AR
@@ -52,10 +51,5 @@ public interface GLPostingService {
      * @return Posted journal entry
      */
     JournalEntry postPaymentApplication(
-            UUID paymentApplicationId,
-            UUID cashAccountId,
-            UUID arAccountId,
-            BigDecimal amount,
-            String description);
-
+            UUID paymentApplicationId, UUID cashAccountId, UUID arAccountId, BigDecimal amount, String description);
 }

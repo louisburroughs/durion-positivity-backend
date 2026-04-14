@@ -1,19 +1,16 @@
 package com.positivity.inventory.internal.service;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
-
-import org.springframework.stereotype.Service;
-
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
-
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * Evaluates cycle count adjustments against approval thresholds.
@@ -34,7 +31,8 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
         List<ApprovalThresholdConfig> configs = thresholdConfigRepository.findByActiveTrueOrderByApprovalTierAsc();
 
         if (configs.isEmpty()) {
-            log.warn("No active approval threshold configurations found. Auto-approving adjustment {}",
+            log.warn(
+                    "No active approval threshold configurations found. Auto-approving adjustment {}",
                     adjustment.getAdjustmentId());
             return Optional.empty();
         }
@@ -44,7 +42,8 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
         BigDecimal absValueVariance = adjustment.getVarianceValue();
         BigDecimal percentVariance = adjustment.getVariancePercentage();
 
-        log.debug("Evaluating adjustment {} - Unit variance: {}, Value variance: ${}, Percent variance: {}%",
+        log.debug(
+                "Evaluating adjustment {} - Unit variance: {}, Value variance: ${}, Percent variance: {}%",
                 adjustment.getAdjustmentId(), absUnitVariance, absValueVariance, percentVariance);
 
         // Evaluate tiers from highest to lowest to determine the minimum required tier
@@ -57,9 +56,12 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
                         "Adjustment {} requires {} approval - exceeds threshold: units={}/{}, value=${}/{}, percent={}%/{}%",
                         adjustment.getAdjustmentId(),
                         requiredTier,
-                        absUnitVariance, config.getUnitVarianceThreshold(),
-                        absValueVariance, config.getValueVarianceThreshold(),
-                        percentVariance, config.getPercentageVarianceThreshold());
+                        absUnitVariance,
+                        config.getUnitVarianceThreshold(),
+                        absValueVariance,
+                        config.getValueVarianceThreshold(),
+                        percentVariance,
+                        config.getPercentageVarianceThreshold());
             }
         }
 

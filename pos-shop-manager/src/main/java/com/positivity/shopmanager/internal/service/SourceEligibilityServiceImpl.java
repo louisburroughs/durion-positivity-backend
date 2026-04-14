@@ -1,10 +1,9 @@
 package com.positivity.shopmanager.internal.service;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.service.SourceEligibilityService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
@@ -36,7 +35,10 @@ public class SourceEligibilityServiceImpl implements SourceEligibilityService {
 
     @Override
     public String getExistingAppointmentId(String sourceType, String sourceId, String facilityId) {
-        log.debug("Getting existing appointment: sourceType={}, sourceId={}, facilityId={}", sourceType, sourceId,
+        log.debug(
+                "Getting existing appointment: sourceType={}, sourceId={}, facilityId={}",
+                sourceType,
+                sourceId,
                 facilityId);
         return null; // Stub implementation
     }

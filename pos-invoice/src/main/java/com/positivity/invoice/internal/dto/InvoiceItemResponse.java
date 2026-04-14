@@ -1,9 +1,8 @@
 package com.positivity.invoice.internal.dto;
 
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public class InvoiceItemResponse {
 

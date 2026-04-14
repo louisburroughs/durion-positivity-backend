@@ -4,12 +4,11 @@ import com.opencsv.CSVReader;
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.enums.DocumentFormat;
 import com.positivity.documents.internal.exception.RenderingException;
-import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
-
 import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
 
 @Component
 public class CsvFormatHandler implements FormatHandler {

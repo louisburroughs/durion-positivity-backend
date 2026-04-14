@@ -1,8 +1,8 @@
 package com.positivity.tax.internal.service;
 
-import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.service.TaxCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -23,10 +23,7 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
     private final ExternalTaxServiceClient externalClient;
 
     public TaxCalculationServiceImpl(
-        TaxProperties properties,
-        TestModeTaxCalculator testCalculator,
-        ExternalTaxServiceClient externalClient
-    ) {
+            TaxProperties properties, TestModeTaxCalculator testCalculator, ExternalTaxServiceClient externalClient) {
         this.properties = properties;
         this.testCalculator = testCalculator;
         this.externalClient = externalClient;
@@ -69,23 +66,17 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
         // Validate each line item has necessary data
         for (int i = 0; i < request.getLineItems().size(); i++) {
             var item = request.getLineItems().get(i);
-            
+
             if (item.getLineItemId() == null || item.getLineItemId().isBlank()) {
-                throw new IllegalArgumentException(
-                    "Line item at index " + i + " is missing lineItemId"
-                );
+                throw new IllegalArgumentException("Line item at index " + i + " is missing lineItemId");
             }
-            
+
             if (item.getQuantity() == null || item.getQuantity().signum() <= 0) {
-                throw new IllegalArgumentException(
-                    "Line item " + item.getLineItemId() + " has invalid quantity"
-                );
+                throw new IllegalArgumentException("Line item " + item.getLineItemId() + " has invalid quantity");
             }
-            
+
             if (item.getUnitPrice() == null || item.getUnitPrice().signum() < 0) {
-                throw new IllegalArgumentException(
-                    "Line item " + item.getLineItemId() + " has invalid unit price"
-                );
+                throw new IllegalArgumentException("Line item " + item.getLineItemId() + " has invalid unit price");
             }
         }
     }

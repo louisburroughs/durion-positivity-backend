@@ -25,13 +25,13 @@
  *
  * <h2>Key Components</h2>
  * <ul>
- *   <li>{@link com.positivity.security.common.GatewayAuthoritiesFilter} - 
+ *   <li>{@link com.positivity.security.common.GatewayAuthoritiesFilter} -
  *       Reads gateway headers and populates SecurityContext</li>
- *   <li>{@link com.positivity.security.common.GatewaySecurityConfig} - 
+ *   <li>{@link com.positivity.security.common.GatewaySecurityConfig} -
  *       Base security configuration for services</li>
- *   <li>{@link com.positivity.security.common.PermissionRegistrationSupport} - 
+ *   <li>{@link com.positivity.security.common.PermissionRegistrationSupport} -
  *       Register service permissions at startup</li>
- *   <li>{@link com.positivity.security.common.SecurityContextHelper} - 
+ *   <li>{@link com.positivity.security.common.SecurityContextHelper} -
  *       Utility for accessing current user/authorities</li>
  * </ul>
  *
@@ -42,7 +42,7 @@
  * <ol>
  *   <li>Add pos-security-common as a dependency</li>
  *   <li>Import {@link com.positivity.security.common.GatewaySecurityConfig}</li>
- *   <li>Create a permission registration class extending 
+ *   <li>Create a permission registration class extending
  *       {@link com.positivity.security.common.PermissionRegistrationSupport}</li>
  *   <li>Use {@code @PreAuthorize} annotations on controllers</li>
  * </ol>

@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Journal Entry lifecycle states.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide</a>

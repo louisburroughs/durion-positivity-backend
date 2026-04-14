@@ -116,8 +116,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         // sourced from
         // security context (ADR-0018). The test asserts the HTTP contract outcome.
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isCreated());
     }
 
@@ -137,8 +137,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isCreated());
     }
 
@@ -164,8 +164,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -183,8 +183,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -207,8 +207,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts/{orderId}/items", orderId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isCreated());
     }
 
@@ -227,8 +227,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts/{orderId}/items", orderId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -248,8 +248,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts/{orderId}/items", orderId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -289,8 +289,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(put("/v1/orders/carts/{orderId}/items/{lineId}", orderId, lineId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
                 .andExpect(status().isOk());
     }
 
@@ -337,8 +337,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         // withGatewayAuth is intentionally not used here to simulate an
         // unauthenticated call.
         mockMvc.perform(post("/v1/orders/carts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -364,15 +364,13 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 List.of());
 
-        when(salesOrderService.linkSource(any(UUID.class), anyString(), anyString())).thenReturn(linkedOrder);
+        when(salesOrderService.linkSource(any(UUID.class), anyString(), anyString()))
+                .thenReturn(linkedOrder);
 
         // SC-008
         mockMvc.perform(withGatewayAuth(patch("/v1/orders/carts/{orderId}/source", orderId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{" +
-                        "\"sourceType\":\"WORKORDER\"," +
-                        "\"sourceId\":\"WO-001\"" +
-                        "}")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{" + "\"sourceType\":\"WORKORDER\"," + "\"sourceId\":\"WO-001\"" + "}")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").exists());
     }
@@ -389,11 +387,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
 
         // SC-009
         mockMvc.perform(withGatewayAuth(post("/v1/orders/carts/{orderId}/items", orderId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{" +
-                        "\"itemSku\":\"ABC-123\"," +
-                        "\"quantity\":1" +
-                        "}")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{" + "\"itemSku\":\"ABC-123\"," + "\"quantity\":1" + "}")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));

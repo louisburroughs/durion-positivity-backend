@@ -1,13 +1,12 @@
 package com.positivity.people.internal.client.dto;
 
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -26,5 +25,4 @@ public class RoleAssignmentRequest {
     private LocalDate effectiveStartDate;
 
     private LocalDate effectiveEndDate;
-
 }

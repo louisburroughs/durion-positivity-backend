@@ -1,14 +1,12 @@
 package com.positivity.documents.service;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.positivity.documents.internal.exception.RenderingException;
 import com.positivity.documents.internal.service.format.JsonFormatHandler;
-
+import java.util.HashMap;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
-
-import java.util.HashMap;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class JsonFormatHandlerTest {
 
@@ -24,7 +22,6 @@ class JsonFormatHandlerTest {
 
     @Test
     void shouldThrowOnMalformedJson() {
-        assertThrows(RenderingException.class,
-                () -> handler.processContent("{bad json}", new HashMap<>()));
+        assertThrows(RenderingException.class, () -> handler.processContent("{bad json}", new HashMap<>()));
     }
 }

@@ -1,17 +1,17 @@
 package com.positivity.tax.common.validation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.positivity.tax.common.dto.TaxCalculationRequest;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 class TaxAddressValidationTest {
 
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private final Validator validator =
+            Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
     @DisplayName("should accept valid ISO country and subdivision combination")

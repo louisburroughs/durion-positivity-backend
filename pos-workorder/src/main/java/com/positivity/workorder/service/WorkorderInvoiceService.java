@@ -8,7 +8,5 @@ import org.jspecify.annotations.Nullable;
 public interface WorkorderInvoiceService {
 
     @NonNull
-    InvoiceGenerationResponse generateInvoice(
-            @NonNull UUID workorderId,
-            @Nullable String idempotencyKey);
+    InvoiceGenerationResponse generateInvoice(@NonNull UUID workorderId, @Nullable String idempotencyKey);
 }

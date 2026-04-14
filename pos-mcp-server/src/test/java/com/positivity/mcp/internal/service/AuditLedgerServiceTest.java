@@ -12,16 +12,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.dto.AuditEventResponse;
-import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
-
+import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -29,7 +27,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -58,13 +55,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class AuditLedgerServiceTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
-    private static final UUID CORRELATION_ID   = UUID.fromString("00000000-0000-7000-8000-000000000200");
-    private static final UUID SESSION_ID       = UUID.fromString("00000000-0000-7000-8000-000000000201");
-    private static final UUID REQUEST_ID       = UUID.fromString("00000000-0000-7000-8000-000000000202");
-    private static final UUID EVENT_ID         = UUID.fromString("00000000-0000-7000-8000-000000000203");
+    private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-7000-8000-000000000200");
+    private static final UUID SESSION_ID = UUID.fromString("00000000-0000-7000-8000-000000000201");
+    private static final UUID REQUEST_ID = UUID.fromString("00000000-0000-7000-8000-000000000202");
+    private static final UUID EVENT_ID = UUID.fromString("00000000-0000-7000-8000-000000000203");
     private static final UUID EVENT_ID_QUERY_1 = UUID.fromString("00000000-0000-7000-8000-000000000210");
     private static final UUID EVENT_ID_QUERY_2 = UUID.fromString("00000000-0000-7000-8000-000000000211");
-    private static final UUID EVENT_ID_DATE_1  = UUID.fromString("00000000-0000-7000-8000-000000000220");
+    private static final UUID EVENT_ID_DATE_1 = UUID.fromString("00000000-0000-7000-8000-000000000220");
     private static final UUID EVENT_ID_ETYPE_1 = UUID.fromString("00000000-0000-7000-8000-000000000230");
 
     private static final Instant FIXED_INSTANT = Instant.parse("2026-01-01T12:00:00Z");
@@ -124,8 +121,8 @@ class AuditLedgerServiceTest {
     void append_setsActorSubjectIdFromSecurityContext() {
         // Issue NLTI-007 / ADR-0018: actor fields from security context
         // SecurityContextHelper requires details map with DETAIL_USERNAME key (gateway pattern)
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                "audit-user", null, List.of());
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken("audit-user", null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "audit-user"));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
@@ -204,8 +201,7 @@ class AuditLedgerServiceTest {
                 .thenReturn(new PageImpl<>(List.of(e1, e2)));
 
         // Issue NLTI-007: service must delegate to repository and map entities to DTOs
-        Page<AuditEventResponse> result = service.query(
-                new AuditQuery(CORRELATION_ID, null, null, null), pageable);
+        Page<AuditEventResponse> result = service.query(new AuditQuery(CORRELATION_ID, null, null, null), pageable);
 
         assertThat(result.getContent()).hasSize(2);
         assertThat(result.getContent().get(0).eventType()).isEqualTo("REQUEST");
@@ -230,11 +226,10 @@ class AuditLedgerServiceTest {
                 .thenReturn(new PageImpl<>(List.of(e1)));
 
         Instant from = Instant.parse("2026-01-01T00:00:00Z");
-        Instant to   = Instant.parse("2026-01-01T23:59:59Z");
+        Instant to = Instant.parse("2026-01-01T23:59:59Z");
 
         // Issue NLTI-007: service must delegate to date-range repo method and map to DTOs
-        Page<AuditEventResponse> result = service.query(
-                new AuditQuery(null, from, to, null), pageable);
+        Page<AuditEventResponse> result = service.query(new AuditQuery(null, from, to, null), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).eventType()).isEqualTo("EXECUTION_COMPLETE");
@@ -259,8 +254,7 @@ class AuditLedgerServiceTest {
                 .thenReturn(new PageImpl<>(List.of(e1)));
 
         // Issue NLTI-007: service must delegate to event-type repo method and map to DTOs
-        Page<AuditEventResponse> result = service.query(
-                new AuditQuery(null, null, null, " request "), pageable);
+        Page<AuditEventResponse> result = service.query(new AuditQuery(null, null, null, " request "), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).eventType()).isEqualTo("REQUEST");

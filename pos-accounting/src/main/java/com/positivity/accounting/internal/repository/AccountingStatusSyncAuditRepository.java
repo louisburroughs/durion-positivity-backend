@@ -12,5 +12,4 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * operations are performed on this table.
  * </p>
  */
-public interface AccountingStatusSyncAuditRepository extends JpaRepository<AccountingStatusSyncAudit, UUID> {
-}
+public interface AccountingStatusSyncAuditRepository extends JpaRepository<AccountingStatusSyncAudit, UUID> {}

@@ -1,12 +1,10 @@
 package com.positivity.order.internal.dto;
 
+import com.positivity.order.internal.entity.OverrideStatus;
+import com.positivity.order.internal.entity.PriceOverrideReasonCode;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.positivity.order.internal.entity.OverrideStatus;
-import com.positivity.order.internal.entity.PriceOverrideReasonCode;
-
 import lombok.Builder;
 import lombok.Data;
 

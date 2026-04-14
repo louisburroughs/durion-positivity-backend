@@ -6,8 +6,7 @@ import com.positivity.price.service.EligibilityDecision;
 /** Maps promotion eligibility domain models to API response DTOs. Issue: #96 */
 public final class PromotionEligibilityRuleMapper {
 
-    private PromotionEligibilityRuleMapper() {
-    }
+    private PromotionEligibilityRuleMapper() {}
 
     public static EligibilityRuleResponse toResponse(PromotionEligibilityRule rule) {
         EligibilityRuleResponse response = new EligibilityRuleResponse();

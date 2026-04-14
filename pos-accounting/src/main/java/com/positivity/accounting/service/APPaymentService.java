@@ -1,18 +1,16 @@
 package com.positivity.accounting.service;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for AP payment orchestration and queries.
- * 
+ *
  * <p>
  * Primary ownership (from Issue #128 decision record):
  * <ul>
@@ -20,7 +18,7 @@ import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
  * state</li>
  * <li>Accounting owns GL posting (asynchronous via event)</li>
  * </ul>
- * 
+ *
  * <p>
  * Payment lifecycle:
  * <ol>
@@ -30,7 +28,7 @@ import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
  * <li>GL_POST_PENDING: Event emitted for GL posting</li>
  * <li>GL_POSTED: Journal entry posted by accounting</li>
  * </ol>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>
@@ -39,11 +37,11 @@ public interface APPaymentService {
 
     /**
      * Execute a vendor payment with optional explicit allocations.
-     * 
+     *
      * <p>
      * Idempotency: same paymentRef + same payload returns existing payment;
      * same paymentRef + different payload yields 409 conflict.
-     * 
+     *
      * <p>
      * Allocation rules (BR-4):
      * <ul>
@@ -53,7 +51,7 @@ public interface APPaymentService {
      * <li>Partial allocations allowed</li>
      * <li>Unapplied remainder recorded as vendor credit</li>
      * </ul>
-     * 
+     *
      * @param request     Execute payment request with paymentRef, vendor, amount,
      *                    optional allocations
      * @param currentUser User initiating payment (for audit)
@@ -68,7 +66,7 @@ public interface APPaymentService {
 
     /**
      * Get payment details by payment ID.
-     * 
+     *
      * @param paymentId Payment UUID
      * @return Optional payment response with full details including allocations
      */
@@ -77,7 +75,7 @@ public interface APPaymentService {
 
     /**
      * Get payment details by paymentRef (idempotency key).
-     * 
+     *
      * @param paymentRef Unique payment reference
      * @return Optional payment response
      */
@@ -86,7 +84,7 @@ public interface APPaymentService {
 
     /**
      * List eligible vendor bills for payment (status = APPROVED, openAmount > 0).
-     * 
+     *
      * @param vendorId Vendor UUID
      * @return List of payable bills ordered by due date (oldest first, nulls last)
      */
@@ -96,10 +94,10 @@ public interface APPaymentService {
     /**
      * Acknowledge GL posting completion (called by accounting service after journal
      * entry posted).
-     * 
+     *
      * <p>
      * This updates payment status to GL_POSTED and records journal entry ID.
-     * 
+     *
      * @param paymentId      Payment UUID
      * @param journalEntryId Journal entry ID from accounting
      */
@@ -107,7 +105,7 @@ public interface APPaymentService {
 
     /**
      * Record GL posting failure (for retry/alerting).
-     * 
+     *
      * @param paymentId    Payment UUID
      * @param errorMessage GL posting error
      */

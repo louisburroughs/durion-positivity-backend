@@ -1,33 +1,8 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
-import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -44,7 +19,27 @@ import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-
+import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -94,7 +89,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
         defaultGLMappingProperties.setAllowGlobalDefaults(true);
         defaultGLMappingProperties.setRequireAmountField(false);
 
-        evaluator = new PostingRuleEvaluatorImpl(TEST_CLOCK,
+        evaluator = new PostingRuleEvaluatorImpl(
+                TEST_CLOCK,
                 versionRepository,
                 ruleSetRepository,
                 glMappingResolver,
@@ -140,8 +136,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
     }
 
     private void stubNoPostingRules() {
-        when(ruleSetRepository.findByEventType(anyString()))
-                .thenReturn(Collections.emptyList());
+        when(ruleSetRepository.findByEventType(anyString())).thenReturn(Collections.emptyList());
     }
 
     private void stubDefaultMapping(String eventType, DefaultGLMapping mapping) {
@@ -197,8 +192,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft().getTransactionDate())
-                    .isEqualTo(event.getTransactionDate());
+            assertThat(result.getJournalEntryDraft().getTransactionDate()).isEqualTo(event.getTransactionDate());
         }
 
         @Test
@@ -312,7 +306,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            JournalEntryLine debitLine = result.getJournalEntryDraft().getLines().get(0);
+            JournalEntryLine debitLine =
+                    result.getJournalEntryDraft().getLines().get(0);
             assertThat(debitLine.getGlAccountId()).isEqualTo(testDebitAccountId);
             assertThat(debitLine.getDebitAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
             assertThat(debitLine.getCreditAmount()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -330,7 +325,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            JournalEntryLine creditLine = result.getJournalEntryDraft().getLines().get(1);
+            JournalEntryLine creditLine =
+                    result.getJournalEntryDraft().getLines().get(1);
             assertThat(creditLine.getGlAccountId()).isEqualTo(testCreditAccountId);
             assertThat(creditLine.getDebitAmount()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(creditLine.getCreditAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
@@ -357,9 +353,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
                     .map(l -> l.getCreditAmount() != null ? l.getCreditAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            assertThat(totalDebits)
-                    .isEqualByComparingTo(totalCredits)
-                    .isEqualByComparingTo(new BigDecimal("1234.56"));
+            assertThat(totalDebits).isEqualByComparingTo(totalCredits).isEqualByComparingTo(new BigDecimal("1234.56"));
         }
 
         @Test
@@ -431,10 +425,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
 
             assertThat(result.isSuccess()).isTrue();
             List<JournalEntryLine> lines = result.getJournalEntryDraft().getLines();
-            assertThat(lines.get(0).getDescription())
-                    .isEqualTo("Default debit for billing.invoicePosted");
-            assertThat(lines.get(1).getDescription())
-                    .isEqualTo("Default credit for billing.invoicePosted");
+            assertThat(lines.get(0).getDescription()).isEqualTo("Default debit for billing.invoicePosted");
+            assertThat(lines.get(1).getDescription()).isEqualTo("Default credit for billing.invoicePosted");
         }
     }
 
@@ -443,7 +435,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
     class AmountResolutionTests {
 
         @ParameterizedTest(name = "Should resolve amount \"{0}\" from string payload")
-        @CsvSource({ "750.25", "9999999.9999", "0.01" })
+        @CsvSource({"750.25", "9999999.9999", "0.01"})
         void shouldResolveAmountFromStringPayload(String amount) {
             stubNoPostingRules();
             DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
@@ -512,8 +504,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("mappingType", "defaultGLMapping");
+            assertThat(result.getEvaluationDetails()).containsEntry("mappingType", "defaultGLMapping");
         }
 
         @Test
@@ -528,8 +519,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("defaultMappingId", mapping.getMappingId());
+            assertThat(result.getEvaluationDetails()).containsEntry("defaultMappingId", mapping.getMappingId());
         }
 
         @Test
@@ -544,8 +534,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("journalEntryLineCount", 2);
+            assertThat(result.getEvaluationDetails()).containsEntry("journalEntryLineCount", 2);
         }
 
         @Test
@@ -617,13 +606,13 @@ class PostingRuleEvaluatorDefaultMappingTest {
                         }
                       ]
                     }
-                    """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                    UUID.fromString("00000000-0000-0000-0000-000000000001")));
+                    """.formatted(
+                            UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                            UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
-            when(ruleSetRepository.findByEventType("billing.invoicePosted"))
-                    .thenReturn(List.of(ruleSet));
+            when(ruleSetRepository.findByEventType("billing.invoicePosted")).thenReturn(List.of(ruleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
-                    ruleSetId, PostingRuleSetState.PUBLISHED))
+                            ruleSetId, PostingRuleSetState.PUBLISHED))
                     .thenReturn(List.of(ruleVersion));
 
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "500.00");
@@ -651,8 +640,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("mappingType", "defaultGLMapping");
+            assertThat(result.getEvaluationDetails()).containsEntry("mappingType", "defaultGLMapping");
         }
 
         @Test
@@ -663,10 +651,9 @@ class PostingRuleEvaluatorDefaultMappingTest {
             ruleSet.setPostingRuleSetId(ruleSetId);
             ruleSet.setEventType("billing.invoicePosted");
 
-            when(ruleSetRepository.findByEventType("billing.invoicePosted"))
-                    .thenReturn(List.of(ruleSet));
+            when(ruleSetRepository.findByEventType("billing.invoicePosted")).thenReturn(List.of(ruleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
-                    ruleSetId, PostingRuleSetState.PUBLISHED))
+                            ruleSetId, PostingRuleSetState.PUBLISHED))
                     .thenReturn(Collections.emptyList());
 
             DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Fallback");
@@ -677,8 +664,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getEvaluationDetails())
-                    .containsEntry("mappingType", "defaultGLMapping");
+            assertThat(result.getEvaluationDetails()).containsEntry("mappingType", "defaultGLMapping");
         }
 
         @Test
@@ -694,8 +680,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
 
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.NO_RULE_VERSION);
-            assertThat(result.getFailureDetails())
-                    .contains("unknown.eventType");
+            assertThat(result.getFailureDetails()).contains("unknown.eventType");
         }
     }
 
@@ -790,8 +775,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft().getDescription())
-                    .contains("refund.issued");
+            assertThat(result.getJournalEntryDraft().getDescription()).contains("refund.issued");
             assertThat(result.getJournalEntryDraft().getLines().get(0).getDescription())
                     .isEqualTo("Refund issued (DR)");
             assertThat(result.getJournalEntryDraft().getLines().get(1).getDescription())

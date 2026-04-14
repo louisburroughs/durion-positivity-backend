@@ -10,5 +10,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CompletePickTaskRequest {
-  private String reason;
+    private String reason;
 }

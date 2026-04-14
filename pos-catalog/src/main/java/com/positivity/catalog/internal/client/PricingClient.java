@@ -26,9 +26,5 @@ public interface PricingClient {
 
     /** Local response record mirroring the relevant pos-price response fields. */
     record PriceQuoteClientResponse(
-            BigDecimal msrpAmount,
-            String msrpCurrency,
-            BigDecimal unitPriceAmount,
-            String priceSource) {
-    }
+            BigDecimal msrpAmount, String msrpCurrency, BigDecimal unitPriceAmount, String priceSource) {}
 }

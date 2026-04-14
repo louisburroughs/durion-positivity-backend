@@ -11,5 +11,6 @@ import lombok.NoArgsConstructor;
 public class CreateReceivingSessionRequest {
     @NotBlank(message = "sourceDocumentId is required")
     private String sourceDocumentId;
+
     private String entryMethod;
 }

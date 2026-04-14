@@ -20,6 +20,9 @@ public class LocationInventoryInquiryResponse {
     @Schema(description = "Storage location identifier", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Current on-hand quantity across all stock items at the location", example = "12", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Current on-hand quantity across all stock items at the location",
+            example = "12",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private int onHandQuantity;
 }

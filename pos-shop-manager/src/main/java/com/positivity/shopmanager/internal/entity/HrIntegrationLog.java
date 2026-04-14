@@ -1,5 +1,7 @@
 package com.positivity.shopmanager.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -9,9 +11,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.shared.id.UUIDv7Id;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

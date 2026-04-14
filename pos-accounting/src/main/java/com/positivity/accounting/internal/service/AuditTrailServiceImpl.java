@@ -1,16 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.audit.dto.AuditTrailResponse;
 import com.positivity.accounting.internal.audit.dto.CancellationRequest;
 import com.positivity.accounting.internal.audit.dto.PriceOverrideRequest;
@@ -32,9 +21,17 @@ import com.positivity.accounting.service.PriceOverrideAuthorizationService;
 import com.positivity.accounting.service.RefundAuthorizationService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,321 +43,319 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class AuditTrailServiceImpl implements AuditTrailService {
 
-        private final Clock clock;
-        private final AuditTrailEntryRepository auditRepository;
-        private final PriceOverrideAuthorizationService overrideAuthService;
-        private final RefundAuthorizationService refundAuthService;
-        private final ApplicationEventPublisher eventPublisher;
-        private final ObjectMapper objectMapper;
+    private final Clock clock;
+    private final AuditTrailEntryRepository auditRepository;
+    private final PriceOverrideAuthorizationService overrideAuthService;
+    private final RefundAuthorizationService refundAuthService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
-        /**
-         * Records a price override in the audit trail.
-         * 
-         * @param request the price override request
-         * @return audit trail response
-         * @throws AuditTrailAuthorizationException if the override is not authorized per policy
-         */
-        @Transactional
-        public AuditTrailResponse recordPriceOverride(PriceOverrideRequest request) {
-                log.info("Recording price override for order {} line {}",
-                                request.getOrderId(), request.getLineItemId());
-                String actorId = resolveActorId();
+    /**
+     * Records a price override in the audit trail.
+     *
+     * @param request the price override request
+     * @return audit trail response
+     * @throws AuditTrailAuthorizationException if the override is not authorized per policy
+     */
+    @Transactional
+    public AuditTrailResponse recordPriceOverride(PriceOverrideRequest request) {
+        log.info("Recording price override for order {} line {}", request.getOrderId(), request.getLineItemId());
+        String actorId = resolveActorId();
 
-                // Validate authorization
-                PriceOverrideAuthorizationServiceImpl.AuthorizationResult authResult = overrideAuthService.validate(
-                                request.getActorRole(),
-                                request.getOriginalPrice(),
-                                request.getAdjustedPrice(),
-                                request.getCategoryCode()
-                );
+        // Validate authorization
+        PriceOverrideAuthorizationServiceImpl.AuthorizationResult authResult = overrideAuthService.validate(
+                request.getActorRole(),
+                request.getOriginalPrice(),
+                request.getAdjustedPrice(),
+                request.getCategoryCode());
 
-                if (!authResult.isApproved()) {
-                        log.warn("Price override denied: {}", authResult.getMessage());
+        if (!authResult.isApproved()) {
+            log.warn("Price override denied: {}", authResult.getMessage());
 
-                        // Emit denial event
-                        eventPublisher.publishEvent(AuthorizationDenied.builder()
-                                        .exceptionType(ExceptionType.PRICE_OVERRIDE)
-                                        .actorId(actorId)
-                                        .actorRole(request.getActorRole())
-                                        .reasonDenied(authResult.getMessage())
-                                        .policyVersion(authResult.getPolicyVersion())
-                                        .timestamp(Instant.now(clock))
-                                        .build());
+            // Emit denial event
+            eventPublisher.publishEvent(AuthorizationDenied.builder()
+                    .exceptionType(ExceptionType.PRICE_OVERRIDE)
+                    .actorId(actorId)
+                    .actorRole(request.getActorRole())
+                    .reasonDenied(authResult.getMessage())
+                    .policyVersion(authResult.getPolicyVersion())
+                    .timestamp(Instant.now(clock))
+                    .build());
 
-                        throw new AuditTrailAuthorizationException(authResult.getMessage());
-                }
-
-                // Calculate override amount/percent
-                BigDecimal discountAmount = request.getOriginalPrice().subtract(request.getAdjustedPrice());
-                BigDecimal discountPercent = discountAmount
-                                .divide(request.getOriginalPrice(), 4, RoundingMode.HALF_UP)
-                                .multiply(BigDecimal.valueOf(100));
-                String overrideDesc = String.format("-$%.2f (%.1f%%)",
-                                discountAmount, discountPercent);
-
-                // Create audit entry
-                AuditTrailEntry entry = AuditTrailEntry.builder()
-                                .exceptionType(ExceptionType.PRICE_OVERRIDE)
-                                .actorId(actorId)
-                                .actorRole(request.getActorRole())
-                                .reason(request.getReason())
-                                .authorizationLevel(authResult.getAuthorizationLevel())
-                                .policyVersion(authResult.getPolicyVersion())
-                                .orderId(request.getOrderId())
-                                .lineItemId(request.getLineItemId())
-                                .originalPrice(request.getOriginalPrice())
-                                .adjustedPrice(request.getAdjustedPrice())
-                                .overrideAmountOrPercent(overrideDesc)
-                                .policyValidationResult(PolicyValidationResult.APPROVED)
-                                .accountingIntent(AccountingIntent.REVENUE_ADJUSTMENT)
-                                .accountingStatus(AccountingStatus.PENDING_POSTING)
-                                .expectedAccountingOutcome("Revenue adjustment of " + overrideDesc)
-                                .sourceEventId(UUIDv7Generator.generate())
-                                .sourceDocumentId("ORDER-" + request.getOrderId())
-                                .build();
-
-                entry = auditRepository.save(entry);
-                log.info("Price override recorded with audit ID {}", entry.getAuditId());
-
-                // Emit event
-                eventPublisher.publishEvent(OverridePriceCreated.builder()
-                                .auditId(entry.getAuditId())
-                                .orderId(entry.getOrderId())
-                                .lineItemId(entry.getLineItemId())
-                                .originalPrice(entry.getOriginalPrice())
-                                .adjustedPrice(entry.getAdjustedPrice())
-                                .actorId(entry.getActorId())
-                                .actorRole(entry.getActorRole())
-                                .authorizationLevel(entry.getAuthorizationLevel())
-                                .policyVersion(entry.getPolicyVersion())
-                                .reason(entry.getReason())
-                                .timestamp(entry.getTimestamp())
-                                .accountingIntent(entry.getAccountingIntent())
-                                .accountingStatus(entry.getAccountingStatus())
-                                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
-                                .sourceEventId(entry.getSourceEventId())
-                                .sourceDocumentId(entry.getSourceDocumentId())
-                                .build());
-
-                return mapToResponse(entry);
+            throw new AuditTrailAuthorizationException(authResult.getMessage());
         }
 
-        /**
-         * Records a refund in the audit trail.
-         * 
-         * @param request the refund request
-         * @return audit trail response
-         * @throws AuditTrailAuthorizationException if the refund is not authorized per policy
-         */
-        @Transactional
-        public AuditTrailResponse recordRefund(RefundRequest request) {
-                log.info("Recording refund for invoice {} payment {}",
-                                request.getInvoiceId(), request.getPaymentId());
-                String actorId = resolveActorId();
+        // Calculate override amount/percent
+        BigDecimal discountAmount = request.getOriginalPrice().subtract(request.getAdjustedPrice());
+        BigDecimal discountPercent = discountAmount
+                .divide(request.getOriginalPrice(), 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+        String overrideDesc = String.format("-$%.2f (%.1f%%)", discountAmount, discountPercent);
 
-                // Validate authorization
-                RefundAuthorizationServiceImpl.RefundAuthorizationResult authResult = refundAuthService.validate(
-                                request.getActorRole(),
-                                request.getOriginalPaymentStatus(),
-                                request.getRefundType());
+        // Create audit entry
+        AuditTrailEntry entry = AuditTrailEntry.builder()
+                .exceptionType(ExceptionType.PRICE_OVERRIDE)
+                .actorId(actorId)
+                .actorRole(request.getActorRole())
+                .reason(request.getReason())
+                .authorizationLevel(authResult.getAuthorizationLevel())
+                .policyVersion(authResult.getPolicyVersion())
+                .orderId(request.getOrderId())
+                .lineItemId(request.getLineItemId())
+                .originalPrice(request.getOriginalPrice())
+                .adjustedPrice(request.getAdjustedPrice())
+                .overrideAmountOrPercent(overrideDesc)
+                .policyValidationResult(PolicyValidationResult.APPROVED)
+                .accountingIntent(AccountingIntent.REVENUE_ADJUSTMENT)
+                .accountingStatus(AccountingStatus.PENDING_POSTING)
+                .expectedAccountingOutcome("Revenue adjustment of " + overrideDesc)
+                .sourceEventId(UUIDv7Generator.generate())
+                .sourceDocumentId("ORDER-" + request.getOrderId())
+                .build();
 
-                if (!authResult.isAuthorized()) {
-                        log.warn("Refund denied: {}", authResult.getMessage());
+        entry = auditRepository.save(entry);
+        log.info("Price override recorded with audit ID {}", entry.getAuditId());
 
-                        // Emit denial event
-                        eventPublisher.publishEvent(AuthorizationDenied.builder()
-                                        .exceptionType(ExceptionType.REFUND)
-                                        .actorId(actorId)
-                                        .actorRole(request.getActorRole())
-                                        .reasonDenied(authResult.getMessage())
-                                        .policyVersion(authResult.getPolicyVersion())
-                                        .timestamp(Instant.now(clock))
-                                        .build());
+        // Emit event
+        eventPublisher.publishEvent(OverridePriceCreated.builder()
+                .auditId(entry.getAuditId())
+                .orderId(entry.getOrderId())
+                .lineItemId(entry.getLineItemId())
+                .originalPrice(entry.getOriginalPrice())
+                .adjustedPrice(entry.getAdjustedPrice())
+                .actorId(entry.getActorId())
+                .actorRole(entry.getActorRole())
+                .authorizationLevel(entry.getAuthorizationLevel())
+                .policyVersion(entry.getPolicyVersion())
+                .reason(entry.getReason())
+                .timestamp(entry.getTimestamp())
+                .accountingIntent(entry.getAccountingIntent())
+                .accountingStatus(entry.getAccountingStatus())
+                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
+                .sourceEventId(entry.getSourceEventId())
+                .sourceDocumentId(entry.getSourceDocumentId())
+                .build());
 
-                        throw new AuditTrailAuthorizationException(authResult.getMessage());
-                }
+        return mapToResponse(entry);
+    }
 
-                // Determine accounting intent based on refund type
-                AccountingIntent accountingIntent = switch (request.getRefundType()) {
-                        case REVERSAL -> AccountingIntent.PAYMENT_REVERSAL;
-                        case CREDIT_MEMO -> AccountingIntent.CUSTOMER_CREDIT;
-                        case ADJUSTMENT -> AccountingIntent.WRITE_OFF;
+    /**
+     * Records a refund in the audit trail.
+     *
+     * @param request the refund request
+     * @return audit trail response
+     * @throws AuditTrailAuthorizationException if the refund is not authorized per policy
+     */
+    @Transactional
+    public AuditTrailResponse recordRefund(RefundRequest request) {
+        log.info("Recording refund for invoice {} payment {}", request.getInvoiceId(), request.getPaymentId());
+        String actorId = resolveActorId();
+
+        // Validate authorization
+        RefundAuthorizationServiceImpl.RefundAuthorizationResult authResult = refundAuthService.validate(
+                request.getActorRole(), request.getOriginalPaymentStatus(), request.getRefundType());
+
+        if (!authResult.isAuthorized()) {
+            log.warn("Refund denied: {}", authResult.getMessage());
+
+            // Emit denial event
+            eventPublisher.publishEvent(AuthorizationDenied.builder()
+                    .exceptionType(ExceptionType.REFUND)
+                    .actorId(actorId)
+                    .actorRole(request.getActorRole())
+                    .reasonDenied(authResult.getMessage())
+                    .policyVersion(authResult.getPolicyVersion())
+                    .timestamp(Instant.now(clock))
+                    .build());
+
+            throw new AuditTrailAuthorizationException(authResult.getMessage());
+        }
+
+        // Determine accounting intent based on refund type
+        AccountingIntent accountingIntent =
+                switch (request.getRefundType()) {
+                    case REVERSAL -> AccountingIntent.PAYMENT_REVERSAL;
+                    case CREDIT_MEMO -> AccountingIntent.CUSTOMER_CREDIT;
+                    case ADJUSTMENT -> AccountingIntent.WRITE_OFF;
                 };
 
-                // Build linked source IDs
-                Map<String, String> linkedIds = new HashMap<>();
-                linkedIds.put("invoiceId", request.getInvoiceId().toString());
-                linkedIds.put("paymentId", request.getPaymentId().toString());
-                String linkedSourceIds = toJson(linkedIds);
+        // Build linked source IDs
+        Map<String, String> linkedIds = new HashMap<>();
+        linkedIds.put("invoiceId", request.getInvoiceId().toString());
+        linkedIds.put("paymentId", request.getPaymentId().toString());
+        String linkedSourceIds = toJson(linkedIds);
 
-                // Create audit entry
-                AuditTrailEntry entry = AuditTrailEntry.builder()
-                                .exceptionType(ExceptionType.REFUND)
-                                .actorId(actorId)
-                                .actorRole(request.getActorRole())
-                                .reason(request.getReason())
-                                .authorizationLevel(request.getActorRole())
-                                .policyVersion(authResult.getPolicyVersion())
-                                .invoiceId(request.getInvoiceId())
-                                .paymentId(request.getPaymentId())
-                                .refundType(request.getRefundType())
-                                .refundAmount(request.getRefundAmount())
-                                .originalPaymentStatus(request.getOriginalPaymentStatus())
-                                .refundMethod(authResult.getRefundMethod())
-                                .linkedSourceIds(linkedSourceIds)
-                                .accountingIntent(accountingIntent)
-                                .accountingStatus(AccountingStatus.PENDING_POSTING)
-                                .expectedAccountingOutcome(String.format("%s refund of $%.2f via %s",
-                                                request.getRefundType(), request.getRefundAmount(),
-                                                authResult.getRefundMethod()))
-                                .sourceEventId(UUIDv7Generator.generate())
-                                .sourceDocumentId("INVOICE-" + request.getInvoiceId())
-                                .build();
+        // Create audit entry
+        AuditTrailEntry entry = AuditTrailEntry.builder()
+                .exceptionType(ExceptionType.REFUND)
+                .actorId(actorId)
+                .actorRole(request.getActorRole())
+                .reason(request.getReason())
+                .authorizationLevel(request.getActorRole())
+                .policyVersion(authResult.getPolicyVersion())
+                .invoiceId(request.getInvoiceId())
+                .paymentId(request.getPaymentId())
+                .refundType(request.getRefundType())
+                .refundAmount(request.getRefundAmount())
+                .originalPaymentStatus(request.getOriginalPaymentStatus())
+                .refundMethod(authResult.getRefundMethod())
+                .linkedSourceIds(linkedSourceIds)
+                .accountingIntent(accountingIntent)
+                .accountingStatus(AccountingStatus.PENDING_POSTING)
+                .expectedAccountingOutcome(String.format(
+                        "%s refund of $%.2f via %s",
+                        request.getRefundType(), request.getRefundAmount(), authResult.getRefundMethod()))
+                .sourceEventId(UUIDv7Generator.generate())
+                .sourceDocumentId("INVOICE-" + request.getInvoiceId())
+                .build();
 
-                entry = auditRepository.save(entry);
-                log.info("Refund recorded with audit ID {}", entry.getAuditId());
+        entry = auditRepository.save(entry);
+        log.info("Refund recorded with audit ID {}", entry.getAuditId());
 
-                // Emit event
-                eventPublisher.publishEvent(RefundCreated.builder()
-                                .auditId(entry.getAuditId())
-                                .invoiceId(entry.getInvoiceId())
-                                .paymentId(entry.getPaymentId())
-                                .refundType(entry.getRefundType())
-                                .refundAmount(entry.getRefundAmount())
-                                .actorId(entry.getActorId())
-                                .actorRole(entry.getActorRole())
-                                .authorizationLevel(entry.getAuthorizationLevel())
-                                .policyVersion(entry.getPolicyVersion())
-                                .reason(entry.getReason())
-                                .timestamp(entry.getTimestamp())
-                                .accountingIntent(entry.getAccountingIntent())
-                                .accountingStatus(entry.getAccountingStatus())
-                                .linkedSourceIds(entry.getLinkedSourceIds())
-                                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
-                                .sourceEventId(entry.getSourceEventId())
-                                .sourceDocumentId(entry.getSourceDocumentId())
-                                .build());
+        // Emit event
+        eventPublisher.publishEvent(RefundCreated.builder()
+                .auditId(entry.getAuditId())
+                .invoiceId(entry.getInvoiceId())
+                .paymentId(entry.getPaymentId())
+                .refundType(entry.getRefundType())
+                .refundAmount(entry.getRefundAmount())
+                .actorId(entry.getActorId())
+                .actorRole(entry.getActorRole())
+                .authorizationLevel(entry.getAuthorizationLevel())
+                .policyVersion(entry.getPolicyVersion())
+                .reason(entry.getReason())
+                .timestamp(entry.getTimestamp())
+                .accountingIntent(entry.getAccountingIntent())
+                .accountingStatus(entry.getAccountingStatus())
+                .linkedSourceIds(entry.getLinkedSourceIds())
+                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
+                .sourceEventId(entry.getSourceEventId())
+                .sourceDocumentId(entry.getSourceDocumentId())
+                .build());
 
-                return mapToResponse(entry);
+        return mapToResponse(entry);
+    }
+
+    /**
+     * Records a cancellation in the audit trail.
+     *
+     * @param request the cancellation request
+     * @return audit trail response
+     */
+    @Transactional
+    public AuditTrailResponse recordCancellation(CancellationRequest request) {
+        log.info(
+                "Recording cancellation of type {} for order {} invoice {}",
+                request.getCancellationType(),
+                request.getOrderId(),
+                request.getInvoiceId());
+        String actorId = resolveActorId();
+
+        // Determine accounting intent based on cancellation type
+        AccountingIntent accountingIntent = request.getCancellationType() == CancellationType.ORDER_CANCELLED
+                ? AccountingIntent.REVENUE_REVERSAL
+                : AccountingIntent.PAYMENT_RECOVERY;
+
+        // Create audit entry
+        AuditTrailEntry entry = AuditTrailEntry.builder()
+                .exceptionType(ExceptionType.CANCELLATION)
+                .actorId(actorId)
+                .actorRole(request.getActorRole())
+                .reason(request.getReason())
+                .authorizationLevel(request.getActorRole())
+                .policyVersion("1.0") // Default version
+                .orderId(request.getOrderId())
+                .invoiceId(request.getInvoiceId())
+                .cancellationType(request.getCancellationType())
+                .beforeSnapshot(request.getBeforeSnapshot())
+                .afterSnapshot(request.getAfterSnapshot())
+                .partialPaymentInfo(request.getPartialPaymentInfo())
+                .glReversalStatus("PENDING_REVERSAL")
+                .accountingIntent(accountingIntent)
+                .accountingStatus(AccountingStatus.PENDING_POSTING)
+                .expectedAccountingOutcome("Cancellation reversal pending accounting review")
+                .sourceEventId(UUIDv7Generator.generate())
+                .sourceDocumentId(
+                        request.getOrderId() != null
+                                ? "ORDER-" + request.getOrderId()
+                                : "INVOICE-" + request.getInvoiceId())
+                .build();
+
+        entry = auditRepository.save(entry);
+        log.info("Cancellation recorded with audit ID {}", entry.getAuditId());
+
+        // Emit event
+        eventPublisher.publishEvent(CancellationCreated.builder()
+                .auditId(entry.getAuditId())
+                .orderId(entry.getOrderId())
+                .invoiceId(entry.getInvoiceId())
+                .cancellationType(entry.getCancellationType())
+                .actorId(entry.getActorId())
+                .actorRole(entry.getActorRole())
+                .authorizationLevel(entry.getAuthorizationLevel())
+                .policyVersion(entry.getPolicyVersion())
+                .reason(entry.getReason())
+                .timestamp(entry.getTimestamp())
+                .accountingIntent(entry.getAccountingIntent())
+                .accountingStatus(entry.getAccountingStatus())
+                .beforeSnapshot(entry.getBeforeSnapshot())
+                .afterSnapshot(entry.getAfterSnapshot())
+                .partialPaymentInfo(entry.getPartialPaymentInfo())
+                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
+                .sourceEventId(entry.getSourceEventId())
+                .sourceDocumentId(entry.getSourceDocumentId())
+                .build());
+
+        return mapToResponse(entry);
+    }
+
+    private AuditTrailResponse mapToResponse(AuditTrailEntry entry) {
+        return AuditTrailResponse.builder()
+                .auditId(entry.getAuditId())
+                .exceptionType(entry.getExceptionType())
+                .actorId(entry.getActorId())
+                .actorRole(entry.getActorRole())
+                .timestamp(entry.getTimestamp())
+                .reason(entry.getReason())
+                .authorizationLevel(entry.getAuthorizationLevel())
+                .policyVersion(entry.getPolicyVersion())
+                .orderId(entry.getOrderId())
+                .lineItemId(entry.getLineItemId())
+                .originalPrice(entry.getOriginalPrice())
+                .adjustedPrice(entry.getAdjustedPrice())
+                .overrideAmountOrPercent(entry.getOverrideAmountOrPercent())
+                .forbiddenCategoryCode(entry.getForbiddenCategoryCode())
+                .policyValidationResult(entry.getPolicyValidationResult())
+                .invoiceId(entry.getInvoiceId())
+                .paymentId(entry.getPaymentId())
+                .refundType(entry.getRefundType())
+                .refundAmount(entry.getRefundAmount())
+                .originalPaymentStatus(entry.getOriginalPaymentStatus())
+                .refundMethod(entry.getRefundMethod())
+                .linkedSourceIds(entry.getLinkedSourceIds())
+                .cancellationType(entry.getCancellationType())
+                .beforeSnapshot(entry.getBeforeSnapshot())
+                .afterSnapshot(entry.getAfterSnapshot())
+                .partialPaymentInfo(entry.getPartialPaymentInfo())
+                .glReversalStatus(entry.getGlReversalStatus())
+                .accountingIntent(entry.getAccountingIntent())
+                .accountingStatus(entry.getAccountingStatus())
+                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
+                .sourceEventId(entry.getSourceEventId())
+                .sourceDocumentId(entry.getSourceDocumentId())
+                .build();
+    }
+
+    private String toJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JacksonException e) {
+            log.error("Failed to serialize object to JSON", e);
+            return "{}";
         }
+    }
 
-        /**
-         * Records a cancellation in the audit trail.
-         * 
-         * @param request the cancellation request
-         * @return audit trail response
-         */
-        @Transactional
-        public AuditTrailResponse recordCancellation(CancellationRequest request) {
-                log.info("Recording cancellation of type {} for order {} invoice {}",
-                                request.getCancellationType(), request.getOrderId(), request.getInvoiceId());
-                String actorId = resolveActorId();
-
-                // Determine accounting intent based on cancellation type
-                AccountingIntent accountingIntent = request.getCancellationType() == CancellationType.ORDER_CANCELLED
-                                ? AccountingIntent.REVENUE_REVERSAL
-                                : AccountingIntent.PAYMENT_RECOVERY;
-
-                // Create audit entry
-                AuditTrailEntry entry = AuditTrailEntry.builder()
-                                .exceptionType(ExceptionType.CANCELLATION)
-                                .actorId(actorId)
-                                .actorRole(request.getActorRole())
-                                .reason(request.getReason())
-                                .authorizationLevel(request.getActorRole())
-                                .policyVersion("1.0") // Default version
-                                .orderId(request.getOrderId())
-                                .invoiceId(request.getInvoiceId())
-                                .cancellationType(request.getCancellationType())
-                                .beforeSnapshot(request.getBeforeSnapshot())
-                                .afterSnapshot(request.getAfterSnapshot())
-                                .partialPaymentInfo(request.getPartialPaymentInfo())
-                                .glReversalStatus("PENDING_REVERSAL")
-                                .accountingIntent(accountingIntent)
-                                .accountingStatus(AccountingStatus.PENDING_POSTING)
-                                .expectedAccountingOutcome("Cancellation reversal pending accounting review")
-                                .sourceEventId(UUIDv7Generator.generate())
-                                .sourceDocumentId(request.getOrderId() != null
-                                                ? "ORDER-" + request.getOrderId()
-                                                : "INVOICE-" + request.getInvoiceId())
-                                .build();
-
-                entry = auditRepository.save(entry);
-                log.info("Cancellation recorded with audit ID {}", entry.getAuditId());
-
-                // Emit event
-                eventPublisher.publishEvent(CancellationCreated.builder()
-                                .auditId(entry.getAuditId())
-                                .orderId(entry.getOrderId())
-                                .invoiceId(entry.getInvoiceId())
-                                .cancellationType(entry.getCancellationType())
-                                .actorId(entry.getActorId())
-                                .actorRole(entry.getActorRole())
-                                .authorizationLevel(entry.getAuthorizationLevel())
-                                .policyVersion(entry.getPolicyVersion())
-                                .reason(entry.getReason())
-                                .timestamp(entry.getTimestamp())
-                                .accountingIntent(entry.getAccountingIntent())
-                                .accountingStatus(entry.getAccountingStatus())
-                                .beforeSnapshot(entry.getBeforeSnapshot())
-                                .afterSnapshot(entry.getAfterSnapshot())
-                                .partialPaymentInfo(entry.getPartialPaymentInfo())
-                                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
-                                .sourceEventId(entry.getSourceEventId())
-                                .sourceDocumentId(entry.getSourceDocumentId())
-                                .build());
-
-                return mapToResponse(entry);
-        }
-
-        private AuditTrailResponse mapToResponse(AuditTrailEntry entry) {
-                return AuditTrailResponse.builder()
-                                .auditId(entry.getAuditId())
-                                .exceptionType(entry.getExceptionType())
-                                .actorId(entry.getActorId())
-                                .actorRole(entry.getActorRole())
-                                .timestamp(entry.getTimestamp())
-                                .reason(entry.getReason())
-                                .authorizationLevel(entry.getAuthorizationLevel())
-                                .policyVersion(entry.getPolicyVersion())
-                                .orderId(entry.getOrderId())
-                                .lineItemId(entry.getLineItemId())
-                                .originalPrice(entry.getOriginalPrice())
-                                .adjustedPrice(entry.getAdjustedPrice())
-                                .overrideAmountOrPercent(entry.getOverrideAmountOrPercent())
-                                .forbiddenCategoryCode(entry.getForbiddenCategoryCode())
-                                .policyValidationResult(entry.getPolicyValidationResult())
-                                .invoiceId(entry.getInvoiceId())
-                                .paymentId(entry.getPaymentId())
-                                .refundType(entry.getRefundType())
-                                .refundAmount(entry.getRefundAmount())
-                                .originalPaymentStatus(entry.getOriginalPaymentStatus())
-                                .refundMethod(entry.getRefundMethod())
-                                .linkedSourceIds(entry.getLinkedSourceIds())
-                                .cancellationType(entry.getCancellationType())
-                                .beforeSnapshot(entry.getBeforeSnapshot())
-                                .afterSnapshot(entry.getAfterSnapshot())
-                                .partialPaymentInfo(entry.getPartialPaymentInfo())
-                                .glReversalStatus(entry.getGlReversalStatus())
-                                .accountingIntent(entry.getAccountingIntent())
-                                .accountingStatus(entry.getAccountingStatus())
-                                .expectedAccountingOutcome(entry.getExpectedAccountingOutcome())
-                                .sourceEventId(entry.getSourceEventId())
-                                .sourceDocumentId(entry.getSourceDocumentId())
-                                .build();
-        }
-
-        private String toJson(Object obj) {
-                try {
-                        return objectMapper.writeValueAsString(obj);
-                } catch (JacksonException e) {
-                        log.error("Failed to serialize object to JSON", e);
-                        return "{}";
-                }
-        }
-
-        private String resolveActorId() {
-                return SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        }
-
+    private String resolveActorId() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault("system");
+    }
 }

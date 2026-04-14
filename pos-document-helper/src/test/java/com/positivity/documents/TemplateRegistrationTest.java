@@ -1,8 +1,8 @@
 package com.positivity.documents;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for TemplateRegistration DTO.
@@ -50,8 +50,8 @@ class TemplateRegistrationTest {
     @Test
     void htmlTemplate_HelperMethod() {
         // Arrange & Act
-        TemplateRegistration registration = TemplateRegistration
-                .htmlTemplate("INVOICE_TEMPLATE", "Invoice template", "<html>Invoice</html>")
+        TemplateRegistration registration = TemplateRegistration.htmlTemplate(
+                        "INVOICE_TEMPLATE", "Invoice template", "<html>Invoice</html>")
                 .version("1.5")
                 .build();
 

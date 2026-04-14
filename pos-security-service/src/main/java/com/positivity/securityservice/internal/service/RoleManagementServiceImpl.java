@@ -1,9 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
-import java.time.Clock;
-
-import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
+import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
@@ -24,16 +22,7 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.securityservice.service.RoleManagementService;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -42,6 +31,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for managing roles, role assignments, and role-permission mappings.
@@ -87,12 +84,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public RoleDto updateRolePermissions(RolePermissionsRequest request) {
-        Role role = roleRepository.findById(request.getRoleId())
+        Role role = roleRepository
+                .findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
         Set<Permission> permissions = new HashSet<>();
         for (String permissionName : request.getPermissionNames()) {
-            Permission permission = permissionRepository.findByName(permissionName)
+            Permission permission = permissionRepository
+                    .findByName(permissionName)
                     .orElseThrow(() -> new PermissionNotFoundException(
                             "Permission not found: " + permissionName + ". It must be registered first."));
             permissions.add(permission);
@@ -102,8 +101,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
 
-        log.info("Updated permissions for role {}: {} permissions assigned",
-                role.getName(), permissions.size());
+        log.info("Updated permissions for role {}: {} permissions assigned", role.getName(), permissions.size());
 
         return toRoleDto(roleRepository.save(role));
     }
@@ -115,7 +113,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Transactional
     public RoleAssignmentDto createRoleAssignment(RoleAssignmentRequest request) {
         if (request.getScopeType() == ScopeType.LOCATION
-                && (request.getScopeLocationIds() == null || request.getScopeLocationIds().isEmpty())) {
+                && (request.getScopeLocationIds() == null
+                        || request.getScopeLocationIds().isEmpty())) {
             throw new IllegalArgumentException("LOCATION scope requires at least one location ID");
         }
 
@@ -125,15 +124,16 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             throw new IllegalArgumentException("GLOBAL scope cannot have location IDs");
         }
 
-        User user = userRepository.findById(request.getUserId())
+        User user = userRepository
+                .findById(request.getUserId())
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + request.getUserId()));
 
-        Role role = roleRepository.findById(request.getRoleId())
+        Role role = roleRepository
+                .findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
-        LocalDateTime requestStart = request.getEffectiveStartDate() != null
-                ? request.getEffectiveStartDate()
-                : LocalDateTime.now(clock);
+        LocalDateTime requestStart =
+                request.getEffectiveStartDate() != null ? request.getEffectiveStartDate() : LocalDateTime.now(clock);
         LocalDateTime requestEnd = request.getEffectiveEndDate();
 
         validateNoOverlappingAssignment(user.getId(), role.getId(), request, requestStart, requestEnd);
@@ -149,8 +149,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setCreatedBy(getCurrentUsername());
         assignment.setCreatedAt(Instant.now(clock));
 
-        log.info("Created role assignment: user={}, role={}, scope={}, locations={}",
-                user.getUsername(), role.getName(), assignment.getScopeType(),
+        log.info(
+                "Created role assignment: user={}, role={}, scope={}, locations={}",
+                user.getUsername(),
+                role.getName(),
+                assignment.getScopeType(),
                 assignment.getScopeLocationIds());
 
         return toRoleAssignmentDto(roleAssignmentRepository.save(assignment));
@@ -163,12 +166,12 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             LocalDateTime requestStart,
             LocalDateTime requestEnd) {
 
-        List<RoleAssignment> existingAssignments = roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId,
-                roleId, request.getScopeType());
+        List<RoleAssignment> existingAssignments =
+                roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, request.getScopeType());
 
         for (RoleAssignment existing : existingAssignments) {
-            boolean sameRoleAndScope = existing.getRole().getId().equals(roleId)
-                    && existing.getScopeType() == request.getScopeType();
+            boolean sameRoleAndScope =
+                    existing.getRole().getId().equals(roleId) && existing.getScopeType() == request.getScopeType();
 
             if (sameRoleAndScope && hasDateOverlap(existing, requestStart, requestEnd)) {
                 if (request.getScopeType() == ScopeType.LOCATION) {
@@ -194,9 +197,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
     private boolean hasLocationOverlap(Set<String> existingLocationIds, Set<String> requestLocationIds) {
         Set<String> existingLocs = new HashSet<>(existingLocationIds);
-        Set<String> requestLocs = requestLocationIds != null
-                ? new HashSet<>(requestLocationIds)
-                : new HashSet<>();
+        Set<String> requestLocs = requestLocationIds != null ? new HashSet<>(requestLocationIds) : new HashSet<>();
 
         existingLocs.retainAll(requestLocs);
         return !existingLocs.isEmpty();
@@ -265,7 +266,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDateTime endDate) {
-        RoleAssignment assignment = roleAssignmentRepository.findById(assignmentId)
+        RoleAssignment assignment = roleAssignmentRepository
+                .findById(assignmentId)
                 .orElseThrow(() -> new RoleAssignmentNotFoundException("Role assignment not found: " + assignmentId));
 
         assignment.setEffectiveEndDate(endDate); // This automatically sets revokedAt
@@ -274,9 +276,13 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
         roleAssignmentRepository.save(assignment);
 
-        log.info("Revoked role assignment: id={}, user={}, role={}, endDate={}, revokedAt={}",
-                assignmentId, assignment.getUser().getUsername(), assignment.getRole().getName(),
-                endDate, assignment.getRevokedAt());
+        log.info(
+                "Revoked role assignment: id={}, user={}, role={}, endDate={}, revokedAt={}",
+                assignmentId,
+                assignment.getUser().getUsername(),
+                assignment.getRole().getName(),
+                endDate,
+                assignment.getRevokedAt());
     }
 
     /**
@@ -292,7 +298,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     public RoleDto getRoleByName(String name) {
-        return toRoleDto(roleRepository.findByName(name)
+        return toRoleDto(roleRepository
+                .findByName(name)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + name)));
     }
 
@@ -306,8 +313,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void deleteRole(@NonNull UUID id) {
-        Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + id));
+        Role role =
+                roleRepository.findById(id).orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + id));
         role.getPermissions().clear();
         roleRepository.save(role);
         roleAssignmentRepository.deleteByRole_Id(id);
@@ -317,9 +324,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void assignPermissionToRole(@NonNull UUID roleId, @NonNull String permissionKey) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
-        Permission permission = permissionRepository.findByName(permissionKey)
+        Permission permission = permissionRepository
+                .findByName(permissionKey)
                 .orElseThrow(() -> new PermissionNotFoundException(
                         "Permission not found: " + permissionKey + ". It must be registered first."));
         role.getPermissions().add(permission);
@@ -331,7 +340,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void revokePermissionFromRole(@NonNull UUID roleId, @NonNull String permissionKey) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
         role.getPermissions().removeIf(p -> p.getName().equals(permissionKey));
         role.setLastModifiedBy(getCurrentUsername());
@@ -342,9 +352,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void assignRoleToUser(@NonNull UUID userId, @NonNull UUID roleId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
         RoleAssignment assignment = new RoleAssignment();
@@ -358,25 +370,20 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         roleAssignmentRepository.save(assignment);
 
         emitAuditEvent(new AuditLogEventRequest(
-            "RoleAssignedToUser",
-            getCurrentUsername(),
-            userId.toString(),
-            "User",
-            "",
-            role.getName(),
-            null));
+                "RoleAssignedToUser", getCurrentUsername(), userId.toString(), "User", "", role.getName(), null));
     }
 
     @Override
     @Transactional
     public void revokeRoleFromUser(@NonNull UUID userId, @NonNull UUID roleId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
-        RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role)
-                .stream()
+        RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
                 .filter(RoleAssignment::isEffective)
                 .findFirst()
                 .orElseThrow(() -> new RoleAssignmentNotFoundException(
@@ -389,13 +396,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         roleAssignmentRepository.save(assignment);
 
         emitAuditEvent(new AuditLogEventRequest(
-                "RoleRevokedFromUser",
-                getCurrentUsername(),
-                userId.toString(),
-                "User",
-                role.getName(),
-                "",
-                null));
+                "RoleRevokedFromUser", getCurrentUsername(), userId.toString(), "User", role.getName(), "", null));
     }
 
     private void emitAuditEvent(AuditLogEventRequest request) {
@@ -415,7 +416,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     private List<RoleAssignment> getAssignmentEntitiesForUser(UUID userId, boolean includeHistory) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
 
         if (includeHistory) {

@@ -3,16 +3,14 @@ package com.positivity.workorder.internal.dto;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Response DTO for estimate snapshots.

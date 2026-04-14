@@ -1,30 +1,26 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.shared.id.UUIDv7Id;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Outbox pattern implementation for reliable event delivery.
@@ -35,7 +31,7 @@ import lombok.ToString;
  * providing at-least-once delivery semantics.
  * <p>
  * Lifecycle: PENDING → PUBLISHED (or FAILED after max retries)
- * 
+ *
  * @see <a href=
  *      "https://microservices.io/patterns/data/transactional-outbox.html">
  *      Transactional Outbox Pattern</a>
@@ -47,11 +43,13 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "event_outbox", indexes = {
-        @Index(name = "idx_outbox_status_created", columnList = "status,created_at"),
-        @Index(name = "idx_outbox_aggregate", columnList = "aggregate_type,aggregate_id"),
-        @Index(name = "idx_outbox_event_type", columnList = "event_type")
-})
+@Table(
+        name = "event_outbox",
+        indexes = {
+            @Index(name = "idx_outbox_status_created", columnList = "status,created_at"),
+            @Index(name = "idx_outbox_aggregate", columnList = "aggregate_type,aggregate_id"),
+            @Index(name = "idx_outbox_event_type", columnList = "event_type")
+        })
 public class EventOutbox {
 
     @EqualsAndHashCode.Include
@@ -131,7 +129,7 @@ public class EventOutbox {
 
     @PrePersist
     protected void onCreate() {
-if (status == null) {
+        if (status == null) {
             status = OutboxStatus.PENDING;
         }
     }

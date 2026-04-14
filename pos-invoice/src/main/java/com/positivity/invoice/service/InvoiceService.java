@@ -5,9 +5,8 @@ import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
-import org.jspecify.annotations.NonNull;
-
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Public invoice service API for invoice generation and lifecycle operations.

@@ -1,30 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClientException;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -70,9 +45,31 @@ import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.service.AppointmentLoadService;
 import com.positivity.shopmanager.service.AppointmentsService;
 import com.positivity.shopmanager.service.SourceEligibilityService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Orchestration service for appointment operations.
@@ -104,11 +101,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     /**
      * Creates an appointment from an Estimate or Workorder.
      * Performs eligibility checks and conflict detection.
-     * 
+     *
      * Per DECISION-SHOPMGMT-014: supports idempotency via idempotencyKey.
      * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
      * and error responses.
-     * 
+     *
      * @param request        The appointment create request
      * @param idempotencyKey Optional idempotency key (Idempotency-Key header)
      * @param correlationId  Optional request correlation ID (X-Correlation-Id
@@ -126,22 +123,27 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     @Override
     @Transactional
     public AppointmentResponse createAppointment(
-            @NonNull AppointmentCreateRequest request,
-            String idempotencyKey,
-            UUID correlationId) {
+            @NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId) {
         UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
         String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
-        log.info("Create appointment requested. locationId={}, resourceId={}, correlationId={}, idempotencyKey={}",
-                request.getLocationId(), request.getResourceId(), normalizedCorrelationId, normalizedIdempotencyKey);
+        log.info(
+                "Create appointment requested. locationId={}, resourceId={}, correlationId={}, idempotencyKey={}",
+                request.getLocationId(),
+                request.getResourceId(),
+                normalizedCorrelationId,
+                normalizedIdempotencyKey);
 
         validateTimeRange(request.getStartAt(), request.getEndAt());
-        if (request.getServiceRequestIds() == null || request.getServiceRequestIds().isEmpty()) {
+        if (request.getServiceRequestIds() == null
+                || request.getServiceRequestIds().isEmpty()) {
             throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
         }
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
 
         if (normalizedIdempotencyKey != null) {
-            Appointment existing = appointmentRepository.findByIdempotencyKey(normalizedIdempotencyKey).orElse(null);
+            Appointment existing = appointmentRepository
+                    .findByIdempotencyKey(normalizedIdempotencyKey)
+                    .orElse(null);
             if (existing != null) {
                 ensureIdempotentRequestMatches(existing, request);
                 return toResponse(existing);
@@ -181,9 +183,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         List<Appointment> conflicts = appointmentRepository
                 .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                        request.getLocationId(),
-                        request.getEndAt(),
-                        request.getStartAt())
+                        request.getLocationId(), request.getEndAt(), request.getStartAt())
                 .stream()
                 .filter(existing -> Objects.equals(existing.getResourceId(), request.getResourceId()))
                 .filter(existing -> existing.getStatus() == AppointmentStatus.SCHEDULED)
@@ -194,8 +194,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .toList();
 
         if (!conflicts.isEmpty()) {
-            throw new AppointmentValidationException("Requested slot is already booked. "
-                    + conflicts.size() + " conflicting appointment(s) found.");
+            throw new AppointmentValidationException(
+                    "Requested slot is already booked. " + conflicts.size() + " conflicting appointment(s) found.");
         }
 
         Appointment appointment = Appointment.builder()
@@ -258,7 +258,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
      * and
      * error responses.
-     * 
+     *
      * @param appointmentId The appointment identifier
      * @param request       The reschedule request containing newStartAt, newEndAt,
      *                      reason,
@@ -267,8 +267,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      */
     @Override
     @Transactional
-    public AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
-            @NonNull RescheduleAppointmentRequest request) {
+    public AppointmentResponse rescheduleAppointment(
+            @NonNull UUID appointmentId, @NonNull RescheduleAppointmentRequest request) {
         if (request.getNewStartAt() == null || request.getNewEndAt() == null) {
             throw new AppointmentValidationException("newStartAt and newEndAt are required");
         }
@@ -276,7 +276,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException("newStartAt must be before newEndAt");
         }
 
-        Appointment appointment = appointmentRepository.findById(appointmentId)
+        Appointment appointment = appointmentRepository
+                .findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED
@@ -297,8 +298,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         if (RescheduleReasonCode.OTHER == request.getReason()
                 && (request.getRescheduleReasonNotes() == null
                         || request.getRescheduleReasonNotes().isBlank())) {
-            throw new AppointmentValidationException(
-                    "rescheduleReasonNotes is required when reason is OTHER");
+            throw new AppointmentValidationException("rescheduleReasonNotes is required when reason is OTHER");
         }
 
         Instant previousStartAt = appointment.getStartAt();
@@ -354,7 +354,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                     null, // estimateId: not yet a typed UUID on Appointment entity
                     null, // workOrderId: not yet a typed UUID on Appointment entity
                     null // assignmentStatus: resolved via assignment lookup in future story
-            ));
+                    ));
         }
 
         return toResponse(saved);
@@ -364,16 +364,17 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * Cancels an existing appointment with a specified reason and optional notes.
      * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
      * and error responses.
-     * 
+     *
      * @param appointmentId The appointment identifier
      * @param request       The cancel request with reason and optional notes
      * @return AppointmentResponse with updated appointment details
      */
     @Override
     @Transactional
-    public AppointmentResponse cancelAppointment(@NonNull UUID appointmentId,
-            @NonNull CancelAppointmentRequest request) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
+    public AppointmentResponse cancelAppointment(
+            @NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request) {
+        Appointment appointment = appointmentRepository
+                .findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
@@ -408,7 +409,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     /**
      * Loads the appointment creation form model for a source document.
      * Per DECISION-SHOPMGMT-012: enforces facility scoping.
-     * 
+     *
      * @param sourceType    ESTIMATE or WORKORDER
      * @param sourceId      The source identifier
      * @param facilityId    The facility identifier (required)
@@ -416,11 +417,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * @return AppointmentCreateModel with facility context and operating hours
      */
     @Override
-    public AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, UUID facilityId,
-            UUID correlationId) {
+    public AppointmentCreateModel loadCreateModel(
+            String sourceType, String sourceId, UUID facilityId, UUID correlationId) {
         UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
-        log.info("[AppointmentsService] loadCreateModel sourceType={}, sourceId={}, facilityId={}, correlationId={}",
-                sourceType, sourceId, facilityId, normalizedCorrelationId);
+        log.info(
+                "[AppointmentsService] loadCreateModel sourceType={}, sourceId={}, facilityId={}, correlationId={}",
+                sourceType,
+                sourceId,
+                facilityId,
+                normalizedCorrelationId);
 
         validateLoadCreateModelInputs(sourceType, sourceId, facilityId);
         if (!locationLooksKnown(facilityId)) {
@@ -430,8 +435,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         String normalizedSourceType = normalizeSourceType(sourceType);
         String sourceStatus = validateAndResolveSourceStatus(normalizedSourceType, sourceId, facilityId);
 
-        AppointmentCreateModel model = appointmentLoadService
-                .loadCreateModel(normalizedSourceType, sourceId, facilityId, normalizedCorrelationId);
+        AppointmentCreateModel model = appointmentLoadService.loadCreateModel(
+                normalizedSourceType, sourceId, facilityId, normalizedCorrelationId);
         if (model == null) {
             model = new AppointmentCreateModel();
         }
@@ -444,7 +449,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * Retrieves an appointment by ID.
      * Per DECISION-SHOPMGMT-012: enforces facility scoping in response (no
      * cross-facility leaks).
-     * 
+     *
      * @param appointmentId The appointment identifier
      * @param correlationId Optional request correlation ID
      * @return AppointmentResponse with appointment details
@@ -458,8 +463,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         } catch (IllegalArgumentException e) {
             throw new AppointmentValidationException("Invalid appointment ID format: " + appointmentId);
         }
-        Appointment appointment = appointmentRepository.findById(parsedId)
-                .orElseThrow(() -> new AppointmentNotFoundException(parsedId));
+        Appointment appointment =
+                appointmentRepository.findById(parsedId).orElseThrow(() -> new AppointmentNotFoundException(parsedId));
         log.debug("Loaded appointment. appointmentId={}, correlationId={}", parsedId, correlationId);
         return toResponse(appointment);
     }
@@ -468,18 +473,18 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     @Transactional(readOnly = true)
     public @NonNull ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, UUID correlationId) {
         UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
-        log.debug("Building schedule view for location {} with correlationId={}",
-                request.getLocationId(), normalizedCorrelationId);
+        log.debug(
+                "Building schedule view for location {} with correlationId={}",
+                request.getLocationId(),
+                normalizedCorrelationId);
         ZoneId zoneId = resolveZoneId(request.getLocationId());
         LocalDate targetDate = request.getDate();
 
         TimeWindow dayWindow = resolveDayWindow(targetDate, zoneId, request.getRange());
 
-        List<Appointment> locationAppointments = appointmentRepository
-                .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                        request.getLocationId(),
-                        dayWindow.dayEndAt(),
-                        dayWindow.dayStartAt());
+        List<Appointment> locationAppointments =
+                appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
+                        request.getLocationId(), dayWindow.dayEndAt(), dayWindow.dayStartAt());
 
         if (locationAppointments.isEmpty() && !locationLooksKnown(request.getLocationId())) {
             throw new LocationNotFoundException(request.getLocationId());
@@ -488,20 +493,19 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> eventsByLane = new HashMap<>();
         for (Appointment appointment : locationAppointments) {
             ResourceLaneKey laneKey = new ResourceLaneKey(
-                    defaultResourceId(appointment.getResourceId()),
-                    defaultResourceType(appointment.getResourceType()));
-            eventsByLane.computeIfAbsent(laneKey, key -> new ArrayList<>())
-                    .add(toScheduleEvent(appointment));
+                    defaultResourceId(appointment.getResourceId()), defaultResourceType(appointment.getResourceType()));
+            eventsByLane.computeIfAbsent(laneKey, key -> new ArrayList<>()).add(toScheduleEvent(appointment));
         }
 
-        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType = eventsByLane.entrySet()
-                .stream()
-                .filter(entry -> matchesResourceType(entry.getKey(), request.getResourceType()))
-                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType =
+                eventsByLane.entrySet().stream()
+                        .filter(entry -> matchesResourceType(entry.getKey(), request.getResourceType()))
+                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         if (request.getResourceId() != null && !request.getResourceId().isBlank()) {
             filteredByType = filteredByType.entrySet().stream()
-                    .filter(entry -> request.getResourceId().equals(entry.getKey().resourceId()))
+                    .filter(entry ->
+                            request.getResourceId().equals(entry.getKey().resourceId()))
                     .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
             if (filteredByType.isEmpty()) {
@@ -509,8 +513,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             }
         }
 
-        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(request.getLocationId(),
-                filteredByType.keySet());
+        Map<ResourceLaneKey, String> resourceNames =
+                resolveResourceNames(request.getLocationId(), filteredByType.keySet());
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
@@ -527,7 +531,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         List<String> warnings = new ArrayList<>();
         if (request.isIncludeAvailabilityOverlay()) {
             try {
-                hrAvailabilityClient.getAvailabilityOverlay(request.getLocationId().toString(), targetDate);
+                hrAvailabilityClient.getAvailabilityOverlay(
+                        request.getLocationId().toString(), targetDate);
                 response.setAvailabilityOverlayStatus("AVAILABLE");
             } catch (Exception exception) {
                 response.setAvailabilityOverlayStatus("UNAVAILABLE");
@@ -542,13 +547,16 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private ZoneId resolveZoneId(UUID locationId) {
-        String configuredTimezone = shopRepository.findById(locationId)
+        String configuredTimezone = shopRepository
+                .findById(locationId)
                 .map(Shop::getTimezone)
                 .filter(timezone -> timezone != null && !timezone.isBlank())
                 .orElse(null);
         if (configuredTimezone == null) {
-            log.warn("Location {} has no configured timezone; defaulting to UTC. "
-                    + "Schedule windows may be incorrect for non-UTC locations.", locationId);
+            log.warn(
+                    "Location {} has no configured timezone; defaulting to UTC. "
+                            + "Schedule windows may be incorrect for non-UTC locations.",
+                    locationId);
             return ZoneOffset.UTC;
         }
         return ZoneId.of(configuredTimezone);
@@ -613,8 +621,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private void ensureIdempotentRequestMatches(Appointment existing, AppointmentCreateRequest request) {
-        List<UUID> existingServiceRequestIds = normalizeServiceRequestIds(
-                loadServiceRequestIds(existing.getAppointmentId()));
+        List<UUID> existingServiceRequestIds =
+                normalizeServiceRequestIds(loadServiceRequestIds(existing.getAppointmentId()));
         List<UUID> requestedServiceRequestIds = normalizeServiceRequestIds(request.getServiceRequestIds());
         boolean matches = Objects.equals(existing.getLocationId(), request.getLocationId())
                 && Objects.equals(existing.getResourceId(), request.getResourceId())
@@ -652,11 +660,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private void enrichCreateModel(
-            AppointmentCreateModel model,
-            String sourceType,
-            String sourceId,
-            UUID facilityId,
-            String sourceStatus) {
+            AppointmentCreateModel model, String sourceType, String sourceId, UUID facilityId, String sourceStatus) {
         model.setFacilityId(facilityId.toString());
         model.setSourceType(sourceType);
         model.setSourceId(sourceId);
@@ -681,9 +685,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private ScheduleViewResponse.ScheduleResourceView toResourceView(
-            ResourceLaneKey laneKey,
-            List<ScheduleViewResponse.ScheduleEventView> events,
-            String resourceName) {
+            ResourceLaneKey laneKey, List<ScheduleViewResponse.ScheduleEventView> events, String resourceName) {
         List<ScheduleViewResponse.ScheduleEventView> sorted = events.stream()
                 .sorted(Comparator.comparing(ScheduleViewResponse.ScheduleEventView::getStartTime)
                         .thenComparing(ScheduleViewResponse.ScheduleEventView::getEndTime)
@@ -721,13 +723,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private Map<String, List<ResourceLaneKey>> indexResourceLanes(
-            Set<ResourceLaneKey> laneKeys,
-            Map<ResourceLaneKey, String> resourceNames) {
+            Set<ResourceLaneKey> laneKeys, Map<ResourceLaneKey, String> resourceNames) {
         Map<String, List<ResourceLaneKey>> technicianLanesByResourceId = new HashMap<>();
         for (ResourceLaneKey laneKey : laneKeys) {
             resourceNames.put(laneKey, defaultResourceDisplayName(laneKey));
             if ("TECHNICIAN".equalsIgnoreCase(laneKey.resourceType())) {
-                technicianLanesByResourceId.computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
+                technicianLanesByResourceId
+                        .computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
                         .add(laneKey);
             }
         }
@@ -742,7 +744,9 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private boolean shopHasTechnicians(Shop shop) {
-        return shop != null && shop.getTechnicians() != null && !shop.getTechnicians().isEmpty();
+        return shop != null
+                && shop.getTechnicians() != null
+                && !shop.getTechnicians().isEmpty();
     }
 
     private void applyTechnicianDisplayNames(
@@ -751,10 +755,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             Map<ResourceLaneKey, String> resourceNames) {
         for (var technician : shop.getTechnicians()) {
             if (technician != null && technician.getId() != null) {
-                List<ResourceLaneKey> technicianLanes = technicianLanesByResourceId.get(technician.getId().toString());
+                List<ResourceLaneKey> technicianLanes =
+                        technicianLanesByResourceId.get(technician.getId().toString());
                 if (technicianLanes != null) {
-                    String technicianName = resolveTechnicianDisplayName(technician.getId().toString(),
-                            technician.getPersonId());
+                    String technicianName =
+                            resolveTechnicianDisplayName(technician.getId().toString(), technician.getPersonId());
                     for (ResourceLaneKey laneKey : technicianLanes) {
                         resourceNames.put(laneKey, technicianName);
                     }
@@ -833,20 +838,17 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private boolean shouldStopConflictScan(
-            ScheduleViewResponse.ScheduleEventView current,
-            ScheduleViewResponse.ScheduleEventView candidate) {
+            ScheduleViewResponse.ScheduleEventView current, ScheduleViewResponse.ScheduleEventView candidate) {
         return !candidateStartsBeforeCurrentEnds(current, candidate);
     }
 
     private boolean isBlockingConflictCandidate(
-            ScheduleViewResponse.ScheduleEventView current,
-            ScheduleViewResponse.ScheduleEventView candidate) {
+            ScheduleViewResponse.ScheduleEventView current, ScheduleViewResponse.ScheduleEventView candidate) {
         return !isConflictExempt(candidate) && hasBlockingOverlap(current, candidate);
     }
 
     private boolean candidateStartsBeforeCurrentEnds(
-            ScheduleViewResponse.ScheduleEventView current,
-            ScheduleViewResponse.ScheduleEventView candidate) {
+            ScheduleViewResponse.ScheduleEventView current, ScheduleViewResponse.ScheduleEventView candidate) {
         return candidate.getStartTime().isBefore(current.getEndTime());
     }
 
@@ -854,15 +856,16 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             Map<String, Set<String>> conflictsByEvent,
             ScheduleViewResponse.ScheduleEventView left,
             ScheduleViewResponse.ScheduleEventView right) {
-        conflictsByEvent.computeIfAbsent(left.getEventId(), ignored -> new HashSet<>())
+        conflictsByEvent
+                .computeIfAbsent(left.getEventId(), ignored -> new HashSet<>())
                 .add(right.getEventId());
-        conflictsByEvent.computeIfAbsent(right.getEventId(), ignored -> new HashSet<>())
+        conflictsByEvent
+                .computeIfAbsent(right.getEventId(), ignored -> new HashSet<>())
                 .add(left.getEventId());
     }
 
     private void applyConflictMetadata(
-            List<ScheduleViewResponse.ScheduleEventView> events,
-            Map<String, Set<String>> conflictsByEvent) {
+            List<ScheduleViewResponse.ScheduleEventView> events, Map<String, Set<String>> conflictsByEvent) {
         for (ScheduleViewResponse.ScheduleEventView event : events) {
             Set<String> conflictIds = conflictsByEvent.getOrDefault(event.getEventId(), Set.of());
             if (conflictIds.isEmpty()) {
@@ -881,14 +884,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private boolean hasBlockingOverlap(
-            ScheduleViewResponse.ScheduleEventView left,
-            ScheduleViewResponse.ScheduleEventView right) {
-        Instant overlapStart = left.getStartTime().isAfter(right.getStartTime())
-                ? left.getStartTime()
-                : right.getStartTime();
-        Instant overlapEnd = left.getEndTime().isBefore(right.getEndTime())
-                ? left.getEndTime()
-                : right.getEndTime();
+            ScheduleViewResponse.ScheduleEventView left, ScheduleViewResponse.ScheduleEventView right) {
+        Instant overlapStart =
+                left.getStartTime().isAfter(right.getStartTime()) ? left.getStartTime() : right.getStartTime();
+        Instant overlapEnd = left.getEndTime().isBefore(right.getEndTime()) ? left.getEndTime() : right.getEndTime();
         if (!overlapStart.isBefore(overlapEnd)) {
             return false;
         }
@@ -937,8 +936,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
     }
 
-    private record TimeWindow(Instant dayStartAt, Instant dayEndAt) {
-    }
+    private record TimeWindow(Instant dayStartAt, Instant dayEndAt) {}
 
     private void validateTimeRange(Instant startAt, Instant endAt) {
         if (startAt == null || endAt == null) {
@@ -999,8 +997,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
 
         try {
-            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {
-            });
+            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException exception) {
             return Map.of();
         }
@@ -1018,7 +1015,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         response.setEndAt(appointment.getEndAt());
         response.setCreatedAt(appointment.getCreatedAt());
         response.setCancellationReason(
-                appointment.getCancellationReasonCode() != null ? appointment.getCancellationReasonCode().name()
+                appointment.getCancellationReasonCode() != null
+                        ? appointment.getCancellationReasonCode().name()
                         : null);
         response.setCancellationNotes(appointment.getCancellationNotes());
         response.setServiceRequestIds(loadServiceRequestIds(appointment.getAppointmentId()));

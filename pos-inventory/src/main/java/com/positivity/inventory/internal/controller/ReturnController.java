@@ -1,10 +1,10 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnResponse;
 import com.positivity.inventory.service.ReturnService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,10 +34,22 @@ public class ReturnController {
     @Operation(
             summary = "Return items to stock",
             description = "Returns issued parts to inventory and records resulting return movement")
-    @ApiResponse(responseCode = "201", description = "Return recorded", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required return authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "422", description = "Return quantity exceeds allowable amount", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "201",
+            description = "Return recorded",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required return authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Return quantity exceeds allowable amount",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReturnResponse> returnItemsToStock(@Valid @RequestBody ReturnItemsRequest request) {
         ReturnResponse response = returnService.returnItemsToStock(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

@@ -2,10 +2,10 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Reason codes for manual journal entries.
- * 
+ *
  * Required for all MANUAL journal entries to provide audit trail and
  * justification.
- * 
+ *
  * @see com.positivity.accounting.entity.JournalEntry
  */
 public enum ManualJEReasonCode {

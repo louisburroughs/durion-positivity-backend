@@ -1,10 +1,5 @@
 package com.positivity.people.internal.controller;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
@@ -13,21 +8,23 @@ import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
-
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestControllerAdvice
@@ -117,8 +114,7 @@ public class PeopleExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadable(
-            HttpMessageNotReadableException ex,
-            HttpServletRequest request) {
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(TIMESTAMP_PROPERTY, Instant.now(clock));
         body.put("status", HttpStatus.BAD_REQUEST.value());
@@ -147,7 +143,8 @@ public class PeopleExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ProblemDetail handleResponseStatusException(ResponseStatusException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.valueOf(ex.getStatusCode().value()),
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.valueOf(ex.getStatusCode().value()),
                 ex.getReason() == null ? ex.getMessage() : ex.getReason());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
@@ -156,8 +153,8 @@ public class PeopleExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpectedException(Exception ex) {
         log.error("Unhandled exception in People API", ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Internal server error");
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
@@ -188,5 +185,4 @@ public class PeopleExceptionHandler {
             }
         };
     }
-
 }

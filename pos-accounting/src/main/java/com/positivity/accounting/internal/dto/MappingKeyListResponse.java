@@ -1,10 +1,9 @@
 package com.positivity.accounting.internal.dto;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 /**
  * Response DTO for paginated list of Mapping Keys.

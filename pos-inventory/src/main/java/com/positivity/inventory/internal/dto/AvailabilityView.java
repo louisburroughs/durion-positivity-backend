@@ -1,9 +1,8 @@
 package com.positivity.inventory.internal.dto;
 
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
-
-import java.util.UUID;
 
 /**
  * Read-only view of on-hand and available-to-promise quantities for a product

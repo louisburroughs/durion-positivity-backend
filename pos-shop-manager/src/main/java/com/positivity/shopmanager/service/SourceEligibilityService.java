@@ -12,7 +12,7 @@ public interface SourceEligibilityService {
 
     /**
      * Validates that an Estimate is eligible for appointment creation.
-     * 
+     *
      * @param estimateId The estimate identifier
      * @param facilityId The facility identifier (for scoping per
      *                   DECISION-SHOPMGMT-012)
@@ -23,7 +23,7 @@ public interface SourceEligibilityService {
 
     /**
      * Validates that a Work Order is eligible for appointment creation.
-     * 
+     *
      * @param workOrderId The work order identifier
      * @param facilityId  The facility identifier (for scoping per
      *                    DECISION-SHOPMGMT-012)
@@ -34,7 +34,7 @@ public interface SourceEligibilityService {
 
     /**
      * Gets the estimate status for eligibility checks.
-     * 
+     *
      * @param estimateId The estimate identifier
      * @param facilityId The facility identifier (for scoping)
      * @return The estimate status as a string (e.g., APPROVED, QUOTED, DRAFT,
@@ -44,7 +44,7 @@ public interface SourceEligibilityService {
 
     /**
      * Gets the work order status for eligibility checks.
-     * 
+     *
      * @param workOrderId The work order identifier
      * @param facilityId  The facility identifier (for scoping)
      * @return The work order status as a string (e.g., OPEN, IN_PROGRESS,
@@ -55,7 +55,7 @@ public interface SourceEligibilityService {
     /**
      * Checks if a source document already has an associated appointment.
      * If so, returns the existing appointment ID (subject to permission checks).
-     * 
+     *
      * @param sourceType ESTIMATE or WORKORDER
      * @param sourceId   The source identifier
      * @param facilityId The facility identifier (for scoping)

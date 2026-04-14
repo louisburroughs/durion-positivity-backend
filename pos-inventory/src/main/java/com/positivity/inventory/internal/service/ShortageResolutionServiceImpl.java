@@ -11,10 +11,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,17 +93,19 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             partialResultsBanner = true;
         }
 
-        Comparator<ResolutionOption> ranker = Comparator
-                .comparingInt((ResolutionOption option) -> option.getEstimatedLeadTimeDays() != null
-                        ? option.getEstimatedLeadTimeDays()
-                        : Integer.MAX_VALUE)
-                .thenComparing(Comparator.comparing(ResolutionOption::getUnitCost,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
-                .thenComparing(Comparator.comparing(ResolutionOption::getQualityTier,
-                        Comparator.nullsLast(Comparator.reverseOrder())));
+        Comparator<ResolutionOption> ranker = Comparator.comparingInt(
+                        (ResolutionOption option) -> option.getEstimatedLeadTimeDays() != null
+                                ? option.getEstimatedLeadTimeDays()
+                                : Integer.MAX_VALUE)
+                .thenComparing(Comparator.comparing(
+                        ResolutionOption::getUnitCost, Comparator.nullsLast(Comparator.naturalOrder())))
+                .thenComparing(Comparator.comparing(
+                        ResolutionOption::getQualityTier, Comparator.nullsLast(Comparator.reverseOrder())));
 
-        substituteOptions = new ArrayList<>(substituteOptions.stream().sorted(ranker).toList());
-        externalOptions = new ArrayList<>(externalOptions.stream().sorted(ranker).toList());
+        substituteOptions =
+                new ArrayList<>(substituteOptions.stream().sorted(ranker).toList());
+        externalOptions =
+                new ArrayList<>(externalOptions.stream().sorted(ranker).toList());
 
         List<ResolutionOption> orderedOptions = new ArrayList<>();
         orderedOptions.addAll(substituteOptions);

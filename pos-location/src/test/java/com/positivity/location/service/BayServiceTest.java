@@ -14,30 +14,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Method;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-
 import com.positivity.location.internal.dto.BayCapacityRequest;
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
@@ -52,12 +28,33 @@ import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.service.BayServiceImpl;
+import java.lang.reflect.Method;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 /**
  * RED tests for Bay service contract behaviors required by Story #77.
  * Issue: CAP-136 #77
  */
-
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BayServiceTest")
 class BayServiceTest {
@@ -69,10 +66,13 @@ class BayServiceTest {
 
     @Mock
     BayRepository bayRepository;
+
     @Mock
     LocationRepository locationRepository;
+
     @Mock
     ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+
     @InjectMocks
     BayServiceImpl bayService;
 
@@ -107,10 +107,12 @@ class BayServiceTest {
                 .thenReturn(mockPage);
         bayService.listBays(locationId, "ACTIVE", "GENERAL_SERVICE", pageable);
         // Status only
-        when(bayRepository.findByLocationIdAndStatus(eq(locationId), anyString(), eq(pageable))).thenReturn(mockPage);
+        when(bayRepository.findByLocationIdAndStatus(eq(locationId), anyString(), eq(pageable)))
+                .thenReturn(mockPage);
         bayService.listBays(locationId, "ACTIVE", null, pageable);
         // BayType only
-        when(bayRepository.findByLocationIdAndBayType(eq(locationId), anyString(), eq(pageable))).thenReturn(mockPage);
+        when(bayRepository.findByLocationIdAndBayType(eq(locationId), anyString(), eq(pageable)))
+                .thenReturn(mockPage);
         bayService.listBays(locationId, null, "GENERAL_SERVICE", pageable);
         // Neither
         when(bayRepository.findByLocationId(locationId, pageable)).thenReturn(mockPage);
@@ -124,17 +126,21 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        BayEntity entity = BayEntity.builder().location(Location.builder().id(locationId).build()).name("Bay1")
+        BayEntity entity = BayEntity.builder()
+                .location(Location.builder().id(locationId).build())
+                .name("Bay1")
                 .bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
-                .maxConcurrentVehicles(2).build();
+                .maxConcurrentVehicles(2)
+                .build();
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(entity));
         when(bayRepository.save(any(BayEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
         // Patch name
         BayPatchRequest patchName = new BayPatchRequest();
         patchName.setName("Bay2");
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, "Bay2")).thenReturn(false);
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, "Bay2"))
+                .thenReturn(false);
         bayService.patchBay(locationId, bayId, patchName);
         // Patch bayType
         BayPatchRequest patchType = new BayPatchRequest();
@@ -157,14 +163,18 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        BayEntity entity = BayEntity.builder().location(Location.builder().id(locationId).build()).name("Bay1")
+        BayEntity entity = BayEntity.builder()
+                .location(Location.builder().id(locationId).build())
+                .name("Bay1")
                 .bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
-                .maxConcurrentVehicles(2).build();
+                .maxConcurrentVehicles(2)
+                .build();
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(entity));
         BayPatchRequest patch = new BayPatchRequest();
         patch.setName("Bay2");
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, "Bay2")).thenReturn(true);
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, "Bay2"))
+                .thenReturn(true);
         assertThatThrownBy(() -> bayService.patchBay(locationId, bayId, patch))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("BAY_NAME_TAKEN");
@@ -184,10 +194,12 @@ class BayServiceTest {
 
     private static final String BAY_SERVICE_FQCN = "com.positivity.location.service.BayService";
     private static final String BAY_REPOSITORY_FQCN = "com.positivity.location.internal.repository.BayRepository";
-    private static final String LOCATION_REPOSITORY_FQCN = "com.positivity.location.internal.repository.LocationRepository";
+    private static final String LOCATION_REPOSITORY_FQCN =
+            "com.positivity.location.internal.repository.LocationRepository";
     private static final String BAY_TYPE_FQCN = "com.positivity.location.internal.enums.BayType";
     private static final String BAY_CAPACITY_REQUEST_FQCN = "com.positivity.location.internal.dto.BayCapacityRequest";
-    private static final String RESOURCE_NOT_FOUND_EXCEPTION_FQCN = "com.positivity.location.internal.exception.ResourceNotFoundException";
+    private static final String RESOURCE_NOT_FOUND_EXCEPTION_FQCN =
+            "com.positivity.location.internal.exception.ResourceNotFoundException";
 
     @Test
     @DisplayName("#77 - createBay_happyPath_returnsBayResponse")
@@ -277,8 +289,10 @@ class BayServiceTest {
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
-        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.of(BayEntity.builder().build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
@@ -294,8 +308,10 @@ class BayServiceTest {
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
-        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
         when(bayRepository.save(any(BayEntity.class)))
                 .thenThrow(new DataIntegrityViolationException("violates uq_bays_location_normalized_name"));
@@ -325,7 +341,8 @@ class BayServiceTest {
     void createBay_invalidCapacity_throwsIllegalArgumentException() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
-        request.setCapacity(BayCapacityRequest.builder().maxConcurrentVehicles(0).build());
+        request.setCapacity(
+                BayCapacityRequest.builder().maxConcurrentVehicles(0).build());
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
@@ -362,8 +379,10 @@ class BayServiceTest {
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
-        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
         when(bayRepository.save(any(BayEntity.class))).thenAnswer(invocation -> {
             BayEntity bay = invocation.getArgument(0, BayEntity.class);
@@ -389,11 +408,13 @@ class BayServiceTest {
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
-        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
-        when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenReturn(List.of(
-                ServiceLocationCapabilityEntity.builder()
+        when(serviceLocationCapabilityRepository.findByCodeIn(any()))
+                .thenReturn(List.of(ServiceLocationCapabilityEntity.builder()
                         .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .code("ALIGN")
                         .name("Align")
@@ -415,8 +436,10 @@ class BayServiceTest {
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
-        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
-        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
         when(bayRepository.save(any(BayEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
@@ -693,10 +716,12 @@ class BayServiceTest {
         when(bayRepository.save(any(BayEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
 
-        BayResponse deactivated = bayService.patchBay(locationId, bayId,
+        BayResponse deactivated = bayService.patchBay(
+                locationId,
+                bayId,
                 BayPatchRequest.builder().status("OUT_OF_SERVICE").build());
-        BayResponse reactivated = bayService.patchBay(locationId, bayId,
-                BayPatchRequest.builder().status("ACTIVE").build());
+        BayResponse reactivated = bayService.patchBay(
+                locationId, bayId, BayPatchRequest.builder().status("ACTIVE").build());
 
         assertThat(deactivated.getStatus()).isEqualTo("OUT_OF_SERVICE");
         assertThat(reactivated.getStatus()).isEqualTo("ACTIVE");

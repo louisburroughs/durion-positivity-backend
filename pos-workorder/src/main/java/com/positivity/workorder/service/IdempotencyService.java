@@ -7,7 +7,7 @@ public interface IdempotencyService {
 
     /**
      * Check if an idempotency key exists and return the associated workorder ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the workorder ID if the key has been processed
      *         before, empty otherwise
@@ -28,7 +28,7 @@ public interface IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated change request
      * ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the change request ID if the key has been
      *         processed
@@ -40,7 +40,7 @@ public interface IdempotencyService {
 
     /**
      * Check if an idempotency key exists and return the associated labor entry ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the labor entry ID if the key has been processed
      *         before, empty otherwise
@@ -51,7 +51,7 @@ public interface IdempotencyService {
 
     /**
      * Register a new idempotency key associated with a workorder.
-     * 
+     *
      * @param keyValue    the idempotency key value
      * @param workorderId the ID of the created workorder
      */
@@ -61,7 +61,7 @@ public interface IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a change request.
-     * 
+     *
      * @param keyValue        the idempotency key value
      * @param changeRequestId the ID of the created change request
      */
@@ -71,7 +71,7 @@ public interface IdempotencyService {
 
     /**
      * Register a new idempotency key associated with a labor entry.
-     * 
+     *
      * @param keyValue     the idempotency key value
      * @param laborEntryId the ID of the created labor entry
      */
@@ -82,7 +82,7 @@ public interface IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated part usage event
      * ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the part usage event ID if the key has been
      *         processed
@@ -94,7 +94,7 @@ public interface IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a part usage event.
-     * 
+     *
      * @param keyValue         the idempotency key value
      * @param partUsageEventId the ID of the created part usage event
      */
@@ -105,7 +105,7 @@ public interface IdempotencyService {
     /**
      * Check if an idempotency key exists and return the associated part adjustment
      * event ID.
-     * 
+     *
      * @param keyValue the idempotency key to check
      * @return Optional containing the part adjustment event ID if the key has been
      *         processed
@@ -128,7 +128,7 @@ public interface IdempotencyService {
 
     /**
      * Mark an idempotency key as processed for a part adjustment event.
-     * 
+     *
      * @param keyValue              the idempotency key value
      * @param partAdjustmentEventId the ID of the created part adjustment event
      */
@@ -148,14 +148,13 @@ public interface IdempotencyService {
 
     /**
      * Clean up expired idempotency keys.
-     * 
+     *
      * <p>
      * This method should be called periodically (e.g., via a scheduled task)
      * to remove old keys and prevent unbounded table growth.
      * </p>
-     * 
+     *
      * @return count of deleted keys
      */
     int cleanupExpiredKeys();
-
 }

@@ -24,12 +24,14 @@ public class PeopleRegistrationClient {
 
     @NonNull
     public PeopleResolvePersonResponse resolvePerson(@NonNull PeopleResolvePersonRequest request) {
-        PeopleResolvePersonResponse response = restClient.post()
+        PeopleResolvePersonResponse response = restClient
+                .post()
                 .uri("/v1/people/resolve")
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
-                    throw new IllegalStateException("People resolve request failed with status " + res.getStatusCode().value());
+                    throw new IllegalStateException("People resolve request failed with status "
+                            + res.getStatusCode().value());
                 })
                 .body(PeopleResolvePersonResponse.class);
         if (response == null) {
@@ -40,28 +42,31 @@ public class PeopleRegistrationClient {
 
     @NonNull
     public List<UUID> getLinkedUserIds(@NonNull UUID personId) {
-        List<UUID> response = restClient.get()
+        List<UUID> response = restClient
+                .get()
                 .uri("/v1/people/{personId}/users", personId)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404, (req, res) -> {
                     throw new IllegalStateException("Resolved person no longer exists for linking");
                 })
                 .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                    throw new IllegalStateException("People linked-user lookup failed with status " + res.getStatusCode().value());
+                    throw new IllegalStateException("People linked-user lookup failed with status "
+                            + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<UUID>>() {
-                });
+                .body(new ParameterizedTypeReference<List<UUID>>() {});
         return response == null ? List.of() : response;
     }
 
     @NonNull
     public PeopleUserLinkResponse linkUserToPerson(@NonNull PeopleLinkUserRequest request) {
-        PeopleUserLinkResponse response = restClient.post()
+        PeopleUserLinkResponse response = restClient
+                .post()
                 .uri("/v1/people/users/link")
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
-                    throw new IllegalStateException("People link request failed with status " + res.getStatusCode().value());
+                    throw new IllegalStateException("People link request failed with status "
+                            + res.getStatusCode().value());
                 })
                 .body(PeopleUserLinkResponse.class);
         if (response == null) {
@@ -71,14 +76,16 @@ public class PeopleRegistrationClient {
     }
 
     public void deletePerson(@NonNull UUID personId) {
-        restClient.delete()
+        restClient
+                .delete()
                 .uri("/v1/people/{personId}", personId)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404, (req, res) -> {
                     throw new IllegalStateException("Created person no longer exists for compensation");
                 })
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
-                    throw new IllegalStateException("People delete request failed with status " + res.getStatusCode().value());
+                    throw new IllegalStateException("People delete request failed with status "
+                            + res.getStatusCode().value());
                 })
                 .toBodilessEntity();
     }

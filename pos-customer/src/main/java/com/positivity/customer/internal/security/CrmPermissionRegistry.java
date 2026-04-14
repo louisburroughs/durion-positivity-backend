@@ -1,20 +1,19 @@
 package com.positivity.customer.internal.security;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 /**
  * CRM Permission Registry
- * 
+ *
  * Defines CRM permission constants and legacy registration metadata.
  * Registration policy is governed by ADR-0025 (`permissions.yaml` as the
  * canonical source).
- * 
+ *
  * Permission Format: crm:resource:action
  * Risk Levels: LOW, MEDIUM, HIGH, CRITICAL
  */
@@ -104,42 +103,66 @@ public class CrmPermissionRegistry {
 
                 // Contact Roles (3 permissions)
                 permission(CONTACT_ROLE_VIEW, "View assigned roles for contacts on an account", "LOW", "Issue #172"),
-                permission(CONTACT_ROLE_ASSIGN, "Assign roles (BILLING, APPROVER, DRIVER) to contacts", "MEDIUM",
+                permission(
+                        CONTACT_ROLE_ASSIGN,
+                        "Assign roles (BILLING, APPROVER, DRIVER) to contacts",
+                        "MEDIUM",
                         "Issue #172"),
                 permission(CONTACT_ROLE_REVOKE, "Revoke a role assignment from a contact", "MEDIUM"),
 
                 // Contact Preferences (2 permissions)
-                permission(CONTACT_PREFERENCE_VIEW, "View communication preferences and consent flags for a party",
-                        "MEDIUM", "Issue #171"),
-                permission(CONTACT_PREFERENCE_EDIT, "Update communication channel preferences and consent for a party",
-                        "HIGH", "Issue #171"),
+                permission(
+                        CONTACT_PREFERENCE_VIEW,
+                        "View communication preferences and consent flags for a party",
+                        "MEDIUM",
+                        "Issue #171"),
+                permission(
+                        CONTACT_PREFERENCE_EDIT,
+                        "Update communication channel preferences and consent for a party",
+                        "HIGH",
+                        "Issue #171"),
 
                 // Vehicle Management (5 permissions)
                 permission(VEHICLE_VIEW, "View vehicle records (VIN, unit #, description, plate)", "LOW", "Issue #169"),
                 permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", "Issue #169"),
-                permission(VEHICLE_CREATE, "Create new vehicle record with VIN and optional party association",
-                        "MEDIUM", "Issue #169"),
+                permission(
+                        VEHICLE_CREATE,
+                        "Create new vehicle record with VIN and optional party association",
+                        "MEDIUM",
+                        "Issue #169"),
                 permission(VEHICLE_EDIT, "Edit vehicle details (unit #, description, license plate, status)", "MEDIUM"),
                 permission(VEHICLE_DEACTIVATE, "Deactivate vehicle record (soft delete)", "HIGH"),
 
                 // Vehicle-Party Association (3 permissions)
-                permission(VEHICLE_PARTY_ASSOC_CREATE,
-                        "Associate party (owner/driver/lessee) to vehicle with effective dating", "MEDIUM"),
-                permission(VEHICLE_PARTY_ASSOC_VIEW, "View party associations for a vehicle (current and historical)",
+                permission(
+                        VEHICLE_PARTY_ASSOC_CREATE,
+                        "Associate party (owner/driver/lessee) to vehicle with effective dating",
+                        "MEDIUM"),
+                permission(
+                        VEHICLE_PARTY_ASSOC_VIEW,
+                        "View party associations for a vehicle (current and historical)",
                         "LOW"),
                 permission(VEHICLE_PARTY_ASSOC_EDIT, "Adjust effective dates for party-vehicle associations", "MEDIUM"),
 
                 // Vehicle Preferences (2 permissions)
-                permission(VEHICLE_PREFERENCE_VIEW,
-                        "View vehicle care preferences (rotation intervals, service types, notes)", "LOW"),
-                permission(VEHICLE_PREFERENCE_EDIT,
-                        "Update vehicle care preferences with audit history and optimistic locking", "MEDIUM"),
+                permission(
+                        VEHICLE_PREFERENCE_VIEW,
+                        "View vehicle care preferences (rotation intervals, service types, notes)",
+                        "LOW"),
+                permission(
+                        VEHICLE_PREFERENCE_EDIT,
+                        "Update vehicle care preferences with audit history and optimistic locking",
+                        "MEDIUM"),
 
                 // Integration Monitoring (3 permissions, read-only)
-                permission(PROCESSING_LOG_VIEW,
-                        "View ingestion event processing outcomes (success/failure/retry state)", "MEDIUM"),
+                permission(
+                        PROCESSING_LOG_VIEW,
+                        "View ingestion event processing outcomes (success/failure/retry state)",
+                        "MEDIUM"),
                 permission(SUSPENSE_VIEW, "View quarantined/unprocessable events requiring triage", "MEDIUM"),
-                permission(INTEGRATION_AUDIT, "View audit/attempt history for ingestion records and retry outcomes",
+                permission(
+                        INTEGRATION_AUDIT,
+                        "View audit/attempt history for ingestion records and retry outcomes",
                         "LOW"));
     }
 
@@ -178,9 +201,15 @@ public class CrmPermissionRegistry {
      */
     public static List<String> contactPermissions() {
         return Arrays.asList(
-                CONTACT_VIEW, CONTACT_CREATE, CONTACT_EDIT, CONTACT_DELETE,
-                CONTACT_ROLE_VIEW, CONTACT_ROLE_ASSIGN, CONTACT_ROLE_REVOKE,
-                CONTACT_PREFERENCE_VIEW, CONTACT_PREFERENCE_EDIT);
+                CONTACT_VIEW,
+                CONTACT_CREATE,
+                CONTACT_EDIT,
+                CONTACT_DELETE,
+                CONTACT_ROLE_VIEW,
+                CONTACT_ROLE_ASSIGN,
+                CONTACT_ROLE_REVOKE,
+                CONTACT_PREFERENCE_VIEW,
+                CONTACT_PREFERENCE_EDIT);
     }
 
     /**
@@ -188,9 +217,16 @@ public class CrmPermissionRegistry {
      */
     public static List<String> vehiclePermissions() {
         return Arrays.asList(
-                VEHICLE_VIEW, VEHICLE_SEARCH, VEHICLE_CREATE, VEHICLE_EDIT, VEHICLE_DEACTIVATE,
-                VEHICLE_PARTY_ASSOC_CREATE, VEHICLE_PARTY_ASSOC_VIEW, VEHICLE_PARTY_ASSOC_EDIT,
-                VEHICLE_PREFERENCE_VIEW, VEHICLE_PREFERENCE_EDIT);
+                VEHICLE_VIEW,
+                VEHICLE_SEARCH,
+                VEHICLE_CREATE,
+                VEHICLE_EDIT,
+                VEHICLE_DEACTIVATE,
+                VEHICLE_PARTY_ASSOC_CREATE,
+                VEHICLE_PARTY_ASSOC_VIEW,
+                VEHICLE_PARTY_ASSOC_EDIT,
+                VEHICLE_PREFERENCE_VIEW,
+                VEHICLE_PREFERENCE_EDIT);
     }
 
     /**

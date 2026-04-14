@@ -2,6 +2,10 @@ package com.positivity.documents.internal.service.format;
 
 import com.positivity.documents.internal.enums.DocumentFormat;
 import com.positivity.documents.internal.exception.RenderingException;
+import java.io.StringReader;
+import java.util.Map;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
 import org.w3c.dom.Document;
@@ -9,11 +13,6 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
-
-import javax.xml.XMLConstants;
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.StringReader;
-import java.util.Map;
 
 @Component
 public class XmlFormatHandler implements FormatHandler {

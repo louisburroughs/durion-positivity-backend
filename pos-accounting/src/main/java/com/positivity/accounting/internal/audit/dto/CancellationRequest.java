@@ -1,10 +1,8 @@
 package com.positivity.accounting.internal.audit.dto;
 
-import java.util.UUID;
-
 import com.positivity.accounting.internal.enums.CancellationType;
-
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

@@ -9,9 +9,16 @@ import org.jspecify.annotations.NonNull;
 
 public interface PeopleReportsService {
 
-    @NonNull List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(@NonNull LocalDate startDate,
-            @NonNull LocalDate endDate, @NonNull String timezone, UUID locationId, @NonNull List<UUID> technicianIds,
-            boolean flaggedOnly, @NonNull String actorId, String correlationId);
+    @NonNull
+    List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull String timezone,
+            UUID locationId,
+            @NonNull List<UUID> technicianIds,
+            boolean flaggedOnly,
+            @NonNull String actorId,
+            String correlationId);
 
     /**
      * Retrieve approved time entries for accounting export orchestration.
@@ -22,7 +29,11 @@ public interface PeopleReportsService {
      * @param correlationId optional request correlation identifier
      * @return deterministic approved-time dataset
      */
-    @NonNull List<ApprovedTimeExportResponse> getApprovedTimeForExport(@NonNull LocalDate startDate, @NonNull LocalDate endDate,
-            @NonNull List<UUID> locationIds, @NonNull String actorId, String correlationId);
-
+    @NonNull
+    List<ApprovedTimeExportResponse> getApprovedTimeForExport(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull List<UUID> locationIds,
+            @NonNull String actorId,
+            String correlationId);
 }

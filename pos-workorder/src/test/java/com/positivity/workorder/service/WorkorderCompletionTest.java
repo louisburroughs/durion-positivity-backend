@@ -12,27 +12,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
@@ -54,7 +33,25 @@ import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -127,13 +124,13 @@ class WorkorderCompletionTest {
     void setUp() {
         // Mock authenticated user with gateway-injected details so snapshot/audit flows
         // have an actor
-        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
-                "test-user",
-                "password",
-                "ROLE_USER");
+        TestingAuthenticationToken authentication =
+                new TestingAuthenticationToken("test-user", "password", "ROLE_USER");
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USER_ID, AUTH_USER_ID,
-                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                AUTH_USER_ID,
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "test-user"));
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -152,9 +149,19 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderServiceImpl(TEST_CLOCK, workOrderRepository, estimateRepository,
-                estimateItemRepository, workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
+        workOrderService = new WorkorderServiceImpl(
+                TEST_CLOCK,
+                workOrderRepository,
+                estimateRepository,
+                estimateItemRepository,
+                workorderServiceRepository,
+                workorderPartRepository,
+                restClient,
+                stateMachine,
+                auditEventRepository,
+                idempotencyService,
+                promotionValidationService,
+                shopmgrClient);
     }
 
     @AfterEach
@@ -334,16 +341,18 @@ class WorkorderCompletionTest {
     }
 
     private void stubCompletionPreconditionsPass() {
-        com.positivity.workorder.internal.entity.WorkorderServiceLine billableService = mock(
-                com.positivity.workorder.internal.entity.WorkorderServiceLine.class);
+        com.positivity.workorder.internal.entity.WorkorderServiceLine billableService =
+                mock(com.positivity.workorder.internal.entity.WorkorderServiceLine.class);
         when(billableService.getStatus()).thenReturn(WorkorderItemStatus.COMPLETED);
         when(billableService.getLineTotal()).thenReturn(BigDecimal.TEN);
 
-        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
-                ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)).thenReturn(List.of());
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(
+                        testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
+                .thenReturn(List.of());
         when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of(billableService));
         when(workorderPartRepository.findByWorkorderId(testWorkorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(testWorkorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(testWorkorderId))
+                .thenReturn(List.of());
         when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
     }
 }

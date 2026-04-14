@@ -57,9 +57,8 @@ public interface StorageLocationService {
      * @return page of storage locations
      */
     @NonNull
-    Page<StorageLocationResponse> listStorageLocations(@NonNull UUID siteId, StorageLocationType type,
-            StorageLocationStatus status,
-            @NonNull Pageable pageable);
+    Page<StorageLocationResponse> listStorageLocations(
+            @NonNull UUID siteId, StorageLocationType type, StorageLocationStatus status, @NonNull Pageable pageable);
 
     /**
      * Patches storage location fields.
@@ -70,6 +69,6 @@ public interface StorageLocationService {
      * @return updated storage location
      */
     @NonNull
-    StorageLocationResponse patchStorageLocation(@NonNull UUID siteId, @NonNull UUID storageLocationId,
-            @NonNull StorageLocationPatchRequest patch);
+    StorageLocationResponse patchStorageLocation(
+            @NonNull UUID siteId, @NonNull UUID storageLocationId, @NonNull StorageLocationPatchRequest patch);
 }

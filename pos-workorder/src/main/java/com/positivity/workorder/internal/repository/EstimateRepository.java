@@ -1,17 +1,15 @@
 package com.positivity.workorder.internal.repository;
 
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.enums.EstimateStatus;
 
 @Repository
 public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
@@ -60,7 +58,7 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
      * Find estimates by status where expiration timestamp is before the given date.
      * Used by approval expiration job to find expired pending approvals.
      * CAP:003 Issue #204 - Handle Approval Expiration
-     * 
+     *
      * @param status          estimate status to filter by
      * @param expiresAtBefore find estimates expired before this timestamp
      * @return list of expired estimates in the given status

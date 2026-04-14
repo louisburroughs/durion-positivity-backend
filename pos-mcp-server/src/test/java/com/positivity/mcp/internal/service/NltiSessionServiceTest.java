@@ -9,26 +9,24 @@ import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import com.positivity.security.common.GatewaySecurityConstants;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import java.util.Map;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
@@ -69,8 +67,7 @@ class NltiSessionServiceTest {
         meterRegistry = new SimpleMeterRegistry();
         service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
 
-        UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
@@ -101,8 +98,7 @@ class NltiSessionServiceTest {
     void sessionReuse_sameSessionIdAndSubject_returnsExistingSession() {
         // Arrange — Issue NLTI-001: existing session in repository
         NltiSession existing = buildSession(SESSION_ID, SUBJECT);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT))
-                .thenReturn(Optional.of(existing));
+        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(existing));
 
         NltiRequestDTO request = new NltiRequestDTO("check workorder 123", SESSION_ID, null);
 
@@ -155,8 +151,7 @@ class NltiSessionServiceTest {
         UUID expiredSessionId = UUID.fromString("00000000-0000-7000-8000-000000000020");
         NltiSession staleSession = buildSession(expiredSessionId, SUBJECT);
         staleSession.setUpdatedAt(OffsetDateTime.parse("2025-12-31T11:00:00Z")); // 25 hours before 2026-01-01T12:00:00Z
-        when(sessionRepository.findByIdAndSubjectId(expiredSessionId, SUBJECT))
-                .thenReturn(Optional.of(staleSession));
+        when(sessionRepository.findByIdAndSubjectId(expiredSessionId, SUBJECT)).thenReturn(Optional.of(staleSession));
 
         NltiRequestDTO request = new NltiRequestDTO("reopen invoice INV-99", expiredSessionId, null);
 

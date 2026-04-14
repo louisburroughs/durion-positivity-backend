@@ -1,14 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -20,11 +12,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Persisted match candidate for ambiguous vendor bill matching.
@@ -57,11 +54,13 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "vendor_bill_match_candidate", indexes = {
-        @Index(name = "idx_match_candidate_invoice_event", columnList = "invoice_event_id"),
-        @Index(name = "idx_match_candidate_bill", columnList = "vendor_bill_id"),
-        @Index(name = "idx_match_candidate_resolved", columnList = "resolved")
-})
+@Table(
+        name = "vendor_bill_match_candidate",
+        indexes = {
+            @Index(name = "idx_match_candidate_invoice_event", columnList = "invoice_event_id"),
+            @Index(name = "idx_match_candidate_bill", columnList = "vendor_bill_id"),
+            @Index(name = "idx_match_candidate_resolved", columnList = "resolved")
+        })
 public class VendorBillMatchCandidate {
 
     @EqualsAndHashCode.Include

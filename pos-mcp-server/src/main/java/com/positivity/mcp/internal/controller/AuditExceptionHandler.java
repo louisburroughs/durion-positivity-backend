@@ -11,8 +11,8 @@ class AuditExceptionHandler {
 
     @ExceptionHandler(InvalidAuditEventTypeException.class)
     ResponseEntity<Map<String, Object>> handleInvalidAuditEventType(InvalidAuditEventTypeException ex) {
-        return ResponseEntity.badRequest().body(
-                Map.of(
+        return ResponseEntity.badRequest()
+                .body(Map.of(
                         "status", "ERROR",
                         "code", "INVALID_EVENT_TYPE",
                         "message", ex.getMessage()));

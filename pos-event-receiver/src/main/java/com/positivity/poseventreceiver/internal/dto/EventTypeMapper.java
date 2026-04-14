@@ -8,8 +8,7 @@ import org.jspecify.annotations.NonNull;
  */
 public final class EventTypeMapper {
 
-    private EventTypeMapper() {
-    }
+    private EventTypeMapper() {}
 
     public static @NonNull EventTypeResponse toResponse(@NonNull EventType eventType) {
         return new EventTypeResponse(

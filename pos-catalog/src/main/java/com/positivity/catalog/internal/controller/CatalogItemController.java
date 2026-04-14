@@ -33,8 +33,16 @@ public class CatalogItemController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/{type}")
-    @Operation(summary = "Add a new catalog item", description = "Adds a new product, service, or non-inventory product to the catalog.")
-    @ApiResponse(responseCode = "201", description = "Catalog item created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogItemResponseDto.class)))
+    @Operation(
+            summary = "Add a new catalog item",
+            description = "Adds a new product, service, or non-inventory product to the catalog.")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Catalog item created successfully",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CatalogItemResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
     @EmitEvent(id = "CATALOG_ITEM_CREATE", apiVersion = "1")
     public ResponseEntity<CatalogItemResponseDto> addCatalogItem(
@@ -45,8 +53,16 @@ public class CatalogItemController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{type}/{catalogId}")
-    @Operation(summary = "Update an existing catalog item", description = "Updates an existing product, service, or non-inventory product in the catalog.")
-    @ApiResponse(responseCode = "200", description = "Catalog item updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogItemResponseDto.class)))
+    @Operation(
+            summary = "Update an existing catalog item",
+            description = "Updates an existing product, service, or non-inventory product in the catalog.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Catalog item updated successfully",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CatalogItemResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
     @ApiResponse(responseCode = "404", description = "Catalog item not found")
     @EmitEvent(id = "CATALOG_ITEM_UPDATE", apiVersion = "1")
@@ -54,14 +70,17 @@ public class CatalogItemController {
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @Parameter(description = "ID of the catalog item to update") @PathVariable UUID catalogId,
             @RequestBody CatalogItemRequestDto request) {
-        return catalogService.updateCatalogItem(type, catalogId, request)
+        return catalogService
+                .updateCatalogItem(type, catalogId, request)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
     @DeleteMapping("/{type}/{catalogId}")
-    @Operation(summary = "Delete a catalog item", description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
+    @Operation(
+            summary = "Delete a catalog item",
+            description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
     @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully")
     @ApiResponse(responseCode = "400", description = "Invalid item type")
     @ApiResponse(responseCode = "404", description = "Catalog item not found")

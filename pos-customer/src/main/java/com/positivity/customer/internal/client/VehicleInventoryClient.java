@@ -2,6 +2,8 @@ package com.positivity.customer.internal.client;
 
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,9 +11,6 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Client for interacting with the pos-vehicle-inventory service.
@@ -22,7 +21,6 @@ import java.util.UUID;
 public class VehicleInventoryClient {
 
     private final RestClient restClient;
-
 
     public VehicleInventoryClient(
             RestClient.Builder restClientBuilder,
@@ -38,7 +36,8 @@ public class VehicleInventoryClient {
         log.debug("Creating vehicle with VIN: {}", request.getVin());
 
         try {
-            VehicleResponse response = restClient.post()
+            VehicleResponse response = restClient
+                    .post()
                     .uri("/v1/vehicles")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -60,7 +59,8 @@ public class VehicleInventoryClient {
         log.debug("Fetching vehicle with ID: {}", vehicleId);
 
         try {
-            VehicleResponse response = restClient.get()
+            VehicleResponse response = restClient
+                    .get()
                     .uri("/v1/vehicles/{vehicleId}", vehicleId)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
@@ -84,7 +84,8 @@ public class VehicleInventoryClient {
         log.debug("Fetching vehicle with VIN: {}", vin);
 
         try {
-            VehicleResponse response = restClient.get()
+            VehicleResponse response = restClient
+                    .get()
                     .uri("/v1/vehicles/vin/{vin}", vin)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
@@ -108,7 +109,8 @@ public class VehicleInventoryClient {
         log.debug("Updating vehicle with ID: {}", vehicleId);
 
         try {
-            VehicleResponse response = restClient.put()
+            VehicleResponse response = restClient
+                    .put()
                     .uri("/v1/vehicles/{vehicleId}", vehicleId)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -130,7 +132,8 @@ public class VehicleInventoryClient {
         log.debug("Deleting vehicle with ID: {}", vehicleId);
 
         try {
-            restClient.delete()
+            restClient
+                    .delete()
                     .uri("/v1/vehicles/{vehicleId}", vehicleId)
                     .retrieve()
                     .toBodilessEntity();

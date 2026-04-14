@@ -94,8 +94,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
     }
 
     private User findUser(UUID userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
     }
 
     private String resolveActor() {

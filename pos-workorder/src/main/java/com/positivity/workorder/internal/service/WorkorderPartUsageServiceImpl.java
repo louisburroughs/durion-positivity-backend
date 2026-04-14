@@ -1,21 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
 import com.positivity.workorder.internal.entity.WorkorderPart;
@@ -25,15 +9,28 @@ import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepos
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderPartUsageService;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for tracking parts usage on workorders.
- * 
+ *
  * CAP:005 Story #158 - Parts Usage Tracking
- * 
+ *
  * Provides methods to issue, consume, and return parts.
  * All operations are idempotent when an idempotency key is provided.
- * 
+ *
  * NOTE: Inventory service integration is stubbed (501 Not Implemented).
  * This service does NOT check inventory availability or create inventory
  * transactions. These features will be added when inventory service
@@ -46,12 +43,13 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private final Clock clock;
 
     private static final String PART_NOT_FOUND = "Part not found: ";
-    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT = "Idempotency key already processed, returning existing event {}";
+    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT =
+            "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
-        private static final String IDEMPOTENCY_OPERATION_PART_ISSUE = "part-usage.issue";
-        private static final String IDEMPOTENCY_OPERATION_PART_CONSUME = "part-usage.consume";
-        private static final String IDEMPOTENCY_OPERATION_PART_RETURN = "part-usage.return";
+    private static final String IDEMPOTENCY_OPERATION_PART_ISSUE = "part-usage.issue";
+    private static final String IDEMPOTENCY_OPERATION_PART_CONSUME = "part-usage.consume";
+    private static final String IDEMPOTENCY_OPERATION_PART_RETURN = "part-usage.return";
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartUsageServiceImpl.class);
 
@@ -75,7 +73,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
     /**
      * Issue parts to a workorder, reserving them for consumption.
-     * 
+     *
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to issue (must be positive)
@@ -97,12 +95,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        Optional<UUID> existingEventId = idempotencyService
-                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey);
+            Optional<UUID> existingEventId =
+                    idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        existingEventId.get());
-                return usageEventRepository.findById(existingEventId.get())
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
+                return usageEventRepository
+                        .findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
@@ -113,10 +111,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId)
+        workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
 
-        WorkorderPart part = workorderPartRepository.findById(partLineId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partLineId)
                 .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
 
         // Verify part belongs to workorder
@@ -143,10 +143,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        idempotencyService.markKeyProcessedForPartUsage(
-                                        IDEMPOTENCY_OPERATION_PART_ISSUE,
-                                        idempotencyKey,
-                                        event.getId());
+            idempotencyService.markKeyProcessedForPartUsage(
+                    IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey, event.getId());
         }
 
         log.info("Issued part quantity for workorder {}", workorderId);
@@ -155,7 +153,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
     /**
      * Consume parts on a workorder.
-     * 
+     *
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to consume (must be positive)
@@ -176,12 +174,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        Optional<UUID> existingEventId = idempotencyService
-                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_CONSUME, idempotencyKey);
+            Optional<UUID> existingEventId =
+                    idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_CONSUME, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        existingEventId.get());
-                return usageEventRepository.findById(existingEventId.get())
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
+                return usageEventRepository
+                        .findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
@@ -192,10 +190,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId)
+        workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
 
-        WorkorderPart part = workorderPartRepository.findById(partLineId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partLineId)
                 .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
 
         // Verify part belongs to workorder
@@ -206,10 +206,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Validate consumption does not exceed issued
         BigDecimal newConsumed = part.getQuantityConsumed().add(quantity);
         if (newConsumed.compareTo(part.getQuantityIssued()) > 0) {
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Consumption exceeds issued quantity. Issued: %s, Already consumed: %s, Attempting to consume: %s",
-                            part.getQuantityIssued(), part.getQuantityConsumed(), quantity));
+            throw new IllegalArgumentException(String.format(
+                    "Consumption exceeds issued quantity. Issued: %s, Already consumed: %s, Attempting to consume: %s",
+                    part.getQuantityIssued(), part.getQuantityConsumed(), quantity));
         }
 
         // Create usage event
@@ -231,10 +230,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        idempotencyService.markKeyProcessedForPartUsage(
-                                        IDEMPOTENCY_OPERATION_PART_CONSUME,
-                                        idempotencyKey,
-                                        event.getId());
+            idempotencyService.markKeyProcessedForPartUsage(
+                    IDEMPOTENCY_OPERATION_PART_CONSUME, idempotencyKey, event.getId());
         }
 
         log.info("Consumed part quantity for workorder {}", workorderId);
@@ -243,7 +240,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
     /**
      * Return unused parts to inventory.
-     * 
+     *
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to return (must be positive)
@@ -265,12 +262,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        Optional<UUID> existingEventId = idempotencyService
-                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_RETURN, idempotencyKey);
+            Optional<UUID> existingEventId =
+                    idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_RETURN, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        existingEventId.get());
-                return usageEventRepository.findById(existingEventId.get())
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
+                return usageEventRepository
+                        .findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
@@ -281,10 +278,12 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId)
+        workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
 
-        WorkorderPart part = workorderPartRepository.findById(partLineId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partLineId)
                 .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
 
         // Verify part belongs to workorder
@@ -294,16 +293,17 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Validate return does not exceed available (issued - consumed - already
         // returned)
-        BigDecimal available = part.getQuantityIssued()
-                .subtract(part.getQuantityConsumed())
-                .subtract(part.getQuantityReturned());
+        BigDecimal available =
+                part.getQuantityIssued().subtract(part.getQuantityConsumed()).subtract(part.getQuantityReturned());
 
         if (quantity.compareTo(available) > 0) {
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Return quantity exceeds available. Issued: %s, Consumed: %s, Already returned: %s, Available: %s, Attempting to return: %s",
-                            part.getQuantityIssued(), part.getQuantityConsumed(), part.getQuantityReturned(), available,
-                            quantity));
+            throw new IllegalArgumentException(String.format(
+                    "Return quantity exceeds available. Issued: %s, Consumed: %s, Already returned: %s, Available: %s, Attempting to return: %s",
+                    part.getQuantityIssued(),
+                    part.getQuantityConsumed(),
+                    part.getQuantityReturned(),
+                    available,
+                    quantity));
         }
 
         // Create usage event
@@ -325,10 +325,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        idempotencyService.markKeyProcessedForPartUsage(
-                                        IDEMPOTENCY_OPERATION_PART_RETURN,
-                                        idempotencyKey,
-                                        event.getId());
+            idempotencyService.markKeyProcessedForPartUsage(
+                    IDEMPOTENCY_OPERATION_PART_RETURN, idempotencyKey, event.getId());
         }
 
         log.info("Returned part quantity for workorder {}", workorderId);
@@ -342,11 +340,13 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     @NonNull
     public List<WorkorderPartUsageEventResponse> getUsageHistory(@NonNull UUID workorderId, @NonNull UUID partLineId) {
         // Validate workorder exists
-        workorderRepository.findById(workorderId)
+        workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
 
         // Validate part exists
-        WorkorderPart part = workorderPartRepository.findById(partLineId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partLineId)
                 .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
 
         // Verify part belongs to workorder
@@ -355,8 +355,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         return usageEventRepository.findByWorkorderPartIdOrderByPerformedAtDesc(partLineId).stream()
-                .map(this::toResponse).toList();
-
+                .map(this::toResponse)
+                .toList();
     }
 
     /**
@@ -366,12 +366,13 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     @NonNull
     public List<WorkorderPartUsageEventResponse> getAllUsageHistory(@NonNull UUID workorderId) {
         // Validate workorder exists
-        workorderRepository.findById(workorderId)
+        workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
 
         return usageEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId).stream()
-                .map(this::toResponse).toList();
-
+                .map(this::toResponse)
+                .toList();
     }
 
     /**
@@ -398,7 +399,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private UUID getWorkorderIdForPart(WorkorderPart part) {
         if (part.getWorkorder() != null) {
             return part.getWorkorder().getId();
-        } else if (part.getWorkOrderService() != null && part.getWorkOrderService().getWorkOrder() != null) {
+        } else if (part.getWorkOrderService() != null
+                && part.getWorkOrderService().getWorkOrder() != null) {
             return part.getWorkOrderService().getWorkOrder().getId();
         }
         throw new IllegalStateException("Part has no associated workorder");

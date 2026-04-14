@@ -8,9 +8,7 @@ import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.service.NltiRequestService;
-
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,10 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * Issue: NLTI-001
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
-        "pos.security.permission-registration.enabled=false",
-        "eureka.client.enabled=false"
-})
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {"pos.security.permission-registration.enabled=false", "eureka.client.enabled=false"})
 @ActiveProfiles("test")
 @Transactional
 class NltiRequestServiceIT {

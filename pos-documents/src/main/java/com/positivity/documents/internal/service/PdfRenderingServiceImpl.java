@@ -1,18 +1,5 @@
 package com.positivity.documents.internal.service;
 
-import java.io.ByteArrayOutputStream;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import com.itextpdf.html2pdf.HtmlConverter;
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.dto.RenderRequest;
@@ -22,6 +9,17 @@ import com.positivity.documents.internal.exception.TemplateNotFoundException;
 import com.positivity.documents.internal.exception.UnsupportedFormatException;
 import com.positivity.documents.internal.service.format.FormatHandler;
 import com.positivity.documents.service.PdfRenderingService;
+import java.io.ByteArrayOutputStream;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 @Service
 public class PdfRenderingServiceImpl implements PdfRenderingService {

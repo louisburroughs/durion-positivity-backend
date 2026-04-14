@@ -20,11 +20,11 @@ class UomConversionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-165-020: Create valid UOM conversion returns 201")
     void createConversion_returnsCreated() throws Exception {
         mockMvc.perform(withAuth(post("/v1/products/uom-conversions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "fromUomCode", "EA",
-                        "toUomCode", "BOX",
-                        "conversionFactor", 10.0)))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromUomCode", "EA",
+                                "toUomCode", "BOX",
+                                "conversionFactor", 10.0)))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.fromUomCode").value("EA"))
                 .andExpect(jsonPath("$.toUomCode").value("BOX"));
@@ -39,13 +39,13 @@ class UomConversionContractBehaviorIT extends BaseContractIntegrationTest {
                 "conversionFactor", 1000.0);
 
         mockMvc.perform(withAuth(post("/v1/products/uom-conversions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(payload))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(withAuth(post("/v1/products/uom-conversions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(payload))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload))))
                 .andExpect(status().isConflict());
     }
 
@@ -53,11 +53,11 @@ class UomConversionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("VE-165-021: Zero conversion factor returns 400")
     void zeroFactor_returnsBadRequest() throws Exception {
         mockMvc.perform(withAuth(post("/v1/products/uom-conversions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "fromUomCode", "EA",
-                        "toUomCode", "EA",
-                        "conversionFactor", 0.0)))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromUomCode", "EA",
+                                "toUomCode", "EA",
+                                "conversionFactor", 0.0)))))
                 .andExpect(status().isBadRequest());
     }
 
@@ -65,17 +65,17 @@ class UomConversionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-165-021: Deactivate conversion returns 204")
     void deactivateConversion_returnsNoContent() throws Exception {
         MvcResult createResult = mockMvc.perform(withAuth(post("/v1/products/uom-conversions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "fromUomCode", "GAL",
-                        "toUomCode", "QT",
-                        "conversionFactor", 4.0)))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fromUomCode", "GAL",
+                                "toUomCode", "QT",
+                                "conversionFactor", 4.0)))))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> response = objectMapper.readValue(createResult.getResponse().getContentAsString(),
-                Map.class);
+        Map<String, Object> response =
+                objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
         UUID id = UUID.fromString((String) response.get("id"));
 
         mockMvc.perform(withAuth(delete("/v1/products/uom-conversions/{id}", id)))

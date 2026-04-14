@@ -1,8 +1,7 @@
 package com.positivity.invoice.internal.client;
 
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
+import org.jspecify.annotations.NonNull;
 
 public class TaxCalculationRequest {
 

@@ -1,7 +1,7 @@
 package com.positivity.catalog.internal.repository;
 
-import com.positivity.catalog.internal.entity.PriceBookRuleEntity;
 import com.positivity.catalog.internal.entity.PriceBookRuleConditionType;
+import com.positivity.catalog.internal.entity.PriceBookRuleEntity;
 import com.positivity.catalog.internal.entity.PriceBookRuleStatus;
 import com.positivity.catalog.internal.entity.PriceBookRuleTargetType;
 import java.time.Instant;

@@ -14,6 +14,7 @@ public class CreatePickListRequest {
 
     @NotNull
     private UUID workorderId;
+
     private Instant dueAt;
     private int priority = 0;
     private UUID reservationId;

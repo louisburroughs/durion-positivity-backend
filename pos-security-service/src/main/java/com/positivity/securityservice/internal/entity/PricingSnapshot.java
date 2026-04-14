@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -61,5 +60,5 @@ public class PricingSnapshot {
         if (timestamp == null) {
             timestamp = Instant.now(Clock.systemUTC());
         }
-}
+    }
 }

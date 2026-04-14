@@ -1,6 +1,9 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,13 +11,9 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Response DTO for a parts usage event.
- * 
+ *
  * CAP:005 Story #158 - Parts Usage Tracking
  */
 @Data

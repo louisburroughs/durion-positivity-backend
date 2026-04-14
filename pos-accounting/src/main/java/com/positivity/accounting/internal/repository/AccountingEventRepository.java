@@ -2,12 +2,11 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.UUID;
 
 /**
  * Repository for AccountingEvent entity.
@@ -25,9 +24,7 @@ public interface AccountingEventRepository extends JpaRepository<AccountingEvent
      * Find accounting events by organization and status with pagination.
      */
     Page<AccountingEvent> findByOrganizationIdAndStatus(
-            UUID organizationId,
-            AccountingEventStatus status,
-            Pageable pageable);
+            UUID organizationId, AccountingEventStatus status, Pageable pageable);
 
     /**
      * Find accounting events by source system.

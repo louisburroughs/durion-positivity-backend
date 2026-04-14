@@ -14,6 +14,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,19 +27,18 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Entity for a mechanic work session associated with a work order task.
  * Implements CAP-139 Story #68.
  */
 @Entity
-@Table(name = "work_session", indexes = {
-        @Index(name = "idx_work_session_mechanic_id", columnList = "mechanicId"),
-        @Index(name = "idx_work_session_work_order_id", columnList = "work_order_id"),
-        @Index(name = "idx_work_session_status", columnList = "status")
-})
+@Table(
+        name = "work_session",
+        indexes = {
+            @Index(name = "idx_work_session_mechanic_id", columnList = "mechanicId"),
+            @Index(name = "idx_work_session_work_order_id", columnList = "work_order_id"),
+            @Index(name = "idx_work_session_status", columnList = "status")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

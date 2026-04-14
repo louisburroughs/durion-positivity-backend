@@ -1,20 +1,17 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
+import com.positivity.accounting.internal.client.WorkorderServiceException;
+import com.positivity.accounting.service.InvoiceRegenerationService;
+import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
-import com.positivity.accounting.internal.client.WorkorderServiceException;
-import com.positivity.accounting.service.InvoiceRegenerationService;
-import com.positivity.shared.dto.InvoiceGenerationResponse;
-
-import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -25,9 +22,8 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
 
     @Override
     @NonNull
-        public InvoiceGenerationResponse regenerateInvoiceFromWorkorder(
-                @NonNull UUID workorderId,
-                @Nullable String idempotencyKey) {
+    public InvoiceGenerationResponse regenerateInvoiceFromWorkorder(
+            @NonNull UUID workorderId, @Nullable String idempotencyKey) {
         if (log.isInfoEnabled()) {
             log.info("Regenerating invoice from workorder {}", maskWorkorderId(workorderId));
         }

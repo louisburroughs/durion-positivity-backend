@@ -14,7 +14,9 @@ public class EligibilityRuleResponse {
     @Schema(description = "Eligibility rule identifier", example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6ab")
     private UUID ruleId;
 
-    @Schema(description = "Promotion identifier to which this rule belongs", example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa")
+    @Schema(
+            description = "Promotion identifier to which this rule belongs",
+            example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa")
     private UUID promotionId;
 
     @Schema(description = "Rule condition type", example = "ACCOUNT_FLEET_SIZE")

@@ -1,10 +1,9 @@
 package com.positivity.price.service;
 
-import java.util.List;
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.price.internal.dto.RestrictionEvaluationRequest;
 import com.positivity.price.internal.dto.RestrictionEvaluationResult;
+import java.util.List;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Evaluates products against active RestrictionRules.

@@ -1,12 +1,11 @@
 package com.positivity.workorder.internal.client;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Client for rendering PDFs via pos-documents service.
@@ -33,13 +32,16 @@ public class DocumentClient {
      */
     @NonNull
     public byte[] renderPdf(@NonNull String markdownContent, String templateId) {
-        log.debug("Requesting PDF render from pos-documents, content length={}, templateId={}",
-                markdownContent.length(), templateId);
+        log.debug(
+                "Requesting PDF render from pos-documents, content length={}, templateId={}",
+                markdownContent.length(),
+                templateId);
 
         try {
             var request = new RenderRequestDto("MARKDOWN", markdownContent, templateId);
 
-            byte[] pdfBytes = documentServiceRestClient.post()
+            byte[] pdfBytes = documentServiceRestClient
+                    .post()
                     .uri("/v1/documents/render")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -75,8 +77,7 @@ public class DocumentClient {
      * Request DTO matching pos-documents RenderRequest structure.
      * Uses String for format to avoid cross-module enum dependency.
      */
-    private record RenderRequestDto(String format, String content, String templateId) {
-    }
+    private record RenderRequestDto(String format, String content, String templateId) {}
 
     /**
      * Exception thrown when document rendering fails.

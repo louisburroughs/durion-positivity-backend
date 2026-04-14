@@ -11,8 +11,7 @@ final class NltiCorrelationIdSupport {
     static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     static final String CORRELATION_ID_ATTRIBUTE = NltiCorrelationIdSupport.class.getName() + ".resolvedCorrelationId";
 
-    private NltiCorrelationIdSupport() {
-    }
+    private NltiCorrelationIdSupport() {}
 
     static @NonNull UUID resolveFromHeader(@Nullable String headerValue) {
         if (headerValue != null && !headerValue.isBlank()) {

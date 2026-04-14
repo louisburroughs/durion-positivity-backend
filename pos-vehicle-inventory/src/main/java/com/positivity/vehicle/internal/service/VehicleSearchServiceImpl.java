@@ -1,20 +1,17 @@
 package com.positivity.vehicle.internal.service;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.dto.VehicleSummary;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.service.VehicleSearchService;
-
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for vehicle search and lookup (CAP:091 Story #103).
@@ -40,8 +37,11 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
     @Override
     @Transactional(readOnly = true)
     public SearchVehiclesResponse search(@NonNull SearchVehiclesRequest request) {
-        log.info("Searching vehicles: query='{}', limit={}, enableContains={}",
-                request.getQuery(), request.getLimit(), request.isEnableContainsMatching());
+        log.info(
+                "Searching vehicles: query='{}', limit={}, enableContains={}",
+                request.getQuery(),
+                request.getLimit(),
+                request.isEnableContainsMatching());
 
         // Validate and normalize query
         String normalizedQuery = request.getQuery().trim().toUpperCase();
@@ -54,20 +54,17 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
         validateQueryLength(normalizedQuery, searchType);
 
         // Fetch candidates from repository (broad search)
-        List<VehicleSummary> candidates = vehicleRepository.searchByQuery(normalizedQuery)
-                .stream()
+        List<VehicleSummary> candidates = vehicleRepository.searchByQuery(normalizedQuery).stream()
                 .map(this::toVehicleSummary)
                 .toList();
 
         // Rank candidates by relevance
-        List<VehicleSummary> ranked = rankCandidates(candidates, normalizedQuery, searchType,
-                request.isEnableContainsMatching());
+        List<VehicleSummary> ranked =
+                rankCandidates(candidates, normalizedQuery, searchType, request.isEnableContainsMatching());
 
         // Apply limit
         int limit = Math.min(request.getLimit(), MAX_LIMIT);
-        List<VehicleSummary> results = ranked.stream()
-                .limit(limit)
-                .toList();
+        List<VehicleSummary> results = ranked.stream().limit(limit).toList();
 
         log.info("Search returned {} results (limit={})", results.size(), limit);
 
@@ -129,10 +126,7 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
      * Ranks candidates by relevance tier: exact → prefix → contains.
      */
     private List<VehicleSummary> rankCandidates(
-            List<VehicleSummary> candidates,
-            String query,
-            SearchType type,
-            Boolean enableContains) {
+            List<VehicleSummary> candidates, String query, SearchType type, Boolean enableContains) {
 
         List<VehicleSummary> exactMatches = new ArrayList<>();
         List<VehicleSummary> prefixMatches = new ArrayList<>();
@@ -156,8 +150,11 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
         ranked.addAll(prefixMatches);
         ranked.addAll(containsMatches);
 
-        log.debug("Ranking: exact={}, prefix={}, contains={}",
-                exactMatches.size(), prefixMatches.size(), containsMatches.size());
+        log.debug(
+                "Ranking: exact={}, prefix={}, contains={}",
+                exactMatches.size(),
+                prefixMatches.size(),
+                containsMatches.size());
 
         return ranked;
     }
@@ -169,7 +166,9 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
         return switch (type) {
             case VIN_EXACT, VIN_PREFIX -> vehicle.getVin().toUpperCase();
             case PLATE -> (vehicle.getLicensePlate() != null ? vehicle.getLicensePlate() : "").toUpperCase();
-            case GENERAL -> (vehicle.getUnitNumber().toUpperCase() + " " + vehicle.getDescription().toUpperCase());
+            case GENERAL ->
+                (vehicle.getUnitNumber().toUpperCase() + " "
+                        + vehicle.getDescription().toUpperCase());
         };
     }
 

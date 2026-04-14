@@ -1,10 +1,10 @@
 package com.positivity.mcp.internal.service;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
 
 import com.positivity.mcp.internal.dto.ClarificationResponseDTO;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
@@ -15,16 +15,13 @@ import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
 import com.positivity.mcp.service.AuditLedgerService;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,9 +44,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class IntentAuditIntegrationTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
-    private static final UUID SESSION_ID     = UUID.fromString("00000000-0000-7000-8000-000000000320");
+    private static final UUID SESSION_ID = UUID.fromString("00000000-0000-7000-8000-000000000320");
     private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-7000-8000-000000000321");
-    private static final UUID INTENT_ID      = UUID.fromString("00000000-0000-7000-8000-000000000322");
+    private static final UUID INTENT_ID = UUID.fromString("00000000-0000-7000-8000-000000000322");
 
     @Mock
     private NltiIntentRepository intentRepository;
@@ -82,7 +79,9 @@ class IntentAuditIntegrationTest {
         existingIntent.setSlotsJson("[]");
         existingIntent.setClarificationQuestionsJson("[]");
         lenient().when(intentRepository.findById(INTENT_ID)).thenReturn(Optional.of(existingIntent));
-        lenient().when(intentRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient()
+                .when(intentRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         // Stub meterRegistry to prevent NPE from lazy counter initialization
         Counter parseCounter = mock(Counter.class);
@@ -108,12 +107,9 @@ class IntentAuditIntegrationTest {
         verify(auditLedgerService, times(1)).append(captor.capture());
         NltiAuditEvent captured = captor.getValue();
         org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(captured.getEventType())
-                .isEqualTo(NltiAuditEventType.INTENT);
-        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId())
-                .isEqualTo(CORRELATION_ID);
-        org.assertj.core.api.Assertions.assertThat(captured.getSessionId())
-                .isEqualTo(SESSION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.getEventType()).isEqualTo(NltiAuditEventType.INTENT);
+        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId()).isEqualTo(CORRELATION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.getSessionId()).isEqualTo(SESSION_ID);
     }
 
     // ─── AC5: metric emission — parse ────────────────────────────────────────
@@ -152,12 +148,9 @@ class IntentAuditIntegrationTest {
         verify(auditLedgerService, times(1)).append(captor.capture());
         NltiAuditEvent captured = captor.getValue();
         org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(captured.getEventType())
-                .isEqualTo(NltiAuditEventType.INTENT);
-        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId())
-                .isEqualTo(CORRELATION_ID);
-        org.assertj.core.api.Assertions.assertThat(captured.getSessionId())
-                .isEqualTo(SESSION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.getEventType()).isEqualTo(NltiAuditEventType.INTENT);
+        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId()).isEqualTo(CORRELATION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.getSessionId()).isEqualTo(SESSION_ID);
     }
 
     // ─── AC5: metric emission — clarification ────────────────────────────────

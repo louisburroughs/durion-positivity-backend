@@ -5,9 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import lombok.Data;
-
 import java.math.BigDecimal;
+import lombok.Data;
 
 /**
  * Request to initiate a card payment against an invoice.
@@ -23,7 +22,9 @@ import java.math.BigDecimal;
 public class InitiatePaymentRequest {
 
     @NotNull
-    @Schema(description = "Payment flow: SALE_CAPTURE (default one-step) or AUTH_ONLY (two-step)", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Payment flow: SALE_CAPTURE (default one-step) or AUTH_ONLY (two-step)",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private PaymentFlow paymentFlow;
 
     @NotNull

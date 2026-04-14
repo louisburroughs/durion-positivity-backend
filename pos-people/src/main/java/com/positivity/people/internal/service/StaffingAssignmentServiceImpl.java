@@ -1,17 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
@@ -22,9 +10,18 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.StaffingAssignmentService;
-
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -41,21 +38,30 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     @Override
     @Transactional
-    public @NonNull StaffingAssignmentResponse create(@NonNull CreateStaffingAssignmentRequest request,
-            @NonNull String actor) {
+    public @NonNull StaffingAssignmentResponse create(
+            @NonNull CreateStaffingAssignmentRequest request, @NonNull String actor) {
         validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
-        if (repository.existsOverlapping(request.getPersonId(), request.getLocationId(), request.getRole(),
-                request.getEffectiveFrom(), request.getEffectiveTo())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+        if (repository.existsOverlapping(
+                request.getPersonId(),
+                request.getLocationId(),
+                request.getRole(),
+                request.getEffectiveFrom(),
+                request.getEffectiveTo())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
                     "An overlapping assignment already exists for this person, location, and role");
         }
 
         if (request.isPrimary()) {
-            repository.findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+            repository
+                    .findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
                     .ifPresent(existing -> {
-                        if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
-                                request.getEffectiveFrom(), request.getEffectiveTo())) {
+                        if (!dateRangesOverlap(
+                                existing.getEffectiveFrom(),
+                                existing.getEffectiveTo(),
+                                request.getEffectiveFrom(),
+                                request.getEffectiveTo())) {
                             return;
                         }
 
@@ -82,7 +88,10 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 .build();
 
         PersonLocationAssignment saved = repository.save(assignment);
-        log.info("Created staffing assignment {} for person {} at location {}", saved.getId(), request.getPersonId(),
+        log.info(
+                "Created staffing assignment {} for person {} at location {}",
+                saved.getId(),
+                request.getPersonId(),
                 request.getLocationId());
 
         return toResponse(saved);
@@ -90,7 +99,9 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     @Override
     public @NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId) {
-        return repository.findByPerson_Id(personId).stream().map(this::toResponse).toList();
+        return repository.findByPerson_Id(personId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
@@ -100,28 +111,38 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     @Override
     @Transactional
-    public @NonNull Optional<StaffingAssignmentResponse> update(@NonNull UUID assignmentId,
-            @NonNull UpdateStaffingAssignmentRequest request, @NonNull String actor) {
+    public @NonNull Optional<StaffingAssignmentResponse> update(
+            @NonNull UUID assignmentId, @NonNull UpdateStaffingAssignmentRequest request, @NonNull String actor) {
         Optional<PersonLocationAssignment> existingAssignment = repository.findById(assignmentId);
         if (existingAssignment.isEmpty()) {
             return Optional.empty();
         }
         validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
-        if (repository.existsOverlappingExcludingId(assignmentId, request.getPersonId(), request.getLocationId(),
-                request.getRole(), request.getEffectiveFrom(), request.getEffectiveTo())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+        if (repository.existsOverlappingExcludingId(
+                assignmentId,
+                request.getPersonId(),
+                request.getLocationId(),
+                request.getRole(),
+                request.getEffectiveFrom(),
+                request.getEffectiveTo())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
                     "An overlapping assignment already exists for this person, location, and role");
         }
 
         PersonLocationAssignment assignment = existingAssignment.get();
 
         if (request.isPrimary()) {
-            repository.findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+            repository
+                    .findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
                     .filter(existing -> !existing.getId().equals(assignmentId))
                     .ifPresent(existing -> {
-                        if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
-                                request.getEffectiveFrom(), request.getEffectiveTo())) {
+                        if (!dateRangesOverlap(
+                                existing.getEffectiveFrom(),
+                                existing.getEffectiveTo(),
+                                request.getEffectiveFrom(),
+                                request.getEffectiveTo())) {
                             return;
                         }
 
@@ -151,10 +172,10 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     @Override
     @Transactional
     public void end(@NonNull UUID assignmentId) {
-        PersonLocationAssignment assignment = repository.findById(assignmentId)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                "Assignment not found: " + assignmentId));
+        PersonLocationAssignment assignment = repository
+                .findById(assignmentId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found: " + assignmentId));
         assignment.setStatus(AssignmentStatus.ENDED);
         if (assignment.getEffectiveTo() == null) {
             assignment.setEffectiveTo(LocalDate.now(clock));
@@ -163,21 +184,30 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     }
 
     private StaffingAssignmentResponse toResponse(PersonLocationAssignment assignment) {
-        return new StaffingAssignmentResponse(assignment.getId(), assignment.getPersonId(), assignment.getLocationId(),
-                assignment.getRole(), assignment.isPrimary(), assignment.getStatus(), assignment.getEffectiveFrom(),
-                assignment.getEffectiveTo(), assignment.getCreatedAt(), assignment.getUpdatedAt(),
+        return new StaffingAssignmentResponse(
+                assignment.getId(),
+                assignment.getPersonId(),
+                assignment.getLocationId(),
+                assignment.getRole(),
+                assignment.isPrimary(),
+                assignment.getStatus(),
+                assignment.getEffectiveFrom(),
+                assignment.getEffectiveTo(),
+                assignment.getCreatedAt(),
+                assignment.getUpdatedAt(),
                 assignment.getCreatedBy());
     }
 
-    private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart,
-            LocalDate rightEnd) {
+    private boolean dateRangesOverlap(
+            LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart, LocalDate rightEnd) {
         LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
         LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
         return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
     }
 
     private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        var person = personRepository.findById(personId)
+        var person = personRepository
+                .findById(personId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
 
         if (person.getStatus() != EmployeeStatus.ACTIVE) {
@@ -188,5 +218,4 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
         }
     }
-
 }

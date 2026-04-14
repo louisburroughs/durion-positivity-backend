@@ -1,4 +1,3 @@
 package com.positivity.order.internal.client;
 
-public record WorkorderCancelResult(boolean success, String resultMessage) {
-}
+public record WorkorderCancelResult(boolean success, String resultMessage) {}

@@ -2,14 +2,13 @@ package com.positivity.inventory.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Canonical manufacturer feed item payload for feed processing.
@@ -23,10 +22,16 @@ import java.util.UUID;
 @Schema(description = "Canonical manufacturer feed payload used for normalized availability ingestion")
 public class ManufacturerFeedItemDto {
 
-    @Schema(description = "Internal product identifier. May be null for unmapped manufacturer parts.", example = "550e8400-e29b-41d4-a716-446655440000", nullable = true)
+    @Schema(
+            description = "Internal product identifier. May be null for unmapped manufacturer parts.",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            nullable = true)
     private UUID productId;
 
-    @Schema(description = "Manufacturer identifier from upstream feed", example = "660e8400-e29b-41d4-a716-446655440000", requiredMode = RequiredMode.REQUIRED)
+    @Schema(
+            description = "Manufacturer identifier from upstream feed",
+            example = "660e8400-e29b-41d4-a716-446655440000",
+            requiredMode = RequiredMode.REQUIRED)
     private UUID manufacturerId;
 
     @Schema(description = "Manufacturer part number", example = "MPN-12345", requiredMode = RequiredMode.REQUIRED)
@@ -56,7 +61,10 @@ public class ManufacturerFeedItemDto {
     @Schema(description = "Pack size multiple", example = "1", nullable = true)
     private Integer packSize;
 
-    @Schema(description = "Source location or warehouse code from manufacturer feed", example = "US-EAST-DC1", nullable = true)
+    @Schema(
+            description = "Source location or warehouse code from manufacturer feed",
+            example = "US-EAST-DC1",
+            nullable = true)
     private String sourceLocationCode;
 
     @Schema(description = "Manufacturer snapshot timestamp", example = "2026-02-24T18:00:00Z", nullable = true)

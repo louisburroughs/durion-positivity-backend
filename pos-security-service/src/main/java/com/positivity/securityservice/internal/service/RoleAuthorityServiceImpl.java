@@ -1,15 +1,13 @@
 package com.positivity.securityservice.internal.service;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import com.positivity.securityservice.service.RoleAuthorityService;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Expands business roles to concrete authorities used by downstream services.
@@ -32,12 +30,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     @Override
     public Set<String> expandRolesToAuthorities(Set<String> roles) {
         Set<String> authorities = new HashSet<>();
-        if (roles == null || roles.isEmpty())
-            return authorities;
+        if (roles == null || roles.isEmpty()) return authorities;
 
         for (String role : roles) {
-            if (role == null || role.isBlank())
-                continue;
+            if (role == null || role.isBlank()) continue;
             String normalized = normalizeRole(role);
             // Always include the ROLE_* itself
             authorities.add(ROLE_PREFIX + normalized);
@@ -54,8 +50,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 case ROLE_AP_CLERK -> authorities.addAll(apClerkAuthorities());
                 case ROLE_ACCOUNTANT -> authorities.addAll(accountantAuthorities());
                 case ROLE_CONTROLLER -> authorities.addAll(controllerAuthorities());
-                default -> {
-                }
+                default -> {}
             }
         }
         return authorities;
@@ -109,9 +104,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> adminAuthorities() {
         Set<String> set = new HashSet<>(fleetManagerAuthorities());
         // CRM high-risk operations
-        set.addAll(List.of(
-                "crm:party:deactivate",
-                "crm:party:merge"));
+        set.addAll(List.of("crm:party:deactivate", "crm:party:merge"));
         // Accounting admin (all permissions)
         set.addAll(controllerAuthorities());
         set.addAll(adminSecurityAuthorities());
@@ -123,10 +116,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> managerAuthorities() {
-        return new HashSet<>(List.of(
-                "security:role:view",
-                "security:role:assign",
-                "security:permission:view"));
+        return new HashSet<>(List.of("security:role:view", "security:role:assign", "security:permission:view"));
     }
 
     private Set<String> adminSecurityAuthorities() {
@@ -181,10 +171,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> apClerkAuthorities() {
         Set<String> set = new HashSet<>(glAnalystAuthorities());
         // Additional AP Clerk permissions (already include GL_ANALYST)
-        set.addAll(List.of(
-                "accounting:ap:approve",
-                "accounting:ap:reject",
-                "accounting:ap:pay"));
+        set.addAll(List.of("accounting:ap:approve", "accounting:ap:reject", "accounting:ap:pay"));
         return set;
     }
 
@@ -204,8 +191,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> controllerAuthorities() {
         Set<String> set = new HashSet<>(accountantAuthorities());
         // Additional Controller permissions (includes ACCOUNTANT)
-        set.addAll(List.of(
-                "accounting:posting_rules:archive"));
+        set.addAll(List.of("accounting:posting_rules:archive"));
         return set;
     }
 }

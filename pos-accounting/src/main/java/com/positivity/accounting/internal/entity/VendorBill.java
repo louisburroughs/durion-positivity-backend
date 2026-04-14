@@ -1,17 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,20 +15,27 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Vendor Bill (Accounts Payable) entity.
- * 
+ *
  * Lifecycle: PENDING_REVIEW → APPROVED → PAID (or REJECTED/CANCELLED)
- * 
+ *
  * Traceability: originEventId → vendorBill → journalEntryId →
  * paymentTransactionId
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Vendor Bill</a>
@@ -47,17 +44,19 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "journalEntry" })
+@ToString(exclude = {"journalEntry"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "vendor_bill", indexes = {
-        @Index(name = "idx_vendor_bill_vendor", columnList = "vendor_id"),
-        @Index(name = "idx_vendor_bill_status", columnList = "status"),
-        @Index(name = "idx_vendor_bill_number", columnList = "bill_number"),
-        @Index(name = "idx_vendor_bill_due_date", columnList = "due_date"),
-        @Index(name = "idx_vendor_bill_origin_event", columnList = "origin_event_id"),
-        @Index(name = "idx_vendor_bill_po", columnList = "purchase_order_id")
-})
+@Table(
+        name = "vendor_bill",
+        indexes = {
+            @Index(name = "idx_vendor_bill_vendor", columnList = "vendor_id"),
+            @Index(name = "idx_vendor_bill_status", columnList = "status"),
+            @Index(name = "idx_vendor_bill_number", columnList = "bill_number"),
+            @Index(name = "idx_vendor_bill_due_date", columnList = "due_date"),
+            @Index(name = "idx_vendor_bill_origin_event", columnList = "origin_event_id"),
+            @Index(name = "idx_vendor_bill_po", columnList = "purchase_order_id")
+        })
 public class VendorBill {
 
     @EqualsAndHashCode.Include
@@ -66,6 +65,7 @@ public class VendorBill {
     @UUIDv7Id
     @Column(name = "vendor_bill_id", nullable = false, columnDefinition = "UUID")
     private UUID vendorBillId;
+
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;
 

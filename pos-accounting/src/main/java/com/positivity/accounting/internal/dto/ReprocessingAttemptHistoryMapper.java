@@ -1,8 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Mapper for converting between ReprocessingAttemptHistory entities and DTOs.

@@ -35,19 +35,25 @@ public class PermissionBitIndexValidator implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         for (Permission p : permissionRepository.findAll()) {
-            PermissionCode.fromCode(p.getName()).ifPresentOrElse(
-                    catalogEntry -> {
-                        if (p.getBitIndex() == null) {
-                            log.warn("Permission '{}' matches catalog entry {} but has no bit index assignment",
-                                    p.getName(), catalogEntry.name());
-                        } else if (p.getBitIndex() != catalogEntry.bitIndex()) {
-                            log.warn("Permission '{}' has bit index {} but catalog expects {}",
-                                    p.getName(), p.getBitIndex(), catalogEntry.bitIndex());
-                        }
-                    },
-                    () -> log.warn(
-                            "Permission '{}' is not in the PermissionCode catalog; bit index will not be assigned",
-                            p.getName()));
+            PermissionCode.fromCode(p.getName())
+                    .ifPresentOrElse(
+                            catalogEntry -> {
+                                if (p.getBitIndex() == null) {
+                                    log.warn(
+                                            "Permission '{}' matches catalog entry {} but has no bit index assignment",
+                                            p.getName(),
+                                            catalogEntry.name());
+                                } else if (p.getBitIndex() != catalogEntry.bitIndex()) {
+                                    log.warn(
+                                            "Permission '{}' has bit index {} but catalog expects {}",
+                                            p.getName(),
+                                            p.getBitIndex(),
+                                            catalogEntry.bitIndex());
+                                }
+                            },
+                            () -> log.warn(
+                                    "Permission '{}' is not in the PermissionCode catalog; bit index will not be assigned",
+                                    p.getName()));
         }
     }
 }

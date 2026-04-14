@@ -28,10 +28,7 @@ import org.jspecify.annotations.NonNull;
  * @param name Permission name in domain:resource:action format
  * @param description Human-readable description
  */
-public record PermissionDefinition(
-        @NonNull String name,
-        String description
-) {
+public record PermissionDefinition(@NonNull String name, String description) {
     /**
      * Create a permission definition with name and description.
      *

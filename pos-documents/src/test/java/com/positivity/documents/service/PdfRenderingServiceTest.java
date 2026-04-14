@@ -1,5 +1,7 @@
 package com.positivity.documents.service;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.dto.RenderRequest;
 import com.positivity.documents.internal.enums.DocumentFormat;
@@ -12,21 +14,18 @@ import com.positivity.documents.internal.service.format.JsonFormatHandler;
 import com.positivity.documents.internal.service.format.MarkdownFormatHandler;
 import com.positivity.documents.internal.service.format.TextFormatHandler;
 import com.positivity.documents.internal.service.format.XmlFormatHandler;
-import org.junit.jupiter.api.Test;
-import org.springframework.core.io.DefaultResourceLoader;
-import tools.jackson.databind.ObjectMapper;
-
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.io.DefaultResourceLoader;
+import tools.jackson.databind.ObjectMapper;
 
 class PdfRenderingServiceTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"),
-            Clock.systemUTC().getZone());
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), Clock.systemUTC().getZone());
     private static final String TEMPLATE_BASE_PATH = "classpath:/templates";
     private static final PdfConfiguration PDF_CONFIG = new PdfConfiguration(1_000_000, TEMPLATE_BASE_PATH, 200);
 
@@ -38,7 +37,8 @@ class PdfRenderingServiceTest {
                     new CsvFormatHandler(PDF_CONFIG),
                     new TextFormatHandler()),
             new TemplateService(new DefaultResourceLoader(), PDF_CONFIG),
-            PDF_CONFIG, FIXED_CLOCK);
+            PDF_CONFIG,
+            FIXED_CLOCK);
 
     @Test
     void shouldRenderPdfUsingDefaultTemplate() {

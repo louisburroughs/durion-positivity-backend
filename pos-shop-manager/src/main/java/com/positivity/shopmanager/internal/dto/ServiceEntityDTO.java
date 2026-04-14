@@ -9,4 +9,3 @@ public class ServiceEntityDTO {
     private String description;
     // Add other fields as needed from pos-catalog ServiceEntity
 }
-

@@ -3,11 +3,9 @@ package com.positivity.poseventreceiver.internal.service;
 import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.service.EmitEventService;
-
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
@@ -34,8 +32,12 @@ public class EmitEventServiceImpl implements EmitEventService {
     @Override
     public boolean receiveEvent(@NonNull EmitEventRequest request) {
         validateRequest(request);
-        log.info("Received EventEmitted event: id={}, apiVersion={}, timestamp={}, elapsedMs={}",
-                request.id(), request.apiVersion(), request.timestamp(), request.elapsedMs());
+        log.info(
+                "Received EventEmitted event: id={}, apiVersion={}, timestamp={}, elapsedMs={}",
+                request.id(),
+                request.apiVersion(),
+                request.timestamp(),
+                request.elapsedMs());
         if (!eventDao.isPreregistered(request.id())) {
             log.warn("Rejected emitted event with unregistered id={}", request.id());
             return false;

@@ -1,7 +1,6 @@
 package com.positivity.order.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;

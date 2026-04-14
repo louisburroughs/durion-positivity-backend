@@ -1,31 +1,29 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * CustomerCredit - AR credit balance created from overpayments.
- * 
+ *
  * Business Rules:
  * - Created when payment amount exceeds invoice application total
  * - Represents remaining payment value as explicit AR credit
  * - Can be applied to future invoices (not implemented in CAP:051)
  * - Once created, payment.unappliedAmount should be 0 (credit is the
  * representation)
- * 
+ *
  * Example:
  * - Payment: $150
  * - Applied to Invoice A: $100
  * - Overpayment: $50 → CustomerCredit created for $50
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Overpayment Policy</a>
@@ -38,11 +36,13 @@ import java.util.UUID;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "customer_credit", indexes = {
-        @Index(name = "idx_customer_credit_customer", columnList = "customer_id"),
-        @Index(name = "idx_customer_credit_payment", columnList = "source_payment_id"),
-        @Index(name = "idx_customer_credit_created_at", columnList = "created_at")
-})
+@Table(
+        name = "customer_credit",
+        indexes = {
+            @Index(name = "idx_customer_credit_customer", columnList = "customer_id"),
+            @Index(name = "idx_customer_credit_payment", columnList = "source_payment_id"),
+            @Index(name = "idx_customer_credit_created_at", columnList = "created_at")
+        })
 public class CustomerCredit {
 
     @EqualsAndHashCode.Include
@@ -51,6 +51,7 @@ public class CustomerCredit {
     @UUIDv7Id
     @Column(name = "credit_id", nullable = false, columnDefinition = "UUID")
     private UUID creditId;
+
     @Column(name = "customer_id", nullable = false, columnDefinition = "UUID")
     private UUID customerId;
 

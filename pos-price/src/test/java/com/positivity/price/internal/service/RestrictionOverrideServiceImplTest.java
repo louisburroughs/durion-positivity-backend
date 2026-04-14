@@ -80,9 +80,7 @@ class RestrictionOverrideServiceImplTest {
         when(ruleRepository.findById(any(UUID.class))).thenReturn(Optional.of(someRule()));
 
         var auth = new UsernamePasswordAuthenticationToken(
-                "test-actor",
-                null,
-                List.of(new SimpleGrantedAuthority("pricing:restriction:override")));
+                "test-actor", null, List.of(new SimpleGrantedAuthority("pricing:restriction:override")));
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "test-actor"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }

@@ -1,10 +1,9 @@
 package com.positivity.workorder.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.ChangeRequest;
+import java.util.List;
+import java.util.UUID;
 
 public interface ChangeRequestService {
 
@@ -16,12 +15,12 @@ public interface ChangeRequestService {
 
     /**
      * Create a change request with idempotency key support.
-     * 
+     *
      * <p>
      * If an idempotency key is provided and has been processed before,
      * returns the existing change request instead of creating a duplicate.
      * </p>
-     * 
+     *
      * @param dto            the change request creation request
      * @param idempotencyKey optional idempotency key for duplicate prevention; if
      *                       null, idempotency is not enforced
@@ -70,5 +69,4 @@ public interface ChangeRequestService {
     List<ChangeRequest> getChangeRequestsByWorkorder(UUID workorderId);
 
     ChangeRequest getChangeRequestById(UUID id);
-
 }

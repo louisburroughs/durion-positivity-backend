@@ -1,19 +1,19 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.internal.security.McpPermissions;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
+import com.positivity.mcp.service.AgentOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,10 +41,8 @@ public class McpChatController {
             @RequestBody @Valid @NonNull ChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-        @NonNull
-        String userId = authentication.getName();
-        @NonNull
-        String role = extractPrimaryRole(authentication);
+        @NonNull String userId = authentication.getName();
+        @NonNull String role = extractPrimaryRole(authentication);
         String response = agentOrchestrationService.chat(userId, role, request.message());
         return ResponseEntity.ok(new ChatResponse(response));
     }
@@ -59,10 +57,8 @@ public class McpChatController {
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
-    public record ChatRequest(@NotBlank @NonNull String message) {
-    }
+    public record ChatRequest(@NotBlank @NonNull String message) {}
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
-    public record ChatResponse(@NonNull String response) {
-    }
+    public record ChatResponse(@NonNull String response) {}
 }

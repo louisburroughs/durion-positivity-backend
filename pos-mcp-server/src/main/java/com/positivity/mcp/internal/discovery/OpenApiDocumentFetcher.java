@@ -5,6 +5,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import java.net.URI;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,9 +15,6 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-
-import java.net.URI;
-import java.util.Optional;
 
 @Component
 public class OpenApiDocumentFetcher {
@@ -26,7 +25,8 @@ public class OpenApiDocumentFetcher {
     private final WebClient webClient;
     private final McpServerProperties properties;
 
-    OpenApiDocumentFetcher(@NonNull DiscoveryClient discoveryClient,
+    OpenApiDocumentFetcher(
+            @NonNull DiscoveryClient discoveryClient,
             @NonNull WebClient discoveryWebClient,
             @NonNull McpServerProperties properties) {
         this.discoveryClient = discoveryClient;
@@ -42,7 +42,8 @@ public class OpenApiDocumentFetcher {
         URI baseUri = instance.get().getUri();
         URI apiDocUri = baseUri.resolve(properties.openApiPath());
 
-        return webClient.get()
+        return webClient
+                .get()
                 .uri(apiDocUri)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -80,6 +81,5 @@ public class OpenApiDocumentFetcher {
         return parser.readContents(raw, null, options);
     }
 
-    public record DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi) {
-    }
+    public record DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi) {}
 }

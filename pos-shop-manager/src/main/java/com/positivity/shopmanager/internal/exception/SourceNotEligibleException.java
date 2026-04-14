@@ -11,8 +11,8 @@ public class SourceNotEligibleException extends RuntimeException {
     private final String sourceId;
     private final String sourceStatus;
 
-    public SourceNotEligibleException(String errorCode, String message, String sourceType, String sourceId,
-            String sourceStatus) {
+    public SourceNotEligibleException(
+            String errorCode, String message, String sourceType, String sourceId, String sourceStatus) {
         super(message);
         this.errorCode = errorCode;
         this.sourceType = sourceType;

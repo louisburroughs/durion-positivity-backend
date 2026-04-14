@@ -1,10 +1,9 @@
 package com.positivity.shopmanager.internal.client;
 
+import com.positivity.shopmanager.internal.dto.PersonDTO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.shopmanager.internal.dto.PersonDTO;
 
 @Component
 public class PersonClient {
@@ -18,9 +17,6 @@ public class PersonClient {
     }
 
     public PersonDTO getPersonById(Long id) {
-        return restClient.get()
-                .uri(peopleServiceUrl + "/{id}", id)
-                .retrieve()
-                .body(PersonDTO.class);
+        return restClient.get().uri(peopleServiceUrl + "/{id}", id).retrieve().body(PersonDTO.class);
     }
 }

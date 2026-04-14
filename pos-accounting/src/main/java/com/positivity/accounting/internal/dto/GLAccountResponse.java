@@ -2,20 +2,18 @@ package com.positivity.accounting.internal.dto;
 
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
-import lombok.experimental.Tolerate;
-
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Tolerate;
 
 /**
  * DTO for GL Account response with computed status.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GLAccount Response</a>

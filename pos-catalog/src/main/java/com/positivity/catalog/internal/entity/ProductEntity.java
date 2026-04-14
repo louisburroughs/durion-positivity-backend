@@ -3,27 +3,28 @@ package com.positivity.catalog.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
 @Setter
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "product", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_product_sku", columnNames = "sku"),
-        @UniqueConstraint(name = "uk_product_manufacturer_mpn", columnNames = { "manufacturer_id",
-                "manufacturer_part_number" })
-}, indexes = {
-        @Index(name = "idx_product_manufacturer_part_number", columnList = "manufacturer_part_number")
-})
+@Table(
+        name = "product",
+        uniqueConstraints = {
+            @UniqueConstraint(name = "uk_product_sku", columnNames = "sku"),
+            @UniqueConstraint(
+                    name = "uk_product_manufacturer_mpn",
+                    columnNames = {"manufacturer_id", "manufacturer_part_number"})
+        },
+        indexes = {@Index(name = "idx_product_manufacturer_part_number", columnList = "manufacturer_part_number")})
 @Schema(description = "Represents a product in the catalog")
 public class ProductEntity implements CatalogItem {
 
@@ -57,10 +58,14 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "Unit of measure", example = "EA")
     private String unitOfMeasure;
 
-    @Schema(description = "Short description of the product", example = "A versatile wrench for heavy-duty applications.")
+    @Schema(
+            description = "Short description of the product",
+            example = "A versatile wrench for heavy-duty applications.")
     private String shortDescription;
 
-    @Schema(description = "Detailed description of the product", example = "This heavy-duty wrench is made from hardened steel...")
+    @Schema(
+            description = "Detailed description of the product",
+            example = "This heavy-duty wrench is made from hardened steel...")
     private String longDescription;
 
     @ElementCollection // Assuming images are a collection of strings (URLs or paths)
@@ -144,7 +149,9 @@ public class ProductEntity implements CatalogItem {
     private String warranty;
 
     @Lob
-    @Schema(description = "Detailed specifications of the product", example = "{\"weight\": \"5kg\", \"length\": \"30cm\"}")
+    @Schema(
+            description = "Detailed specifications of the product",
+            example = "{\"weight\": \"5kg\", \"length\": \"30cm\"}")
     private String specifications;
 
     @Enumerated(EnumType.STRING)
@@ -183,5 +190,4 @@ public class ProductEntity implements CatalogItem {
             lifecycleState = ProductLifecycleState.ACTIVE;
         }
     }
-
 }

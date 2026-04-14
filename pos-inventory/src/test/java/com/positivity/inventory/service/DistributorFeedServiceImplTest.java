@@ -1,5 +1,10 @@
 package com.positivity.inventory.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.positivity.inventory.internal.dto.DistributorFeedItemDto;
 import com.positivity.inventory.internal.entity.DistributorFeedException;
 import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
@@ -7,7 +12,9 @@ import com.positivity.inventory.internal.enums.DistributorExceptionReason;
 import com.positivity.inventory.internal.repository.DistributorFeedExceptionRepository;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.internal.service.DistributorFeedServiceImpl;
-
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,15 +23,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DistributorFeedServiceImplTest {
@@ -132,9 +130,7 @@ class DistributorFeedServiceImplTest {
 
     @Test
     void processFeed_usesFallbackPayloadWhenSerializationFails() throws Exception {
-        DistributorFeedItemDto item = baseItemBuilder()
-                .productId(null)
-                .build();
+        DistributorFeedItemDto item = baseItemBuilder().productId(null).build();
 
         when(objectMapper.writeValueAsString(item)).thenThrow(new RuntimeException("serialization failed"));
 

@@ -6,15 +6,14 @@ import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.invoice.internal.repository.BillingRulesRepository;
 import com.positivity.invoice.service.BillingRulesService;
+import com.positivity.security.common.SecurityContextHelper;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.positivity.security.common.SecurityContextHelper;
-
-import java.util.Optional;
 
 /**
  * Implementation of BillingRulesService.
@@ -50,8 +49,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     @NonNull
     @Transactional(readOnly = true)
     public Optional<BillingRulesDTO> getBillingRules(@NonNull String partyId) {
-        return repository.findByPartyId(partyId)
-                .map(this::toDTO);
+        return repository.findByPartyId(partyId).map(this::toDTO);
     }
 
     @Override
@@ -119,10 +117,8 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

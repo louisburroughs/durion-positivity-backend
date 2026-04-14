@@ -11,8 +11,8 @@ import com.positivity.location.config.TestSecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -48,16 +48,15 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isCreated());
     }
 
     @Test
     @DisplayName("#76 - GET /v1/mobile-units returns 200")
     void shouldListMobileUnits() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units")))
-                .andExpect(status().isOk());
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units"))).andExpect(status().isOk());
     }
 
     @Test
@@ -78,8 +77,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(patch("/v1/mobile-units/{id}", "018f1f5a-a222-7333-8222-222222222222")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(patchPayload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(patchPayload)))
                 .andExpect(status().isOk());
     }
 
@@ -100,18 +99,18 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(
-                withGatewayAuth(put("/v1/mobile-units/{id}/coverage-rules", "018f1f5a-a222-7333-8222-222222222222")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(payload)))
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/mobile-units/{id}/coverage-rules", "018f1f5a-a222-7333-8222-222222222222")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(payload)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("#76 - GET /v1/mobile-units/{id}/coverage-rules returns 200")
     void shouldGetCoverageRules() throws Exception {
-        mockMvc.perform(
-                withGatewayAuth(get("/v1/mobile-units/{id}/coverage-rules", "018f1f5a-a222-7333-8222-222222222222")))
+        mockMvc.perform(withGatewayAuth(
+                        get("/v1/mobile-units/{id}/coverage-rules", "018f1f5a-a222-7333-8222-222222222222")))
                 .andExpect(status().isOk());
     }
 
@@ -130,16 +129,15 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/service-areas")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isCreated());
     }
 
     @Test
     @DisplayName("#76 - GET /v1/service-areas returns 200")
     void shouldListServiceAreas() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/service-areas")))
-                .andExpect(status().isOk());
+        mockMvc.perform(withGatewayAuth(get("/v1/service-areas"))).andExpect(status().isOk());
     }
 
     @Test
@@ -152,8 +150,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", "018f1f5a-a555-7333-8222-555555555555")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isNotFound());
     }
 
@@ -167,8 +165,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", "bad-id")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -185,16 +183,15 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(post("/v1/travel-buffer-policies")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isCreated());
     }
 
     @Test
     @DisplayName("#76 - GET /v1/travel-buffer-policies returns 200")
     void shouldListTravelBufferPolicies() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/travel-buffer-policies")))
-                .andExpect(status().isOk());
+        mockMvc.perform(withGatewayAuth(get("/v1/travel-buffer-policies"))).andExpect(status().isOk());
     }
 
     @Test
@@ -207,8 +204,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(patch("/v1/travel-buffer-policies/{id}", "018f1f5a-a666-7333-8222-666666666666")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isNotFound());
     }
 
@@ -222,8 +219,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(withGatewayAuth(patch("/v1/travel-buffer-policies/{id}", "not-a-uuid")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -231,9 +228,9 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("#76 - GET /v1/mobile-units:eligible returns 200")
     void shouldReturnEligibleMobileUnits() throws Exception {
         mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
-                .param("postalCode", "98101")
-                .param("countryCode", "US")
-                .param("at", "2026-02-22T10:00:00Z")))
+                        .param("postalCode", "98101")
+                        .param("countryCode", "US")
+                        .param("at", "2026-02-22T10:00:00Z")))
                 .andExpect(status().isOk());
     }
 }

@@ -1,9 +1,9 @@
 package com.positivity.price.internal.service;
 
-import com.positivity.price.internal.client.AccountDataProvider;
 import com.positivity.price.internal.client.AccountContext;
-import com.positivity.price.internal.client.VehicleDataProvider;
+import com.positivity.price.internal.client.AccountDataProvider;
 import com.positivity.price.internal.client.VehicleContext;
+import com.positivity.price.internal.client.VehicleDataProvider;
 import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
 import com.positivity.price.internal.entity.PromotionEligibilityRule;
 import com.positivity.price.internal.entity.PromotionOffer;
@@ -15,9 +15,9 @@ import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferNotFoundException;
 import com.positivity.price.internal.repository.PromotionEligibilityRuleRepository;
 import com.positivity.price.internal.repository.PromotionOfferRepository;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.price.service.EligibilityDecision;
 import com.positivity.price.service.EligibilityEvaluationService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -53,8 +53,7 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Override
     @NonNull
     @Transactional
-    public PromotionEligibilityRule addRule(
-            @NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request) {
+    public PromotionEligibilityRule addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request) {
         PromotionOffer promotion = promotionOfferRepository
                 .findById(promotionId)
                 .orElseThrow(() -> new PromotionOfferNotFoundException(promotionId));
@@ -80,9 +79,8 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Override
     @Transactional
     public void deleteRule(@NonNull UUID promotionId, @NonNull UUID ruleId) {
-        long deleted = promotionEligibilityRuleRepository.deleteByRuleIdAndPromotion_PromotionOfferId(
-                ruleId,
-                promotionId);
+        long deleted =
+                promotionEligibilityRuleRepository.deleteByRuleIdAndPromotion_PromotionOfferId(ruleId, promotionId);
         if (deleted == 0) {
             throw new EligibilityRuleNotFoundException(ruleId);
         }
@@ -93,15 +91,14 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Transactional(readOnly = true)
     public EligibilityDecision evaluateEligibility(
             @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId) {
-        List<PromotionEligibilityRule> rules = promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(
-                promotionId);
+        List<PromotionEligibilityRule> rules =
+                promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(promotionId);
         if (rules.isEmpty()) {
             return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
         }
 
-        RuleCombination combination = rules.get(0).getRuleCombination() != null
-                ? rules.get(0).getRuleCombination()
-                : RuleCombination.AND;
+        RuleCombination combination =
+                rules.get(0).getRuleCombination() != null ? rules.get(0).getRuleCombination() : RuleCombination.AND;
 
         if (combination == RuleCombination.OR) {
             EligibilityReasonCode lastFailure = EligibilityReasonCode.EVALUATION_ERROR;
@@ -146,9 +143,8 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
             }
 
             if (conditionType == ConditionType.ACCOUNT_ID_LIST) {
-                List<String> accountIds = Arrays.stream(value.split(","))
-                        .map(String::trim)
-                        .toList();
+                List<String> accountIds =
+                        Arrays.stream(value.split(",")).map(String::trim).toList();
                 boolean inList = accountIds.contains(accountId.toString());
                 if (operator == RuleOperator.IN && !inList) {
                     return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_NOT_IN_LIST);

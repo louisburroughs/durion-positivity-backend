@@ -19,19 +19,17 @@ public class HrAvailabilityClient {
     private final RestClient hrRestClient;
 
     public HrAvailabilityClient(
-            RestClient.Builder builder,
-            @Value("${pos.hr.base-url:http://localhost:8086}") String hrBaseUrl) {
+            RestClient.Builder builder, @Value("${pos.hr.base-url:http://localhost:8086}") String hrBaseUrl) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(200));
         requestFactory.setReadTimeout(Duration.ofMillis(200));
-        this.hrRestClient = builder
-                .baseUrl(hrBaseUrl)
-                .requestFactory(requestFactory)
-                .build();
+        this.hrRestClient =
+                builder.baseUrl(hrBaseUrl).requestFactory(requestFactory).build();
     }
 
     public Object getAvailabilityOverlay(String locationId, LocalDate date) {
-        return hrRestClient.get()
+        return hrRestClient
+                .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/people/v1/availability/overlay")
                         .queryParam("locationId", locationId)
@@ -49,7 +47,8 @@ public class HrAvailabilityClient {
      */
     public List<HrScheduleBlock> getScheduleBlocks(String personId, Instant windowStart, Instant windowEnd) {
         try {
-            List<HrScheduleBlock> result = hrRestClient.get()
+            List<HrScheduleBlock> result = hrRestClient
+                    .get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/hr/v1/schedules")
                             .queryParam("personId", personId)

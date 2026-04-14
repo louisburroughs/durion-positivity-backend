@@ -1,27 +1,26 @@
 package com.positivity.accounting.internal.entity;
 
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Posting Rule Set - parent entity for versioned posting rules.
- * 
+ *
  * Each rule set has multiple versions (PostingRuleVersion). Only one version
  * can be PUBLISHED at a time for active JE generation.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Posting Rules</a>
@@ -33,10 +32,12 @@ import lombok.ToString;
 @ToString(exclude = "versions")
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "posting_rule_set", indexes = {
-        @Index(name = "idx_posting_rule_set_name", columnList = "name"),
-        @Index(name = "idx_posting_rule_set_event_type", columnList = "event_type")
-})
+@Table(
+        name = "posting_rule_set",
+        indexes = {
+            @Index(name = "idx_posting_rule_set_name", columnList = "name"),
+            @Index(name = "idx_posting_rule_set_event_type", columnList = "event_type")
+        })
 public class PostingRuleSet {
 
     @EqualsAndHashCode.Include
@@ -45,6 +46,7 @@ public class PostingRuleSet {
     @UUIDv7Id
     @Column(name = "posting_rule_set_id", nullable = false, columnDefinition = "UUID")
     private UUID postingRuleSetId;
+
     @Column(name = "name", length = 100, nullable = false)
     private String name;
 

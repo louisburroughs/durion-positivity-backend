@@ -1,20 +1,19 @@
 package com.positivity.customer.contract;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Contract behavior integration tests for the Billing Rules endpoint.
@@ -79,8 +78,10 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
         party.setLegalName("Billing Rules Test Corp");
         party.setDisplayName("Billing Corp");
         party.setPartyNumber("BR-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        party.setCustomerNumber(
-                "CUST-BR-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
+        party.setCustomerNumber("CUST-BR-"
+                + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                        .toString()
+                        .substring(0, 8));
         party.setStatus(AccountStatus.ACTIVE);
 
         Contact contact = new Contact();
@@ -115,8 +116,8 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Issue CAP-252: endpoint missing → 404 returned instead of 200 (RED)
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}/billing-rules", party.getPartyId())
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.poRequired").isBoolean());
     }
@@ -142,8 +143,8 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Issue CAP-252: endpoint missing → 404 returned instead of 200 (RED)
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}/billing-rules", party.getPartyId())
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.poRequired").value(false));
     }
@@ -169,8 +170,8 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
         UUID unknownPartyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}/billing-rules", unknownPartyId)
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", PARTY_VIEW_AUTH))
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", PARTY_VIEW_AUTH))
                 .andExpect(status().isNotFound());
     }
 

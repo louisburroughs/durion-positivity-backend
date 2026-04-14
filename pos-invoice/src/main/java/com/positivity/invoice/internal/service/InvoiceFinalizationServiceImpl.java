@@ -1,7 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -15,18 +13,18 @@ import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.security.common.SecurityContextHelper;
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
 /**
  * Story #13 — Controlled invoice finalization.
@@ -51,7 +49,6 @@ import java.util.UUID;
 public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationService {
     private final Clock clock;
 
-
     private static final String SYSTEM = "system";
 
     private static final Logger log = LoggerFactory.getLogger(InvoiceFinalizationServiceImpl.class);
@@ -62,9 +59,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final InvoiceRepository invoiceRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    public InvoiceFinalizationServiceImpl(InvoiceRepository invoiceRepository,
-            ApplicationEventPublisher eventPublisher,
-            Clock clock) {
+    public InvoiceFinalizationServiceImpl(
+            InvoiceRepository invoiceRepository, ApplicationEventPublisher eventPublisher, Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
@@ -86,9 +82,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             // Invoice not found — treat as ineligible; workorder completion cannot be
             // confirmed.
             return new FinalizationEligibilityResult(
-                    false,
-                    "Associated workorder is not in COMPLETED status or invoice data is incomplete",
-                    true);
+                    false, "Associated workorder is not in COMPLETED status or invoice data is incomplete", true);
         }
 
         Invoice invoice = invoiceOpt.get();
@@ -96,9 +90,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // AC2: must be DRAFT
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
             return new FinalizationEligibilityResult(
-                    false,
-                    "Invoice is not in DRAFT status (current: " + invoice.getStatus() + ")",
-                    false);
+                    false, "Invoice is not in DRAFT status (current: " + invoice.getStatus() + ")", false);
         }
 
         BigDecimal total = invoice.getTotal();
@@ -129,8 +121,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             Invoice existing = existingOpt.get();
             if (existing.getStatus() != InvoiceStatus.DRAFT) {
                 throw new IllegalStateException(
-                        "Invoice " + invoiceId + " is in " + existing.getStatus()
-                                + " status and cannot be finalized");
+                        "Invoice " + invoiceId + " is in " + existing.getStatus() + " status and cannot be finalized");
             }
         }
 
@@ -169,23 +160,22 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     @Override
     @NonNull
-    public InvoiceDetailsResponse revert(@NonNull UUID invoiceId,
-            @NonNull String managerApprovalCode,
-            @NonNull String reason) {
+    public InvoiceDetailsResponse revert(
+            @NonNull UUID invoiceId, @NonNull String managerApprovalCode, @NonNull String reason) {
         // M6: Approval code must be supplied
         if (managerApprovalCode.isBlank()) {
             throw new IllegalArgumentException("Manager approval code is required to revert a finalized invoice");
         }
 
         // m11: use InvoiceNotFoundException (maps to 404, not 500)
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository
+                .findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException("Invoice " + invoiceId + " not found"));
 
         // AC6: POSTED invoices are immutable — checked before FINALIZED guard so POSTED
         // gets its own explicit rejection message
         if (invoice.getStatus() == InvoiceStatus.POSTED) {
-            throw new IllegalStateException(
-                    "Invoice " + invoiceId + " is in POSTED status and cannot be reverted");
+            throw new IllegalStateException("Invoice " + invoiceId + " is in POSTED status and cannot be reverted");
         }
 
         // AC6: Invoice must be in FINALIZED status to be reverted (NF1)
@@ -206,13 +196,14 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // Transition back to DRAFT
         // ADR-0018: audit the actor performing the reversion
         String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        String redactedCode = managerApprovalCode.length() > 4
-                ? managerApprovalCode.substring(0, 4) + "****"
-                : "****";
+        String redactedCode = managerApprovalCode.length() > 4 ? managerApprovalCode.substring(0, 4) + "****" : "****";
 
         if (log.isInfoEnabled()) {
-            log.info("Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
-                    maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
+            log.info(
+                    "Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
+                    maskForLog(revertedBy),
+                    maskForLog(invoiceId),
+                    redactedCode);
         }
 
         invoice.setStatus(InvoiceStatus.DRAFT);
@@ -240,9 +231,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      * M4: When SERVICE_ADVISOR provides a manager approval code for an invoice
      * exceeding $500, the override is audited at INFO level.
      */
-    private void enforcePermissions(@NonNull FinalizationRequest request,
-            @NonNull UUID invoiceId,
-            @NonNull BigDecimal invoiceTotal) {
+    private void enforcePermissions(
+            @NonNull FinalizationRequest request, @NonNull UUID invoiceId, @NonNull BigDecimal invoiceTotal) {
         boolean isShopManager = SecurityContextHelper.hasRole("SHOP_MANAGER");
         String approvalCode = request.getManagerApprovalCode();
 
@@ -254,14 +244,15 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             }
             // M4: Audit the manager approval override
             String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-            String redactedCode = approvalCode.length() > 4
-                    ? approvalCode.substring(0, 4) + "****"
-                    : "****";
+            String redactedCode = approvalCode.length() > 4 ? approvalCode.substring(0, 4) + "****" : "****";
 
             if (log.isInfoEnabled()) {
                 log.info(
                         "Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
-                        maskForLog(actor), redactedCode, maskForLog(invoiceId), invoiceTotal);
+                        maskForLog(actor),
+                        redactedCode,
+                        maskForLog(invoiceId),
+                        invoiceTotal);
             }
         }
     }
@@ -270,10 +261,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";
@@ -281,15 +270,11 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
-    private void publishFinalizedEvent(UUID invoiceId, UUID workorderId, String finalizedBy,
-            Instant finalizedAt, BigDecimal grandTotal) {
+    private void publishFinalizedEvent(
+            UUID invoiceId, UUID workorderId, String finalizedBy, Instant finalizedAt, BigDecimal grandTotal) {
         // m10: eventPublisher is Spring-injected — always non-null; null guard removed
         eventPublisher.publishEvent(new InvoiceFinalizedEvent(
-                invoiceId,
-                workorderId,
-                finalizedBy,
-                finalizedAt,
-                grandTotal != null ? grandTotal : BigDecimal.ZERO));
+                invoiceId, workorderId, finalizedBy, finalizedAt, grandTotal != null ? grandTotal : BigDecimal.ZERO));
     }
 
     private InvoiceDetailsResponse toDetailsResponse(@NonNull Invoice invoice) {

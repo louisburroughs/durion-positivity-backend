@@ -1,14 +1,13 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for managing technician assignments to workorders.
@@ -18,7 +17,7 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
 
     /**
      * Find the current assignment for a workorder.
-     * 
+     *
      * @param workorderId the workorder ID
      * @return optional containing the current assignment if one exists
      */
@@ -27,7 +26,7 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
 
     /**
      * Find all assignments for a workorder ordered by most recent first.
-     * 
+     *
      * @param workorderId the workorder ID
      * @return list of assignments ordered by assignedAt descending
      */

@@ -13,6 +13,7 @@ import lombok.Value;
 public class HrScheduleBlock {
     /** "SHIFT" or "PTO" */
     String blockType;
+
     Instant startTime;
     Instant endTime;
 }

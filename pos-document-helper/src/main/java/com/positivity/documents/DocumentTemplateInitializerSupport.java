@@ -1,13 +1,12 @@
 package com.positivity.documents;
 
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Support class for registering document templates with the pos-documents
@@ -21,7 +20,7 @@ import java.util.function.Consumer;
  *
  * <p>
  * Example usage with RestClient:
- * 
+ *
  * <pre>
  * {
  *     &#64;code
@@ -93,8 +92,7 @@ public class DocumentTemplateInitializerSupport {
         Objects.requireNonNull(templates, "templates cannot be null");
         Objects.requireNonNull(registrationFunction, "registrationFunction cannot be null");
 
-        log.info("[{}] Registering {} document templates with pos-documents...",
-                serviceName, templates.size());
+        log.info("[{}] Registering {} document templates with pos-documents...", serviceName, templates.size());
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
@@ -103,12 +101,14 @@ public class DocumentTemplateInitializerSupport {
             try {
                 registrationFunction.accept(registration);
                 successCount.incrementAndGet();
-                log.debug("[{}] Successfully registered template: {}",
-                        serviceName, registration.getTemplateId());
+                log.debug("[{}] Successfully registered template: {}", serviceName, registration.getTemplateId());
             } catch (Exception e) {
                 failCount.incrementAndGet();
-                log.warn("[{}] Failed to register template: {} - {}",
-                        serviceName, registration.getTemplateId(), e.getMessage());
+                log.warn(
+                        "[{}] Failed to register template: {} - {}",
+                        serviceName,
+                        registration.getTemplateId(),
+                        e.getMessage());
             }
         }
 
@@ -119,8 +119,12 @@ public class DocumentTemplateInitializerSupport {
         if (failed == 0) {
             log.info("[{}] Successfully registered all {} templates", serviceName, success);
         } else {
-            log.warn("[{}] Template registration complete: {} succeeded, {} failed out of {} total",
-                    serviceName, success, failed, total);
+            log.warn(
+                    "[{}] Template registration complete: {} succeeded, {} failed out of {} total",
+                    serviceName,
+                    success,
+                    failed,
+                    total);
         }
 
         return success;

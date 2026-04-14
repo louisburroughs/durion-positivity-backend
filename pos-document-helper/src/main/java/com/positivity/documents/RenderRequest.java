@@ -1,14 +1,13 @@
 package com.positivity.documents;
 
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 import org.jspecify.annotations.NonNull;
 
-import java.util.Map;
-
 /**
  * Request DTO for rendering a document via pos-documents service.
- * 
+ *
  * <p>Example usage:
  * <pre>{@code
  * RenderRequest request = RenderRequest.builder()

@@ -1,7 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
@@ -13,20 +11,15 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkexecTimeTrackingService;
-import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -37,341 +30,323 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingService {
-        private final Clock clock;
+    private final Clock clock;
 
-        private static final String SYSTEM_USER_ID = "system";
-        private static final String IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED = "workexec.labor.performed";
-        private static final String IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START = "workexec.timer.start";
+    private static final String SYSTEM_USER_ID = "system";
+    private static final String IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED = "workexec.labor.performed";
+    private static final String IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START = "workexec.timer.start";
 
-        private static final Set<WorkorderStatus> TIMER_ELIGIBLE_STATUSES = Set.of(
-                        WorkorderStatus.APPROVED,
-                        WorkorderStatus.ASSIGNED,
-                        WorkorderStatus.WORK_IN_PROGRESS,
-                        WorkorderStatus.AWAITING_PARTS,
-                        WorkorderStatus.AWAITING_APPROVAL);
+    private static final Set<WorkorderStatus> TIMER_ELIGIBLE_STATUSES = Set.of(
+            WorkorderStatus.APPROVED,
+            WorkorderStatus.ASSIGNED,
+            WorkorderStatus.WORK_IN_PROGRESS,
+            WorkorderStatus.AWAITING_PARTS,
+            WorkorderStatus.AWAITING_APPROVAL);
 
-        private final WorkorderRepository workorderRepository;
-        private final WorkorderLaborEntryRepository laborEntryRepository;
-        private final WorkorderServiceRepository workorderServiceRepository;
-        private final TechnicianAssignmentRepository technicianAssignmentRepository;
-        private final IdempotencyService idempotencyService;
+    private final WorkorderRepository workorderRepository;
+    private final WorkorderLaborEntryRepository laborEntryRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
+    private final TechnicianAssignmentRepository technicianAssignmentRepository;
+    private final IdempotencyService idempotencyService;
 
-        @Transactional(readOnly = true)
-        @NonNull
-        public List<WorkexecTimeTrackingService.JobTimeTotal> getJobTimeTotals(
-                        @NonNull LocalDate startDate,
-                        @NonNull LocalDate endDate,
-                        @NonNull ZoneId timezone,
-                        @Nullable UUID locationId,
-                        @NonNull List<UUID> technicianIds) {
+    @Transactional(readOnly = true)
+    @NonNull
+    public List<WorkexecTimeTrackingService.JobTimeTotal> getJobTimeTotals(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull ZoneId timezone,
+            @Nullable UUID locationId,
+            @NonNull List<UUID> technicianIds) {
 
-                LocalDateTime queryStartUtc = startDate.minusDays(1).atStartOfDay();
-                LocalDateTime queryEndUtc = endDate.plusDays(2).atStartOfDay();
-                List<WorkorderLaborEntry> entries = laborEntryRepository
-                                .findFinalizedByEndTimeBetween(queryStartUtc, queryEndUtc, WorkorderStatus.COMPLETED);
+        LocalDateTime queryStartUtc = startDate.minusDays(1).atStartOfDay();
+        LocalDateTime queryEndUtc = endDate.plusDays(2).atStartOfDay();
+        List<WorkorderLaborEntry> entries = laborEntryRepository.findFinalizedByEndTimeBetween(
+                queryStartUtc, queryEndUtc, WorkorderStatus.COMPLETED);
 
-                Map<String, WorkexecTimeTrackingService.JobTimeTotal> grouped = new LinkedHashMap<>();
+        Map<String, WorkexecTimeTrackingService.JobTimeTotal> grouped = new LinkedHashMap<>();
 
-                for (WorkorderLaborEntry entry : entries) {
-                        UUID technicianId = entry.getTechnicianId();
-                        Workorder workorder = entry.getWorkorder();
-                        UUID rowLocationId = workorder.getShopId();
-                        LocalDateTime entryEndTime = entry.getEndTime();
-                        boolean skip = entryEndTime == null
-                                        || (!technicianIds.isEmpty() && !technicianIds.contains(technicianId))
-                                        || (locationId != null && (rowLocationId == null
-                                                        || !locationId.equals(rowLocationId)));
-                        LocalDate performedDate = entryEndTime == null
-                                        ? null
-                                        : entryEndTime.atOffset(ZoneOffset.UTC).atZoneSameInstant(timezone)
-                                                        .toLocalDate();
-                        boolean outsideRange = performedDate == null
-                                        || performedDate.isBefore(startDate)
-                                        || performedDate.isAfter(endDate);
+        for (WorkorderLaborEntry entry : entries) {
+            UUID technicianId = entry.getTechnicianId();
+            Workorder workorder = entry.getWorkorder();
+            UUID rowLocationId = workorder.getShopId();
+            LocalDateTime entryEndTime = entry.getEndTime();
+            boolean skip = entryEndTime == null
+                    || (!technicianIds.isEmpty() && !technicianIds.contains(technicianId))
+                    || (locationId != null && (rowLocationId == null || !locationId.equals(rowLocationId)));
+            LocalDate performedDate = entryEndTime == null
+                    ? null
+                    : entryEndTime
+                            .atOffset(ZoneOffset.UTC)
+                            .atZoneSameInstant(timezone)
+                            .toLocalDate();
+            boolean outsideRange =
+                    performedDate == null || performedDate.isBefore(startDate) || performedDate.isAfter(endDate);
 
-                        if (skip || outsideRange) {
-                                continue;
-                        }
+            if (skip || outsideRange) {
+                continue;
+            }
 
-                        int minutes = entry.getHoursWorked()
-                                        .multiply(BigDecimal.valueOf(60))
-                                        .setScale(0, RoundingMode.HALF_UP)
-                                        .intValue();
+            int minutes = entry.getHoursWorked()
+                    .multiply(BigDecimal.valueOf(60))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .intValue();
 
-                        String key = technicianId + "|" + rowLocationId + "|" + performedDate;
-                        WorkexecTimeTrackingService.JobTimeTotal current = grouped.get(key);
-                        if (current == null) {
-                                grouped.put(key, new WorkexecTimeTrackingService.JobTimeTotal(
-                                                technicianId,
-                                                rowLocationId,
-                                                performedDate,
-                                                minutes));
-                        } else {
-                                grouped.put(key, new WorkexecTimeTrackingService.JobTimeTotal(
-                                                current.technicianId(),
-                                                current.locationId(),
-                                                current.localDate(),
-                                                current.totalJobMinutes() + minutes));
-                        }
-                }
-
-                List<WorkexecTimeTrackingService.JobTimeTotal> response = new ArrayList<>(grouped.values());
-                response.sort(Comparator
-                                .comparing(WorkexecTimeTrackingService.JobTimeTotal::localDate)
-                                .thenComparing(WorkexecTimeTrackingService.JobTimeTotal::technicianId));
-                return response;
+            String key = technicianId + "|" + rowLocationId + "|" + performedDate;
+            WorkexecTimeTrackingService.JobTimeTotal current = grouped.get(key);
+            if (current == null) {
+                grouped.put(
+                        key,
+                        new WorkexecTimeTrackingService.JobTimeTotal(
+                                technicianId, rowLocationId, performedDate, minutes));
+            } else {
+                grouped.put(
+                        key,
+                        new WorkexecTimeTrackingService.JobTimeTotal(
+                                current.technicianId(),
+                                current.locationId(),
+                                current.localDate(),
+                                current.totalJobMinutes() + minutes));
+            }
         }
 
-        @Transactional
-        public WorkexecTimeTrackingService.LaborPerformedResult recordLaborPerformed(
-                        WorkexecTimeTrackingService.LaborPerformedRequest request,
-                        @NonNull String idempotencyKey) {
+        List<WorkexecTimeTrackingService.JobTimeTotal> response = new ArrayList<>(grouped.values());
+        response.sort(Comparator.comparing(WorkexecTimeTrackingService.JobTimeTotal::localDate)
+                .thenComparing(WorkexecTimeTrackingService.JobTimeTotal::technicianId));
+        return response;
+    }
 
-                Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
-                                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED,
-                                idempotencyKey);
-                if (existingId.isPresent()) {
-                        WorkorderLaborEntry existing = laborEntryRepository.findById(existingId.get())
-                                        .orElseThrow(
-                                                        () -> new NoSuchElementException(
-                                                                        "Labor performed entry not found: "
-                                                                                        + existingId.get()));
-                        return new WorkexecTimeTrackingService.LaborPerformedResult(
-                                        toLaborPerformedResponse(existing, request),
-                                        true);
-                }
+    @Transactional
+    public WorkexecTimeTrackingService.LaborPerformedResult recordLaborPerformed(
+            WorkexecTimeTrackingService.LaborPerformedRequest request, @NonNull String idempotencyKey) {
 
-                Workorder workorder = workorderRepository.findById(request.workorderId())
-                                .orElseThrow(() -> new NoSuchElementException(
-                                                "Workorder not found: " + request.workorderId()));
+        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED, idempotencyKey);
+        if (existingId.isPresent()) {
+            WorkorderLaborEntry existing = laborEntryRepository
+                    .findById(existingId.get())
+                    .orElseThrow(
+                            () -> new NoSuchElementException("Labor performed entry not found: " + existingId.get()));
+            return new WorkexecTimeTrackingService.LaborPerformedResult(
+                    toLaborPerformedResponse(existing, request), true);
+        }
 
-                if (isBlockedForLaborPosting(workorder)) {
+        Workorder workorder = workorderRepository
+                .findById(request.workorderId())
+                .orElseThrow(() -> new NoSuchElementException("Workorder not found: " + request.workorderId()));
+
+        if (isBlockedForLaborPosting(workorder)) {
+            throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                    "WORKEXEC_CONFLICT_WORKORDER_STATE",
+                    "Cannot record labor for workorder in state " + workorder.getStatus());
+        }
+
+        if (!"HOURS".equalsIgnoreCase(request.labor().unit())) {
+            throw new IllegalArgumentException("labor.unit must be HOURS");
+        }
+
+        BigDecimal quantity = request.labor().quantity();
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("labor.quantity must be greater than 0");
+        }
+
+        LocalDateTime endTime = LocalDateTime.ofInstant(request.performedAt(), ZoneOffset.UTC);
+        long secondsWorked = quantity.multiply(BigDecimal.valueOf(3600))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+        LocalDateTime startTime = endTime.minusSeconds(secondsWorked);
+
+        WorkorderServiceLine workorderService =
+                resolveOrCreateWorkorderService(workorder, null, request.technicianId());
+
+        String notes = "sourceSystem=" + request.source().system() + ";sourceReferenceId="
+                + request.source().sourceReferenceId();
+
+        WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
+                .workorder(workorder)
+                .workorderService(workorderService)
+                .technicianId(request.technicianId())
+                .startTime(startTime)
+                .endTime(endTime)
+                .hoursWorked(quantity.setScale(2, RoundingMode.HALF_UP))
+                .notes(notes)
+                .createdBy(SYSTEM_USER_ID)
+                .createdAt(Instant.now(clock))
+                .build();
+
+        WorkorderLaborEntry saved = laborEntryRepository.save(entry);
+        idempotencyService.registerLaborKey(
+                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED, idempotencyKey, saved.getId());
+
+        return new WorkexecTimeTrackingService.LaborPerformedResult(toLaborPerformedResponse(saved, request), false);
+    }
+
+    @Transactional(readOnly = true)
+    @NonNull
+    public List<WorkexecTimeTrackingService.TimerEntry> getActiveTimers(@NonNull UUID mechanicId) {
+        return laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId).stream()
+                .map(this::toTimerResponse)
+                .toList();
+    }
+
+    @Transactional
+    public WorkexecTimeTrackingService.TimerStartResult startTimer(
+            @NonNull UUID mechanicId,
+            WorkexecTimeTrackingService.TimerStartRequest request,
+            @Nullable String idempotencyKey) {
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                    IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START, idempotencyKey);
+            if (existingId.isPresent()) {
+                WorkorderLaborEntry existing = laborEntryRepository
+                        .findById(existingId.get())
+                        .orElseThrow(() -> new NoSuchElementException("Timer entry not found: " + existingId.get()));
+                return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(existing), true);
+            }
+        }
+
+        Workorder workorder = workorderRepository
+                .findById(request.workorderId())
+                .orElseThrow(() -> new NoSuchElementException("Workorder not found: " + request.workorderId()));
+
+        if (!TIMER_ELIGIBLE_STATUSES.contains(workorder.getStatus())) {
+            throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                    "INVALID_STATE", "Workorder is not in a timer-eligible state");
+        }
+
+        technicianAssignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(request.workorderId())
+                .ifPresent(assignment -> {
+                    if (!mechanicId.equals(assignment.getTechnicianId())) {
                         throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                                        "WORKEXEC_CONFLICT_WORKORDER_STATE",
-                                        "Cannot record labor for workorder in state " + workorder.getStatus());
-                }
+                                "INVALID_STATE", "Workorder is currently assigned to a different mechanic");
+                    }
+                });
 
-                if (!"HOURS".equalsIgnoreCase(request.labor().unit())) {
-                        throw new IllegalArgumentException("labor.unit must be HOURS");
-                }
-
-                BigDecimal quantity = request.labor().quantity();
-                if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalArgumentException("labor.quantity must be greater than 0");
-                }
-
-                LocalDateTime endTime = LocalDateTime.ofInstant(request.performedAt(), ZoneOffset.UTC);
-                long secondsWorked = quantity.multiply(BigDecimal.valueOf(3600))
-                                .setScale(0, RoundingMode.HALF_UP)
-                                .longValue();
-                LocalDateTime startTime = endTime.minusSeconds(secondsWorked);
-
-                WorkorderServiceLine workorderService = resolveOrCreateWorkorderService(
-                                workorder,
-                                null,
-                                request.technicianId());
-
-                String notes = "sourceSystem=" + request.source().system() +
-                                ";sourceReferenceId=" + request.source().sourceReferenceId();
-
-                WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
-                                .workorder(workorder)
-                                .workorderService(workorderService)
-                                .technicianId(request.technicianId())
-                                .startTime(startTime)
-                                .endTime(endTime)
-                                .hoursWorked(quantity.setScale(2, RoundingMode.HALF_UP))
-                                .notes(notes)
-                                .createdBy(SYSTEM_USER_ID)
-                                .createdAt(Instant.now(clock))
-                                .build();
-
-                WorkorderLaborEntry saved = laborEntryRepository.save(entry);
-                idempotencyService.registerLaborKey(
-                                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED,
-                                idempotencyKey,
-                                saved.getId());
-
-                return new WorkexecTimeTrackingService.LaborPerformedResult(toLaborPerformedResponse(saved, request),
-                                false);
+        List<WorkorderLaborEntry> active =
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
+        if (!active.isEmpty()) {
+            throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                    "TIMER_ALREADY_ACTIVE", "Mechanic already has an active timer");
         }
 
-        @Transactional(readOnly = true)
-        @NonNull
-        public List<WorkexecTimeTrackingService.TimerEntry> getActiveTimers(@NonNull UUID mechanicId) {
-                return laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId)
-                                .stream()
-                                .map(this::toTimerResponse)
-                                .toList();
+        WorkorderServiceLine workorderService =
+                resolveOrCreateWorkorderService(workorder, request.workorderItemId(), mechanicId);
+
+        WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
+                .workorder(workorder)
+                .workorderService(workorderService)
+                .technicianId(mechanicId)
+                .startTime(LocalDateTime.now(ZoneOffset.UTC))
+                .hoursWorked(BigDecimal.ZERO)
+                .notes(request.laborCode())
+                .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
+                .createdAt(Instant.now(clock))
+                .build();
+
+        WorkorderLaborEntry saved = laborEntryRepository.save(entry);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            idempotencyService.registerLaborKey(
+                    IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START, idempotencyKey, saved.getId());
         }
 
-        @Transactional
-        public WorkexecTimeTrackingService.TimerStartResult startTimer(
-                        @NonNull UUID mechanicId,
-                        WorkexecTimeTrackingService.TimerStartRequest request,
-                        @Nullable String idempotencyKey) {
+        return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(saved), false);
+    }
 
-                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
-                                        IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START,
-                                        idempotencyKey);
-                        if (existingId.isPresent()) {
-                                WorkorderLaborEntry existing = laborEntryRepository.findById(existingId.get())
-                                                .orElseThrow(() -> new NoSuchElementException(
-                                                                "Timer entry not found: " + existingId.get()));
-                                return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(existing),
-                                                true);
-                        }
-                }
-
-                Workorder workorder = workorderRepository.findById(request.workorderId())
-                                .orElseThrow(() -> new NoSuchElementException(
-                                                "Workorder not found: " + request.workorderId()));
-
-                if (!TIMER_ELIGIBLE_STATUSES.contains(workorder.getStatus())) {
-                        throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                                        "INVALID_STATE",
-                                        "Workorder is not in a timer-eligible state");
-                }
-
-                technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(request.workorderId())
-                                .ifPresent(assignment -> {
-                                        if (!mechanicId.equals(assignment.getTechnicianId())) {
-                                                throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                                                                "INVALID_STATE",
-                                                                "Workorder is currently assigned to a different mechanic");
-                                        }
-                                });
-
-                List<WorkorderLaborEntry> active = laborEntryRepository
-                                .findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
-                if (!active.isEmpty()) {
-                        throw new WorkexecTimeTrackingService.WorkexecConflictException("TIMER_ALREADY_ACTIVE",
-                                        "Mechanic already has an active timer");
-                }
-
-                WorkorderServiceLine workorderService = resolveOrCreateWorkorderService(
-                                workorder,
-                                request.workorderItemId(),
-                                mechanicId);
-
-                WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
-                                .workorder(workorder)
-                                .workorderService(workorderService)
-                                .technicianId(mechanicId)
-                                .startTime(LocalDateTime.now(ZoneOffset.UTC))
-                                .hoursWorked(BigDecimal.ZERO)
-                                .notes(request.laborCode())
-                                .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
-                                .createdAt(Instant.now(clock))
-                                .build();
-
-                WorkorderLaborEntry saved = laborEntryRepository.save(entry);
-                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        idempotencyService.registerLaborKey(
-                                        IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START,
-                                        idempotencyKey,
-                                        saved.getId());
-                }
-
-                return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(saved), false);
+    @Transactional
+    @NonNull
+    public List<WorkexecTimeTrackingService.TimerEntry> stopTimers(@NonNull UUID mechanicId) {
+        List<WorkorderLaborEntry> active =
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
+        if (active.isEmpty()) {
+            throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                    "NO_ACTIVE_TIMER", "No active timer exists for mechanic");
         }
 
-        @Transactional
-        @NonNull
-        public List<WorkexecTimeTrackingService.TimerEntry> stopTimers(@NonNull UUID mechanicId) {
-                List<WorkorderLaborEntry> active = laborEntryRepository
-                                .findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
-                if (active.isEmpty()) {
-                        throw new WorkexecTimeTrackingService.WorkexecConflictException("NO_ACTIVE_TIMER",
-                                        "No active timer exists for mechanic");
-                }
-
-                LocalDateTime stopTime = LocalDateTime.now(ZoneOffset.UTC);
-                for (WorkorderLaborEntry entry : active) {
-                        entry.stop(stopTime);
-                }
-
-                List<WorkorderLaborEntry> saved = laborEntryRepository.saveAll(active);
-                return saved.stream().map(this::toTimerResponse).toList();
+        LocalDateTime stopTime = LocalDateTime.now(ZoneOffset.UTC);
+        for (WorkorderLaborEntry entry : active) {
+            entry.stop(stopTime);
         }
 
-        private WorkexecTimeTrackingService.LaborPerformedResponse toLaborPerformedResponse(
-                        @NonNull WorkorderLaborEntry entry,
-                        WorkexecTimeTrackingService.LaborPerformedRequest request) {
-                LocalDateTime performedAt = Objects.requireNonNull(
-                                entry.getEndTime() != null ? entry.getEndTime() : entry.getStartTime(),
-                                "performedAt timestamp must be present");
-                return new WorkexecTimeTrackingService.LaborPerformedResponse(
-                                entry.getId(),
-                                entry.getWorkorder().getId(),
-                                entry.getTechnicianId(),
-                                performedAt.toInstant(ZoneOffset.UTC),
-                                entry.getHoursWorked(),
-                                request.labor().unit(),
-                                request.source().system(),
-                                request.source().sourceReferenceId());
+        List<WorkorderLaborEntry> saved = laborEntryRepository.saveAll(active);
+        return saved.stream().map(this::toTimerResponse).toList();
+    }
+
+    private WorkexecTimeTrackingService.LaborPerformedResponse toLaborPerformedResponse(
+            @NonNull WorkorderLaborEntry entry, WorkexecTimeTrackingService.LaborPerformedRequest request) {
+        LocalDateTime performedAt = Objects.requireNonNull(
+                entry.getEndTime() != null ? entry.getEndTime() : entry.getStartTime(),
+                "performedAt timestamp must be present");
+        return new WorkexecTimeTrackingService.LaborPerformedResponse(
+                entry.getId(),
+                entry.getWorkorder().getId(),
+                entry.getTechnicianId(),
+                performedAt.toInstant(ZoneOffset.UTC),
+                entry.getHoursWorked(),
+                request.labor().unit(),
+                request.source().system(),
+                request.source().sourceReferenceId());
+    }
+
+    private WorkexecTimeTrackingService.TimerEntry toTimerResponse(@NonNull WorkorderLaborEntry entry) {
+        Long durationInSeconds = null;
+        if (entry.getEndTime() != null) {
+            durationInSeconds = java.time.Duration.between(entry.getStartTime(), entry.getEndTime())
+                    .getSeconds();
         }
 
-        private WorkexecTimeTrackingService.TimerEntry toTimerResponse(@NonNull WorkorderLaborEntry entry) {
-                Long durationInSeconds = null;
-                if (entry.getEndTime() != null) {
-                        durationInSeconds = java.time.Duration.between(entry.getStartTime(), entry.getEndTime())
-                                        .getSeconds();
-                }
+        return new WorkexecTimeTrackingService.TimerEntry(
+                entry.getId(),
+                entry.getTechnicianId(),
+                entry.getWorkorder().getId(),
+                entry.getWorkorderServiceId(),
+                entry.getNotes(),
+                entry.getStartTime(),
+                entry.getEndTime(),
+                durationInSeconds,
+                entry.getEndTime() == null ? "ACTIVE" : "COMPLETED");
+    }
 
-                return new WorkexecTimeTrackingService.TimerEntry(
-                                entry.getId(),
-                                entry.getTechnicianId(),
-                                entry.getWorkorder().getId(),
-                                entry.getWorkorderServiceId(),
-                                entry.getNotes(),
-                                entry.getStartTime(),
-                                entry.getEndTime(),
-                                durationInSeconds,
-                                entry.getEndTime() == null ? "ACTIVE" : "COMPLETED");
+    @NonNull
+    private WorkorderServiceLine resolveOrCreateWorkorderService(
+            @NonNull Workorder workorder, @Nullable UUID requestedWorkorderItemId, @Nullable UUID technicianId) {
+        if (requestedWorkorderItemId != null) {
+            WorkorderServiceLine service = workorderServiceRepository
+                    .findById(requestedWorkorderItemId)
+                    .orElseThrow(() ->
+                            new NoSuchElementException("Workorder service not found: " + requestedWorkorderItemId));
+            if (service.getWorkOrder() != null
+                    && !workorder.getId().equals(service.getWorkOrder().getId())) {
+                throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                        "INVALID_STATE", "workorderItemId does not belong to the provided workorder");
+            }
+            return service;
         }
 
-        @NonNull
-        private WorkorderServiceLine resolveOrCreateWorkorderService(
-                        @NonNull Workorder workorder,
-                        @Nullable UUID requestedWorkorderItemId,
-                        @Nullable UUID technicianId) {
-                if (requestedWorkorderItemId != null) {
-                        WorkorderServiceLine service = workorderServiceRepository.findById(requestedWorkorderItemId)
-                                        .orElseThrow(() -> new NoSuchElementException(
-                                                        "Workorder service not found: " + requestedWorkorderItemId));
-                        if (service.getWorkOrder() != null
-                                        && !workorder.getId().equals(service.getWorkOrder().getId())) {
-                                throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                                                "INVALID_STATE",
-                                                "workorderItemId does not belong to the provided workorder");
-                        }
-                        return service;
-                }
+        return workorderServiceRepository.findByWorkOrder_Id(workorder.getId()).stream()
+                .findFirst()
+                .orElseGet(() -> workorderServiceRepository.save(WorkorderServiceLine.builder()
+                        .workOrder(workorder)
+                        .serviceEntityId(UUID.nameUUIDFromBytes(
+                                ("workexec-auto-service:" + workorder.getId()).getBytes(StandardCharsets.UTF_8)))
+                        .technicianId(technicianId)
+                        .description("Workexec auto-created labor service")
+                        .build()));
+    }
 
-                return workorderServiceRepository.findByWorkOrder_Id(workorder.getId()).stream()
-                                .findFirst()
-                                .orElseGet(() -> workorderServiceRepository.save(WorkorderServiceLine.builder()
-                                                .workOrder(workorder)
-                                                .serviceEntityId(UUID.nameUUIDFromBytes(
-                                                                ("workexec-auto-service:" + workorder.getId())
-                                                                                .getBytes(StandardCharsets.UTF_8)))
-                                                .technicianId(technicianId)
-                                                .description("Workexec auto-created labor service")
-                                                .build()));
+    private boolean isBlockedForLaborPosting(Workorder workorder) {
+        if (workorder.getStatus() == WorkorderStatus.CANCELLED) {
+            return true;
         }
-
-        private boolean isBlockedForLaborPosting(Workorder workorder) {
-                if (workorder.getStatus() == WorkorderStatus.CANCELLED) {
-                        return true;
-                }
-                return workorder.getStatus() == WorkorderStatus.COMPLETED
-                                && !Boolean.TRUE.equals(workorder.getIsReopened());
-        }
-
+        return workorder.getStatus() == WorkorderStatus.COMPLETED && !Boolean.TRUE.equals(workorder.getIsReopened());
+    }
 }

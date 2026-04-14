@@ -29,15 +29,17 @@ public class StorageLocationValidationController {
     @Operation(
             summary = "Validate storage location reference",
             description = "Returns existence, active status, and site ownership for a storage location ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Validation payload returned"),
-            @ApiResponse(responseCode = "400", description = "Invalid storageLocationId format"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing location:read authority")
-    })
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Validation payload returned"),
+                @ApiResponse(responseCode = "400", description = "Invalid storageLocationId format"),
+                @ApiResponse(responseCode = "403", description = "Forbidden - missing location:read authority")
+            })
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_VALIDATE", apiVersion = "1")
     public StorageLocationValidationResponseDTO validateStorageLocation(
-            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID storageLocationId) {
+            @Parameter(description = "Storage location identifier", required = true) @PathVariable
+                    UUID storageLocationId) {
         return storageLocationService.getStorageLocationValidation(storageLocationId);
     }
 }

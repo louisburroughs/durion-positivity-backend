@@ -1,10 +1,9 @@
 package com.positivity.accounting.internal.dto;
 
-import java.util.Collections;
-import java.util.List;
-
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Mapper for converting between Posting Rule entities and DTOs.
@@ -53,7 +52,9 @@ public final class PostingRuleMapper {
         return PostingRuleVersionResponse.builder()
                 .versionId(entity.getVersionId())
                 .postingRuleSetId(
-                        entity.getPostingRuleSet() != null ? entity.getPostingRuleSet().getPostingRuleSetId() : null)
+                        entity.getPostingRuleSet() != null
+                                ? entity.getPostingRuleSet().getPostingRuleSetId()
+                                : null)
                 .versionNumber(entity.getVersionNumber())
                 .state(entity.getState())
                 .rulesDefinition(entity.getRulesDefinition())
@@ -86,9 +87,8 @@ public final class PostingRuleMapper {
      * metadata.
      */
     public static PostingRuleSetListResponse toListResponse(org.springframework.data.domain.Page<PostingRuleSet> page) {
-        List<PostingRuleSetResponse> responses = page.getContent().stream()
-                .map(PostingRuleMapper::toResponse)
-                .toList();
+        List<PostingRuleSetResponse> responses =
+                page.getContent().stream().map(PostingRuleMapper::toResponse).toList();
 
         return PostingRuleSetListResponse.builder()
                 .ruleSets(responses)

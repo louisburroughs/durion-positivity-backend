@@ -25,5 +25,4 @@ public class WorkexecClientException extends RuntimeException {
     public String getErrorCode() {
         return errorCode;
     }
-
 }

@@ -5,6 +5,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.client.DocumentClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
+import com.positivity.workorder.internal.client.TaxClient;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.service.EstimateServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -12,7 +23,6 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,19 +35,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
-
-import com.positivity.workorder.internal.client.DocumentClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
-import com.positivity.workorder.internal.client.TaxClient;
-import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
-import com.positivity.workorder.internal.repository.EstimateItemRepository;
-import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.internal.service.EstimateServiceImpl;
-
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -133,9 +130,7 @@ class EstimateServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createEstimate: null crmContactIds in request → saved estimate has empty crmContactIds")
     void createEstimate_nullCrmContactIds_savesEstimateWithEmptyCrmContactIds() {
-        CreateEstimateRequest request = buildBaseRequest()
-                .crmContactIds(null)
-                .build();
+        CreateEstimateRequest request = buildBaseRequest().crmContactIds(null).build();
 
         ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
         when(estimateRepository.save(estimateCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
@@ -155,9 +150,8 @@ class EstimateServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createEstimate: crmContactIds provided → saved estimate has same contact IDs")
     void createEstimate_withCrmContactIds_savesEstimateWithContactIds() {
-        CreateEstimateRequest request = buildBaseRequest()
-                .crmContactIds(List.of(CRM_CONTACT_ID))
-                .build();
+        CreateEstimateRequest request =
+                buildBaseRequest().crmContactIds(List.of(CRM_CONTACT_ID)).build();
 
         ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
         when(estimateRepository.save(estimateCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
@@ -168,12 +162,12 @@ class EstimateServiceImplCrmPropagationTest {
     }
 
     @Test
-    @DisplayName("createEstimate: crmContactIds is a defensive copy — mutations to source list don't affect saved estimate")
+    @DisplayName(
+            "createEstimate: crmContactIds is a defensive copy — mutations to source list don't affect saved estimate")
     void createEstimate_withCrmContactIds_savesDefensiveCopy() {
         List<String> mutableContactIds = new java.util.ArrayList<>(List.of(CRM_CONTACT_ID));
-        CreateEstimateRequest request = buildBaseRequest()
-                .crmContactIds(mutableContactIds)
-                .build();
+        CreateEstimateRequest request =
+                buildBaseRequest().crmContactIds(mutableContactIds).build();
 
         ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
         when(estimateRepository.save(estimateCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));

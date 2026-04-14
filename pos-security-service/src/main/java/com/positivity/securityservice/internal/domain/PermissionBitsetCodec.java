@@ -1,13 +1,11 @@
 package com.positivity.securityservice.internal.domain;
 
 import com.positivity.securityservice.internal.enums.PermissionCode;
-
-import org.jspecify.annotations.NonNull;
-
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.Set;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Pure utility class for encoding and decoding permission sets as compact
@@ -88,9 +86,8 @@ public final class PermissionBitsetCodec {
      */
     public static Set<PermissionCode> decodeToPermissions(String encoded, int permVer) {
         if (permVer != PermissionCode.CATALOG_VERSION) {
-            throw new IllegalArgumentException(
-                    "Unsupported permission catalog version: " + permVer
-                            + " (expected " + PermissionCode.CATALOG_VERSION + ")");
+            throw new IllegalArgumentException("Unsupported permission catalog version: " + permVer + " (expected "
+                    + PermissionCode.CATALOG_VERSION + ")");
         }
         BitSet bitSet = decode(encoded);
         Set<PermissionCode> result = EnumSet.noneOf(PermissionCode.class);

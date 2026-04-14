@@ -11,8 +11,7 @@ public interface ReplenishmentService {
 
     @NonNull
     ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
-            @NonNull String productId,
-            @NonNull UUID pickFaceLocationId);
+            @NonNull String productId, @NonNull UUID pickFaceLocationId);
 
     @NonNull
     List<ReplenishmentTaskResponse> runBatchReplenishmentScan();
@@ -24,6 +23,5 @@ public interface ReplenishmentService {
     List<ReplenishmentPolicyResponse> getReplenishmentPolicies();
 
     @NonNull
-    ReplenishmentPolicyResponse createReplenishmentPolicy(
-            @NonNull CreateReplenishmentPolicyRequest request);
+    ReplenishmentPolicyResponse createReplenishmentPolicy(@NonNull CreateReplenishmentPolicyRequest request);
 }

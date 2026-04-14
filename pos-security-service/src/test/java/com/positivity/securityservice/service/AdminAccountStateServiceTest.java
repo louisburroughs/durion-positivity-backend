@@ -6,18 +6,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.AccountStateResponse;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.AdminAccountStateServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.positivity.securityservice.internal.dto.AccountStateResponse;
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.exception.UserNotFoundException;
-import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.service.AdminAccountStateServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -46,10 +45,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @DisplayName("AdminAccountStateServiceTest — AUTH-006")
 class AdminAccountStateServiceTest {
 
-    private static final Clock TEST_CLOCK =
-            Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
-    private static final UUID USER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Spy
     Clock clock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -104,8 +101,7 @@ class AdminAccountStateServiceTest {
         void unlock_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.unlock(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.unlock(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
     }
 
@@ -145,8 +141,7 @@ class AdminAccountStateServiceTest {
         void enable_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.enable(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.enable(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
     }
 
@@ -173,10 +168,9 @@ class AdminAccountStateServiceTest {
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Issue AUTH-006: actor resolved server-side from security context (ADR-0018)
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(
-                            "admin-user", "n/a",
-                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+            SecurityContextHolder.getContext()
+                    .setAuthentication(new UsernamePasswordAuthenticationToken(
+                            "admin-user", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
             service.disable(USER_ID);
 
@@ -192,8 +186,7 @@ class AdminAccountStateServiceTest {
         void disable_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.disable(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.disable(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
 
         @Test
@@ -253,8 +246,7 @@ class AdminAccountStateServiceTest {
         void expireAccount_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.expireAccount(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.expireAccount(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
     }
 
@@ -292,8 +284,7 @@ class AdminAccountStateServiceTest {
         void expireCredentials_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.expireCredentials(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.expireCredentials(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
     }
 
@@ -331,8 +322,7 @@ class AdminAccountStateServiceTest {
         void getAccountState_throwsUserNotFoundWhenMissing() {
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.getAccountState(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+            assertThatThrownBy(() -> service.getAccountState(USER_ID)).isInstanceOf(UserNotFoundException.class);
         }
     }
 }

@@ -1,27 +1,25 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-
+import lombok.*;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 /**
  * PaymentApplicationReversal - compensating transaction to reverse a payment
  * application.
- * 
+ *
  * Business Rules:
  * - Reversals are NEW records, not deletions
  * - Original PaymentApplication remains unchanged
  * - Reversals restore invoice balances and payment unapplied amounts
  * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
  * - Requires non-empty reason for audit trail
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Reversibility</a>
@@ -34,15 +32,14 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "payment_application_reversal", 
-    indexes = {
-        @Index(name = "idx_reversal_reversed_at", columnList = "reversed_at")
-    },
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_reversal_original_application", 
-                         columnNames = "original_payment_application_id")
-    }
-)
+@Table(
+        name = "payment_application_reversal",
+        indexes = {@Index(name = "idx_reversal_reversed_at", columnList = "reversed_at")},
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_reversal_original_application",
+                    columnNames = "original_payment_application_id")
+        })
 public class PaymentApplicationReversal {
 
     @EqualsAndHashCode.Include
@@ -84,7 +81,7 @@ public class PaymentApplicationReversal {
     }
 
     public void setOriginalPaymentApplicationId(UUID originalPaymentApplicationId) {
-        this.originalPaymentApplication = originalPaymentApplicationId == null ? null
-                : new PaymentApplication(originalPaymentApplicationId);
+        this.originalPaymentApplication =
+                originalPaymentApplicationId == null ? null : new PaymentApplication(originalPaymentApplicationId);
     }
 }

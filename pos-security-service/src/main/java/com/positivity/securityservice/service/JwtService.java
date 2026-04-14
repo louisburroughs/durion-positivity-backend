@@ -2,27 +2,26 @@ package com.positivity.securityservice.service;
 
 import java.util.Set;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
  * extraction, and deletion.
- * 
+ *
  * **Security Model (ADR-0011):**
  * - JWT secret: Injected from environment variable `SECURITY_JWT_SECRET`
  * - Token revocation: Cached in Redis with TTL matching expiration
  * - Access token lifetime: 1 hour (3600 seconds)
  * - Refresh token lifetime: 7 days (604800 seconds)
  * - JWT ID (JTI): Unique identifier for token revocation tracking
- * 
+ *
  * **Implementation Notes:**
  * - Permission encoding: Effective permissions are encoded into perm_bits
  * (Base64URL BitSet) at token issuance via PermissionBitsetCodec.
  * - Concurrency: JwtToken entity uses @Version for optimistic locking
  * - Graceful Degradation: If Redis unavailable, token validation still succeeds
- * 
+ *
  * @since 1.0
  */
 public interface JwtService {
@@ -66,12 +65,12 @@ public interface JwtService {
      * - Permissions: Encoded as perm_bits Base64URL BitSet via
      * PermissionBitsetCodec at issuance.
      * - Revocation: Token stored in Redis with 1-hour TTL
-     * 
+     *
      * @param username the subject for the token
      * @param userId   stable user identifier for audit lineage
      * @param roles    the set of roles to include in the token
      * @return the generated JWT token string
-     * 
+     *
      * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
     String generateToken(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles);
@@ -86,7 +85,7 @@ public interface JwtService {
      * **Concurrency:**
      * - JwtToken entity uses @Version for optimistic locking
      * - Token revocation checks Redis with 1-5ms latency (typical)
-     * 
+     *
      * **Graceful Degradation:**
      * - If Redis is unavailable: Still validates signature and database presence
      * - If database is unavailable: Fails (token not found)
@@ -139,11 +138,11 @@ public interface JwtService {
     /**
      * Deletes the given JWT token from the repository and marks it as revoked in
      * Redis.
-     * 
+     *
      * **Process:**
      * 1. Delete token from database first (fail-fast if token doesn't exist)
      * 2. Extract JTI and revoke in Redis cache
-     * 
+     *
      * **Consistency:**
      * - Database deletion is performed first within a transaction
      * - Redis revocation is best-effort (token is already invalidated in DB)
@@ -155,10 +154,10 @@ public interface JwtService {
 
     /**
      * Revokes a token by its JTI (JWT ID) and removes it from the database.
-     * 
+     *
      * @param jti               the JWT ID (unique token identifier)
      * @param expirationSeconds token expiration time in seconds
-     * 
+     *
      * @throws IllegalArgumentException if jti is blank or expirationSeconds <= 0
      */
     void revokeTokenByJti(@NonNull String jti, long expirationSeconds);
@@ -181,42 +180,42 @@ public interface JwtService {
      * @param accessToken  the access token
      * @param refreshToken the refresh token
      */
-    record TokenPair(String accessToken, String refreshToken) {
-    }
+    record TokenPair(String accessToken, String refreshToken) {}
 
     /**
      * Generates a pair of access and refresh tokens for the given username and
      * roles, stores them, and returns the pair.
-     * 
+     *
      * **Token Lifetimes:**
      * - Access token: 1 hour (3600 seconds)
      * - Refresh token: 7 days (604800 seconds)
-     * 
+     *
      * **JTI (JWT ID):**
      * - Both tokens include a unique JTI for revocation tracking
      * - Each token has separate JTI (not shared)
      * - Permissions: Encoded as perm_bits Base64URL BitSet via
      * PermissionBitsetCodec at issuance.
-    *
-    * @implNote Access token claims: {@code sub}, {@code uid}, {@code username},
-    *           {@code iss} ("pos-security-service"), {@code aud} ("api-gateway"),
-    *           {@code perm_bits}, {@code perm_ver}, {@code iat}, {@code exp}, {@code jti}.
-    *           Refresh token claims: {@code sub}, {@code uid}, {@code type}="refresh",
-    *           {@code iat}, {@code exp}, {@code jti}.
-     * 
+     *
+     * @implNote Access token claims: {@code sub}, {@code uid}, {@code username},
+     *           {@code iss} ("pos-security-service"), {@code aud} ("api-gateway"),
+     *           {@code perm_bits}, {@code perm_ver}, {@code iat}, {@code exp}, {@code jti}.
+     *           Refresh token claims: {@code sub}, {@code uid}, {@code type}="refresh",
+     *           {@code iat}, {@code exp}, {@code jti}.
+     *
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage
      * @param personId optional CRM person identifier; when non-null, included as
-    *                 {@code personId} claim in the access token only. When null,
-    *                 the claim is omitted (expected for users not yet linked to a
-    *                 person record).
+     *                 {@code personId} claim in the access token only. When null,
+     *                 the claim is omitted (expected for users not yet linked to a
+     *                 person record).
      * @param roles    the set of roles used to derive the permission bitset claim
      *                 (perm_bits)
      * @return a TokenPair containing the access and refresh tokens
-     * 
+     *
      * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles);
+    TokenPair generateTokenPair(
+            @NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles);
 
     /**
      * Validates the given refresh token by checking:
@@ -238,14 +237,14 @@ public interface JwtService {
      * 2. Extracts uid from refresh token and loads current roles from persistence
      * 3. Invalidates old tokens (marks as revoked in Redis)
      * 4. Generates new token pair with fresh expiration times
-     * 
+     *
      * **Concurrency:**
      * - Handles OptimisticLockingFailureException with exponential backoff retry
      * - JwtToken entity uses @Version for optimistic locking
      *
      * @param refreshToken the refresh token string
      * @return a new TokenPair with fresh access and refresh tokens
-     * 
+     *
      * @throws IllegalArgumentException if the refresh token is invalid or not found
      */
     TokenPair refreshAccessToken(@NonNull String refreshToken);

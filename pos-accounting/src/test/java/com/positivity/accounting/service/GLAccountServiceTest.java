@@ -6,28 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
@@ -43,6 +21,26 @@ import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Unit tests for GLAccountServiceImpl.
@@ -170,8 +168,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("returns account response when found")
         void success() {
-            when(glAccountRepository.findById(testAccountId))
-                    .thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
 
             GLAccountResponse result = service.getGLAccount(testAccountId);
 
@@ -212,9 +209,8 @@ class GLAccountServiceTest {
     @Test
     @DisplayName("updateGLAccount - updates only name when description is null")
     void updateGLAccount_onlyName() {
-        GLAccountUpdateRequest request = GLAccountUpdateRequest.builder()
-                .accountName("New Name")
-                .build();
+        GLAccountUpdateRequest request =
+                GLAccountUpdateRequest.builder().accountName("New Name").build();
 
         when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
         when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
@@ -262,8 +258,7 @@ class GLAccountServiceTest {
         @DisplayName("deactivates when balance is zero")
         void success() {
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
-            when(journalEntryLineRepository.getAccountBalance(testAccountId))
-                    .thenReturn(BigDecimal.ZERO);
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
             when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
 
             GLAccountResponse result = service.deactivateGLAccount(testAccountId);
@@ -275,8 +270,7 @@ class GLAccountServiceTest {
         @DisplayName("throws AccountNotZeroBalanceException when balance is non-zero")
         void nonZeroBalance() {
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
-            when(journalEntryLineRepository.getAccountBalance(testAccountId))
-                    .thenReturn(new BigDecimal("500.00"));
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(new BigDecimal("500.00"));
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
                     .isInstanceOf(AccountNotZeroBalanceException.class)
@@ -356,8 +350,7 @@ class GLAccountServiceTest {
     @DisplayName("getAccountBalance - returns balance for existing account")
     void getAccountBalance_success() {
         when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
-        when(journalEntryLineRepository.getAccountBalance(testAccountId))
-                .thenReturn(new BigDecimal("1500.00"));
+        when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(new BigDecimal("1500.00"));
 
         GLAccountBalanceResponse result = service.getAccountBalance(testAccountId);
 

@@ -53,10 +53,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     @Override
-    public SalesOrderLineSummary addItem(UUID orderId, String itemSku, int quantity, String reasonCode,
-            BigDecimal manualPrice) {
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+    public SalesOrderLineSummary addItem(
+            UUID orderId, String itemSku, int quantity, String reasonCode, BigDecimal manualPrice) {
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
 
         BigDecimal unitPrice;
         PriceSource priceSource;
@@ -78,9 +78,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
 
         InventoryResult inventoryResult = inventoryPort.checkAvailability(itemSku, quantity);
-        FulfillmentStatus fulfillmentStatus = inventoryResult.sufficient()
-                ? FulfillmentStatus.AVAILABLE
-                : FulfillmentStatus.BACKORDER;
+        FulfillmentStatus fulfillmentStatus =
+                inventoryResult.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER;
 
         SalesOrderLine line = SalesOrderLine.builder()
                 .order(order)
@@ -104,9 +103,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     public SalesOrderLineSummary updateItemQuantity(UUID orderId, UUID lineId, int newQuantity) {
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
-        SalesOrderLine line = salesOrderLineRepository.findById(lineId)
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        SalesOrderLine line = salesOrderLineRepository
+                .findById(lineId)
                 .orElseThrow(() -> new SalesOrderNotFoundException("Order line not found: " + lineId));
 
         line.setQuantity(newQuantity);
@@ -123,8 +123,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     public void removeItem(UUID orderId, UUID lineId) {
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
 
         order.getLines().removeIf(l -> lineId.equals(l.getOrderLineId()));
         order.setSubtotal(recalculateSubtotal(order.getLines()));
@@ -135,16 +135,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     public SalesOrderSummary getOrder(UUID orderId) {
-        return toSummary(salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId)));
+        return toSummary(
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId)));
     }
 
     @Override
     public SalesOrderSummary linkSource(UUID orderId, String sourceType, String sourceId) {
         SourceType type = SourceType.valueOf(sourceType);
 
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
 
         if (order.getCustomerId() == null && SourceType.WORKORDER.equals(type)) {
             throw new IllegalStateException(

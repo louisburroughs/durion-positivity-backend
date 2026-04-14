@@ -1,20 +1,18 @@
 package com.positivity.securityservice.internal.config;
 
-import java.time.Clock;
-
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import jakarta.annotation.PostConstruct;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-import java.util.Map;
-
 /**
  * Initializes default roles at application startup.
- * 
+ *
  * Roles bundle permissions and can be assigned to users with scope (GLOBAL or
  * LOCATION).
  * The inventory-related roles support the permission model from issue #37:
@@ -22,7 +20,6 @@ import java.util.Map;
  * - INVENTORY_MANAGER: Can create and approve adjustments (location-scoped)
  * - INVENTORY_CONTROLLER: Can approve adjustments globally
  */
-
 @Component
 @RequiredArgsConstructor
 @Slf4j

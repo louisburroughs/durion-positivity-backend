@@ -1,9 +1,17 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
+import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
+import com.positivity.vehicle.service.VehicleLegacyService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,17 +22,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
-import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
-import com.positivity.vehicle.service.VehicleLegacyService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
@@ -55,7 +52,8 @@ public class VehicleController {
     @GetMapping("/{id}")
     public ResponseEntity<VehicleLegacyResponse> getVehicle(
             @Parameter(description = "ID of the vehicle to retrieve", example = "1") @PathVariable UUID id) {
-        return vehicleLegacyService.getVehicle(id)
+        return vehicleLegacyService
+                .getVehicle(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -76,7 +74,8 @@ public class VehicleController {
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
         try {
-            return vehicleLegacyService.updateVehicle(id, updated)
+            return vehicleLegacyService
+                    .updateVehicle(id, updated)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
@@ -122,9 +121,11 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable String vin) {
+            @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
+                    String vin) {
         try {
-            return vehicleLegacyService.getVehicleByVin(vin)
+            return vehicleLegacyService
+                    .getVehicleByVin(vin)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
@@ -139,10 +140,12 @@ public class VehicleController {
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> updateVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable String vin,
+            @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable
+                    String vin,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
         try {
-            return vehicleLegacyService.updateVehicleByVin(vin, updated)
+            return vehicleLegacyService
+                    .updateVehicleByVin(vin, updated)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
@@ -157,7 +160,8 @@ public class VehicleController {
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/vin/{vin}")
     public ResponseEntity<Void> deleteVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable String vin) {
+            @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable
+                    String vin) {
         try {
             if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
                 return ResponseEntity.notFound().build();

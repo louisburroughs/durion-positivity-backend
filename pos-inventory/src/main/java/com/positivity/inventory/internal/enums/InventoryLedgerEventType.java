@@ -6,23 +6,23 @@ import java.util.stream.Collectors;
 
 /**
  * Defines inventory ledger event types for tracking stock movements.
- * 
+ *
  * <p>
  * These event types are used to compute On-Hand and Available-to-Promise (ATP)
  * quantities
  * as defined in ADR-0001 (Inventory Ledger ATP Computation).
- * 
+ *
  * <p>
  * <strong>On-Hand Calculation:</strong> Net sum of physical stock movement
  * events.
  * On-Hand events include: INBOUND (positive) and OUTBOUND (negative) event
  * types.
- * 
+ *
  * <p>
  * <strong>ATP Calculation:</strong> ATP = On-Hand - Allocations.
  * Reservation and allocation events affect availability but NOT physical
  * on-hand.
- * 
+ *
  * @see <a href=
  *      "/docs/adr/0001-inventory-ledger-atp-computation.md">ADR-0001</a>
  */
@@ -203,7 +203,7 @@ public enum InventoryLedgerEventType {
 
     /**
      * Returns the direction of this event type (INBOUND, OUTBOUND, or NEUTRAL).
-     * 
+     *
      * @return the event direction
      */
     public EventDirection getDirection() {
@@ -212,7 +212,7 @@ public enum InventoryLedgerEventType {
 
     /**
      * Indicates whether this event type affects the physical on-hand quantity.
-     * 
+     *
      * @return true if this event affects on-hand, false otherwise
      */
     public boolean affectsOnHand() {
@@ -235,7 +235,7 @@ public enum InventoryLedgerEventType {
     /**
      * Returns the sign multiplier for quantity calculations.
      * INBOUND = +1, OUTBOUND = -1, NEUTRAL = 0
-     * 
+     *
      * @return the sign multiplier
      */
     public int getSignMultiplier() {
@@ -263,7 +263,7 @@ public enum InventoryLedgerEventType {
 
         /**
          * Returns the sign multiplier for quantity calculations.
-         * 
+         *
          * @return 1 for INBOUND, -1 for OUTBOUND, 0 for NEUTRAL
          */
         public int getSignMultiplier() {

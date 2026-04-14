@@ -1,5 +1,17 @@
 package com.positivity.gateway.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -12,9 +24,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import javax.crypto.SecretKey;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,20 +41,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.server.ServerWebExchange;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
-import io.micrometer.core.instrument.MeterRegistry;
 import reactor.core.publisher.Mono;
 
 @Configuration
@@ -85,14 +81,17 @@ public class SecurityGatewayConfig {
             @Value("${pos.gateway.security.allowed-jwt-algorithms:HS256}") String allowedJwtAlgorithmsCsv,
             @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry) {
-        this(jwtSecret,
+        this(
+                jwtSecret,
                 strictJwtHeaderValidation,
                 parseAllowedJwtAlgorithms(allowedJwtAlgorithmsCsv),
                 authProperties,
                 meterRegistry);
     }
 
-    SecurityGatewayConfig(@NonNull String jwtSecret, boolean strictJwtHeaderValidation,
+    SecurityGatewayConfig(
+            @NonNull String jwtSecret,
+            boolean strictJwtHeaderValidation,
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry) {
@@ -172,17 +171,21 @@ public class SecurityGatewayConfig {
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER_ID),
                 incomingRequest.getHeaders().getFirst(HEADER_X_AUTHORITIES));
 
-        ServerHttpRequest strippedRequest = incomingRequest.mutate().headers(headers -> {
-            if (authProperties.isStripInboundIdentityHeaders()) {
-                headers.remove(HEADER_X_USER);
-                headers.remove(HEADER_X_USER_ID);
-                headers.remove(HEADER_X_AUTHORITIES);
-                headers.remove(HEADER_X_ROLES);
-                incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
-            }
-        }).build();
+        ServerHttpRequest strippedRequest = incomingRequest
+                .mutate()
+                .headers(headers -> {
+                    if (authProperties.isStripInboundIdentityHeaders()) {
+                        headers.remove(HEADER_X_USER);
+                        headers.remove(HEADER_X_USER_ID);
+                        headers.remove(HEADER_X_AUTHORITIES);
+                        headers.remove(HEADER_X_ROLES);
+                        incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
+                    }
+                })
+                .build();
 
-        ServerWebExchange strippedExchange = exchange.mutate().request(strippedRequest).build();
+        ServerWebExchange strippedExchange =
+                exchange.mutate().request(strippedRequest).build();
         return new AuthRequestContext(strippedExchange, strippedRequest, uri.getPath(), inboundHeaders);
     }
 
@@ -210,12 +213,7 @@ public class SecurityGatewayConfig {
         } catch (JwtException ex) {
             String reason = tokenValidationReason(ex);
             rejectAuthentication(
-                    context,
-                    METRIC_AUTH_TOKEN_VALIDATION_FAILURE,
-                    REJECTION_REASON_TAG,
-                    reason,
-                    reason,
-                    UNKNOWN_JTI);
+                    context, METRIC_AUTH_TOKEN_VALIDATION_FAILURE, REJECTION_REASON_TAG, reason, reason, UNKNOWN_JTI);
             return Optional.empty();
         }
     }
@@ -230,8 +228,8 @@ public class SecurityGatewayConfig {
 
         Optional<String> legacyAuthoritiesHeader = resolveLegacyAuthoritiesHeader(claims, context, jti);
         if (legacyAuthoritiesHeader.isPresent()) {
-            return Optional.of(new AuthenticatedIdentity(subject, claims.get("uid", String.class),
-                    legacyAuthoritiesHeader.get(), jti));
+            return Optional.of(new AuthenticatedIdentity(
+                    subject, claims.get("uid", String.class), legacyAuthoritiesHeader.get(), jti));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -340,9 +338,7 @@ public class SecurityGatewayConfig {
     }
 
     private Mono<Void> forwardAuthenticatedRequest(
-            AuthRequestContext context,
-            GatewayFilterChain chain,
-            AuthenticatedIdentity identity) {
+            AuthRequestContext context, GatewayFilterChain chain, AuthenticatedIdentity identity) {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
@@ -358,15 +354,19 @@ public class SecurityGatewayConfig {
             }
         }
 
-        ServerHttpRequest authenticatedRequest = context.request().mutate().headers(headers -> {
-            headers.set(HEADER_X_USER, identity.subject());
-            if (StringUtils.hasText(identity.userId())) {
-                headers.set(HEADER_X_USER_ID, identity.userId());
-            }
-            headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
-        }).build();
+        ServerHttpRequest authenticatedRequest = context.request()
+                .mutate()
+                .headers(headers -> {
+                    headers.set(HEADER_X_USER, identity.subject());
+                    if (StringUtils.hasText(identity.userId())) {
+                        headers.set(HEADER_X_USER_ID, identity.userId());
+                    }
+                    headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
+                })
+                .build();
 
-        return chain.filter(context.exchange().mutate().request(authenticatedRequest).build());
+        return chain.filter(
+                context.exchange().mutate().request(authenticatedRequest).build());
     }
 
     private Mono<Void> rejectAuthentication(
@@ -407,8 +407,8 @@ public class SecurityGatewayConfig {
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
                 || isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
-                || isPathMatch(path, authProperties.getStrippedAuthPathRoot(),
-                        authProperties.getStrippedAuthPathPrefix());
+                || isPathMatch(
+                        path, authProperties.getStrippedAuthPathRoot(), authProperties.getStrippedAuthPathPrefix());
     }
 
     private static boolean isPathMatch(String path, String root, String prefix) {
@@ -541,16 +541,13 @@ public class SecurityGatewayConfig {
         return !inboundValue.equals(expectedValue);
     }
 
-    private record InboundIdentityHeaders(String user, String userId, String authorities) {
-    }
+    private record InboundIdentityHeaders(String user, String userId, String authorities) {}
 
     private record AuthRequestContext(
             ServerWebExchange exchange,
             ServerHttpRequest request,
             String path,
-            InboundIdentityHeaders inboundHeaders) {
-    }
+            InboundIdentityHeaders inboundHeaders) {}
 
-    private record AuthenticatedIdentity(String subject, String userId, String authoritiesHeader, String jti) {
-    }
+    private record AuthenticatedIdentity(String subject, String userId, String authoritiesHeader, String jti) {}
 }

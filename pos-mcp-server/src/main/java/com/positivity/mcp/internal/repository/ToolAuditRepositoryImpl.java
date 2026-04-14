@@ -10,15 +10,15 @@ import org.springframework.stereotype.Repository;
 @Profile("!test")
 public class ToolAuditRepositoryImpl implements ToolAuditRepository {
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  public ToolAuditRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
-  }
+    public ToolAuditRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
-  @Override
-  public void logInvocation(@NonNull ToolInvocationLog log) {
-    String sql = """
+    @Override
+    public void logInvocation(@NonNull ToolInvocationLog log) {
+        String sql = """
         INSERT INTO mcp_tool_invocation_log (
           tool_id,
           user_id,
@@ -35,19 +35,19 @@ public class ToolAuditRepositoryImpl implements ToolAuditRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
-    jdbcTemplate.update(
-        sql,
-        log.toolId(),
-        log.userId(),
-        log.sessionId(),
-        log.intent(),
-        log.workflowState(),
-        log.semanticRank(),
-        log.finalScore(),
-        log.selected(),
-        log.success(),
-        log.fallbackInvoked(),
-        log.executionTimeMs(),
-        log.errorType());
-  }
+        jdbcTemplate.update(
+                sql,
+                log.toolId(),
+                log.userId(),
+                log.sessionId(),
+                log.intent(),
+                log.workflowState(),
+                log.semanticRank(),
+                log.finalScore(),
+                log.selected(),
+                log.success(),
+                log.fallbackInvoked(),
+                log.executionTimeMs(),
+                log.errorType());
+    }
 }

@@ -1,16 +1,15 @@
 package com.positivity.security.common;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.jspecify.annotations.NonNull;
-
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Utility class for accessing authenticated security context information.
@@ -37,7 +36,7 @@ import java.util.stream.Collectors;
  * </p>
  *
  * <h2>Usage</h2>
- * 
+ *
  * <pre>{@code
  * // Get current username
  * String user = SecurityContextHelper.getCurrentUsername().orElse("anonymous");
@@ -123,7 +122,7 @@ public final class SecurityContextHelper {
      * lookups and relationships requiring stable UUID identity.
      * See ADR-0022 for canonical stable identity requirements.
      * </p>
-     * 
+     *
      * @return Optional containing stable UUID user ID
      * @throws IllegalStateException  if authentication/details map is missing
      * @throws MissingPersonIdException if user id is missing or not a UUID in details map
@@ -138,9 +137,8 @@ public final class SecurityContextHelper {
         }
 
         if (userId == null) {
-            throw new MissingPersonIdException(
-                    "Missing authenticated userId in authentication details key '"
-                            + GatewaySecurityConstants.DETAIL_USER_ID + "'");
+            throw new MissingPersonIdException("Missing authenticated userId in authentication details key '"
+                    + GatewaySecurityConstants.DETAIL_USER_ID + "'");
         }
 
         throw new MissingPersonIdException(
@@ -197,9 +195,7 @@ public final class SecurityContextHelper {
     public static Set<String> getAuthorities() {
         Authentication authentication = requireAuthenticatedAuthentication();
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        return authorities.stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toSet());
+        return authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
     }
 
     /**
@@ -265,7 +261,8 @@ public final class SecurityContextHelper {
      */
     public static boolean isAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.isAuthenticated()
+        return authentication != null
+                && authentication.isAuthenticated()
                 && !GatewaySecurityConstants.ANONYMOUS_USER.equals(authentication.getPrincipal());
     }
 

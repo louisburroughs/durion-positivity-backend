@@ -8,13 +8,13 @@ package com.positivity.documents;
 public enum DocumentFormat {
     /** Portable Document Format (binary) */
     PDF,
-    
+
     /** HyperText Markup Language */
     HTML,
-    
+
     /** Plain text */
     TEXT,
-    
+
     /** Comma-Separated Values */
     CSV
 }

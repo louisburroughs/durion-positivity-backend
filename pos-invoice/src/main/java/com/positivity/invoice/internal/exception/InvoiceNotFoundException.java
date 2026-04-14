@@ -1,8 +1,7 @@
 package com.positivity.invoice.internal.exception;
 
-import org.jspecify.annotations.NonNull;
-
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public class InvoiceNotFoundException extends RuntimeException {
 

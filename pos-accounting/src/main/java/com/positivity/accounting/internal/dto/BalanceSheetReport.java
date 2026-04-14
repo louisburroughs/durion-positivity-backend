@@ -1,21 +1,20 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import lombok.*;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Balance Sheet report response.
- * 
+ *
  * Structure follows US GAAP:
  * Assets (Current + Non-Current) =
  * Liabilities (Current + Non-Current) + Stockholders' Equity
- * 
+ *
  * All amounts from POSTED journal entries as of the specified date.
  */
 @Data

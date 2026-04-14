@@ -2,6 +2,10 @@ package com.positivity.security.common;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
@@ -11,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -19,11 +22,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Security filter that reads authentication headers injected by the API
@@ -70,8 +68,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         String path = request.getRequestURI();
 
@@ -90,8 +88,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
-                    authorities);
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(username, null, authorities);
             Map<String, Object> details = new HashMap<>();
             details.put(GatewaySecurityConstants.DETAIL_USERNAME, username);
             userId.ifPresent(id -> details.put(GatewaySecurityConstants.DETAIL_USER_ID, id));
@@ -100,16 +98,18 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             if (loggr.isDebugEnabled()) {
-                loggr.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
-                        username, userId.orElse(null), authorities.size());
+                loggr.debug(
+                        "Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
+                        username,
+                        userId.orElse(null),
+                        authorities.size());
             }
         } else {
             // No authentication headers - clear any existing context
             SecurityContextHolder.clearContext();
 
             if (loggr.isTraceEnabled()) {
-                loggr.trace("No gateway authentication headers for request: {} {}",
-                        request.getMethod(), path);
+                loggr.trace("No gateway authentication headers for request: {} {}", request.getMethod(), path);
             }
         }
 
@@ -117,7 +117,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
     }
 
     private Optional<UUID> resolveUserIdFromToken(String authorizationHeader, String username) {
-        if (authorizationHeader == null || authorizationHeader.isBlank()
+        if (authorizationHeader == null
+                || authorizationHeader.isBlank()
                 || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             loggr.warn("Missing bearer token while resolving userId for user '{}'", username);
             return Optional.empty();
@@ -138,11 +139,11 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
             byte[] payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1]);
             JsonNode payloadNode = objectMapper.readTree(payloadBytes);
-            JsonNode userIdNode = firstNonBlankClaim(payloadNode,
-                    GatewaySecurityConstants.CLAIM_UID,
-                    GatewaySecurityConstants.CLAIM_USER_ID_LEGACY);
+            JsonNode userIdNode = firstNonBlankClaim(
+                    payloadNode, GatewaySecurityConstants.CLAIM_UID, GatewaySecurityConstants.CLAIM_USER_ID_LEGACY);
             if (userIdNode == null || userIdNode.asText().isBlank()) {
-                loggr.warn("Missing JWT '{}' and legacy '{}' claims for user '{}'",
+                loggr.warn(
+                        "Missing JWT '{}' and legacy '{}' claims for user '{}'",
                         GatewaySecurityConstants.CLAIM_UID,
                         GatewaySecurityConstants.CLAIM_USER_ID_LEGACY,
                         username);

@@ -2,9 +2,9 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Enum for journal entry type classification.
- * 
+ *
  * Used to distinguish event-driven postings from manual adjustments.
- * 
+ *
  * @see com.positivity.accounting.entity.JournalEntry
  */
 public enum JournalEntryType {

@@ -2,11 +2,11 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Posting Rule Set version state machine.
- * 
+ *
  * State transitions:
  * - DRAFT → PUBLISHED → ARCHIVED
  * - DRAFT → (delete if never published)
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide</a>

@@ -1,23 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
@@ -33,8 +15,22 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.security.common.SecurityContextHelper;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for GL Account (Chart of Accounts) management.
@@ -46,7 +42,6 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class GLAccountServiceImpl implements GLAccountService {
     private final Clock clock;
-
 
     private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
 
@@ -116,7 +111,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse getGLAccount(@NonNull UUID glAccountId) {
         log.debug("Retrieving GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         return toResponse(account);
@@ -135,7 +131,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse updateGLAccount(@NonNull UUID glAccountId, @NonNull GLAccountUpdateRequest request) {
         log.info("Updating GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Update mutable fields
@@ -180,7 +177,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId, @NonNull LocalDateTime effectiveDate) {
         log.info("Activating GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Set activation date to provided effective date
@@ -211,7 +209,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse deactivateGLAccount(@NonNull UUID glAccountId) {
         log.info("Deactivating GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Verify zero balance
@@ -246,14 +245,15 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse archiveGLAccount(@NonNull UUID glAccountId) {
         log.info("Archiving GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Verify account is INACTIVE
         String status = account.getDerivedStatus();
         if (!"INACTIVE".equals(status)) {
-            String msg = "Cannot archive account " + account.getAccountCode() + " with status " + status +
-                    ". Account must be INACTIVE to archive.";
+            String msg = "Cannot archive account " + account.getAccountCode() + " with status " + status
+                    + ". Account must be INACTIVE to archive.";
             log.warn("Cannot archive account unless INACTIVE");
             throw new AccountNotInactiveException(msg);
         }
@@ -286,7 +286,8 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountBalanceResponse getAccountBalance(@NonNull UUID glAccountId) {
         log.debug("Getting balance for GL account");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         BigDecimal balance = journalEntryLineRepository.getAccountBalance(glAccountId);
@@ -324,8 +325,9 @@ public class GLAccountServiceImpl implements GLAccountService {
         // Filter by status if provided
         List<GLAccountResponse> filteredResults = accountPage.getContent().stream()
                 .map(this::toResponse)
-                .filter(response -> status == null || status.isBlank() ||
-                        response.getStatus().name().equalsIgnoreCase(status))
+                .filter(response -> status == null
+                        || status.isBlank()
+                        || response.getStatus().name().equalsIgnoreCase(status))
                 .toList();
 
         // Note: This in-memory filtering affects pagination accuracy
@@ -383,18 +385,20 @@ public class GLAccountServiceImpl implements GLAccountService {
     public void validateAccountForPosting(@NonNull UUID glAccountId, @NonNull LocalDateTime transactionDate) {
         log.debug("Validating GL account for posting");
 
-        GLAccount account = glAccountRepository.findById(glAccountId)
+        GLAccount account = glAccountRepository
+                .findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Check if account is active on transaction date
         if (account.getActivationDate() != null && account.getActivationDate().isAfter(transactionDate)) {
-            throw new IllegalArgumentException("Account " + account.getAccountCode() +
-                    " is not yet active on " + transactionDate);
+            throw new IllegalArgumentException(
+                    "Account " + account.getAccountCode() + " is not yet active on " + transactionDate);
         }
 
-        if (account.getDeactivationDate() != null && !account.getDeactivationDate().isAfter(transactionDate)) {
-            throw new IllegalArgumentException("Account " + account.getAccountCode() +
-                    " is inactive as of " + transactionDate);
+        if (account.getDeactivationDate() != null
+                && !account.getDeactivationDate().isAfter(transactionDate)) {
+            throw new IllegalArgumentException(
+                    "Account " + account.getAccountCode() + " is inactive as of " + transactionDate);
         }
     }
 
@@ -419,5 +423,4 @@ public class GLAccountServiceImpl implements GLAccountService {
         response.setVersion(account.getVersion());
         return response;
     }
-
 }

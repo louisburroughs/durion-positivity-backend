@@ -1,9 +1,13 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -16,12 +20,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.dto.UnbalancedEntryException;
-import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
-import com.positivity.shared.error.ApiError;
-import com.positivity.shared.id.UUIDv7Generator;
-
 /**
  * Standardized error responses for security-related exceptions.
  */
@@ -31,7 +29,7 @@ public class AccountingExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
+    @ExceptionHandler({AuthenticationException.class, AuthenticationCredentialsNotFoundException.class})
     public ResponseEntity<ApiError> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required", request);
     }
@@ -68,8 +66,8 @@ public class AccountingExceptionHandler {
     }
 
     @ExceptionHandler(DuplicateAccountCodeException.class)
-    public ResponseEntity<ApiError> handleDuplicateAccountCode(DuplicateAccountCodeException ex,
-            HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleDuplicateAccountCode(
+            DuplicateAccountCodeException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
     }
 
@@ -81,18 +79,24 @@ public class AccountingExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
-                ApiError.of("REQUEST_FAILED", message, statusCode, Instant.now(clock).toString(), correlationId),
-                headers, ex.getStatusCode());
+                ApiError.of(
+                        "REQUEST_FAILED",
+                        message,
+                        statusCode,
+                        Instant.now(clock).toString(),
+                        correlationId),
+                headers,
+                ex.getStatusCode());
     }
 
-    private ResponseEntity<ApiError> build(HttpStatus status, String code, String message,
-            HttpServletRequest request) {
+    private ResponseEntity<ApiError> build(HttpStatus status, String code, String message, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
                 ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
-                headers, status);
+                headers,
+                status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {
@@ -100,7 +104,9 @@ public class AccountingExceptionHandler {
             return UUIDv7Generator.generate().toString();
         }
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 
     private String resolveStateErrorCode(String message) {

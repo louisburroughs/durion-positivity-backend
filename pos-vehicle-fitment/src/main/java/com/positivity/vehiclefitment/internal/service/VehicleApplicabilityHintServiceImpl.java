@@ -7,14 +7,12 @@ import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
-
+import java.util.*;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing vehicle applicability hints.
@@ -61,7 +59,8 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
     public HintResponse updateHint(UUID hintId, UpdateHintRequest request) {
         log.info("Updating vehicle applicability hint {}", hintId);
 
-        VehicleApplicabilityHint hint = hintRepository.findById(hintId)
+        VehicleApplicabilityHint hint = hintRepository
+                .findById(hintId)
                 .orElseThrow(() -> new IllegalArgumentException("Hint not found with ID: " + hintId));
 
         hint.getFitmentTags().clear();
@@ -105,7 +104,8 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
     public HintResponse getHint(UUID hintId) {
         log.info("Retrieving vehicle applicability hint {}", hintId);
 
-        VehicleApplicabilityHint hint = hintRepository.findById(hintId)
+        VehicleApplicabilityHint hint = hintRepository
+                .findById(hintId)
                 .orElseThrow(() -> new IllegalArgumentException("Hint not found with ID: " + hintId));
 
         return mapToResponse(hint);
@@ -121,9 +121,7 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
 
         List<VehicleApplicabilityHint> hints = hintRepository.findByProductId(productId);
 
-        return hints.stream()
-                .map(this::mapToResponse)
-                .toList();
+        return hints.stream().map(this::mapToResponse).toList();
     }
 
     /**
@@ -156,9 +154,8 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
         log.info("Found {} matching products", productIdList.size());
 
         // Convert UUIDs to String for response
-        List<String> productIdStrings = productIdList.stream()
-                .map(String::valueOf)
-                .toList();
+        List<String> productIdStrings =
+                productIdList.stream().map(String::valueOf).toList();
         return new FilterProductsResponse(productIdStrings, productIdStrings.size());
     }
 
@@ -167,10 +164,7 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
      */
     private boolean hintMatchesAttributes(VehicleApplicabilityHint hint, Map<String, String> attributes) {
         Map<TagType, String> hintTags = hint.getFitmentTags().stream()
-                .collect(Collectors.toMap(
-                        FitmentTag::getTagType,
-                        FitmentTag::getTagValue,
-                        (v1, v2) -> v1));
+                .collect(Collectors.toMap(FitmentTag::getTagType, FitmentTag::getTagValue, (v1, v2) -> v1));
 
         for (Map.Entry<String, String> attribute : attributes.entrySet()) {
             try {

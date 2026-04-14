@@ -1,11 +1,10 @@
 package com.positivity.invoice.internal.dto;
 
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Event emitted when an invoice is finalized. Story #13 scaffold.

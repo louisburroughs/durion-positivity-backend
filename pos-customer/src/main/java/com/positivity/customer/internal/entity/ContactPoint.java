@@ -1,15 +1,7 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.shared.id.UUIDv7Id;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -24,10 +16,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Contact point entity representing a single contact method (email, phone) for
@@ -42,11 +39,13 @@ import lombok.ToString;
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "contact_point", indexes = {
-        @Index(name = "idx_contact_point_person", columnList = "person_id"),
-        @Index(name = "idx_contact_point_type", columnList = "contact_type"),
-        @Index(name = "idx_contact_point_value", columnList = "value")
-})
+@Table(
+        name = "contact_point",
+        indexes = {
+            @Index(name = "idx_contact_point_person", columnList = "person_id"),
+            @Index(name = "idx_contact_point_type", columnList = "contact_type"),
+            @Index(name = "idx_contact_point_value", columnList = "value")
+        })
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Contact point (email, phone) for a person")
 public class ContactPoint {

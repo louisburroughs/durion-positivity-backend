@@ -1,22 +1,21 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import lombok.experimental.Tolerate;
-
-import java.io.Serializable;
-import java.math.BigDecimal;
-import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Response from applying a Credit Memo to an invoice.
  * Returned by Invoice service to Accounting service.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
  *      #131</a>

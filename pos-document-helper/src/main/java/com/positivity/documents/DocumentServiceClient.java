@@ -4,6 +4,8 @@ import com.positivity.documents.exception.DocumentRenderException;
 import com.positivity.documents.exception.TemplateRegistrationException;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import java.time.Duration;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,9 +14,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
-import java.time.Duration;
-import java.util.Objects;
-
 /**
  * Client for interacting with the pos-documents service.
  * Provides high-level methods for template registration and document rendering
@@ -22,7 +21,7 @@ import java.util.Objects;
  *
  * <p>
  * Example usage:
- * 
+ *
  * <pre>{@code
  * DocumentServiceClient client = DocumentServiceClient.builder()
  *         .baseUrl("http://pos-documents:8080")
@@ -75,25 +74,29 @@ public class DocumentServiceClient {
 
         try {
             Retry.decorateRunnable(retry, () -> {
-                try {
-                    restClient.put()
-                            .uri("/v1/documents/templates/{templateId}", registration.getTemplateId())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .body(registration)
-                            .retrieve()
-                            .toBodilessEntity();
-                } catch (Exception e) {
-                    log.warn("Template registration attempt failed for {}: {}",
-                            registration.getTemplateId(), e.getMessage());
-                    throw e;
-                }
-            }).run();
+                        try {
+                            restClient
+                                    .put()
+                                    .uri("/v1/documents/templates/{templateId}", registration.getTemplateId())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .body(registration)
+                                    .retrieve()
+                                    .toBodilessEntity();
+                        } catch (Exception e) {
+                            log.warn(
+                                    "Template registration attempt failed for {}: {}",
+                                    registration.getTemplateId(),
+                                    e.getMessage());
+                            throw e;
+                        }
+                    })
+                    .run();
 
             log.info("Successfully registered template: {}", registration.getTemplateId());
 
         } catch (Exception e) {
-            String msg = String.format("Failed to register template %s after retries: %s",
-                    registration.getTemplateId(), e.getMessage());
+            String msg = String.format(
+                    "Failed to register template %s after retries: %s", registration.getTemplateId(), e.getMessage());
             log.error(msg, e);
             throw new TemplateRegistrationException(msg, e, registration.getTemplateId());
         }
@@ -111,24 +114,27 @@ public class DocumentServiceClient {
         Objects.requireNonNull(request.getTemplateId(), "templateId cannot be null");
         Objects.requireNonNull(request.getFormat(), "format cannot be null");
 
-        log.debug("Rendering document: templateId={}, format={}",
-                request.getTemplateId(), request.getFormat());
+        log.debug("Rendering document: templateId={}, format={}", request.getTemplateId(), request.getFormat());
 
         try {
             ResponseEntity<byte[]> response = Retry.decorateSupplier(retry, () -> {
-                try {
-                    return restClient.post()
-                            .uri("/v1/documents/render")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .body(request)
-                            .retrieve()
-                            .toEntity(byte[].class);
-                } catch (Exception e) {
-                    log.warn("Document render attempt failed for template {}: {}",
-                            request.getTemplateId(), e.getMessage());
-                    throw e;
-                }
-            }).get();
+                        try {
+                            return restClient
+                                    .post()
+                                    .uri("/v1/documents/render")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .body(request)
+                                    .retrieve()
+                                    .toEntity(byte[].class);
+                        } catch (Exception e) {
+                            log.warn(
+                                    "Document render attempt failed for template {}: {}",
+                                    request.getTemplateId(),
+                                    e.getMessage());
+                            throw e;
+                        }
+                    })
+                    .get();
 
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
                 throw new DocumentRenderException(
@@ -142,8 +148,11 @@ public class DocumentServiceClient {
                     ? response.getHeaders().getContentType().toString()
                     : "application/octet-stream";
 
-            log.info("Successfully rendered document: templateId={}, format={}, size={}",
-                    request.getTemplateId(), request.getFormat(), content.length);
+            log.info(
+                    "Successfully rendered document: templateId={}, format={}, size={}",
+                    request.getTemplateId(),
+                    request.getFormat(),
+                    content.length);
 
             return RenderResponse.builder()
                     .content(content)
@@ -155,10 +164,12 @@ public class DocumentServiceClient {
                     .build();
 
         } catch (Exception e) {
-            String msg = String.format("Failed to render document with template %s (format=%s) after retries: %s",
+            String msg = String.format(
+                    "Failed to render document with template %s (format=%s) after retries: %s",
                     request.getTemplateId(), request.getFormat(), e.getMessage());
             log.error(msg, e);
-            throw new DocumentRenderException(msg, e, request.getTemplateId(), request.getFormat().name());
+            throw new DocumentRenderException(
+                    msg, e, request.getTemplateId(), request.getFormat().name());
         }
     }
 
@@ -218,9 +229,7 @@ public class DocumentServiceClient {
          * @return configured client
          */
         public DocumentServiceClient build() {
-            RestClient restClient = RestClient.builder()
-                    .baseUrl(baseUrl)
-                    .build();
+            RestClient restClient = RestClient.builder().baseUrl(baseUrl).build();
 
             RetryConfig retryConfig = RetryConfig.custom()
                     .maxAttempts(maxRetries)

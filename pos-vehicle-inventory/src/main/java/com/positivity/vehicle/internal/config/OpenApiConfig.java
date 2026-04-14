@@ -16,8 +16,6 @@ public class OpenApiConfig {
                         .title("Vehicle Inventory API")
                         .version("1.0")
                         .description("API for managing vehicle inventory in the POS system")
-                        .contact(new Contact()
-                                .name("Durion Team")
-                                .email("platform@durionpos.org")));
+                        .contact(new Contact().name("Durion Team").email("platform@durionpos.org")));
     }
 }

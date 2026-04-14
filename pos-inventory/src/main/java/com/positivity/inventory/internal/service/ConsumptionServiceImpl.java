@@ -1,16 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
@@ -25,6 +14,15 @@ import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -53,16 +51,18 @@ public class ConsumptionServiceImpl implements ConsumptionService {
 
         List<InventoryLedgerEntry> entriesToSave = new ArrayList<>();
         for (ConsumeItemLine item : items) {
-            PickTaskEntity task = pickTaskRepository.findById(item.getPickTaskId())
-                    .orElseThrow(() -> new ResourceNotFoundException("PickTask", item.getPickTaskId().toString()));
+            PickTaskEntity task = pickTaskRepository
+                    .findById(item.getPickTaskId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "PickTask", item.getPickTaskId().toString()));
 
             if (task.getStatus() != PickTaskStatus.PICKED) {
                 throw new WorkorderConsumptionException("Item not picked: " + item.getPickTaskId());
             }
 
             if (item.getQuantity() > task.getQuantityPicked()) {
-                throw new WorkorderConsumptionException("Requested quantity exceeds picked quantity for task: "
-                        + item.getPickTaskId());
+                throw new WorkorderConsumptionException(
+                        "Requested quantity exceeds picked quantity for task: " + item.getPickTaskId());
             }
 
             entriesToSave.add(buildLedgerEntry(request, item));
@@ -74,7 +74,8 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 .filter(Objects::nonNull)
                 .toList();
 
-        int totalItemsConsumed = items.stream().mapToInt(ConsumeItemLine::getQuantity).sum();
+        int totalItemsConsumed =
+                items.stream().mapToInt(ConsumeItemLine::getQuantity).sum();
 
         return new ConsumptionResponse(
                 UUIDv7Generator.generate(),

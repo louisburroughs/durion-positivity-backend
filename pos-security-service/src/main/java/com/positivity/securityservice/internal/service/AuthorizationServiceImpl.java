@@ -27,12 +27,12 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     @Transactional(readOnly = true)
     public Decision authorize(@NonNull String principalId, @NonNull String permissionKey) {
         return principalRoleRepository.findByPrincipalId(principalId).stream()
-                .map(PrincipalRole::getRole)
-                .map(Role::getPermissions)
-                .flatMap(Set::stream)
-                .map(Permission::getName)
-                .anyMatch(permissionKey::equals)
-                        ? Decision.ALLOW
-                        : Decision.DENY;
+                        .map(PrincipalRole::getRole)
+                        .map(Role::getPermissions)
+                        .flatMap(Set::stream)
+                        .map(Permission::getName)
+                        .anyMatch(permissionKey::equals)
+                ? Decision.ALLOW
+                : Decision.DENY;
     }
 }

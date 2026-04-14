@@ -1,9 +1,6 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -24,6 +21,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Mobile unit aggregate for field-service dispatch.
@@ -31,9 +31,13 @@ import lombok.NoArgsConstructor;
  * Issue: #76
  */
 @Entity
-@Table(name = "mobile_units", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_mobile_units_base_location_name", columnNames = { "base_location_id", "name" })
-})
+@Table(
+        name = "mobile_units",
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uq_mobile_units_base_location_name",
+                    columnNames = {"base_location_id", "name"})
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -85,5 +89,4 @@ public class MobileUnitEntity {
 
     @Column(name = "updated_by", columnDefinition = "UUID")
     private UUID updatedBy;
-
 }

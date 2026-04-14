@@ -1,17 +1,14 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.AdjustmentStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
-
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import com.positivity.shared.id.UUIDv7Id;
-
-import lombok.Data;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
@@ -68,5 +65,4 @@ public class TimeEntryAdjustment {
 
     @Column(name = "decided_at")
     private Instant decidedAt;
-
 }

@@ -1,8 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
-import java.util.UUID;
-
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.Data;
 
 @Data

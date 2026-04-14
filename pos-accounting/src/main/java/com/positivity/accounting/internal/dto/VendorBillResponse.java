@@ -1,20 +1,17 @@
 package com.positivity.accounting.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import org.jspecify.annotations.Nullable;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.accounting.internal.enums.VendorBillStatus;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Vendor bill response DTO.

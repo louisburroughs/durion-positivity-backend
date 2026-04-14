@@ -39,19 +39,19 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     @Transactional
     public @NonNull List<PutawayTaskResponse> generateTasksForReceipt(@NonNull GeneratePutawayTasksRequest request) {
         UUID sourceReceiptId = parseRequiredUuid(request.getSourceReceiptId(), "sourceReceiptId");
-        GoodsReceiptEntity sourceReceipt = goodsReceiptRepository.findById(sourceReceiptId)
-            .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
+        GoodsReceiptEntity sourceReceipt = goodsReceiptRepository
+                .findById(sourceReceiptId)
+                .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
-        UUID suggestedDestination = enabledRules.isEmpty()
-                ? DEFAULT_LOCATION
-                : enabledRules.get(0).getDestinationLocationId();
+        UUID suggestedDestination =
+                enabledRules.isEmpty() ? DEFAULT_LOCATION : enabledRules.get(0).getDestinationLocationId();
 
         List<ParsedPutawayLineItem> lineItems = resolveLineItems(request);
 
         List<PutawayTask> tasks = lineItems.stream()
                 .map(lineItem -> PutawayTask.builder()
-                    .sourceReceipt(sourceReceipt)
+                        .sourceReceipt(sourceReceipt)
                         .productId(lineItem.productId())
                         .quantity(lineItem.quantity())
                         .sourceLocationId(STAGING_LOCATION)
@@ -87,7 +87,8 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     public @NonNull PutawayTaskResponse claimTask(@NonNull String taskId, @NonNull String userId) {
         UUID putawayTaskId = parseRequiredUuid(taskId, "taskId");
 
-        PutawayTask task = putawayTaskRepository.findByIdForUpdate(putawayTaskId)
+        PutawayTask task = putawayTaskRepository
+                .findByIdForUpdate(putawayTaskId)
                 .orElseThrow(() -> new TaskNotFoundException(putawayTaskId));
 
         task.setStatus(PutawayTaskStatus.ASSIGNED);
@@ -109,8 +110,10 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     }
 
     private List<ParsedPutawayLineItem> resolveLineItems(GeneratePutawayTasksRequest request) {
-        boolean hasLineItems = request.getLineItems() != null && !request.getLineItems().isEmpty();
-        boolean hasLegacyProductId = request.getProductId() != null && !request.getProductId().isBlank();
+        boolean hasLineItems =
+                request.getLineItems() != null && !request.getLineItems().isEmpty();
+        boolean hasLegacyProductId =
+                request.getProductId() != null && !request.getProductId().isBlank();
         boolean hasLegacyQuantity = request.getQuantity() != null;
 
         if (hasLineItems && (hasLegacyProductId || hasLegacyQuantity)) {
@@ -155,15 +158,16 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         return value;
     }
 
-    private record ParsedPutawayLineItem(UUID productId, Integer quantity) {
-    }
+    private record ParsedPutawayLineItem(UUID productId, Integer quantity) {}
 
     private PutawayTaskResponse toResponse(PutawayTask task) {
         return PutawayTaskResponse.builder()
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
-            .sourceReceiptId(task.getSourceReceipt() != null && task.getSourceReceipt().getReceiptId() != null
-                ? task.getSourceReceipt().getReceiptId().toString()
-                : null)
+                .sourceReceiptId(
+                        task.getSourceReceipt() != null
+                                        && task.getSourceReceipt().getReceiptId() != null
+                                ? task.getSourceReceipt().getReceiptId().toString()
+                                : null)
                 .productId(task.getProductId() != null ? task.getProductId().toString() : null)
                 .quantity(task.getQuantity())
                 .sourceLocationId(task.getSourceLocationId())
@@ -171,7 +175,10 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .originalSuggestedLocationId(task.getOriginalSuggestedLocationId())
                 .finalSuggestedLocationId(task.getFinalSuggestedLocationId())
                 .actualDestinationLocationId(task.getActualDestinationLocationId())
-                .fallbackReason(task.getFallbackReason() != null ? task.getFallbackReason().name() : null)
+                .fallbackReason(
+                        task.getFallbackReason() != null
+                                ? task.getFallbackReason().name()
+                                : null)
                 .status(task.getStatus() != null ? task.getStatus().name() : null)
                 .assigneeId(task.getAssigneeId())
                 .createdAt(task.getCreatedAt())

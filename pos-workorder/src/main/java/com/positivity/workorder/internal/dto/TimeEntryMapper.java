@@ -4,8 +4,7 @@ import com.positivity.workorder.internal.entity.TimeEntry;
 
 public final class TimeEntryMapper {
 
-    private TimeEntryMapper() {
-    }
+    private TimeEntryMapper() {}
 
     public static TimeEntryResponse toResponse(TimeEntry entry) {
         return TimeEntryResponse.builder()

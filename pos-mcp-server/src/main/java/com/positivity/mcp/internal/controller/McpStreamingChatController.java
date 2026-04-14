@@ -25,40 +25,41 @@ import reactor.core.publisher.Flux;
 @RequestMapping("/v1/mcp")
 public class McpStreamingChatController {
 
-  private final StreamingAgentOrchestrationService streamingSessionAgentManager;
+    private final StreamingAgentOrchestrationService streamingSessionAgentManager;
 
-  public McpStreamingChatController(
-      @NonNull StreamingAgentOrchestrationService streamingSessionAgentManager) {
-    this.streamingSessionAgentManager = streamingSessionAgentManager;
-  }
+    public McpStreamingChatController(@NonNull StreamingAgentOrchestrationService streamingSessionAgentManager) {
+        this.streamingSessionAgentManager = streamingSessionAgentManager;
+    }
 
-  @Operation(summary = "Execute MCP streaming chat - returns SSE token stream")
-  @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
-  @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")
-  public Flux<ServerSentEvent<String>> streamChat(
-      @RequestBody @Valid @NonNull StreamChatRequest request,
-      @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
+    @Operation(summary = "Execute MCP streaming chat - returns SSE token stream")
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
+    @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")
+    public Flux<ServerSentEvent<String>> streamChat(
+            @RequestBody @Valid @NonNull StreamChatRequest request,
+            @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-    @NonNull
-    String userId = authentication.getName();
-    @NonNull
-    String role = extractPrimaryRole(authentication);
+        @NonNull String userId = authentication.getName();
+        @NonNull String role = extractPrimaryRole(authentication);
 
-    return streamingSessionAgentManager.streamChat(userId, role, request.message())
-        .map(token -> ServerSentEvent.<String>builder(token).event("chat").build());
-  }
+        return streamingSessionAgentManager
+                .streamChat(userId, role, request.message())
+                .map(token ->
+                        ServerSentEvent.<String>builder(token).event("chat").build());
+    }
 
-  private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
-    return Objects.requireNonNull(auth.getAuthorities().stream()
-        .map(GrantedAuthority::getAuthority)
-        .filter(Objects::nonNull)
-        .filter(a -> a.startsWith("ROLE_"))
-        .findFirst()
-        .orElse("ROLE_USER"));
-  }
+    private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
+        return Objects.requireNonNull(auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .filter(a -> a.startsWith("ROLE_"))
+                .findFirst()
+                .orElse("ROLE_USER"));
+    }
 
-  @Schema(name = "StreamChatRequest", description = "Streaming chat request payload", example = "{\"message\":\"Hello\"}")
-  public record StreamChatRequest(@NotBlank @NonNull String message) {
-  }
+    @Schema(
+            name = "StreamChatRequest",
+            description = "Streaming chat request payload",
+            example = "{\"message\":\"Hello\"}")
+    public record StreamChatRequest(@NotBlank @NonNull String message) {}
 }

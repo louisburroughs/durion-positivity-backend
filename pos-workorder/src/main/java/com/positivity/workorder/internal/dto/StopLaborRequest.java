@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 /**
  * Request DTO for stopping a labor session.
  * Empty body - stopTime is captured server-side.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #159 - Record Labor Performed
  */

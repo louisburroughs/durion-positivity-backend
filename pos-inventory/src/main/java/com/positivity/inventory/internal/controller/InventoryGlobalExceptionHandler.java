@@ -1,19 +1,5 @@
 package com.positivity.inventory.internal.controller;
 
-import java.time.Clock;
-import java.time.Instant;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
@@ -44,11 +30,22 @@ import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.time.Clock;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Module-wide exception advice for inventory controllers.
@@ -76,11 +73,11 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class,
-            ConstraintViolationException.class,
-            InvalidInventoryAvailabilityRequestException.class,
-            IllegalArgumentException.class
+        MethodArgumentTypeMismatchException.class,
+        HttpMessageNotReadableException.class,
+        ConstraintViolationException.class,
+        InvalidInventoryAvailabilityRequestException.class,
+        IllegalArgumentException.class
     })
     public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
@@ -121,8 +118,8 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class,
-            LocationNotFoundException.class })
+    @ExceptionHandler({ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class
+    })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
@@ -173,26 +170,22 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            LocationNotValidForSkuException.class,
-            LocationAtCapacityException.class,
-            NoOnHandAtSourceLocationException.class,
-            PutawayValidationException.class
+        LocationNotValidForSkuException.class,
+        LocationAtCapacityException.class,
+        NoOnHandAtSourceLocationException.class,
+        PutawayValidationException.class
     })
     public ResponseEntity<ApiError> handlePutawayValidation(PutawayValidationException ex) {
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
-    @ExceptionHandler({
-            SourceDocumentNotFoundException.class,
-            ReceivingSessionNotFoundException.class
-    })
+    @ExceptionHandler({SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class})
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(SourceDocumentAlreadyReceivedException.class)
-    public ResponseEntity<ApiError> handleSourceDocumentAlreadyReceived(
-            SourceDocumentAlreadyReceivedException ex) {
+    public ResponseEntity<ApiError> handleSourceDocumentAlreadyReceived(SourceDocumentAlreadyReceivedException ex) {
         return build(HttpStatus.BAD_REQUEST, "SOURCE_DOCUMENT_ALREADY_RECEIVED", ex.getMessage());
     }
 
@@ -221,8 +214,12 @@ public class InventoryGlobalExceptionHandler {
         String correlationId = resolveCorrelationId(null);
         return ResponseEntity.status(status)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(code, message != null ? message : "",
-                        status.value(), Instant.now(clock).toString(), correlationId));
+                .body(ApiError.of(
+                        code,
+                        message != null ? message : "",
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

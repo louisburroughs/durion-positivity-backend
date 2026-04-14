@@ -1,34 +1,31 @@
 package com.positivity.location.internal.controller;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.service.BayService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.extern.slf4j.Slf4j;
-
 import jakarta.validation.Valid;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @Tag(name = "Bay API", description = "Operations for managing bays within locations")
@@ -41,7 +38,9 @@ public class BayController {
         this.bayService = bayService;
     }
 
-    @Operation(summary = "List bays", description = "List bays for a location with optional status and bayType filters.")
+    @Operation(
+            summary = "List bays",
+            description = "List bays for a location with optional status and bayType filters.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
     @PreAuthorize("hasAuthority('location:bay:read')")
     @GetMapping
@@ -84,9 +83,7 @@ public class BayController {
     @PreAuthorize("hasAuthority('location:bay:manage')")
     @PatchMapping("/{bayId}")
     public ResponseEntity<BayResponse> patchBay(
-            @PathVariable String locationId,
-            @PathVariable String bayId,
-            @RequestBody BayPatchRequest patchRequest) {
+            @PathVariable String locationId, @PathVariable String bayId, @RequestBody BayPatchRequest patchRequest) {
         return ResponseEntity.ok(bayService.patchBay(parseUuid(locationId), parseUuid(bayId), patchRequest));
     }
 
@@ -97,5 +94,4 @@ public class BayController {
             return UUID.nameUUIDFromBytes(value.getBytes());
         }
     }
-
 }

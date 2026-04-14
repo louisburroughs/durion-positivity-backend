@@ -1,7 +1,7 @@
 package com.positivity.catalog.internal.service;
 
-import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.CategoryDto;
+import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductSearchResultDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
@@ -68,7 +68,8 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
             throw new CatalogValidationException("sku is immutable and cannot be changed");
         }
 
-        if (request.getManufacturerId() != null && request.getMpn() != null
+        if (request.getManufacturerId() != null
+                && request.getMpn() != null
                 && productRepository.existsByManufacturerIdAndManufacturerPartNumberIgnoreCaseAndIdNot(
                         request.getManufacturerId(), request.getMpn(), productId)) {
             throw new CatalogBusinessRuleException("Product with manufacturerId + mpn already exists");
@@ -127,7 +128,8 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
     }
 
     private ProductEntity findProduct(UUID productId) {
-        return productRepository.findById(productId)
+        return productRepository
+                .findById(productId)
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 

@@ -1,12 +1,16 @@
 package com.positivity.vehiclereferencecarapi.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;
 import com.positivity.vehiclereferencecarapi.internal.exception.CarApiException;
 import com.positivity.vehiclereferencecarapi.internal.repository.CarApiMakeRepository;
 import com.positivity.vehiclereferencecarapi.internal.repository.CarApiModelRepository;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,12 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -42,10 +40,7 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = carApiBaseUrl + "/makes";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("data");
@@ -70,10 +65,7 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = carApiBaseUrl + "/models?make_id=" + makeId;
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("data");

@@ -11,9 +11,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.JwtService.TokenPair;
+import com.positivity.securityservice.service.LockoutService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,20 +32,11 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.CredentialsExpiredException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import com.positivity.securityservice.internal.dto.LoginRequest;
-import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.JwtService.TokenPair;
-import com.positivity.securityservice.service.LockoutService;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
-import org.springframework.security.authentication.LockedException;
 
 /**
  * Unit tests for {@link AuthenticationServiceImpl} covering AUTH-001 and AUTH-003.
@@ -139,7 +135,7 @@ class AuthenticationServiceImplTest {
             // This architectural assertion holds in BOTH RED and GREEN phases:
             // the impl must never own a PasswordEncoder dependency.
             boolean hasPasswordEncoderField = java.util.Arrays.stream(
-                    AuthenticationServiceImpl.class.getDeclaredFields())
+                            AuthenticationServiceImpl.class.getDeclaredFields())
                     .anyMatch(f -> f.getType().equals(PasswordEncoder.class));
 
             assertThat(hasPasswordEncoderField)
@@ -153,9 +149,9 @@ class AuthenticationServiceImplTest {
         void login_neverCallsPasswordEncoderMatches() {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("testuser");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
-                            new User("testuser", "password", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("testuser", "password", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
@@ -181,9 +177,9 @@ class AuthenticationServiceImplTest {
         void login_delegatesToAuthenticationManager() {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("alice");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
-                            new User("alice", "secret", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("alice", "secret", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
@@ -221,7 +217,8 @@ class AuthenticationServiceImplTest {
     class UnexpectedPrincipalType {
 
         @Test
-        @DisplayName("T8c: login() throws IllegalStateException when AuthenticationManager returns non-SecurityUserPrincipal")
+        @DisplayName(
+                "T8c: login() throws IllegalStateException when AuthenticationManager returns non-SecurityUserPrincipal")
         void login_throwsIllegalStateException_whenPrincipalIsNotSecurityUserPrincipal() {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("testuser");
@@ -249,9 +246,9 @@ class AuthenticationServiceImplTest {
         void login_callsJwtServiceGenerateTokenPairOnSuccess() {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("bob");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
-                            new User("bob", "pass", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("bob", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
 
             String fakeAccess = "access.token.stub";
@@ -269,11 +266,7 @@ class AuthenticationServiceImplTest {
                     .as("refreshToken must equal value returned by JwtService")
                     .isEqualTo(fakeRefresh);
 
-            verify(jwtService).generateTokenPair(
-                    argThat("bob"::equals),
-                    any(UUID.class),
-                    isNull(),
-                    any());
+            verify(jwtService).generateTokenPair(argThat("bob"::equals), any(UUID.class), isNull(), any());
         }
     }
 
@@ -304,8 +297,7 @@ class AuthenticationServiceImplTest {
         @Test
         @DisplayName("T10 — throws LockedException before authenticate() when isLockedOut=true")
         void t10_throwsLockedExceptionWhenIsLockedOut() {
-            when(userRepository.findByUsername("alice")).thenReturn(
-                    java.util.Optional.of(userEntity()));
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
             when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
             when(lockoutService.isLockedOut(userId)).thenReturn(true);
 
@@ -318,21 +310,19 @@ class AuthenticationServiceImplTest {
         @Test
         @DisplayName("T11 — calls recordSuccessfulLogin after successful authenticate")
         void t11_callsRecordSuccessfulLoginOnSuccess() {
-            when(userRepository.findByUsername("alice")).thenReturn(
-                    java.util.Optional.of(userEntity()));
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
             when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
             when(lockoutService.isLockedOut(userId)).thenReturn(false);
 
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("alice");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(
-                            userId, null,
-                            new org.springframework.security.core.userdetails.User(
-                                    "alice", "pass", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            userId,
+                            null,
+                            new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
-                    .thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
 
@@ -342,12 +332,10 @@ class AuthenticationServiceImplTest {
         @Test
         @DisplayName("T12 — calls recordFailedAttempt and rethrows BadCredentials")
         void t12_callsRecordFailedAttemptOnBadCredentials() {
-            when(userRepository.findByUsername("alice")).thenReturn(
-                    java.util.Optional.of(userEntity()));
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
             when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
             when(lockoutService.isLockedOut(userId)).thenReturn(false);
-            when(authenticationManager.authenticate(any()))
-                    .thenThrow(new BadCredentialsException("bad"));
+            when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
 
             assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
                     .isInstanceOf(BadCredentialsException.class);
@@ -368,25 +356,24 @@ class AuthenticationServiceImplTest {
         @DisplayName("T13 — ROLE_-prefixed authority is stripped before passing to JwtService")
         void t13_rolePrefixIsStripped() {
             UUID roleUserId = UUID.randomUUID();
-            org.springframework.security.core.GrantedAuthority roleAuthority =
-                    () -> "ROLE_ADMIN";
+            org.springframework.security.core.GrantedAuthority roleAuthority = () -> "ROLE_ADMIN";
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("charlie");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId, null,
-                            new User("charlie", "pass", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            roleUserId, null, new User("charlie", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(roleAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
-                    .thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("charlie", "pass"));
 
-            verify(jwtService).generateTokenPair(
-                    any(),
-                    any(UUID.class),
-                    isNull(),
-                    argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")));
+            verify(jwtService)
+                    .generateTokenPair(
+                            any(),
+                            any(UUID.class),
+                            isNull(),
+                            argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")));
         }
 
         @Test
@@ -396,21 +383,17 @@ class AuthenticationServiceImplTest {
             org.springframework.security.core.GrantedAuthority plainAuthority = () -> "MANAGER";
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("dave");
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId, null,
-                            new User("dave", "pass", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            roleUserId, null, new User("dave", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(plainAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
-                    .thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("dave", "pass"));
 
-            verify(jwtService).generateTokenPair(
-                    any(),
-                    any(UUID.class),
-                    isNull(),
-                    argThat(roles -> roles.contains("MANAGER")));
+            verify(jwtService)
+                    .generateTokenPair(any(), any(UUID.class), isNull(), argThat(roles -> roles.contains("MANAGER")));
         }
     }
 
@@ -494,23 +477,18 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("alice");
             // SecurityUserPrincipal must be constructed with (userId, personId, delegate)
-            when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(
-                            t18UserId, t18PersonId,
-                            new org.springframework.security.core.userdetails.User(
-                                    "alice", "pass", List.of())));
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            t18UserId,
+                            t18PersonId,
+                            new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
-                    .thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
 
-            verify(jwtService).generateTokenPair(
-                    eq("alice"),
-                    eq(t18UserId),
-                    eq(t18PersonId),
-                    any());
+            verify(jwtService).generateTokenPair(eq("alice"), eq(t18UserId), eq(t18PersonId), any());
         }
     }
 }

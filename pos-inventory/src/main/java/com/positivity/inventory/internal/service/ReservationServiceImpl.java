@@ -1,7 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -15,14 +13,13 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.service.ReservationService;
 import com.positivity.security.common.SecurityContextHelper;
-
-import lombok.RequiredArgsConstructor;
-
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import com.positivity.inventory.service.ReservationService;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +36,8 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
-        ReservationEntity reservation = reservationRepository.findByWorkorderLineId(request.getWorkorderLineId())
+        ReservationEntity reservation = reservationRepository
+                .findByWorkorderLineId(request.getWorkorderLineId())
                 .map(existing -> updateExistingReservation(existing, request))
                 .orElseGet(() -> createReservationWithSoftAllocation(request));
 
@@ -48,19 +46,19 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public @NonNull ReservationResponse promoteToHard(
-            @NonNull UUID allocationId,
-            @NonNull PromoteAllocationRequest request) {
-        AllocationEntity allocation = allocationRepository.findById(allocationId)
+            @NonNull UUID allocationId, @NonNull PromoteAllocationRequest request) {
+        AllocationEntity allocation = allocationRepository
+                .findById(allocationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
 
         ReservationEntity reservation = allocation.getReservation();
         UUID stockItemId = reservation.getStockItemId();
         int netOnHand = calculateNetOnHand(stockItemId);
 
-        int existingHard = allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD)
-                .stream()
-                .mapToInt(AllocationEntity::getAllocatedQuantity)
-                .sum();
+        int existingHard =
+                allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD).stream()
+                        .mapToInt(AllocationEntity::getAllocatedQuantity)
+                        .sum();
 
         if (allocation.getAllocationState() == AllocationState.HARD) {
             existingHard -= allocation.getAllocatedQuantity();
@@ -80,11 +78,14 @@ public class ReservationServiceImpl implements ReservationService {
         allocationRepository.save(allocation);
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
-        int totalAllocated = allocations.stream().mapToInt(AllocationEntity::getAllocatedQuantity).sum();
+        int totalAllocated = allocations.stream()
+                .mapToInt(AllocationEntity::getAllocatedQuantity)
+                .sum();
         reservation.setAllocatedQuantity(totalAllocated);
-        reservation.setStatus(totalAllocated >= reservation.getRequiredQuantity()
-                ? ReservationStatus.FULFILLED
-                : ReservationStatus.PARTIALLY_FULFILLED);
+        reservation.setStatus(
+                totalAllocated >= reservation.getRequiredQuantity()
+                        ? ReservationStatus.FULFILLED
+                        : ReservationStatus.PARTIALLY_FULFILLED);
         reservationRepository.save(reservation);
 
         return toResponse(reservation);
@@ -92,7 +93,8 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public void cancelReservation(@NonNull UUID workorderLineId) {
-        ReservationEntity reservation = reservationRepository.findByWorkorderLineId(workorderLineId)
+        ReservationEntity reservation = reservationRepository
+                .findByWorkorderLineId(workorderLineId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation", workorderLineId.toString()));
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);

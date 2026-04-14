@@ -1,10 +1,9 @@
 package com.positivity.documents.internal.service.format;
 
 import com.positivity.documents.internal.enums.DocumentFormat;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
-
-import java.util.Map;
 
 @Component
 public class TextFormatHandler implements FormatHandler {

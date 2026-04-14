@@ -9,21 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.mcp.internal.dto.ClarificationResponseDTO;
 import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.entity.NltiIntent;
@@ -32,9 +17,21 @@ import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
 import com.positivity.mcp.service.AuditLedgerService;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link IntentParserServiceImpl} covering NLTI-002 acceptance
@@ -140,8 +137,7 @@ class IntentParserServiceTest {
 
         assertThat(result.status()).isEqualTo("NEEDS_CLARIFICATION");
         assertThat(result.clarificationQuestions()).isNotEmpty();
-        result.clarificationQuestions()
-                .forEach(q -> assertThat(q.options()).hasSizeGreaterThanOrEqualTo(2));
+        result.clarificationQuestions().forEach(q -> assertThat(q.options()).hasSizeGreaterThanOrEqualTo(2));
     }
 
     // ─── AC3: clarification resolution → READY ──────────────────────────────
@@ -319,7 +315,8 @@ class IntentParserServiceTest {
     // ─── resolve: selectedOption blank branch ────────────────────────────────
 
     @Test
-    @DisplayName("resolve: blank selectedOption triggers PENDING_CLARIFICATION (!selectedOption.isBlank() false-branch)")
+    @DisplayName(
+            "resolve: blank selectedOption triggers PENDING_CLARIFICATION (!selectedOption.isBlank() false-branch)")
     void resolve_withBlankSelectedOption_remainsPendingClarification() {
         // answer=non-blank, selectedOption=blank → fourth condition
         // (!selectedOption.isBlank()) false
@@ -393,8 +390,7 @@ class IntentParserServiceTest {
     void constructor_withNullObjectMapper_createsWorkingInstance() {
         // Passing null for objectMapper → constructor null-safe branch uses new
         // ObjectMapper()
-        var svc = new IntentParserServiceImpl(
-                intentRepository, auditLedgerService, meterRegistry, clock, null);
+        var svc = new IntentParserServiceImpl(intentRepository, auditLedgerService, meterRegistry, clock, null);
 
         IntentV1 result = svc.parse("check tire status", SESSION_ID, CORRELATION_ID);
 
@@ -407,8 +403,7 @@ class IntentParserServiceTest {
     @Test
     @DisplayName("4-param constructor delegates to 5-param constructor with default ObjectMapper")
     void constructor_fourParam_createsWorkingInstance() {
-        var svc = new IntentParserServiceImpl(
-                intentRepository, auditLedgerService, meterRegistry, clock);
+        var svc = new IntentParserServiceImpl(intentRepository, auditLedgerService, meterRegistry, clock);
 
         IntentV1 result = svc.parse("list open workorders", SESSION_ID, CORRELATION_ID);
 

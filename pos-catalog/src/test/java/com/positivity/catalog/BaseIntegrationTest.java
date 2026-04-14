@@ -33,7 +33,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>
  * Usage:
- * 
+ *
  * <pre>
  * &#64;DisplayName("My Controller Tests")
  * public class MyControllerIT extends BaseIntegrationTest {
@@ -61,7 +61,8 @@ public abstract class BaseIntegrationTest {
     protected MockMvc mockMvc;
 
     protected static final String TEST_USER = "testuser";
-    protected static final String TEST_AUTHORITIES = String.join(",",
+    protected static final String TEST_AUTHORITIES = String.join(
+            ",",
             "ROLE_ADMIN",
             "ROLE_CATALOG_VIEW",
             "ROLE_CATALOG_EDIT",
@@ -72,8 +73,7 @@ public abstract class BaseIntegrationTest {
     @BeforeEach
     public void setUpMockMvc() {
         resetDatabaseState();
-        this.mockMvc = MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
+        this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .apply(springSecurity())
                 .build();
     }
@@ -81,23 +81,21 @@ public abstract class BaseIntegrationTest {
     private void resetDatabaseState() {
         jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
         try {
-            jdbcTemplate.queryForList(
-                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'",
-                    String.class).forEach(table -> jdbcTemplate.execute("TRUNCATE TABLE \"" + table + "\""));
+            jdbcTemplate
+                    .queryForList(
+                            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'",
+                            String.class)
+                    .forEach(table -> jdbcTemplate.execute("TRUNCATE TABLE \"" + table + "\""));
         } finally {
             jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
         }
     }
 
     protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", TEST_AUTHORITIES);
+        return builder.header("X-User", TEST_USER).header("X-Authorities", TEST_AUTHORITIES);
     }
 
     protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder, String authorities) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", authorities);
+        return builder.header("X-User", TEST_USER).header("X-Authorities", authorities);
     }
 }

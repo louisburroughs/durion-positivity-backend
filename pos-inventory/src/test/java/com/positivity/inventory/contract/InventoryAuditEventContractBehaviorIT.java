@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.event.InventoryAuditEvent;
+import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,12 +21,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
-
-import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
-import com.positivity.inventory.internal.enums.ApprovalTier;
-import com.positivity.inventory.internal.event.InventoryAuditEvent;
-import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -96,12 +93,14 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(eventEnvelope.has("aggregate")).isTrue();
         assertThat(eventEnvelope.has("payload")).isTrue();
 
-        assertThatCode(() -> UUID.fromString(eventEnvelope.get("eventId").asString())).doesNotThrowAnyException();
+        assertThatCode(() -> UUID.fromString(eventEnvelope.get("eventId").asString()))
+                .doesNotThrowAnyException();
     }
 
     private UUID createPendingApprovalAdjustment() throws Exception {
         UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        JsonNode createRequest = objectMapper.createObjectNode()
+        JsonNode createRequest = objectMapper
+                .createObjectNode()
                 .put("stockItemId", stockItemId.toString())
                 .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")
                 .put("countedQuantity", 22)
@@ -110,27 +109,29 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
                 .put("createdByUserId", "user-creator");
 
         String createResponse = mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
-                .header("X-User", "user-creator")
-                .header("X-User-Id", "user-creator")
-                .header("X-Authorities", "inventory:adjustment:create,inventory:adjustment:approve")
-                .header("X-Correlation-Id", "corr-issue-22-create")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createRequest)))
+                        .header("X-User", "user-creator")
+                        .header("X-User-Id", "user-creator")
+                        .header("X-Authorities", "inventory:adjustment:create,inventory:adjustment:approve")
+                        .header("X-Correlation-Id", "corr-issue-22-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        return UUID.fromString(objectMapper.readTree(createResponse).path("adjustmentId").asString());
+        return UUID.fromString(
+                objectMapper.readTree(createResponse).path("adjustmentId").asString());
     }
 
     private void approveAdjustment(@NonNull UUID adjustmentId) throws Exception {
-        JsonNode approveRequest = objectMapper.createObjectNode()
+        JsonNode approveRequest = objectMapper
+                .createObjectNode()
                 .put("approverUserId", "user-approver")
                 .put("notes", "approve adjustment for audit event contract test");
 
-        mockMvc.perform(
-                withGatewayAuth(post("/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
+        mockMvc.perform(withGatewayAuth(
+                                post("/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
                         .header("X-User", "user-approver")
                         .header("X-User-Id", "user-approver")
                         .header("X-Authorities", "inventory:adjustment:approve")

@@ -10,12 +10,16 @@ import java.util.UUID;
 public class TimeEntryAdjustmentRequest {
 
     @NotNull(message = "timeEntryId is required")
-    @Schema(description = "Time entry identifier to adjust", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Time entry identifier to adjust",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID timeEntryId;
 
     @NotBlank(message = "reasonCode is required")
-    @Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK",
+    @Schema(
+            description = "Reason code for the adjustment",
+            example = "MISSED_BREAK",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
 
@@ -89,5 +93,4 @@ public class TimeEntryAdjustmentRequest {
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
     }
-
 }

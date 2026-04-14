@@ -1,13 +1,11 @@
 package com.positivity.accounting.internal.audit.event;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
 import com.positivity.accounting.internal.enums.AccountingIntent;
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.enums.RefundType;
-
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

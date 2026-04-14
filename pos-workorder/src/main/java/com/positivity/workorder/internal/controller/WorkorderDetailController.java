@@ -8,17 +8,16 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Controller for workorder detail with role-based visibility.
@@ -37,21 +36,36 @@ public class WorkorderDetailController {
 
     @GetMapping("/{workorderId}/detail")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get workorder detail with role-based visibility", description = "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
-            +
-            "Capability flags indicate which actions the user can perform.", responses = {
-                    @ApiResponse(responseCode = "200", description = "Workorder detail retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @Operation(
+            summary = "Get workorder detail with role-based visibility",
+            description =
+                    "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
+                            + "Capability flags indicate which actions the user can perform.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Workorder detail retrieved successfully",
+                        content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
+                @ApiResponse(responseCode = "404", description = "Workorder not found")
             })
     public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
-            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
-            @Parameter(description = "User authorities (comma-separated)", example = "workorder:workorder:view,workorder:financials:view") @RequestHeader(value = "X-Authorities", required = false) String authorities) {
+            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    @NonNull
+                    UUID workorderId,
+            @Parameter(
+                            description = "User authorities (comma-separated)",
+                            example = "workorder:workorder:view,workorder:financials:view")
+                    @RequestHeader(value = "X-Authorities", required = false)
+                    String authorities) {
 
         // Extract authorities from header
         Set<String> userAuthorities = extractAuthorities(authorities);
 
-        log.debug("Getting workorder detail: workorderId(mask)={}, authorityCount={}",
-                maskForLog(workorderId), userAuthorities.size());
+        log.debug(
+                "Getting workorder detail: workorderId(mask)={}, authorityCount={}",
+                maskForLog(workorderId),
+                userAuthorities.size());
 
         WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId, userAuthorities);
 
@@ -69,10 +83,8 @@ public class WorkorderDetailController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

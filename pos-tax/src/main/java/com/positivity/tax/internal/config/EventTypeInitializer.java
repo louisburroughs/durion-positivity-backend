@@ -1,8 +1,8 @@
 package com.positivity.tax.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -40,7 +40,8 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

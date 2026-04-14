@@ -7,8 +7,7 @@ import com.positivity.vehicle.internal.entity.Van;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
 
 public final class VehicleLegacyMapper {
-    private VehicleLegacyMapper() {
-    }
+    private VehicleLegacyMapper() {}
 
     public static VehicleEntity toEntity(VehicleLegacyRequest request) {
         VehicleEntity entity = createVehicleByType(request.getVehicleType());

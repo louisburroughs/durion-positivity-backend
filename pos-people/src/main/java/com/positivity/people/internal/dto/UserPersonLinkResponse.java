@@ -1,10 +1,9 @@
 package com.positivity.people.internal.dto;
 
-import lombok.Builder;
-import lombok.Data;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder
@@ -23,5 +22,4 @@ public class UserPersonLinkResponse {
     private String createdBy;
 
     private String notes;
-
 }

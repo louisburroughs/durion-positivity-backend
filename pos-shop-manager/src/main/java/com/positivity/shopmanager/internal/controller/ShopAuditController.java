@@ -40,8 +40,7 @@ public class ShopAuditController {
     @GetMapping
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
     @EmitEvent(id = "SHOPMGR_AUDIT_SEARCH", apiVersion = "1")
-    public @NonNull List<ShopAuditEntryResponse> searchAudit(
-            @ModelAttribute ShopAuditFilter filter) {
+    public @NonNull List<ShopAuditEntryResponse> searchAudit(@ModelAttribute ShopAuditFilter filter) {
         return shopAuditService.search(filter);
     }
 
@@ -54,9 +53,9 @@ public class ShopAuditController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
     @EmitEvent(id = "SHOPMGR_AUDIT_GET_BY_ID", apiVersion = "1")
-    public @NonNull ResponseEntity<ShopAuditEntryResponse> getAuditById(
-            @PathVariable UUID id) {
-        return shopAuditService.findById(id)
+    public @NonNull ResponseEntity<ShopAuditEntryResponse> getAuditById(@PathVariable UUID id) {
+        return shopAuditService
+                .findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

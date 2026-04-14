@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * Main application class for the Invoice service.
  * CAP:092 - Preferences & Billing Rules
  */
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
 @EnableDiscoveryClient
 @EnableJpaRepositories
 @EnableAsync
@@ -20,5 +20,4 @@ public class PosInvoiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosInvoiceApplication.class, args);
     }
-
 }

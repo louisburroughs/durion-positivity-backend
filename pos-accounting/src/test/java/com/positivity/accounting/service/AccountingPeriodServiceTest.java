@@ -2,13 +2,13 @@ package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,11 +17,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
-
 /**
  * Unit tests for AccountingPeriodService
- * 
+ *
  * Tests monthly accounting period management including
  * period ID calculation and prior period detection.
  */

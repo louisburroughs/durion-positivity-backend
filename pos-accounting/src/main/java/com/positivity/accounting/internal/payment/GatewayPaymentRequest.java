@@ -1,16 +1,14 @@
 package com.positivity.accounting.internal.payment;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.positivity.accounting.internal.enums.PaymentMethod;
-
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -52,4 +50,3 @@ public class GatewayPaymentRequest {
     @NotNull(message = "metadata cannot be null")
     private List<@NotBlank(message = "metadata entries cannot be blank") String> metadata = new ArrayList<>();
 }
-

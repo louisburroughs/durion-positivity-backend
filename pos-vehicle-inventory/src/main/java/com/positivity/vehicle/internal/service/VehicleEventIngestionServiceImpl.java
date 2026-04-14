@@ -1,18 +1,5 @@
 package com.positivity.vehicle.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
 import com.positivity.vehicle.internal.entity.EventProcessingLog;
 import com.positivity.vehicle.internal.entity.EventProcessingLog.ConflictPolicy;
@@ -23,9 +10,19 @@ import com.positivity.vehicle.internal.enums.OdometerUnit;
 import com.positivity.vehicle.internal.repository.EventProcessingLogRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.service.VehicleEventIngestionService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Event ingestion service for vehicle updates (CAP:091 Story #101).
@@ -44,7 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionService {
     private final Clock clock;
 
-
     private final VehicleRecordRepository vehicleRepository;
     private final EventProcessingLogRepository eventProcessingLogRepository;
 
@@ -60,16 +56,20 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
         String workorderId = event.getWorkorderId();
         String vehicleId = event.getVehicleId();
 
-        log.info("Processing VehicleUpdated event: id={}, workorder={}, vehicle={}",
-                eventId, workorderId, vehicleId);
+        log.info("Processing VehicleUpdated event: id={}, workorder={}, vehicle={}", eventId, workorderId, vehicleId);
 
         // 1. Check for duplicate (idempotency)
         Optional<EventProcessingLog> existingLog = eventProcessingLogRepository.findByEventId(eventId);
         if (existingLog.isPresent()) {
-            log.warn("Duplicate event detected: id={} (already processed with status {})",
-                    eventId, existingLog.get().getStatus());
-            updateEventProcessingLog(existingLog.get(), ProcessingStatus.DUPLICATE_EVENT,
-                    ConflictPolicy.DUPLICATE_EVENT, "Already processed");
+            log.warn(
+                    "Duplicate event detected: id={} (already processed with status {})",
+                    eventId,
+                    existingLog.get().getStatus());
+            updateEventProcessingLog(
+                    existingLog.get(),
+                    ProcessingStatus.DUPLICATE_EVENT,
+                    ConflictPolicy.DUPLICATE_EVENT,
+                    "Already processed");
             return;
         }
 
@@ -77,8 +77,8 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
         Optional<VehicleRecord> vehicleOpt = vehicleRepository.findById(UUID.fromString(vehicleId));
         if (vehicleOpt.isEmpty()) {
             log.error("Vehicle not found: id={}", vehicleId);
-            var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId,
-                    ProcessingStatus.ERROR_VEHICLE_NOT_FOUND);
+            var eventLog =
+                    createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.ERROR_VEHICLE_NOT_FOUND);
             eventProcessingLogRepository.save(eventLog);
             return;
         }
@@ -87,10 +87,13 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
 
         // 3. Validate VIN change (not allowed; controlled separately)
         if (!vehicle.getVinNormalized().equals(event.getVinNormalized())) {
-            log.warn("VIN change rejected: vehicle={}, old={}, new={}",
-                    vehicleId, vehicle.getVinNormalized(), event.getVinNormalized());
-            var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId,
-                    ProcessingStatus.CONFLICT_VIN_CHANGE);
+            log.warn(
+                    "VIN change rejected: vehicle={}, old={}, new={}",
+                    vehicleId,
+                    vehicle.getVinNormalized(),
+                    event.getVinNormalized());
+            var eventLog =
+                    createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.CONFLICT_VIN_CHANGE);
             eventLog.setConflictPolicy(ConflictPolicy.VIN_CHANGE);
             eventLog.setDetails(Map.of("oldVin", vehicle.getVinNormalized(), "newVin", event.getVinNormalized()));
             eventProcessingLogRepository.save(eventLog);
@@ -101,22 +104,26 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
         if (event.getCurrentMileage() != null) {
             if (event.getCurrentMileage() < 0 || event.getCurrentMileage() > 999999) {
                 log.error("Invalid mileage: vehicle={}, mileage={}", vehicleId, event.getCurrentMileage());
-                var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId,
-                        ProcessingStatus.ERROR_INVALID_ODOMETER);
+                var eventLog = createEventProcessingLog(
+                        eventId, workorderId, vehicleId, ProcessingStatus.ERROR_INVALID_ODOMETER);
                 eventLog.setDetails(Map.of("mileage", event.getCurrentMileage()));
                 eventProcessingLogRepository.save(eventLog);
                 return;
             }
 
             // 5. Check mileage decrease (warning but accept)
-            Long currentMileage = vehicle.getOdometer() != null ? vehicle.getOdometer().getValue() : null;
+            Long currentMileage =
+                    vehicle.getOdometer() != null ? vehicle.getOdometer().getValue() : null;
             if (currentMileage != null && event.getCurrentMileage() < currentMileage) {
-                log.warn("Mileage decrease detected: vehicle={}, old={}, new={}",
-                        vehicleId, currentMileage, event.getCurrentMileage());
+                log.warn(
+                        "Mileage decrease detected: vehicle={}, old={}, new={}",
+                        vehicleId,
+                        currentMileage,
+                        event.getCurrentMileage());
                 // Flag for review but accept (per business rules)
                 applyMileageUpdate(vehicle, event);
-                var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId,
-                        ProcessingStatus.PENDING_REVIEW);
+                var eventLog =
+                        createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.PENDING_REVIEW);
                 eventLog.setConflictPolicy(ConflictPolicy.MILEAGE_DECREASE);
                 eventLog.setDetails(Map.of("oldMileage", currentMileage, "newMileage", event.getCurrentMileage()));
                 eventProcessingLogRepository.save(eventLog);
@@ -128,7 +135,11 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
         try {
             applyUpdate(vehicle, event);
             var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.SUCCESS);
-            eventLog.setDetails(Map.of("updateType", "mileage_and_metadata", "appliedAt", Instant.now(clock).toString()));
+            eventLog.setDetails(Map.of(
+                    "updateType",
+                    "mileage_and_metadata",
+                    "appliedAt",
+                    Instant.now(clock).toString()));
             eventProcessingLogRepository.save(eventLog);
             log.info("Successfully processed event: id={}", eventId);
         } catch (Exception e) {
@@ -181,8 +192,11 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
     /**
      * Create event processing log for new event.
      */
-    private EventProcessingLog createEventProcessingLog(@NonNull String eventId, @NonNull String workorderId,
-            @NonNull String vehicleId, @NonNull ProcessingStatus status) {
+    private EventProcessingLog createEventProcessingLog(
+            @NonNull String eventId,
+            @NonNull String workorderId,
+            @NonNull String vehicleId,
+            @NonNull ProcessingStatus status) {
         return EventProcessingLog.builder()
                 .eventId(eventId)
                 .workorderId(workorderId)
@@ -195,8 +209,11 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
     /**
      * Update existing event processing log.
      */
-    private void updateEventProcessingLog(@NonNull EventProcessingLog log, @NonNull ProcessingStatus status,
-            @Nullable ConflictPolicy policy, @Nullable String note) {
+    private void updateEventProcessingLog(
+            @NonNull EventProcessingLog log,
+            @NonNull ProcessingStatus status,
+            @Nullable ConflictPolicy policy,
+            @Nullable String note) {
         log.setStatus(status);
         if (policy != null) {
             log.setConflictPolicy(policy);

@@ -1,23 +1,21 @@
 package com.positivity.accounting.internal.config;
 
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
-
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
 /**
  * Configuration for GL account mappings used in Credit Memo processing.
- * 
+ *
  * <p>
  * <strong>Required Configuration:</strong> All GL account IDs must be
  * configured in application.yml
  * or by command-line argument. The application will fail to start if any
  * required property is missing.
  * </p>
- * 
+ *
  * <pre>
  * pos:
  *   accounting:
@@ -26,7 +24,7 @@ import lombok.Data;
  *       tax-payable-account-id: "87654321-4321-8765-4321-876543218765"
  *       ar-account-id: "11111111-2222-3333-4444-555555555555"
  * </pre>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
  *      #131</a>

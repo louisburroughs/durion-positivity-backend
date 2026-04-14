@@ -27,8 +27,8 @@ public class LocationRosterServiceImpl implements LocationRosterService {
 
     @Override
     @NonNull
-    public Page<LocationRef> getRoster(@Nullable String status, @Nullable Instant sinceUpdatedAt,
-            @NonNull Pageable pageable) {
+    public Page<LocationRef> getRoster(
+            @Nullable String status, @Nullable Instant sinceUpdatedAt, @NonNull Pageable pageable) {
         Page<Location> locations;
         if (status != null && sinceUpdatedAt != null) {
             locations = locationRepository.findByStatusAndUpdatedAtAfter(status, sinceUpdatedAt, pageable);

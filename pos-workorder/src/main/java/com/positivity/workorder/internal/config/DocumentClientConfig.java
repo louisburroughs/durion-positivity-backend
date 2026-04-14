@@ -15,8 +15,6 @@ public class DocumentClientConfig {
     public RestClient documentServiceRestClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.documents.base-url:http://pos-documents:8080}") String documentServiceBaseUrl) {
-        return restClientBuilder
-                .baseUrl(documentServiceBaseUrl)
-                .build();
+        return restClientBuilder.baseUrl(documentServiceBaseUrl).build();
     }
 }

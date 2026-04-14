@@ -1,15 +1,13 @@
 package com.positivity.order.internal.repository;
 
+import com.positivity.order.internal.entity.OverrideStatus;
+import com.positivity.order.internal.entity.PriceOverride;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import com.positivity.order.internal.entity.OverrideStatus;
-import com.positivity.order.internal.entity.PriceOverride;
 
 /**
  * Repository for PriceOverride entity operations.

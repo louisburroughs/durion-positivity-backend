@@ -1,16 +1,15 @@
 package com.positivity.securityservice.internal.domain;
 
-import com.positivity.securityservice.internal.enums.PermissionCode;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.securityservice.internal.enums.PermissionCode;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link PermissionBitsetCodec} (PERM-003).
@@ -43,10 +42,7 @@ class PermissionBitsetCodecTest {
     void encodeSinglePermissionProducesBase64UrlWithoutPadding() {
         // Issue PERM-003: output must be valid Base64URL and have no '=' padding chars
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
-        assertThat(encoded)
-                .isNotNull()
-                .doesNotContain("=")
-                .matches("[A-Za-z0-9_-]*");
+        assertThat(encoded).isNotNull().doesNotContain("=").matches("[A-Za-z0-9_-]*");
     }
 
     @Test
@@ -56,11 +52,9 @@ class PermissionBitsetCodecTest {
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
                 PermissionCode.MCP__CHAT__EXECUTE // bit 226
-        );
+                );
         String encoded = PermissionBitsetCodec.encode(perms);
-        assertThat(encoded)
-                .doesNotContain("=")
-                .matches("[A-Za-z0-9_-]*");
+        assertThat(encoded).doesNotContain("=").matches("[A-Za-z0-9_-]*");
     }
 
     // -------------------------------------------------------------------------
@@ -89,8 +83,7 @@ class PermissionBitsetCodecTest {
     @DisplayName("decode malformed Base64 input throws IllegalArgumentException")
     void decodeThrowsIllegalArgumentForMalformedBase64() {
         // Issue PERM-003: codec must surface invalid input clearly to callers
-        assertThatThrownBy(() -> PermissionBitsetCodec.decode("!@#$%"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PermissionBitsetCodec.decode("!@#$%")).isInstanceOf(IllegalArgumentException.class);
     }
 
     // -------------------------------------------------------------------------
@@ -104,8 +97,8 @@ class PermissionBitsetCodecTest {
         // catalog
         Set<PermissionCode> all = EnumSet.allOf(PermissionCode.class);
         String encoded = PermissionBitsetCodec.encode(all);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
-                PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded =
+                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(all);
     }
 
@@ -117,10 +110,10 @@ class PermissionBitsetCodecTest {
                 PermissionCode.SECURITY__ROLE__VIEW, // bit 138
                 PermissionCode.SECURITY__PERMISSION__VIEW, // bit 143
                 PermissionCode.WORKORDER__ESTIMATE__APPROVE // bit 188
-        );
+                );
         String encoded = PermissionBitsetCodec.encode(subset);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
-                PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded =
+                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(subset);
     }
 
@@ -130,8 +123,8 @@ class PermissionBitsetCodecTest {
         // Issue PERM-003: bit 11 (catalog:product:view)
         Set<PermissionCode> single = Set.of(PermissionCode.CATALOG__PRODUCT__VIEW);
         String encoded = PermissionBitsetCodec.encode(single);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
-                PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded =
+                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(single);
     }
 
@@ -151,8 +144,7 @@ class PermissionBitsetCodecTest {
         bytes[28] = (byte) 0x08; // bit 227 (beyond catalog, should be ignored)
         String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
-        Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded,
-                PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
 
         // Only the known permission should be present; bit 227 must be silently ignored
         assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW);
@@ -169,7 +161,7 @@ class PermissionBitsetCodecTest {
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
                 PermissionCode.CATALOG__PRODUCT__VIEW // bit 11
-        );
+                );
         String encoded = PermissionBitsetCodec.encode(perms);
         assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, 99))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -185,7 +177,8 @@ class PermissionBitsetCodecTest {
     void hasPermissionReturnsTrueWhenBitIsSet() {
         // Issue PERM-003: bit for ACCOUNTING__JE__VIEW (bit 0) must be found
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
-        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__VIEW)).isTrue();
+        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__VIEW))
+                .isTrue();
     }
 
     @Test
@@ -194,15 +187,15 @@ class PermissionBitsetCodecTest {
         // Issue PERM-003: only bit 0 is set; bit 1 (ACCOUNTING__JE__CREATE) must not
         // match
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
-        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__CREATE)).isFalse();
+        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__CREATE))
+                .isFalse();
     }
 
     @Test
     @DisplayName("hasPermission correctly handles the last bit (bit 226)")
     void hasPermissionWorksForLastBit() {
         // Issue PERM-003: boundary check — bit 226 is the highest defined catalog bit
-        String encoded = PermissionBitsetCodec.encode(
-                Set.of(PermissionCode.MCP__CHAT__EXECUTE)); // bit 226
+        String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.MCP__CHAT__EXECUTE)); // bit 226
         assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.MCP__CHAT__EXECUTE))
                 .isTrue();
         assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__VIEW))

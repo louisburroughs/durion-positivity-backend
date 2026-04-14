@@ -1,15 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.VehicleTransferRequest;
@@ -22,9 +12,16 @@ import com.positivity.customer.service.CrmVehicleService;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for managing customer-vehicle associations.
@@ -104,19 +101,19 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
      */
     @Override
     @Transactional
-    public VehicleResponse updateVehicle(@NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request,
-            @NonNull UUID vehicleId) {
+    public VehicleResponse updateVehicle(
+            @NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request, @NonNull UUID vehicleId) {
         log.debug("Updating vehicle {} for customer {}", vehicleId, customerId);
 
         AbstractParty party = findPartyOrThrow(customerId);
 
         // Fetch existing vehicle to verify ownership
-        VehicleResponse existing = vehicleInventoryClient.getVehicle(vehicleId)
+        VehicleResponse existing = vehicleInventoryClient
+                .getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!party.getVehicleVins().contains(existing.getVin())) {
-            throw new IllegalArgumentException(
-                    "Vehicle " + vehicleId + " does not belong to customer " + customerId);
+            throw new IllegalArgumentException("Vehicle " + vehicleId + " does not belong to customer " + customerId);
         }
 
         // Map to vehicle inventory request
@@ -127,8 +124,10 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
                 .description(request.getDescription() != null ? request.getDescription() : existing.getDescription())
                 .licensePlate(
                         request.getLicensePlate() != null ? request.getLicensePlate() : existing.getLicensePlate())
-                .licensePlateJurisdiction(request.getLicensePlateRegion() != null ? request.getLicensePlateRegion()
-                        : existing.getLicensePlateJurisdiction())
+                .licensePlateJurisdiction(
+                        request.getLicensePlateRegion() != null
+                                ? request.getLicensePlateRegion()
+                                : existing.getLicensePlateJurisdiction())
                 .build();
 
         return vehicleInventoryClient.updateVehicle(vehicleId, vehicleRequest);
@@ -145,12 +144,12 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
         AbstractParty party = findPartyOrThrow(customerId);
 
         // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleId)
+        VehicleResponse vehicle = vehicleInventoryClient
+                .getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!party.getVehicleVins().contains(vehicle.getVin())) {
-            throw new IllegalArgumentException(
-                    "Vehicle " + vehicleId + " does not belong to customer " + customerId);
+            throw new IllegalArgumentException("Vehicle " + vehicleId + " does not belong to customer " + customerId);
         }
 
         // Delete from vehicle inventory
@@ -168,8 +167,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
      */
     @Override
     @Transactional
-    public VehicleResponse transferVehicle(@NonNull UUID sourceCustomerId, @NonNull UUID vehicleId,
-            @NonNull VehicleTransferRequest request) {
+    public VehicleResponse transferVehicle(
+            @NonNull UUID sourceCustomerId, @NonNull UUID vehicleId, @NonNull VehicleTransferRequest request) {
         log.debug("Transferring vehicle {} from {} to {}", vehicleId, sourceCustomerId, request.getTargetCustomerId());
 
         UUID targetUuid = parseCustomerId(request.getTargetCustomerId());
@@ -178,7 +177,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
         AbstractParty targetParty = findPartyOrThrow(targetUuid);
 
         // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleId)
+        VehicleResponse vehicle = vehicleInventoryClient
+                .getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!sourceParty.getVehicleVins().contains(vehicle.getVin())) {
@@ -209,7 +209,10 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
 
         VehicleResponse updated = vehicleInventoryClient.updateVehicle(vehicleId, updateRequest);
 
-        log.info("Transferred vehicle {} from customer {} to customer {}", vehicleId, sourceCustomerId,
+        log.info(
+                "Transferred vehicle {} from customer {} to customer {}",
+                vehicleId,
+                sourceCustomerId,
                 request.getTargetCustomerId());
 
         return updated;
@@ -225,9 +228,11 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     }
 
     private AbstractParty findPartyOrThrow(UUID partyId) {
-        return personPartyRepository.findById(partyId)
+        return personPartyRepository
+                .findById(partyId)
                 .map(p -> (AbstractParty) p)
-                .orElseGet(() -> commercialPartyRepository.findById(partyId)
+                .orElseGet(() -> commercialPartyRepository
+                        .findById(partyId)
                         .map(p -> (AbstractParty) p)
                         .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + partyId)));
     }
@@ -244,7 +249,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     @Transactional(readOnly = true)
     public CommercialParty findPartyByVehicleId(@NonNull UUID vehicleId) {
         log.debug("Finding party for vehicle: {}", vehicleId);
-        VehicleResponse vehicleData = vehicleInventoryClient.getVehicle(vehicleId).orElse(null);
+        VehicleResponse vehicleData =
+                vehicleInventoryClient.getVehicle(vehicleId).orElse(null);
 
         if (vehicleData == null || vehicleData.getVin() == null) {
             log.debug("Vehicle not found: {}", vehicleId);
@@ -259,14 +265,16 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(
             String vinCode) {
         try {
-            VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
+            VehicleResponse vehicleData =
+                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
 
             if (vehicleData == null) {
                 log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
                 return null;
             }
 
-            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary = new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
+            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary =
+                    new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
             summary.setVehicleId(vehicleData.getVehicleId().toString());
             summary.setVin(vehicleData.getVin());
             summary.setLicensePlate(vehicleData.getLicensePlate());
@@ -318,19 +326,19 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
 
     @Override
     public CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
-        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
-                UUIDv7Generator.generate(),
-                Instant.now(clock),
-                "1.0.0");
+        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta =
+                new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
+                        UUIDv7Generator.generate(), Instant.now(clock), "1.0.0");
 
-        com.positivity.customer.internal.dto.snapshot.AccountSummary acct = new com.positivity.customer.internal.dto.snapshot.AccountSummary(
-                party.getPartyId().toString(),
-                party.getPartyNumber() != null ? party.getPartyNumber() : "N/A",
-                party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
-                party.getPartyType().name());
+        com.positivity.customer.internal.dto.snapshot.AccountSummary acct =
+                new com.positivity.customer.internal.dto.snapshot.AccountSummary(
+                        party.getPartyId().toString(),
+                        party.getPartyNumber() != null ? party.getPartyNumber() : "N/A",
+                        party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
+                        party.getPartyType().name());
 
-        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = collectVehiclesForParty(
-                party);
+        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles =
+                collectVehiclesForParty(party);
 
         CrmSnapshotDTO result = new CrmSnapshotDTO();
         result.setSnapshotMetadata(meta);
@@ -343,8 +351,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     }
 
     @Override
-    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(
-            CommercialParty party) {
+    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>
+            collectVehiclesForParty(CommercialParty party) {
         return party.getVehicleVins().stream()
                 .map(this::fetchVehicleSummaryByVin)
                 .filter(java.util.Objects::nonNull)

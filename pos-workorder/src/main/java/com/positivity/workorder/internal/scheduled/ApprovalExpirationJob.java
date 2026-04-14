@@ -1,18 +1,16 @@
 package com.positivity.workorder.internal.scheduled;
 
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
 import com.positivity.workorder.service.EstimateService;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 /**
  * Scheduled job to expire pending approvals that have exceeded their approval
  * window.
  * CAP:003 Issue #204 - Handle Approval Expiration
- * 
+ *
  * Runs hourly to check for estimates in PENDING_APPROVAL state where expiresAt
  * has passed.
  * Transitions these estimates to EXPIRED state with reason explaining the

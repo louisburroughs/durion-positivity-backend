@@ -1,23 +1,9 @@
 package com.positivity.securityservice;
 
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
@@ -26,6 +12,17 @@ import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Integration tests for role assignment revocation endpoint with LocalDateTime
@@ -33,7 +30,9 @@ import com.positivity.securityservice.internal.repository.UserRepository;
  * Tests verify proper handling of ISO DATE_TIME format and default behavior
  * when parameter is omitted.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = PosSecurityServiceApplication.class)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = PosSecurityServiceApplication.class)
 @ActiveProfiles("test")
 @DisplayName("Role Assignment Revocation EndDate Parameter Tests")
 @Transactional
@@ -85,11 +84,12 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
     void testRevokeWithoutEndDate() throws Exception {
         // When: Revoking without endDate parameter
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", testAssignment.getId()))
-                .header("X-Correlation-Id", TEST_CORRELATION_ID))
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isNoContent());
 
         // Then: Assignment should have effectiveEndDate set to approximately now
-        RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
+        RoleAssignment revoked =
+                roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
         LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
 
         // Verify endDate is set and is within last minute (allowing for test execution
@@ -108,12 +108,13 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // When: Revoking with endDate parameter
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", testAssignment.getId()))
-                .param("endDate", endDateParam)
-                .header("X-Correlation-Id", TEST_CORRELATION_ID))
+                        .param("endDate", endDateParam)
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isNoContent());
 
         // Then: Assignment should have the specified effectiveEndDate
-        RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
+        RoleAssignment revoked =
+                roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
         assertThat(revoked.getEffectiveEndDate()).isEqualTo(specificEndDate);
     }
 
@@ -125,8 +126,8 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // When/Then: Should return 400 Bad Request
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", testAssignment.getId()))
-                .param("endDate", invalidEndDate)
-                .header("X-Correlation-Id", TEST_CORRELATION_ID))
+                        .param("endDate", invalidEndDate)
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID));
     }
@@ -140,11 +141,12 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // When/Then: Future date is supported
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", testAssignment.getId()))
-                .param("endDate", endDateParam)
-                .header("X-Correlation-Id", TEST_CORRELATION_ID))
+                        .param("endDate", endDateParam)
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isNoContent());
 
-        RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
+        RoleAssignment revoked =
+                roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
         assertThat(revoked.getEffectiveEndDate()).isEqualTo(futureDate);
     }
 
@@ -156,7 +158,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // When/Then: Should return 404 Not Found
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", nonExistentId))
-                .header("X-Correlation-Id", TEST_CORRELATION_ID))
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROLE_ASSIGNMENT_NOT_FOUND"))
                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID));

@@ -15,9 +15,6 @@ public class PersonClient {
     private String peopleServiceUrl;
 
     public PersonDTO getPersonById(Long id) {
-        return restClient.get()
-                .uri(peopleServiceUrl + "/{id}", id)
-                .retrieve()
-                .body(PersonDTO.class);
+        return restClient.get().uri(peopleServiceUrl + "/{id}", id).retrieve().body(PersonDTO.class);
     }
 }

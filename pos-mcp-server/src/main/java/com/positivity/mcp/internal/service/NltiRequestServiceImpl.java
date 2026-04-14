@@ -62,10 +62,11 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     private final Counter rateLimitCounterEvictions;
     private final Counter rateLimitCounterInvalidations;
 
-    public NltiRequestServiceImpl(@NonNull NltiSessionRepository sessionRepository,
-                                   @NonNull NltiRequestRepository requestRepository,
-                                   @NonNull Clock clock,
-                                   @NonNull MeterRegistry meterRegistry) {
+    public NltiRequestServiceImpl(
+            @NonNull NltiSessionRepository sessionRepository,
+            @NonNull NltiRequestRepository requestRepository,
+            @NonNull Clock clock,
+            @NonNull MeterRegistry meterRegistry) {
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository must not be null");
         this.requestRepository = Objects.requireNonNull(requestRepository, "requestRepository must not be null");
         this.clock = clock;
@@ -144,8 +145,8 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         Optional<NltiSession> sessionForSubject = sessionRepository.findByIdAndSubjectId(providedSessionId, subjectId);
         if (sessionForSubject.isPresent()) {
             NltiSession existing = sessionForSubject.get();
-            boolean expired = existing.getUpdatedAt()
-                    .isBefore(OffsetDateTime.now(clock).minusHours(sessionTtlHours));
+            boolean expired =
+                    existing.getUpdatedAt().isBefore(OffsetDateTime.now(clock).minusHours(sessionTtlHours));
             if (expired) {
                 sessionRequestCounts().invalidate(existing.getId());
                 rateLimitCounterInvalidations.increment();
@@ -174,8 +175,8 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     private @NonNull String hashPrompt(@NonNull String prompt) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(Objects.requireNonNull(prompt, "prompt must not be null")
-                    .getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest(
+                    Objects.requireNonNull(prompt, "prompt must not be null").getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);

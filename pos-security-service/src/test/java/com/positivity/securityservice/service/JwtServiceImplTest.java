@@ -1,8 +1,5 @@
 package com.positivity.securityservice.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,12 +21,12 @@ import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.service.JwtServiceImpl;
 import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -58,10 +55,13 @@ class JwtServiceImplTest {
 
     @Mock
     private JwtTokenRepository jwtTokenRepository;
+
     @Mock
     private RoleAuthorityServiceImpl roleAuthorityService;
+
     @Mock
     private UserService userService;
+
     @Mock
     private TokenRevocationManager tokenRevocationManager;
 
@@ -70,10 +70,7 @@ class JwtServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(
-                sut,
-                "jwtSecret",
-                "this-is-a-long-test-secret-key-with-at-least-32-chars");
+        ReflectionTestUtils.setField(sut, "jwtSecret", "this-is-a-long-test-secret-key-with-at-least-32-chars");
         ReflectionTestUtils.invokeMethod(sut, "initializeSecretKey");
         org.mockito.Mockito.lenient()
                 .when(roleAuthorityService.expandRolesToAuthorities(any()))
@@ -357,7 +354,8 @@ class JwtServiceImplTest {
         JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
                 .parseSignedClaims(pair.refreshToken())
@@ -375,7 +373,9 @@ class JwtServiceImplTest {
                 .id(UUID.randomUUID().toString())
                 .subject("alice")
                 .issuer("wrong-issuer")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .claim(JwtService.UID, TEST_USER_ID.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
@@ -448,7 +448,9 @@ class JwtServiceImplTest {
         String legacyToken = Jwts.builder()
                 .subject("alice")
                 .issuer("pos-security-service")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .claim(JwtService.USER_ID, legacyUserId.toString())
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -473,26 +475,25 @@ class JwtServiceImplTest {
     void accessToken_containsPermBitsAndPermVer() {
         when(roleAuthorityService.expandRolesToAuthorities(any()))
                 .thenReturn(Set.of(
-                        PermissionCode.ACCOUNTING__JE__VIEW.code(),
-                        PermissionCode.ACCOUNTING__JE__CREATE.code()));
+                        PermissionCode.ACCOUNTING__JE__VIEW.code(), PermissionCode.ACCOUNTING__JE__CREATE.code()));
 
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+                .parseSignedClaims(tokenPair.accessToken())
+                .getPayload();
 
         assertThat(claims).containsKey(JwtService.PERM_BITS);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
 
         String permBits = claims.get(JwtService.PERM_BITS, String.class);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(permBits,
-                PermissionCode.CATALOG_VERSION);
-        assertThat(decoded).contains(
-                PermissionCode.ACCOUNTING__JE__VIEW,
-                PermissionCode.ACCOUNTING__JE__CREATE);
+        Set<PermissionCode> decoded =
+                PermissionBitsetCodec.decodeToPermissions(permBits, PermissionCode.CATALOG_VERSION);
+        assertThat(decoded).contains(PermissionCode.ACCOUNTING__JE__VIEW, PermissionCode.ACCOUNTING__JE__CREATE);
     }
 
     /**
@@ -508,10 +509,12 @@ class JwtServiceImplTest {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+                .parseSignedClaims(tokenPair.accessToken())
+                .getPayload();
 
         @SuppressWarnings("unchecked")
         List<String> roles = claims.get(JwtService.ROLES, List.class);
@@ -523,16 +526,15 @@ class JwtServiceImplTest {
     @DisplayName("generateTokenPair normalizes role claims without ROLE_ROLE duplicates")
     void accessToken_normalizesRolesWithoutDoublePrefix() {
         JwtService.TokenPair tokenPair = sut.generateTokenPair(
-                "alice",
-                UUID.randomUUID(),
-                null,
-                Set.of("admin", "ROLE_ADMIN", "role1", "ROLE1", " shop_mgr "));
+                "alice", UUID.randomUUID(), null, Set.of("admin", "ROLE_ADMIN", "role1", "ROLE1", " shop_mgr "));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+                .parseSignedClaims(tokenPair.accessToken())
+                .getPayload();
 
         @SuppressWarnings("unchecked")
         List<String> roles = claims.get(JwtService.ROLES, List.class);
@@ -547,10 +549,12 @@ class JwtServiceImplTest {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.refreshToken()).getPayload();
+                .parseSignedClaims(tokenPair.refreshToken())
+                .getPayload();
 
         assertThat(claims.containsKey(JwtService.ROLES)).isFalse();
         assertThat(claims.containsKey(JwtService.AUTHORITIES)).isFalse();
@@ -572,10 +576,12 @@ class JwtServiceImplTest {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+                .parseSignedClaims(tokenPair.accessToken())
+                .getPayload();
 
         assertThat(claims.get(JwtService.UID, String.class)).isEqualTo(userId.toString());
         assertThat(claims.get(JwtService.USERNAME, String.class)).isEqualTo("alice");
@@ -612,10 +618,12 @@ class JwtServiceImplTest {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
-        Claims claims = Jwts.parser().verifyWith(key)
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
                 .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
                 .build()
-                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+                .parseSignedClaims(tokenPair.accessToken())
+                .getPayload();
         // perm_bits must be present for the decode path to be exercised
         assertThat(claims).containsKey(JwtService.PERM_BITS);
 
@@ -637,7 +645,9 @@ class JwtServiceImplTest {
         String legacyToken = Jwts.builder()
                 .subject("alice")
                 .issuer("pos-security-service")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .claim(JwtService.AUTHORITIES, List.of(PermissionCode.ACCOUNTING__JE__VIEW.code()))
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -659,16 +669,14 @@ class JwtServiceImplTest {
     @DisplayName("access token is less than 600 bytes for 100 permission codes")
     void accessToken_lessThan600BytesForHundredPermissions() {
         List<PermissionCode> first100 = Arrays.asList(PermissionCode.values()).subList(0, 100);
-        Set<String> permCodeStrings = first100.stream()
-                .map(PermissionCode::code)
-                .collect(Collectors.toSet());
+        Set<String> permCodeStrings =
+                first100.stream().map(PermissionCode::code).collect(Collectors.toSet());
 
         when(roleAuthorityService.expandRolesToAuthorities(any())).thenReturn(permCodeStrings);
 
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
-        assertThat(tokenPair.accessToken().getBytes(StandardCharsets.UTF_8))
-                .hasSizeLessThan(600);
+        assertThat(tokenPair.accessToken().getBytes(StandardCharsets.UTF_8)).hasSizeLessThan(600);
     }
 
     /**
@@ -686,7 +694,9 @@ class JwtServiceImplTest {
         String legacyToken = Jwts.builder()
                 .subject("alice")
                 .issuer("pos-security-service")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .claim(JwtService.ROLES, List.of("ADMIN"))
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -719,7 +729,9 @@ class JwtServiceImplTest {
         String tokenWithStringPermVer = Jwts.builder()
                 .subject("alice")
                 .issuer("pos-security-service")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .claim(JwtService.PERM_BITS, permBits)
                 .claim(JwtService.PERM_VER, "unknown-version")
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
@@ -758,11 +770,12 @@ class JwtServiceImplTest {
                 .doReturn(Optional.of(stored))
                 .when(jwtTokenRepository)
                 .findByRefreshToken(refreshToken);
-        when(userService.getUserById(userId)).thenReturn(Optional.of(UserDto.builder()
-                .id(userId)
-                .username(userId.toString())
-                .roles(Set.of())
-                .build()));
+        when(userService.getUserById(userId))
+                .thenReturn(Optional.of(UserDto.builder()
+                        .id(userId)
+                        .username(userId.toString())
+                        .roles(Set.of())
+                        .build()));
 
         assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -782,7 +795,9 @@ class JwtServiceImplTest {
         String tokenWithoutUid = Jwts.builder()
                 .subject("alice")
                 .issuer("pos-security-service")
-                .audience().add("api-gateway").and()
+                .audience()
+                .add("api-gateway")
+                .and()
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
                 .signWith(key)
@@ -840,7 +855,9 @@ class JwtServiceImplTest {
             String tokenWithMalformedPersonId = Jwts.builder()
                     .subject("alice")
                     .issuer("pos-security-service")
-                    .audience().add("api-gateway").and()
+                    .audience()
+                    .add("api-gateway")
+                    .and()
                     .claim(JwtService.PERSON_ID, "not-a-valid-uuid")
                     .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                     .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -872,12 +889,13 @@ class JwtServiceImplTest {
                     .doReturn(Optional.of(stored))
                     .when(jwtTokenRepository)
                     .findByRefreshToken(refreshToken);
-            when(userService.getUserById(userId)).thenReturn(Optional.of(UserDto.builder()
-                    .id(userId)
-                    .username(userId.toString())
-                    .roles(Set.of("ADMIN"))
-                    .personId(personId)
-                    .build()));
+            when(userService.getUserById(userId))
+                    .thenReturn(Optional.of(UserDto.builder()
+                            .id(userId)
+                            .username(userId.toString())
+                            .roles(Set.of("ADMIN"))
+                            .personId(personId)
+                            .build()));
 
             JwtService.TokenPair refreshed = sut.refreshAccessToken(refreshToken);
 

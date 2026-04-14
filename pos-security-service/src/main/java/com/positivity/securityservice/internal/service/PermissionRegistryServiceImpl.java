@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
@@ -9,19 +7,18 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.service.PermissionRegistryService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.regex.Pattern;
-import java.util.Objects;
 
 /**
  * Service for managing the central permission registry.
@@ -33,8 +30,7 @@ import java.util.Objects;
 public class PermissionRegistryServiceImpl implements PermissionRegistryService {
     private final Clock clock;
 
-    public record ProcessingCounters(int registered, int updated, int skipped) {
-    }
+    public record ProcessingCounters(int registered, int updated, int skipped) {}
 
     private final PermissionRepository permissionRepository;
 
@@ -43,8 +39,8 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * or domain:action (2-segment legacy format).
      * All lowercase, alphanumeric with underscores and hyphens.
      */
-    public static final Pattern PERMISSION_PATTERN = Pattern
-            .compile("^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)?$");
+    public static final Pattern PERMISSION_PATTERN =
+            Pattern.compile("^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)?$");
 
     /**
      * Register or update permissions from a service manifest.
@@ -54,8 +50,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
     public PermissionRegistrationResponse registerPermissions(@NonNull PermissionRegistrationRequest request) {
         validateRegistrationRequest(request);
 
-        log.info("Registering permissions for domain: {}, service: {}",
-                request.getDomain(), request.getServiceName());
+        log.info("Registering permissions for domain: {}, service: {}", request.getDomain(), request.getServiceName());
 
         List<String> errors = new ArrayList<>();
         ProcessingCounters counters = new ProcessingCounters(0, 0, 0);
@@ -65,7 +60,8 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         }
 
         boolean success = errors.isEmpty() || (counters.registered() + counters.updated()) > 0;
-        String message = String.format("Processed %d permissions: %d registered, %d updated, %d skipped",
+        String message = String.format(
+                "Processed %d permissions: %d registered, %d updated, %d skipped",
                 request.getPermissions().size(), counters.registered(), counters.updated(), counters.skipped());
 
         return PermissionRegistrationResponse.builder()
@@ -116,8 +112,9 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             PermissionRegistrationRequest.PermissionDefinition permDef,
             List<String> errors,
             ProcessingCounters counters) {
-        errors.add("Invalid permission name format: " + permDef.getName() +
-                " (must match lowercase 'domain:resource:action' or legacy 'domain:action' format; segments may include hyphens)");
+        errors.add(
+                "Invalid permission name format: " + permDef.getName()
+                        + " (must match lowercase 'domain:resource:action' or legacy 'domain:action' format; segments may include hyphens)");
         return incrementSkipped(counters);
     }
 
@@ -159,8 +156,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             boolean changed = false;
 
             if (existing.getBitIndex() == null) {
-                PermissionCode.fromCode(existing.getName())
-                        .ifPresent(pc -> existing.setBitIndex(pc.bitIndex()));
+                PermissionCode.fromCode(existing.getName()).ifPresent(pc -> existing.setBitIndex(pc.bitIndex()));
                 changed = existing.getBitIndex() != null;
             }
 
@@ -201,8 +197,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
     }
 
     private Permission buildPermission(
-            PermissionRegistrationRequest request,
-            PermissionRegistrationRequest.PermissionDefinition permDef) {
+            PermissionRegistrationRequest request, PermissionRegistrationRequest.PermissionDefinition permDef) {
         Permission permission = new Permission();
         permission.setName(permDef.getName());
         permission.setDescription(permDef.getDescription());
@@ -237,9 +232,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      */
     @Override
     public List<PermissionDto> getAllPermissions() {
-        return permissionRepository.findAll().stream()
-                .map(this::toDto)
-                .toList();
+        return permissionRepository.findAll().stream().map(this::toDto).toList();
     }
 
     /**

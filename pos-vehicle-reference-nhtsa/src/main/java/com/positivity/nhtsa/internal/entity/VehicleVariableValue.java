@@ -1,15 +1,14 @@
 package com.positivity.nhtsa.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import com.positivity.shared.id.UUIDv7Id;
+
 @Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
@@ -33,5 +32,4 @@ public class VehicleVariableValue {
     private String value;
     private String valueId;
     private LocalDateTime cacheTimestamp;
-
 }

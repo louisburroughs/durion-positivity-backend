@@ -2,11 +2,10 @@ package com.positivity.invoice.service;
 
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class RefundPaymentResult {

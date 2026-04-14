@@ -1,22 +1,21 @@
 package com.positivity.location.internal.service;
 
-import com.positivity.location.service.TravelBufferPolicyService;
-
 import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
+import com.positivity.location.service.TravelBufferPolicyService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -29,10 +28,8 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
 
     private static final String TRAVEL_BUFFER_POLICY_NAME_TAKEN = "TRAVEL_BUFFER_POLICY_NAME_TAKEN";
     private static final String TRAVEL_BUFFER_POLICY_CONFLICT = "TRAVEL_BUFFER_POLICY_CONFLICT";
-    private static final Set<String> SUPPORTED_BUFFER_TYPES = Set.of(
-            "FLAT_MINUTES",
-            "PERCENTAGE_OF_TRAVEL",
-            "DISTANCE_MULTIPLIER");
+    private static final Set<String> SUPPORTED_BUFFER_TYPES =
+            Set.of("FLAT_MINUTES", "PERCENTAGE_OF_TRAVEL", "DISTANCE_MULTIPLIER");
 
     protected final TravelBufferPolicyRepository repository;
 
@@ -91,7 +88,8 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
     @Transactional
     public TravelBufferPolicyResponse patch(String id, Map<String, Object> patch) {
         UUID policyId = parseUuidStrict(id);
-        TravelBufferPolicyEntity entity = repository.findById(policyId)
+        TravelBufferPolicyEntity entity = repository
+                .findById(policyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Travel buffer policy not found"));
 
         if (patch.containsKey("bufferType")) {
@@ -189,7 +187,6 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
     }
 
     private DuplicateResourceException toTravelBufferPolicyConflictException(
-
             DataIntegrityViolationException exception) {
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(TRAVEL_BUFFER_POLICY_NAME_TAKEN);

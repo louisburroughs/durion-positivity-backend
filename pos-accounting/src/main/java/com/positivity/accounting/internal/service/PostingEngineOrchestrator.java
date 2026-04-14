@@ -1,20 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -29,14 +14,25 @@ import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryR
 import com.positivity.accounting.service.IdempotencyService;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.accounting.service.PostingRuleEvaluator;
-
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orchestrates the posting rule engine flow including evaluation, idempotency,
  * journal entry creation/posting, and event status updates.
- * 
+ *
  * Key Responsibilities:
  * - Idempotency checks before posting
  * - Coordinate posting rule evaluation
@@ -44,12 +40,12 @@ import lombok.extern.slf4j.Slf4j;
  * - Update AccountingEvent with results
  * - Create ReprocessingAttemptHistory records
  * - Emit metrics
- * 
+ *
  * Transaction Boundaries:
  * - Each invocation runs in a transaction
  * - Optimistic locking on AccountingEvent prevents duplicate postings
  * - Idempotency checks provide additional deduplication
- * 
+ *
  * @see PostingRuleEvaluator
  * @see JournalEntryServiceImpl
  * @see IdempotencyServiceImpl
@@ -71,7 +67,7 @@ public class PostingEngineOrchestrator {
     /**
      * Processes an accounting event through the posting engine.
      * Handles evaluation, idempotency, posting, and status updates.
-     * 
+     *
      * Flow:
      * 1. Create attempt history record (default to FAILURE)
      * 2. Check idempotency key
@@ -79,7 +75,7 @@ public class PostingEngineOrchestrator {
      * 4. On success: create/post journal entry
      * 5. Update event status and attempt history
      * 6. Return result
-     * 
+     *
      * @param event               the accounting event to process
      * @param mappingVersionToUse optional specific mapping version
      * @param triggeredByUserId   user ID for audit trail
@@ -124,7 +120,8 @@ public class PostingEngineOrchestrator {
 
             if (!evaluationResult.isSuccess()) {
                 // Evaluation failed - update event status to SUSPENDED
-                log.warn("Posting rule evaluation failed for event {}: {} - {}",
+                log.warn(
+                        "Posting rule evaluation failed for event {}: {} - {}",
                         event.getEventId(),
                         evaluationResult.getFailureReason(),
                         evaluationResult.getFailureDetails());
@@ -134,10 +131,9 @@ public class PostingEngineOrchestrator {
                 event.setFailureDetails(evaluationResult.getFailureDetails());
 
                 attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
-                attemptHistory.setOutcomeDetails(
-                        String.format("Evaluation failed: %s - %s",
-                                evaluationResult.getFailureReason(),
-                                evaluationResult.getFailureDetails()));
+                attemptHistory.setOutcomeDetails(String.format(
+                        "Evaluation failed: %s - %s",
+                        evaluationResult.getFailureReason(), evaluationResult.getFailureDetails()));
 
                 accountingEventRepository.save(event);
                 reprocessingAttemptHistoryRepository.save(attemptHistory);
@@ -172,10 +168,9 @@ public class PostingEngineOrchestrator {
             event.setResolvedByUserId(triggeredByUserId);
 
             attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
-            attemptHistory.setOutcomeDetails(
-                    String.format("Successfully %s journal entry with reference: %s",
-                            autoPost ? "posted" : "created draft",
-                            postingReference));
+            attemptHistory.setOutcomeDetails(String.format(
+                    "Successfully %s journal entry with reference: %s",
+                    autoPost ? "posted" : "created draft", postingReference));
 
             // Register idempotency key
             idempotencyService.registerKey(idempotencyKey, event.getEventId());
@@ -219,10 +214,10 @@ public class PostingEngineOrchestrator {
     /**
      * Computes idempotency key for posting operations.
      * Key format: SHA-256(eventPayload + mappingVersion + orgId + sourceSystem)
-     * 
+     *
      * Uses JSON serialization with sorted keys for deterministic payload
      * representation.
-     * 
+     *
      * @param event               the accounting event
      * @param mappingVersionToUse the mapping version (null = "AUTO")
      * @return idempotency key (hex string)

@@ -1,4 +1,3 @@
 package com.positivity.securityservice;
 
-public abstract class BaseContractIntegrationTest extends BaseIntegrationTest {
-}
+public abstract class BaseContractIntegrationTest extends BaseIntegrationTest {}

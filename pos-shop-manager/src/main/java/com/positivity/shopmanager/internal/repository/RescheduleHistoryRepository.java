@@ -22,8 +22,7 @@ public interface RescheduleHistoryRepository extends JpaRepository<RescheduleHis
      * ordered most-recent first.
      */
     @NonNull
-    List<RescheduleHistory> findByAppointmentIdOrderByRescheduledAtDesc(
-            @NonNull UUID appointmentId);
+    List<RescheduleHistory> findByAppointmentIdOrderByRescheduledAtDesc(@NonNull UUID appointmentId);
 
     /** Returns the count of reschedules for the given appointment. */
     long countByAppointmentId(@NonNull UUID appointmentId);

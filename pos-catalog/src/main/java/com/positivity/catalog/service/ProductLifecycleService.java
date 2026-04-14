@@ -1,14 +1,13 @@
 package com.positivity.catalog.service;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.entity.ProductLifecycleState;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 public interface ProductLifecycleService {
 
@@ -16,8 +15,7 @@ public interface ProductLifecycleService {
 
     ProductLifecycleResponse updateLifecycle(UUID productId, ProductLifecycleUpdateRequest request);
 
-    ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
-            ProductReplacementRequest request);
+    ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId, ProductReplacementRequest request);
 
     ProductLifecycleResponse setLifecycleState(
             UUID productId,
@@ -34,5 +32,4 @@ public interface ProductLifecycleService {
             Instant effectiveAt);
 
     List<ProductLifecycleResponse.ReplacementOption> getReplacementProducts(UUID productId);
-
 }

@@ -289,8 +289,8 @@ public enum PermissionCode {
      */
     public static final int CATALOG_VERSION = 3;
 
-    private static final Map<String, PermissionCode> BY_CODE = Stream.of(values())
-            .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
+    private static final Map<String, PermissionCode> BY_CODE =
+            Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
 
     private final int bitIndex;
     private final String code;

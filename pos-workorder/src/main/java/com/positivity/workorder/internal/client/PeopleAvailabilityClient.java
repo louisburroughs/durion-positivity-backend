@@ -1,16 +1,14 @@
 package com.positivity.workorder.internal.client;
 
-import java.time.Clock;
-
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
+import java.time.Clock;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.time.LocalDate;
 
 /**
  * Client for fetching mechanic availability from the People service.
@@ -31,7 +29,8 @@ public class PeopleAvailabilityClient {
      */
     public PeopleAvailabilityResponse fetchAvailability(@NonNull String locationId, @NonNull LocalDate date) {
         try {
-            return peopleServiceRestClient.get()
+            return peopleServiceRestClient
+                    .get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/v1/people/availability")
                             .queryParam("locationId", locationId)

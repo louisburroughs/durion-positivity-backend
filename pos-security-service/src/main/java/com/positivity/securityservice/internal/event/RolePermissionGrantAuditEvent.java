@@ -17,8 +17,8 @@ public class RolePermissionGrantAuditEvent extends ApplicationEvent {
     private final String permissionKey;
     private final Instant timestamp;
 
-    public RolePermissionGrantAuditEvent(Object source, String actorId, UUID roleId, String permissionKey,
-            Instant timestamp) {
+    public RolePermissionGrantAuditEvent(
+            Object source, String actorId, UUID roleId, String permissionKey, Instant timestamp) {
         super(source);
         this.eventType = "role.permission.grant";
         this.actorId = actorId;
@@ -49,12 +49,11 @@ public class RolePermissionGrantAuditEvent extends ApplicationEvent {
 
     @Override
     public String toString() {
-        return "RolePermissionGrantAuditEvent{" +
-                "eventType='" + eventType + '\'' +
-                ", actorId='" + actorId + '\'' +
-                ", roleId=" + roleId +
-                ", permissionKey='" + permissionKey + '\'' +
-                ", timestamp=" + timestamp +
-                '}';
+        return "RolePermissionGrantAuditEvent{" + "eventType='"
+                + eventType + '\'' + ", actorId='"
+                + actorId + '\'' + ", roleId="
+                + roleId + ", permissionKey='"
+                + permissionKey + '\'' + ", timestamp="
+                + timestamp + '}';
     }
 }

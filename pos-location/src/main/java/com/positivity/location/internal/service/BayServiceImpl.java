@@ -1,7 +1,5 @@
 package com.positivity.location.internal.service;
 
-import com.positivity.location.service.BayService;
-
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
@@ -14,6 +12,7 @@ import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.service.BayService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,7 +54,8 @@ public class BayServiceImpl implements BayService {
     }
 
     public BayResponse createBay(UUID locationId, BayRequest request) {
-        Location location = locationRepository.findById(locationId)
+        Location location = locationRepository
+                .findById(locationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Location not found"));
 
         String name = requireName(request.getName());
@@ -67,7 +67,9 @@ public class BayServiceImpl implements BayService {
         }
 
         if (bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, name)
-                || bayRepository.findByLocationIdAndNormalizedName(locationId, normalizeName(name)).isPresent()) {
+                || bayRepository
+                        .findByLocationIdAndNormalizedName(locationId, normalizeName(name))
+                        .isPresent()) {
             throw new DuplicateResourceException(BAY_NAME_TAKEN);
         }
 
@@ -101,8 +103,8 @@ public class BayServiceImpl implements BayService {
 
         Page<BayEntity> page;
         if (normalizedStatus != null && normalizedBayType != null) {
-            page = bayRepository.findByLocationIdAndStatusAndBayType(locationId, normalizedStatus, normalizedBayType,
-                    pageable);
+            page = bayRepository.findByLocationIdAndStatusAndBayType(
+                    locationId, normalizedStatus, normalizedBayType, pageable);
         } else if (normalizedStatus != null) {
             page = bayRepository.findByLocationIdAndStatus(locationId, normalizedStatus, pageable);
         } else if (normalizedBayType != null) {
@@ -116,14 +118,16 @@ public class BayServiceImpl implements BayService {
     @Transactional(readOnly = true)
     public BayResponse getBay(UUID locationId, UUID bayId) {
         validateLocationExists(locationId);
-        BayEntity bay = bayRepository.findByIdAndLocationId(bayId, locationId)
+        BayEntity bay = bayRepository
+                .findByIdAndLocationId(bayId, locationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bay not found"));
         return toResponse(bay);
     }
 
     public BayResponse patchBay(UUID locationId, UUID bayId, BayPatchRequest patch) {
         validateLocationExists(locationId);
-        BayEntity existing = bayRepository.findByIdAndLocationId(bayId, locationId)
+        BayEntity existing = bayRepository
+                .findByIdAndLocationId(bayId, locationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bay not found"));
 
         if (patch.getName() != null) {
@@ -208,7 +212,8 @@ public class BayServiceImpl implements BayService {
     }
 
     private int resolveMaxConcurrentVehicles(BayRequest request) {
-        Integer capacityValue = request.getCapacity() != null ? request.getCapacity().getMaxConcurrentVehicles() : null;
+        Integer capacityValue =
+                request.getCapacity() != null ? request.getCapacity().getMaxConcurrentVehicles() : null;
         Integer resolved = capacityValue != null ? capacityValue : request.getMaxConcurrentVehicles();
         if (resolved == null) {
             throw new IllegalArgumentException("capacity.maxConcurrentVehicles is required");
@@ -328,6 +333,5 @@ public class BayServiceImpl implements BayService {
                 .build();
     }
 
-    private record NormalizedServiceCapabilities(List<String> normalizedCodes, Set<String> invalidCodes) {
-    }
+    private record NormalizedServiceCapabilities(List<String> normalizedCodes, Set<String> invalidCodes) {}
 }

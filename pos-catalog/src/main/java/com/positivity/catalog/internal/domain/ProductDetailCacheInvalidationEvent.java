@@ -9,8 +9,7 @@ import org.jspecify.annotations.Nullable;
  * Event used to invalidate product detail cache entries.
  */
 public record ProductDetailCacheInvalidationEvent(
-        @NonNull UUID productId,
-        @Nullable UUID locationId) {
+        @NonNull UUID productId, @Nullable UUID locationId) {
 
     public ProductDetailCacheInvalidationEvent {
         Objects.requireNonNull(productId, "productId must not be null");
@@ -21,8 +20,7 @@ public record ProductDetailCacheInvalidationEvent(
     }
 
     public static ProductDetailCacheInvalidationEvent forProductAtLocation(
-            @NonNull UUID productId,
-            @NonNull UUID locationId) {
+            @NonNull UUID productId, @NonNull UUID locationId) {
         return new ProductDetailCacheInvalidationEvent(productId, locationId);
     }
 }

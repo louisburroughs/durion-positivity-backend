@@ -7,14 +7,13 @@ import com.positivity.inventory.internal.enums.UnmappedPartStatus;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.UnmappedManufacturerPartRepository;
 import com.positivity.inventory.service.ManufacturerFeedService;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Collection;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.util.Collection;
 
 /**
  * Manufacturer feed processor for normalized inventory ingestion.
@@ -31,7 +30,8 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
     private final UnmappedManufacturerPartRepository unmappedManufacturerPartRepository;
     private final Clock clock;
 
-    public ManufacturerFeedServiceImpl(NormalizedAvailabilityRepository normalizedAvailabilityRepository,
+    public ManufacturerFeedServiceImpl(
+            NormalizedAvailabilityRepository normalizedAvailabilityRepository,
             UnmappedManufacturerPartRepository unmappedManufacturerPartRepository,
             Clock clock) {
         this.normalizedAvailabilityRepository = normalizedAvailabilityRepository;
@@ -83,8 +83,8 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
 
     private void upsertUnmapped(ManufacturerFeedItemDto item, Instant eventTime) {
         UnmappedManufacturerPart unmapped = unmappedManufacturerPartRepository
-                .findByManufacturerIdAndManufacturerPartNumber(item.getManufacturerId(),
-                        item.getManufacturerPartNumber())
+                .findByManufacturerIdAndManufacturerPartNumber(
+                        item.getManufacturerId(), item.getManufacturerPartNumber())
                 .orElseGet(() -> UnmappedManufacturerPart.builder()
                         .manufacturerId(item.getManufacturerId())
                         .manufacturerPartNumber(item.getManufacturerPartNumber())

@@ -114,13 +114,13 @@ public class PromotionOfferController {
     @PreAuthorize("hasAuthority('Promotion:Apply')")
     @Operation(
             summary = "Apply promotion offer during estimate pricing",
-            description = "Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.")
+            description =
+                    "Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.")
     @ApiResponse(responseCode = "200", description = "Promotion offer applied.")
     @ApiResponse(responseCode = "400", description = "Invalid promotion application request.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found or not eligible.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
-    public ResponseEntity<ApplyPromotionResponse> applyPromotion(
-            @RequestBody @Valid ApplyPromotionRequest request) {
+    public ResponseEntity<ApplyPromotionResponse> applyPromotion(@RequestBody @Valid ApplyPromotionRequest request) {
         return ResponseEntity.ok(promotionOfferService.applyPromotion(request));
     }
 }

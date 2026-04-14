@@ -2,15 +2,14 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.util.List;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.List;
-import java.util.UUID;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 @Getter
 @Setter
 @Slf4j
@@ -36,7 +35,11 @@ public class CatalogEntity {
     @OneToMany(fetch = FetchType.LAZY)
     private List<NonInventoryProductEntity> nonInventoryProducts;
 
-    public CatalogEntity(String name, String description, List<ProductEntity> products, List<ServiceEntity> services,
+    public CatalogEntity(
+            String name,
+            String description,
+            List<ProductEntity> products,
+            List<ServiceEntity> services,
             List<NonInventoryProductEntity> nonInventoryProducts) {
         this.name = name;
         this.description = description;

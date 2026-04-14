@@ -1,14 +1,13 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Response DTO for part adjustment events.
@@ -54,7 +53,9 @@ public class WorkorderPartAdjustmentEventResponse {
     /**
      * For SUBSTITUTION: ID of the substitute part.
      */
-    @Schema(description = "Substitute part identifier for substitution adjustments", example = "550e8400-e29b-41d4-a716-446655440501")
+    @Schema(
+            description = "Substitute part identifier for substitution adjustments",
+            example = "550e8400-e29b-41d4-a716-446655440501")
     private UUID substitutedWithPartId;
 
     /**

@@ -1,14 +1,5 @@
 package com.positivity.location.internal.service;
 
-import java.util.Objects;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
 import com.positivity.location.internal.entity.Location;
@@ -16,8 +7,14 @@ import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.SiteDefaultsService;
-
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service implementation for configuring and retrieving site default storage
@@ -95,13 +92,15 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
     }
 
     private Location resolveLocationOrThrow(UUID siteId) {
-        return locationRepository.findById(siteId)
+        return locationRepository
+                .findById(siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, SITE_NOT_FOUND));
     }
 
     private StorageLocationEntity resolveStorageLocationInSite(UUID storageLocationId, UUID siteId) {
-        return storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
-                        DEFAULT_LOCATION_NOT_BELONGS_TO_SITE));
+        return storageLocationRepository
+                .findByIdAndSiteId(storageLocationId, siteId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT, DEFAULT_LOCATION_NOT_BELONGS_TO_SITE));
     }
 }

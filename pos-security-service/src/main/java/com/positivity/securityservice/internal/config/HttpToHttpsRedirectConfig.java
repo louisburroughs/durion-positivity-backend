@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.Connector;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -10,8 +11,6 @@ import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Adds an HTTP connector that redirects traffic to HTTPS when explicitly enabled.
@@ -24,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Configuration
 @Slf4j
 @ConditionalOnWebApplication(type = Type.SERVLET)
-@ConditionalOnClass({ TomcatServletWebServerFactory.class, Connector.class })
+@ConditionalOnClass({TomcatServletWebServerFactory.class, Connector.class})
 @ConditionalOnProperty(prefix = "security.http-to-https", name = "enabled", havingValue = "true")
 public class HttpToHttpsRedirectConfig {
 

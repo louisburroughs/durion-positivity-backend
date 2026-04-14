@@ -1,10 +1,9 @@
 package com.positivity.mcp.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
+import java.util.List;
+import java.util.UUID;
 
 public interface SystemPromptService {
 
@@ -17,5 +16,4 @@ public interface SystemPromptService {
     SystemPromptResponse update(UUID id, SystemPromptRequest request);
 
     void delete(UUID id);
-
 }

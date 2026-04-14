@@ -26,8 +26,7 @@ public class StorageLocationValidationClient {
     private final RestClient restClient;
 
     public StorageLocationValidationClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayUrl + "/location/v1/storage-locations")
                 .build();
@@ -44,7 +43,8 @@ public class StorageLocationValidationClient {
 
         String authorizationHeader = resolveAuthorizationHeader();
 
-        StorageLocationValidation response = restClient.get()
+        StorageLocationValidation response = restClient
+                .get()
                 .uri("/{storageLocationId}/validation", parsedId)
                 .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
                 .retrieve()

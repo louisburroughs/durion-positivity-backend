@@ -10,14 +10,17 @@ import org.jspecify.annotations.NonNull;
 
 public interface PersonService {
 
-    @NonNull List<Person> getAllPeople();
+    @NonNull
+    List<Person> getAllPeople();
 
-    @NonNull Optional<Person> getPersonById(@NonNull UUID id);
+    @NonNull
+    Optional<Person> getPersonById(@NonNull UUID id);
 
-    @NonNull Person savePerson(@NonNull Person person);
+    @NonNull
+    Person savePerson(@NonNull Person person);
 
-    @NonNull ResolvePersonResponse resolvePerson(@NonNull ResolvePersonRequest request);
+    @NonNull
+    ResolvePersonResponse resolvePerson(@NonNull ResolvePersonRequest request);
 
     void deletePerson(@NonNull UUID id);
-
 }

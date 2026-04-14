@@ -1,11 +1,10 @@
 package com.positivity.vehicle.service;
 
+import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
+import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
-import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 
 public interface VehiclePreferencesService {
 
@@ -23,13 +22,10 @@ public interface VehiclePreferencesService {
      * Updates specific preference fields without replacing the entire map.
      */
     VehicleCarePreference mergePreferences(
-            UUID vehicleId,
-            Map<String, Object> partialPreferences,
-            UUID updatedByUserId);
+            UUID vehicleId, Map<String, Object> partialPreferences, UUID updatedByUserId);
 
     /**
      * Deletes preferences for a vehicle.
      */
     void deletePreferences(UUID vehicleId);
-
 }

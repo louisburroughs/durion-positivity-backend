@@ -1,4 +1,3 @@
 package com.positivity.image.internal.dto;
 
-public record ImageFileView(String filename, String url) {
-}
+public record ImageFileView(String filename, String url) {}

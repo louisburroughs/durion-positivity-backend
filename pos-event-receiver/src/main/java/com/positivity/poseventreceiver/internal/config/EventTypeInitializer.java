@@ -4,7 +4,6 @@ import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
 import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.entity.EventType;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -46,11 +45,11 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        log.info("Registering {} event-receiver event types (direct DAO access)", EventTypes.all().size());
+        log.info(
+                "Registering {} event-receiver event types (direct DAO access)",
+                EventTypes.all().size());
 
-        initializerSupport.registerEventTypes(
-                EventTypes.all(),
-                this::registerEventTypeDirectly);
+        initializerSupport.registerEventTypes(EventTypes.all(), this::registerEventTypeDirectly);
 
         log.info("Event-receiver event type registration complete");
     }
@@ -91,11 +90,14 @@ public class EventTypeInitializer implements ApplicationRunner {
                         registration.getTypeCode(),
                         registration.getDescription(),
                         registration.getApiVersion(),
-                        registration.getP50Micros() != null ? registration.getP50Micros()
+                        registration.getP50Micros() != null
+                                ? registration.getP50Micros()
                                 : EventType.DEFAULT_THRESHOLD_MICROS,
-                        registration.getP95Micros() != null ? registration.getP95Micros()
+                        registration.getP95Micros() != null
+                                ? registration.getP95Micros()
                                 : EventType.DEFAULT_THRESHOLD_MICROS,
-                        registration.getP99Micros() != null ? registration.getP99Micros()
+                        registration.getP99Micros() != null
+                                ? registration.getP99Micros()
                                 : EventType.DEFAULT_THRESHOLD_MICROS);
             }
 

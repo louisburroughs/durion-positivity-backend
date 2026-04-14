@@ -13,17 +13,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConsumePickedItemsResponse {
-  private UUID workorderId;
-  private int totalItemsConsumed;
-  private List<ConsumedItemResult> results;
+    private UUID workorderId;
+    private int totalItemsConsumed;
+    private List<ConsumedItemResult> results;
 
-  @Data
-  @Builder
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class ConsumedItemResult {
-    private UUID pickTaskId;
-    private int quantityConsumed;
-    private ConsumeItemStatus status;
-  }
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ConsumedItemResult {
+        private UUID pickTaskId;
+        private int quantityConsumed;
+        private ConsumeItemStatus status;
+    }
 }

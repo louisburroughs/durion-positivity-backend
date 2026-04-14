@@ -1,12 +1,11 @@
 package com.positivity.customer.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 /**
  * Response DTO for retrieving contacts with role assignments for a party.

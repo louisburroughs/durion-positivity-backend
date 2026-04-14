@@ -13,20 +13,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import java.util.UUID;
 
 /**
  * CRM Contacts Controller
- * 
+ *
  * Handles contact point (email, phone) and contact role management for parties.
  * Endpoints for retrieving contacts with roles and managing role assignments.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/108">Backend
  *      Issue #108</a>
@@ -49,16 +49,25 @@ public class CrmContactsController {
 
     /**
      * Get all contacts for a party with their roles.
-     * 
+     *
      * GET /v1/crm/parties/{partyId}/contacts
      * Requires: CONTACT_VIEW permission
      */
-    @Operation(summary = "Get contacts with roles", description = "Retrieve all contacts for a party including their role assignments")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Contacts retrieved successfully", content = @Content(schema = @Schema(implementation = GetContactsWithRolesResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
-    })
+    @Operation(
+            summary = "Get contacts with roles",
+            description = "Retrieve all contacts for a party including their role assignments")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Contacts retrieved successfully",
+                        content = @Content(schema = @Schema(implementation = GetContactsWithRolesResponse.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content),
+                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+            })
     @GetMapping("/{partyId}/contacts")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
     @EmitEvent(id = "CRM_CONTACTS_LIST", apiVersion = "1")
@@ -76,24 +85,34 @@ public class CrmContactsController {
 
     /**
      * Update contact roles for a specific contact within a party.
-     * 
+     *
      * PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles
      * Requires: CONTACT_ROLE_ASSIGN permission
      */
-    @Operation(summary = "Update contact roles", description = "Assign or update role assignments for a specific contact within a party")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Roles updated successfully", content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
-    })
+    @Operation(
+            summary = "Update contact roles",
+            description = "Assign or update role assignments for a specific contact within a party")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Roles updated successfully",
+                        content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
+                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content),
+                @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
+            })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
     @EmitEvent(id = "CRM_CONTACT_ROLES_UPDATE", apiVersion = "1")
     public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
             @Parameter(description = "Contact ID", required = true) @PathVariable @NonNull UUID contactId,
-            @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull UpdateContactRolesRequest request) {
+            @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull
+                    UpdateContactRolesRequest request) {
 
         try {
             UpdateContactRolesResponse response = contactRoleService.updateContactRoles(partyId, contactId, request);

@@ -1,10 +1,9 @@
 package com.positivity.order.internal.client;
 
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Component;
 
 /**
  * Default (stub) implementation of PricingPort.
@@ -16,9 +15,6 @@ public class DefaultPricingPortAdapter implements PricingPort {
 
     @Override
     public @NonNull PricingResult resolvePrice(@NonNull String itemSku) {
-        return new PricingResult(
-                BigDecimal.TEN.setScale(4, RoundingMode.HALF_UP),
-                false,
-                true);
+        return new PricingResult(BigDecimal.TEN.setScale(4, RoundingMode.HALF_UP), false, true);
     }
 }

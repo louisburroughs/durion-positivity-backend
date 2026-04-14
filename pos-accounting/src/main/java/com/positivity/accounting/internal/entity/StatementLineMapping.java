@@ -1,14 +1,8 @@
 package com.positivity.accounting.internal.entity;
 
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -22,34 +16,39 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Configurable mapping from GL accounts to financial statement lines.
- * 
+ *
  * Enables flexible Chart of Accounts (COA) mapping to standardized
  * statement lines (e.g., US GAAP, IFRS).
- * 
+ *
  * Example mappings:
  * - Account "4000" (Sales Revenue) → "PL_REVENUE_SALES" line on Income
  * Statement
  * - Account "1000" (Cash) → "BS_ASSETS_CURRENT_CASH" line on Balance Sheet
- * 
+ *
  * @see StatementType
  * @see OperationType
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "statement_line_mappings", indexes = {
-        @Index(name = "idx_statement_line_mapping_type", columnList = "statement_type"),
-        @Index(name = "idx_statement_line_mapping_account", columnList = "gl_account_id"),
-        @Index(name = "idx_statement_line_mapping_code", columnList = "statement_line_code")
-})
+@Table(
+        name = "statement_line_mappings",
+        indexes = {
+            @Index(name = "idx_statement_line_mapping_type", columnList = "statement_type"),
+            @Index(name = "idx_statement_line_mapping_account", columnList = "gl_account_id"),
+            @Index(name = "idx_statement_line_mapping_code", columnList = "statement_line_code")
+        })
 @Getter
 @Setter
 @NoArgsConstructor

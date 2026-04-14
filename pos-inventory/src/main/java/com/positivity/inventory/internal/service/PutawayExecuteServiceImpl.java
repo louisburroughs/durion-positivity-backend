@@ -34,12 +34,12 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
     @Override
     @Transactional
     public @NonNull PutawayExecutionResponse executePutaway(
-            @NonNull String taskId,
-            @NonNull PutawayExecutionRequest request) {
+            @NonNull String taskId, @NonNull PutawayExecutionRequest request) {
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("System");
         UUID parsedTaskId = parseRequiredUuid(taskId, "taskId");
 
-        PutawayTask task = putawayTaskRepository.findByIdForUpdate(parsedTaskId)
+        PutawayTask task = putawayTaskRepository
+                .findByIdForUpdate(parsedTaskId)
                 .or(() -> putawayTaskRepository.findById(parsedTaskId))
                 .orElseThrow(() -> new TaskNotFoundException(parsedTaskId));
 
@@ -63,8 +63,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                 .quantityAfter(sourceOnHandAfter)
                 .transactionUserId(actorId)
                 .locationId(request.getSourceLocationId())
-                .notes("Putaway from " + request.getSourceLocationId() + " to "
-                        + request.getDestinationLocationId())
+                .notes("Putaway from " + request.getSourceLocationId() + " to " + request.getDestinationLocationId())
                 .timestamp(now)
                 .build();
 
@@ -88,9 +87,10 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         putawayTaskRepository.save(task);
 
         return PutawayExecutionResponse.builder()
-                .ledgerEntryId(savedSourceLedgerEntry.getLedgerEntryId() != null
-                        ? savedSourceLedgerEntry.getLedgerEntryId().toString()
-                        : null)
+                .ledgerEntryId(
+                        savedSourceLedgerEntry.getLedgerEntryId() != null
+                                ? savedSourceLedgerEntry.getLedgerEntryId().toString()
+                                : null)
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
                 .skuId(request.getSkuId())
                 .sourceLocationId(request.getSourceLocationId())
@@ -122,9 +122,10 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
             return;
         }
 
-        ValidationResult.ValidationError firstError = validationResult.getErrors().isEmpty()
-                ? null
-                : validationResult.getErrors().get(0);
+        ValidationResult.ValidationError firstError =
+                validationResult.getErrors().isEmpty()
+                        ? null
+                        : validationResult.getErrors().get(0);
         String errorCode = firstError != null ? firstError.getErrorCode() : "PUTAWAY_VALIDATION_FAILED";
         String message = firstError != null ? firstError.getMessage() : "Putaway validation failed";
         throw new PutawayValidationException(errorCode, message);

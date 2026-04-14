@@ -1,7 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
@@ -10,25 +8,24 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountTier;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.service.AccountTierService;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Service for managing account tier assignments and resolution.
- * 
+ *
  * Provides operations to:
  * - Retrieve current account tier
  * - Compute/resolve tier based on business rules
  * - Apply tier assignments with audit tracking
- * 
+ *
  * Business rules for tier calculation:
  * - STANDARD: Default tier, < $50K annual revenue
  * - BRONZE: $50K - $100K annual revenue OR 3+ months old
@@ -42,7 +39,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountTierServiceImpl implements AccountTierService {
     private final Clock clock;
-
 
     private final CommercialPartyRepository commercialPartyRepository;
 
@@ -60,7 +56,7 @@ public class AccountTierServiceImpl implements AccountTierService {
 
     /**
      * Get the current tier for an account.
-     * 
+     *
      * @param accountId the account/party identifier
      * @return tier information response
      * @throws IllegalArgumentException if account not found
@@ -70,7 +66,8 @@ public class AccountTierServiceImpl implements AccountTierService {
     public GetAccountTierResponse getAccountTier(@NonNull UUID accountId) {
         log.debug("Getting tier for account: {}", accountId);
 
-        CommercialParty party = commercialPartyRepository.findById(accountId)
+        CommercialParty party = commercialPartyRepository
+                .findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
 
         return buildTierResponse(party);
@@ -78,9 +75,9 @@ public class AccountTierServiceImpl implements AccountTierService {
 
     /**
      * Resolve/compute the appropriate tier for an account based on business rules.
-     * 
+     *
      * Optionally applies the resolved tier to the account if requested.
-     * 
+     *
      * @param request tier resolution request with calculation criteria
      * @return resolution result with recommended tier
      * @throws IllegalArgumentException if account not found
@@ -96,7 +93,8 @@ public class AccountTierServiceImpl implements AccountTierService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid account ID format: " + request.getAccountId(), e);
         }
-        CommercialParty party = commercialPartyRepository.findById(partyId)
+        CommercialParty party = commercialPartyRepository
+                .findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found: " + request.getAccountId()));
 
         AccountTier currentTier = party.getTier() != null ? party.getTier() : AccountTier.STANDARD;
@@ -233,6 +231,5 @@ public class AccountTierServiceImpl implements AccountTierService {
     /**
      * Internal record for tier calculation results.
      */
-    public record TierCalculation(AccountTier tier, int score, String reason) {
-    }
+    public record TierCalculation(AccountTier tier, int score, String reason) {}
 }

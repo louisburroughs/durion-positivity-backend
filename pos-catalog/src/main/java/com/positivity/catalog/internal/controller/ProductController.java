@@ -1,21 +1,5 @@
 package com.positivity.catalog.internal.controller;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
@@ -38,7 +22,6 @@ import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.catalog.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -46,8 +29,22 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -65,8 +62,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/pricing/guardrail-policies")
-    @Operation(summary = "Upsert location guardrail policy", description = "Creates or updates the active LOCATION guardrail policy used by price overrides.")
-    @ApiResponse(responseCode = "200", description = "Guardrail policy upserted", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @Operation(
+            summary = "Upsert location guardrail policy",
+            description = "Creates or updates the active LOCATION guardrail policy used by price overrides.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Guardrail policy upserted",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid policy payload")
     @EmitEvent(id = "CATALOG_GUARDRAIL_POLICY_UPSERT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> upsertLocationGuardrailPolicy(
@@ -76,8 +81,17 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/pricing/location-overrides")
-    @Operation(summary = "Create location price override", description = "Creates a location-specific price override and enforces guardrails for margin and discount limits.")
-    @ApiResponse(responseCode = "201", description = "Override created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @Operation(
+            summary = "Create location price override",
+            description =
+                    "Creates a location-specific price override and enforces guardrails for margin and discount limits.")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Override created",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Guardrail validation failed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_CREATE", apiVersion = "1")
@@ -88,8 +102,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/pricing/effective-price/{locationId}/{productId}")
-    @Operation(summary = "Get effective location price", description = "Resolves effective price using precedence: ACTIVE override first, otherwise base price.")
-    @ApiResponse(responseCode = "200", description = "Effective price returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EffectiveLocationPriceResponseDto.class)))
+    @Operation(
+            summary = "Get effective location price",
+            description = "Resolves effective price using precedence: ACTIVE override first, otherwise base price.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Effective price returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = EffectiveLocationPriceResponseDto.class)))
     @ApiResponse(responseCode = "404", description = "No pricing context found")
     public ResponseEntity<EffectiveLocationPriceResponseDto> getEffectiveLocationPrice(
             @Parameter(description = "Location ID", required = true) @PathVariable UUID locationId,
@@ -99,8 +121,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
     @PostMapping("/pricing/location-overrides/{overrideId}/approve")
-    @Operation(summary = "Approve pending location price override", description = "Approves a pending override and activates it as the effective location price.")
-    @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @Operation(
+            summary = "Approve pending location price override",
+            description = "Approves a pending override and activates it as the effective location price.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Override approved",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid approval request")
     @ApiResponse(responseCode = "404", description = "Override or approval request not found")
     @ApiResponse(responseCode = "409", description = "Version conflict")
@@ -113,8 +143,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
     @PostMapping("/pricing/location-overrides/{overrideId}/reject")
-    @Operation(summary = "Reject pending location price override", description = "Rejects a pending override, persists rejection metadata, and marks the request as terminal.")
-    @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @Operation(
+            summary = "Reject pending location price override",
+            description = "Rejects a pending override, persists rejection metadata, and marks the request as terminal.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Override rejected",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid rejection request")
     @ApiResponse(responseCode = "404", description = "Override or approval request not found")
     @ApiResponse(responseCode = "409", description = "Version conflict")
@@ -127,23 +165,46 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/search")
-    @Operation(summary = "Search catalog products", description = "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.")
-    @ApiResponse(responseCode = "200", description = "Search results", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogSearchResultDto.class)))
+    @Operation(
+            summary = "Search catalog products",
+            description =
+                    "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Search results",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CatalogSearchResultDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request parameter (e.g., non-numeric limit)")
     public ResponseEntity<CatalogSearchResultDto> searchProducts(
-            @Parameter(description = "Free-text search query (matches product name and description)") @RequestParam(required = false) String q,
-            @Parameter(description = "Filter by manufacturer brand (exact, case-insensitive)") @RequestParam(required = false) String brand,
-            @Parameter(description = "Filter by category name (exact, case-insensitive)") @RequestParam(required = false) String category,
-            @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false) String sku,
-            @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false) String cursor,
-            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20") int limit) {
+            @Parameter(description = "Free-text search query (matches product name and description)")
+                    @RequestParam(required = false)
+                    String q,
+            @Parameter(description = "Filter by manufacturer brand (exact, case-insensitive)")
+                    @RequestParam(required = false)
+                    String brand,
+            @Parameter(description = "Filter by category name (exact, case-insensitive)")
+                    @RequestParam(required = false)
+                    String category,
+            @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false)
+                    String sku,
+            @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false)
+                    String cursor,
+            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20")
+                    int limit) {
         return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @PostMapping
-    @Operation(summary = "Create product master record", description = "Creates a product master record with immutable SKU and uniqueness checks.")
-    @ApiResponse(responseCode = "201", description = "Product created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @Operation(
+            summary = "Create product master record",
+            description = "Creates a product master record with immutable SKU and uniqueness checks.")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Product created",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "409", description = "Business conflict")
     @EmitEvent(id = "CATALOG_PRODUCT_CREATED", apiVersion = "1")
@@ -153,8 +214,13 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{productId}")
-    @Operation(summary = "Update product master record", description = "Updates mutable product master fields. SKU is immutable.")
-    @ApiResponse(responseCode = "200", description = "Product updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @Operation(
+            summary = "Update product master record",
+            description = "Updates mutable product master fields. SKU is immutable.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Product updated",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "404", description = "Product not found")
     @ApiResponse(responseCode = "409", description = "Business conflict")
@@ -168,11 +234,15 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}")
     @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved product", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved product",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
     @ApiResponse(responseCode = "404", description = "Product not found")
     public ResponseEntity<ProductDto> getProductById(
             @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
-        return catalogService.getProductById(productId)
+        return catalogService
+                .getProductById(productId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -180,7 +250,10 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/name/{name}")
     @Operation(summary = "Get products by name", description = "Retrieves a list of products matching the given name.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved products", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved products",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
     public List<ProductDto> getProductByName(
             @Parameter(description = "Name of the products to be obtained") @PathVariable String name) {
         return catalogService.getProductsByName(name);
@@ -188,14 +261,25 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}/detail")
-    @Operation(summary = "Get product details with pricing and availability", description = "Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved product details (may be partial if some services unavailable)", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDetailView.class)))
+    @Operation(
+            summary = "Get product details with pricing and availability",
+            description =
+                    "Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved product details (may be partial if some services unavailable)",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ProductDetailView.class)))
     @ApiResponse(responseCode = "400", description = "Invalid location ID")
     @ApiResponse(responseCode = "404", description = "Product not found")
     @ApiResponse(responseCode = "500", description = "Unexpected server error while retrieving product details")
     public ResponseEntity<ProductDetailView> getProductDetailView(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
-            @Parameter(description = "Location/store ID for location-specific data", required = true) @RequestParam(name = "location_id") UUID locationId) {
+            @Parameter(description = "Location/store ID for location-specific data", required = true)
+                    @RequestParam(name = "location_id")
+                    UUID locationId) {
 
         log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
         if (locationId == null) {
@@ -216,11 +300,15 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/services/{serviceId}")
     @Operation(summary = "Get a service by ID", description = "Retrieves a specific service by its unique ID.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved service", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved service",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDto.class)))
     @ApiResponse(responseCode = "404", description = "Service not found")
     public ResponseEntity<ServiceDto> getServiceById(
             @Parameter(description = "ID of the service to be obtained") @PathVariable UUID serviceId) {
-        return catalogService.getServiceById(serviceId)
+        return catalogService
+                .getServiceById(serviceId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -228,7 +316,10 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/services/name/{name}")
     @Operation(summary = "Get services by name", description = "Retrieves a list of services matching the given name.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved services", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved services",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDto.class)))
     public List<ServiceDto> getServiceByName(
             @Parameter(description = "Name of the services to be obtained") @PathVariable String name) {
         return catalogService.getServicesByName(name);
@@ -236,20 +327,37 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/{productId}")
-    @Operation(summary = "Get a non-inventory product by ID", description = "Retrieves a specific non-inventory product by its unique ID.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved non-inventory product", content = @Content(mediaType = "application/json", schema = @Schema(implementation = NonInventoryProductDto.class)))
+    @Operation(
+            summary = "Get a non-inventory product by ID",
+            description = "Retrieves a specific non-inventory product by its unique ID.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved non-inventory product",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = NonInventoryProductDto.class)))
     @ApiResponse(responseCode = "404", description = "Non-inventory product not found")
     public ResponseEntity<NonInventoryProductDto> getNonInventoryProductById(
             @Parameter(description = "ID of the non-inventory product to be obtained") @PathVariable UUID productId) {
-        return catalogService.getNonInventoryProductById(productId)
+        return catalogService
+                .getNonInventoryProductById(productId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/name/{name}")
-    @Operation(summary = "Get non-inventory products by name", description = "Retrieves a list of non-inventory products matching the given name.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved non-inventory products", content = @Content(mediaType = "application/json", schema = @Schema(implementation = NonInventoryProductDto.class)))
+    @Operation(
+            summary = "Get non-inventory products by name",
+            description = "Retrieves a list of non-inventory products matching the given name.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved non-inventory products",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = NonInventoryProductDto.class)))
     public List<NonInventoryProductDto> getNonInventoryProductByName(
             @Parameter(description = "Name of the non-inventory products to be obtained") @PathVariable String name) {
         return catalogService.getNonInventoryProductsByName(name);
@@ -257,8 +365,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
     @GetMapping("/{productId}/lifecycle")
-    @Operation(summary = "Get product lifecycle state", description = "Retrieves lifecycle state and replacement suggestions for a product.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved lifecycle state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class)))
+    @Operation(
+            summary = "Get product lifecycle state",
+            description = "Retrieves lifecycle state and replacement suggestions for a product.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved lifecycle state",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ProductLifecycleResponse.class)))
     @ApiResponse(responseCode = "404", description = "Product not found")
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_GET", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse> getProductLifecycle(
@@ -277,8 +393,16 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
     @PutMapping("/{productId}/lifecycle")
-    @Operation(summary = "Set product lifecycle state", description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
-    @ApiResponse(responseCode = "200", description = "Lifecycle state updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class)))
+    @Operation(
+            summary = "Set product lifecycle state",
+            description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Lifecycle state updated successfully",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ProductLifecycleResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "403", description = "Missing override permission")
     @ApiResponse(responseCode = "404", description = "Product not found")
@@ -292,7 +416,9 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
     @PostMapping("/{productId}/replacements")
-    @Operation(summary = "Add replacement product", description = "Adds a replacement suggestion to a discontinued product.")
+    @Operation(
+            summary = "Add replacement product",
+            description = "Adds a replacement suggestion to a discontinued product.")
     @ApiResponse(responseCode = "201", description = "Replacement added successfully")
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "404", description = "Product not found")
@@ -306,8 +432,13 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}/substitutes")
-    @Operation(summary = "Get substitute parts", description = "Returns list of substitute parts for a given productId.")
-    @ApiResponse(responseCode = "200", description = "Substitute parts returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @Operation(
+            summary = "Get substitute parts",
+            description = "Returns list of substitute parts for a given productId.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Substitute parts returned",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
     @ApiResponse(responseCode = "404", description = "Product not found")
     public ResponseEntity<List<ProductDto>> getPartSubstitutes(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {

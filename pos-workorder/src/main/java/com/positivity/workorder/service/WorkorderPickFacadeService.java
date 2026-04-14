@@ -15,36 +15,31 @@ import org.jspecify.annotations.NonNull;
 
 public interface WorkorderPickFacadeService {
 
-  @NonNull
-  WorkorderPickListResponse getPickListForWorkorder(@NonNull UUID workorderId);
+    @NonNull
+    WorkorderPickListResponse getPickListForWorkorder(@NonNull UUID workorderId);
 
-  @NonNull
-  List<WorkorderPickTaskResponse> getPickTasksForWorkorder(@NonNull UUID workorderId);
+    @NonNull
+    List<WorkorderPickTaskResponse> getPickTasksForWorkorder(@NonNull UUID workorderId);
 
-  @NonNull
-  ResolveScanResponse resolveScan(
-      @NonNull UUID workorderId,
-      @NonNull UUID pickTaskId,
-      @NonNull ResolveScanRequest request);
+    @NonNull
+    ResolveScanResponse resolveScan(
+            @NonNull UUID workorderId, @NonNull UUID pickTaskId, @NonNull ResolveScanRequest request);
 
-  @NonNull
-  WorkorderPickTaskResponse confirmPickLine(
-      @NonNull UUID workorderId,
-      @NonNull UUID pickTaskId,
-      @NonNull UUID pickLineId,
-      @NonNull ConfirmPickLineRequest request);
+    @NonNull
+    WorkorderPickTaskResponse confirmPickLine(
+            @NonNull UUID workorderId,
+            @NonNull UUID pickTaskId,
+            @NonNull UUID pickLineId,
+            @NonNull ConfirmPickLineRequest request);
 
-  @NonNull
-  WorkorderPickTaskResponse completePickTask(
-      @NonNull UUID workorderId,
-      @NonNull UUID pickTaskId,
-      @NonNull CompletePickTaskRequest request);
+    @NonNull
+    WorkorderPickTaskResponse completePickTask(
+            @NonNull UUID workorderId, @NonNull UUID pickTaskId, @NonNull CompletePickTaskRequest request);
 
-  @NonNull
-  List<WorkorderPickedItemResponse> getPickedItemsForWorkorder(@NonNull UUID workorderId);
+    @NonNull
+    List<WorkorderPickedItemResponse> getPickedItemsForWorkorder(@NonNull UUID workorderId);
 
-  @NonNull
-  ConsumePickedItemsResponse consumePickedItems(
-      @NonNull UUID workorderId,
-      @NonNull ConsumePickedItemsRequest request);
+    @NonNull
+    ConsumePickedItemsResponse consumePickedItems(
+            @NonNull UUID workorderId, @NonNull ConsumePickedItemsRequest request);
 }

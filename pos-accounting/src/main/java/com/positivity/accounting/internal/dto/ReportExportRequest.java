@@ -9,7 +9,7 @@ import lombok.*;
 
 /**
  * Request to export a financial report.
- * 
+ *
  * Supports CSV and PDF formats for v1.0.
  */
 @Data
@@ -31,7 +31,9 @@ public class ReportExportRequest {
      */
     @NotBlank(message = "reportId is required")
     @Size(max = 100, message = "reportId must not exceed 100 characters")
-    @Schema(description = "Report identifier or type key", example = "income-statement",
+    @Schema(
+            description = "Report identifier or type key",
+            example = "income-statement",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reportId;
 

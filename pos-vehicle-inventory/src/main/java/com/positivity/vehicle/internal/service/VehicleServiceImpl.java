@@ -7,16 +7,14 @@ import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
 import com.positivity.vehicle.service.VehicleService;
-
 import jakarta.persistence.EntityNotFoundException;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service for vehicle CRUD operations - CAP:091 Story #105.
@@ -42,9 +40,8 @@ public class VehicleServiceImpl implements VehicleService {
 
         // Check global uniqueness
         if (vehicleRepository.existsByVinNormalizedAndIsActiveTrue(vinNormalized)) {
-            throw new IllegalArgumentException(
-                    "Vehicle with VIN " + request.getVin() + " already exists. " +
-                            "VINs must be globally unique across all active vehicles.");
+            throw new IllegalArgumentException("Vehicle with VIN " + request.getVin() + " already exists. "
+                    + "VINs must be globally unique across all active vehicles.");
         }
 
         // Create entity
@@ -75,8 +72,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     @Transactional(readOnly = true)
     public Optional<VehicleResponse> getVehicle(@NonNull UUID vehicleId) {
-        return vehicleRepository.findByVehicleId(vehicleId)
-                .map(this::mapToResponse);
+        return vehicleRepository.findByVehicleId(vehicleId).map(this::mapToResponse);
     }
 
     /**
@@ -86,8 +82,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional(readOnly = true)
     public Optional<VehicleResponse> getVehicleByVin(@NonNull String vin) {
         String vinNormalized = VinUtils.normalize(vin);
-        return vehicleRepository.findByVinNormalized(vinNormalized)
-                .map(this::mapToResponse);
+        return vehicleRepository.findByVinNormalized(vinNormalized).map(this::mapToResponse);
     }
 
     /**
@@ -98,7 +93,8 @@ public class VehicleServiceImpl implements VehicleService {
     public VehicleResponse updateVehicle(@NonNull UUID vehicleId, @NonNull UpdateVehicleRequest request) {
         log.info("Updating vehicle {}", vehicleId);
 
-        VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
+        VehicleRecord vehicle = vehicleRepository
+                .findByVehicleId(vehicleId)
                 .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
         // Patch semantics: only update fields that are explicitly provided.
@@ -141,7 +137,8 @@ public class VehicleServiceImpl implements VehicleService {
     public void deleteVehicle(@NonNull UUID vehicleId) {
         log.info("Deactivating vehicle {}", vehicleId);
 
-        VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
+        VehicleRecord vehicle = vehicleRepository
+                .findByVehicleId(vehicleId)
                 .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
         vehicle.setIsActive(false);

@@ -1,29 +1,28 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.ApprovalStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import lombok.Data;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 
 @Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "timekeeping_entry", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "tenant_id", "source_system", "source_session_id" }) })
+@Table(
+        name = "timekeeping_entry",
+        uniqueConstraints = {@UniqueConstraint(columnNames = {"tenant_id", "source_system", "source_session_id"})})
 public class TimekeepingEntry {
 
     @Id
@@ -69,5 +68,4 @@ public class TimekeepingEntry {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
 }

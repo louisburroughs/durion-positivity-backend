@@ -2,6 +2,8 @@ package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.workorder.internal.service.CustomerReferenceService;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -9,12 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.workorder.internal.service.CustomerReferenceService;
-import com.sun.net.httpserver.HttpServer;
 
 class CustomerReferenceServiceHttpTest {
 
@@ -63,8 +61,11 @@ class CustomerReferenceServiceHttpTest {
     void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/customers/" + customerId, 200,
-                "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}", callCount);
+        HttpServer server = startServer(
+                "/v1/customers/" + customerId,
+                200,
+                "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}",
+                callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
             CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);

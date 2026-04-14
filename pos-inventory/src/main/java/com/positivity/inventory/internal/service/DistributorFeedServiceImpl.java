@@ -7,16 +7,15 @@ import com.positivity.inventory.internal.enums.DistributorExceptionReason;
 import com.positivity.inventory.internal.repository.DistributorFeedExceptionRepository;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.service.DistributorFeedService;
+import java.util.Collection;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
-
-import java.util.Collection;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Distributor feed processor with normalization and exception queue routing.
@@ -30,12 +29,12 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
     private static final String POLICY_VERSION = "v1";
     private static final Pattern LEAD_TIME_RANGE_PATTERN = Pattern.compile("^(\\d+)\\s*-\\s*(\\d+)$");
     private static final Pattern LEAD_TIME_SINGLE_PATTERN = Pattern.compile("^(\\d+)$");
-    private static final Pattern LEAD_TIME_RANGE_WITH_UNIT_PATTERN = Pattern
-            .compile("^(\\d+)\\s*-\\s*(\\d+)\\s*(hour|hours|hr|hrs|day|days)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern LEAD_TIME_SINGLE_WITH_UNIT_PATTERN = Pattern
-            .compile("^(\\d+)\\s*(hour|hours|hr|hrs|day|days)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern LEAD_TIME_T_PLUS_PATTERN = Pattern.compile("^T\\s*\\+\\s*(\\d+)$",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern LEAD_TIME_RANGE_WITH_UNIT_PATTERN =
+            Pattern.compile("^(\\d+)\\s*-\\s*(\\d+)\\s*(hour|hours|hr|hrs|day|days)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern LEAD_TIME_SINGLE_WITH_UNIT_PATTERN =
+            Pattern.compile("^(\\d+)\\s*(hour|hours|hr|hrs|day|days)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern LEAD_TIME_T_PLUS_PATTERN =
+            Pattern.compile("^T\\s*\\+\\s*(\\d+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern ISO_3166_ALPHA2_PATTERN = Pattern.compile("^[A-Z]{2}$");
     private static final Pattern ISO_3166_2_PATTERN = Pattern.compile("^[A-Z]{2}-[A-Z0-9]{1,3}$");
 
@@ -43,7 +42,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
     private final DistributorFeedExceptionRepository distributorFeedExceptionRepository;
     private final ObjectMapper objectMapper;
 
-    public DistributorFeedServiceImpl(DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository,
+    public DistributorFeedServiceImpl(
+            DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository,
             DistributorFeedExceptionRepository distributorFeedExceptionRepository,
             ObjectMapper objectMapper) {
         this.distributorNormalizedInventoryRepository = distributorNormalizedInventoryRepository;
@@ -77,9 +77,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         }
     }
 
-    private void upsertNormalized(DistributorFeedItemDto item,
-            LeadTimeNormalizationResult leadTime,
-            String normalizedRegion) {
+    private void upsertNormalized(
+            DistributorFeedItemDto item, LeadTimeNormalizationResult leadTime, String normalizedRegion) {
         DistributorNormalizedInventory normalized = distributorNormalizedInventoryRepository
                 .findByDistributorIdAndDistributorSku(item.getDistributorId(), item.getDistributorSku())
                 .orElseGet(DistributorNormalizedInventory::new);
@@ -98,8 +97,7 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         distributorNormalizedInventoryRepository.save(normalized);
     }
 
-    private void queueException(DistributorFeedItemDto item,
-            DistributorExceptionReason reason) {
+    private void queueException(DistributorFeedItemDto item, DistributorExceptionReason reason) {
         DistributorFeedException exception = DistributorFeedException.builder()
                 .distributorId(item.getDistributorId() != null ? item.getDistributorId() : "UNKNOWN")
                 .distributorSku(item.getDistributorSku())
@@ -116,8 +114,12 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         } catch (Exception exception) {
             log.warn("Failed to serialize distributor feed item payload; storing fallback payload", exception);
             return "DistributorFeedItemDto{distributorId=%s, distributorSku=%s, productId=%s, rawLeadTime=%s, rawShipFromRegion=%s}"
-                    .formatted(item.getDistributorId(), item.getDistributorSku(), item.getProductId(),
-                            item.getRawLeadTime(), item.getRawShipFromRegion());
+                    .formatted(
+                            item.getDistributorId(),
+                            item.getDistributorSku(),
+                            item.getProductId(),
+                            item.getRawLeadTime(),
+                            item.getRawShipFromRegion());
         }
     }
 
@@ -138,7 +140,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
             return new LeadTimeNormalizationResult(true, null, null);
         }
 
-        if (normalizedUpper.equals("SAME DAY") || normalizedUpper.equals("SAMEDAY")
+        if (normalizedUpper.equals("SAME DAY")
+                || normalizedUpper.equals("SAMEDAY")
                 || normalizedUpper.equals("TODAY")) {
             return new LeadTimeNormalizationResult(true, 0, 0);
         }
@@ -173,9 +176,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
 
         Matcher rangeMatcher = LEAD_TIME_RANGE_PATTERN.matcher(normalized);
         if (rangeMatcher.matches()) {
-            return new LeadTimeNormalizationResult(true,
-                    Integer.parseInt(rangeMatcher.group(1)),
-                    Integer.parseInt(rangeMatcher.group(2)));
+            return new LeadTimeNormalizationResult(
+                    true, Integer.parseInt(rangeMatcher.group(1)), Integer.parseInt(rangeMatcher.group(2)));
         }
 
         Matcher singleMatcher = LEAD_TIME_SINGLE_PATTERN.matcher(normalized);
@@ -203,6 +205,5 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         return (iso3166Alpha2 || iso31662) ? normalized : null;
     }
 
-    private record LeadTimeNormalizationResult(boolean valid, Integer minDays, Integer maxDays) {
-    }
+    private record LeadTimeNormalizationResult(boolean valid, Integer minDays, Integer maxDays) {}
 }

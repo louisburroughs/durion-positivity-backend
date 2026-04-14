@@ -6,7 +6,7 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestClient;
 
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
 public class PosLocationApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosLocationApplication.class, args);

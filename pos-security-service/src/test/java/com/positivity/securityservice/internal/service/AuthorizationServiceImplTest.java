@@ -3,12 +3,16 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.entity.PrincipalRole;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
+import com.positivity.securityservice.service.AuthorizationService.Decision;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -17,12 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.PrincipalRole;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
-import com.positivity.securityservice.service.AuthorizationService.Decision;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthorizationServiceImpl")

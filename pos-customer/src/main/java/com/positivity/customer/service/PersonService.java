@@ -1,13 +1,11 @@
 package com.positivity.customer.service;
 
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.web.server.ResponseStatusException;
 
 public interface PersonService {
 
@@ -58,5 +56,4 @@ public interface PersonService {
      * @return list of matching persons
      */
     List<GetPersonResponse> searchPersons(String searchTerm);
-
 }

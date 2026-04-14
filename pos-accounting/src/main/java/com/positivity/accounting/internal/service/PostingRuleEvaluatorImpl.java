@@ -1,21 +1,6 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.internal.dto.MappingEvaluation;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -31,13 +16,24 @@ import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.service.GLMappingResolver;
 import com.positivity.accounting.service.PostingRuleEvaluator;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -55,7 +51,7 @@ import tools.jackson.databind.ObjectMapper;
  * 5. Return PostingResult with outcome
  *
  * rulesDefinition JSON schema:
- * 
+ *
  * <pre>
  * {
  *   "conditions": [
@@ -89,7 +85,6 @@ import tools.jackson.databind.ObjectMapper;
 public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     private final Clock clock;
 
-
     private final PostingRuleVersionRepository versionRepository;
     private final PostingRuleSetRepository ruleSetRepository;
     private final GLMappingResolver glMappingResolver;
@@ -102,21 +97,21 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     @Override
     @NonNull
     public PostingResult evaluateEvent(@NonNull AccountingEvent event, @Nullable UUID mappingVersionToUse) {
-        log.debug("Evaluating posting rules for event {} org {} date {}",
-                event.getEventId(), event.getOrganizationId(), event.getTransactionDate());
+        log.debug(
+                "Evaluating posting rules for event {} org {} date {}",
+                event.getEventId(),
+                event.getOrganizationId(),
+                event.getTransactionDate());
 
         // Validation
         if (event.getOrganizationId() == null) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR,
-                    "Event missing organizationId");
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing organizationId");
         }
         if (event.getTransactionDate() == null) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR,
-                    "Event missing transactionDate");
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing transactionDate");
         }
         if (event.getEventType() == null || event.getEventType().isBlank()) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR,
-                    "Event missing eventType");
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing eventType");
         }
 
         Map<String, Object> evaluationDetails = new HashMap<>();
@@ -133,8 +128,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 if (defaultGLMappingProperties.isEnabled()) {
                     DefaultGLMapping defaultMapping = loadDefaultGLMapping(event);
                     if (defaultMapping != null) {
-                        log.debug("Using default GL mapping {} for eventType '{}'",
-                                defaultMapping.getMappingId(), event.getEventType());
+                        log.debug(
+                                "Using default GL mapping {} for eventType '{}'",
+                                defaultMapping.getMappingId(),
+                                event.getEventType());
                         JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
 
                         if (!isBalanced(journalEntry)) {
@@ -149,11 +146,14 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
                         evaluationDetails.put("mappingType", "defaultGLMapping");
                         evaluationDetails.put("defaultMappingId", defaultMapping.getMappingId());
-                        evaluationDetails.put("journalEntryLineCount", journalEntry.getLines().size());
+                        evaluationDetails.put(
+                                "journalEntryLineCount", journalEntry.getLines().size());
                         evaluationDetails.put("journalEntryAmount", calculateDebitTotal(journalEntry));
 
-                        log.info("Successfully evaluated event {} with default GL mapping {}",
-                                event.getEventId(), defaultMapping.getMappingId());
+                        log.info(
+                                "Successfully evaluated event {} with default GL mapping {}",
+                                event.getEventId(),
+                                defaultMapping.getMappingId());
                         return PostingResult.success(journalEntry, null, evaluationDetails);
                     }
                 }
@@ -161,7 +161,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 // No rule version and no default mapping (or feature disabled) - fail
                 String msg = String.format(
                         "No published rule version or default GL mapping found for eventType '%s' on %s%s",
-                        event.getEventType(), event.getTransactionDate(),
+                        event.getEventType(),
+                        event.getTransactionDate(),
                         defaultGLMappingProperties.isEnabled() ? "" : " (default mappings disabled)");
                 evaluationDetails.put("failureStep", "loadRuleVersion");
                 return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
@@ -198,12 +199,15 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                         evaluationDetails);
             }
 
-            evaluationDetails.put("journalEntryLineCount", journalEntry.getLines().size());
+            evaluationDetails.put(
+                    "journalEntryLineCount", journalEntry.getLines().size());
             evaluationDetails.put("journalEntryAmount", calculateDebitTotal(journalEntry));
 
             // 5. Return success result
-            log.info("Successfully evaluated event {} with mapping version {}",
-                    event.getEventId(), ruleVersion.getVersionId());
+            log.info(
+                    "Successfully evaluated event {} with mapping version {}",
+                    event.getEventId(),
+                    ruleVersion.getVersionId());
             return PostingResult.success(journalEntry, ruleVersion.getVersionId(), evaluationDetails);
 
         } catch (Exception e) {
@@ -241,16 +245,18 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
         // For each rule set, find PUBLISHED versions (most recent first via @OrderBy)
         for (PostingRuleSet ruleSet : ruleSets) {
-            List<PostingRuleVersion> publishedVersions = versionRepository
-                    .findByPostingRuleSet_PostingRuleSetIdAndState(
-                            ruleSet.getPostingRuleSetId(),
-                            PostingRuleSetState.PUBLISHED);
+            List<PostingRuleVersion> publishedVersions =
+                    versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
+                            ruleSet.getPostingRuleSetId(), PostingRuleSetState.PUBLISHED);
 
             if (!publishedVersions.isEmpty()) {
                 PostingRuleVersion selected = publishedVersions.get(0);
-                log.debug("Selected rule version {} (v{}) from rule set '{}' for eventType '{}'",
-                        selected.getVersionId(), selected.getVersionNumber(),
-                        ruleSet.getName(), event.getEventType());
+                log.debug(
+                        "Selected rule version {} (v{}) from rule set '{}' for eventType '{}'",
+                        selected.getVersionId(),
+                        selected.getVersionNumber(),
+                        ruleSet.getName(),
+                        event.getEventType());
                 return selected;
             }
         }
@@ -265,9 +271,9 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * Resolution priority (when allowGlobalDefaults=true):
      * 1. Exact match: eventType + organizationId
      * 2. Global default: eventType + organizationId IS NULL
-     * 
+     *
      * When allowGlobalDefaults=false, only org-specific mappings are returned.
-     * 
+     *
      * @param event the accounting event
      * @return default GL mapping if found, null otherwise
      */
@@ -288,7 +294,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     /**
      * Generates a simple balanced journal entry from a default GL mapping.
      * Uses the event's payload.amount field for the transaction amount.
-     * 
+     *
      * @param event          the accounting event
      * @param defaultMapping the default GL mapping
      * @return generated journal entry with two lines (debit + credit)
@@ -312,8 +318,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             if (defaultGLMappingProperties.isRequireAmountField()) {
                 throw new IllegalArgumentException(
-                        "Event " + event.getEventId() + " has zero or missing payload.amount field, " +
-                                "which is required when using default GL mappings (pos.accounting.default-mappings.require-amount-field=true)");
+                        "Event " + event.getEventId() + " has zero or missing payload.amount field, "
+                                + "which is required when using default GL mappings (pos.accounting.default-mappings.require-amount-field=true)");
             }
             log.warn("Event {} has zero or missing amount - using 0.01 for traceability", event.getEventId());
             amount = new BigDecimal("0.01");
@@ -326,9 +332,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         debitLine.setGlAccountId(defaultMapping.getDebitAccountId());
         debitLine.setDebitAmount(amount);
         debitLine.setCreditAmount(BigDecimal.ZERO);
-        debitLine.setDescription(defaultMapping.getDescription() != null
-                ? defaultMapping.getDescription() + " (DR)"
-                : "Default debit for " + event.getEventType());
+        debitLine.setDescription(
+                defaultMapping.getDescription() != null
+                        ? defaultMapping.getDescription() + " (DR)"
+                        : "Default debit for " + event.getEventType());
 
         // Create credit line
         JournalEntryLine creditLine = new JournalEntryLine();
@@ -337,9 +344,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         creditLine.setGlAccountId(defaultMapping.getCreditAccountId());
         creditLine.setDebitAmount(BigDecimal.ZERO);
         creditLine.setCreditAmount(amount);
-        creditLine.setDescription(defaultMapping.getDescription() != null
-                ? defaultMapping.getDescription() + " (CR)"
-                : "Default credit for " + event.getEventType());
+        creditLine.setDescription(
+                defaultMapping.getDescription() != null
+                        ? defaultMapping.getDescription() + " (CR)"
+                        : "Default credit for " + event.getEventType());
 
         List<JournalEntryLine> lines = new ArrayList<>();
         lines.add(debitLine);
@@ -367,14 +375,14 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * @param ruleVersion the selected posting rule version
      * @return evaluation result with resolved GL account lines
      */
-
     private MappingEvaluation evaluateMappingKeys(AccountingEvent event, PostingRuleVersion ruleVersion) {
         MappingEvaluation eval = new MappingEvaluation();
         String rulesJson = ruleVersion.getRulesDefinition();
 
         // Handle empty/null rules (e.g. newly-created stub rule sets)
         if (rulesJson == null || rulesJson.isBlank() || "{}".equals(rulesJson.trim())) {
-            log.warn("Rules definition is empty for version {} - cannot generate valid journal entry",
+            log.warn(
+                    "Rules definition is empty for version {} - cannot generate valid journal entry",
                     ruleVersion.getVersionId());
             eval.setSuccess(false);
             eval.addEvaluatedKey("(empty rulesDefinition)");
@@ -386,7 +394,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             JsonNode conditions = root.get("conditions");
 
             if (conditions == null || !conditions.isArray() || conditions.isEmpty()) {
-                log.warn("No conditions in rulesDefinition for version {} - cannot generate valid journal entry",
+                log.warn(
+                        "No conditions in rulesDefinition for version {} - cannot generate valid journal entry",
                         ruleVersion.getVersionId());
                 eval.setSuccess(false);
                 eval.addEvaluatedKey("(no conditions defined)");
@@ -434,22 +443,27 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                     UUID glAccountId = null;
 
                     if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
-                        UUID postingCategoryId = UUID.fromString(lineNode.get("postingCategoryId").asString());
-                        UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asString());
+                        UUID postingCategoryId = UUID.fromString(
+                                lineNode.get("postingCategoryId").asString());
+                        UUID mappingKeyId =
+                                UUID.fromString(lineNode.get("mappingKeyId").asString());
 
                         try {
                             glAccountId = glMappingResolver.resolveGLAccount(
-                                    postingCategoryId, mappingKeyId,
-                                    event.getTransactionDate(), dimensions);
+                                    postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
                         } catch (IllegalArgumentException e) {
-                            log.warn("GL mapping resolution failed for category={} key={}: {}",
-                                    postingCategoryId, mappingKeyId, e.getMessage());
+                            log.warn(
+                                    "GL mapping resolution failed for category={} key={}: {}",
+                                    postingCategoryId,
+                                    mappingKeyId,
+                                    e.getMessage());
                             allLinesResolved = false;
                             break;
                         }
                     } else if (lineNode.has("glAccountId")) {
                         // Direct GL account reference (simpler rules without mapping tables)
-                        glAccountId = UUID.fromString(lineNode.get("glAccountId").asString());
+                        glAccountId =
+                                UUID.fromString(lineNode.get("glAccountId").asString());
                     }
 
                     if (glAccountId == null) {
@@ -478,8 +492,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             return eval;
 
         } catch (Exception e) {
-            log.error("Failed to parse rulesDefinition JSON for version {}: {}",
-                    ruleVersion.getVersionId(), e.getMessage());
+            log.error(
+                    "Failed to parse rulesDefinition JSON for version {}: {}",
+                    ruleVersion.getVersionId(),
+                    e.getMessage());
             eval.setSuccess(false);
             return eval;
         }
@@ -530,7 +546,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * @param event       the accounting event
      * @return resolved amount, or BigDecimal.ZERO if unresolvable
      */
-
     private BigDecimal resolveAmount(String amountField, AccountingEvent event) {
         if (amountField == null || amountField.isBlank()) {
             return BigDecimal.ZERO;
@@ -562,9 +577,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             } else if (current instanceof String str) {
                 return new BigDecimal(str);
             }
-        } catch (
-
-        Exception e) {
+        } catch (Exception e) {
             log.warn("Failed to resolve amount from field '{}': {}", amountField, e.getMessage());
         }
 
@@ -576,7 +589,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * resolution.
      * Looks for a "dimensions" map within the event payload.
      */
-
     private Map<String, String> extractDimensions(AccountingEvent event) {
         Map<String, Object> payload = event.getPayload();
         if (payload == null) {
@@ -599,15 +611,16 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * If no resolved lines are present (passthrough mode), generates a placeholder
      * entry.
      */
-    private JournalEntry generateJournalEntry(AccountingEvent event, MappingEvaluation mappingEval,
-            PostingRuleVersion ruleVersion) {
+    private JournalEntry generateJournalEntry(
+            AccountingEvent event, MappingEvaluation mappingEval, PostingRuleVersion ruleVersion) {
         JournalEntry entry = new JournalEntry();
         entry.setJournalEntryId(UUIDv7Generator.generate());
         entry.setSourceEventId(event.getEventId());
         entry.setSourceEventType(event.getEventType());
         entry.setPostingRuleVersionId(ruleVersion.getVersionId());
         entry.setPostingRuleSetId(
-                ruleVersion.getPostingRuleSet() != null ? ruleVersion.getPostingRuleSet().getPostingRuleSetId()
+                ruleVersion.getPostingRuleSet() != null
+                        ? ruleVersion.getPostingRuleSet().getPostingRuleSetId()
                         : null);
         entry.setEntryType(JournalEntryType.EVENT_DRIVEN);
         entry.setTransactionDate(event.getTransactionDate());

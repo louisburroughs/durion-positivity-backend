@@ -40,9 +40,10 @@ public class ConflictOverrideServiceImpl implements ConflictOverrideService {
         }
 
         // Locate the appointment — required for flagging and record linkage
-        var appointment = appointmentRepository.findById(request.getAppointmentId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Appointment not found: " + request.getAppointmentId()));
+        var appointment = appointmentRepository
+                .findById(request.getAppointmentId())
+                .orElseThrow(
+                        () -> new IllegalArgumentException("Appointment not found: " + request.getAppointmentId()));
 
         // AC4: Flag appointment as a conflict override
         appointment.setConflictOverride(true);

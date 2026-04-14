@@ -1,18 +1,15 @@
 package com.positivity.accounting.internal.service;
 
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.accounting.internal.client.CustomerBillingRulesClient;
 import com.positivity.accounting.internal.client.CustomerServiceException;
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.service.BillingRulesService;
-
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor

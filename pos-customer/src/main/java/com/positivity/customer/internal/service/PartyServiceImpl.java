@@ -1,23 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.UUID;
-
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
@@ -50,9 +32,24 @@ import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Service
@@ -86,8 +83,10 @@ public class PartyServiceImpl implements PartyService {
         party.setDisplayName(request.getDisplayName());
         party.setTaxId(request.getTaxId());
         party.setBillingTermsId(request.getBillingTermsId());
-        party.setPartyType(StringUtils.hasText(request.getPartyType()) ? PartyType.valueOf(request.getPartyType())
-                : PartyType.COMMERCIAL);
+        party.setPartyType(
+                StringUtils.hasText(request.getPartyType())
+                        ? PartyType.valueOf(request.getPartyType())
+                        : PartyType.COMMERCIAL);
         party.setStatus(AccountStatus.ACTIVE);
         party.setPartyNumber(generatePartyNumber());
         if (request.getExternalIdentifiers() != null) {
@@ -99,7 +98,9 @@ public class PartyServiceImpl implements PartyService {
 
         CommercialParty saved = partyRepository.save(party);
         contactRepository.save(contact);
-        log.info("Created commercial account with partyId: {}, partyNumber: {}", saved.getPartyId(),
+        log.info(
+                "Created commercial account with partyId: {}, partyNumber: {}",
+                saved.getPartyId(),
                 saved.getPartyNumber());
 
         return CreateCommercialAccountResponse.builder()
@@ -175,17 +176,13 @@ public class PartyServiceImpl implements PartyService {
 
         // Fall back to business name if no contact first name provided
         if (!StringUtils.hasText(firstName)) {
-            firstName = StringUtils.hasText(request.getDisplayName())
-                    ? request.getDisplayName()
-                    : request.getLegalName();
+            firstName =
+                    StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName() : request.getLegalName();
         }
 
         Contact contact = new Contact();
-        UUID personId = peopleClient.resolveOrCreatePersonId(
-                request.getEmail(),
-                request.getPhone(),
-                lastName,
-                firstName);
+        UUID personId =
+                peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName, firstName);
         contact.setCommercialParty(party);
         contact.setPersonId(personId);
         contact.setFirstName(firstName);
@@ -201,8 +198,8 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private String buildContactName(Contact contact) {
-        return (contact.getFirstName() != null ? contact.getFirstName() : "") + " " +
-                (contact.getLastName() != null ? contact.getLastName() : "");
+        return (contact.getFirstName() != null ? contact.getFirstName() : "") + " "
+                + (contact.getLastName() != null ? contact.getLastName() : "");
     }
 
     @Override
@@ -218,9 +215,8 @@ public class PartyServiceImpl implements PartyService {
                 .filter(p -> matchesSearchCriteria(p, searchRequest))
                 .toList();
 
-        List<SearchPartiesResponse.PartySummary> summaries = filtered.stream()
-                .map(this::mapToPartySummary)
-                .toList();
+        List<SearchPartiesResponse.PartySummary> summaries =
+                filtered.stream().map(this::mapToPartySummary).toList();
 
         log.debug("Found {} parties matching search criteria", summaries.size());
 
@@ -235,7 +231,9 @@ public class PartyServiceImpl implements PartyService {
     @Override
     @Transactional
     public MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request) {
-        log.info("Merging parties - survivor: {}, loser: {}", survivorPartyId,
+        log.info(
+                "Merging parties - survivor: {}, loser: {}",
+                survivorPartyId,
                 request != null ? request.getLosingPartyId() : null);
         if (request == null || !StringUtils.hasText(request.getLosingPartyId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "losingPartyId is required");
@@ -286,12 +284,13 @@ public class PartyServiceImpl implements PartyService {
 
     @Override
     @Transactional
-    public UpdateContactRolesResponse updateContactRoles(UUID partyId, UUID contactId,
-            UpdateContactRolesRequest request) {
+    public UpdateContactRolesResponse updateContactRoles(
+            UUID partyId, UUID contactId, UpdateContactRolesRequest request) {
         log.debug("Updating contact roles for party: {}, contact: {}", partyId, contactId);
         CommercialParty party = findPartyOrThrow(partyId);
 
-        Contact contact = contactRepository.findById(contactId)
+        Contact contact = contactRepository
+                .findById(contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
 
         if (!contact.getCommercialParty().getPartyId().equals(party.getPartyId())) {
@@ -325,8 +324,8 @@ public class PartyServiceImpl implements PartyService {
 
     @Override
     @Transactional
-    public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(UUID partyId,
-            UpsertCommunicationPreferencesRequest request) {
+    public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
+            UUID partyId, UpsertCommunicationPreferencesRequest request) {
         log.debug("Upserting communication preferences for party: {}", partyId);
         CommercialParty party = findPartyOrThrow(partyId);
 
@@ -344,7 +343,9 @@ public class PartyServiceImpl implements PartyService {
     @Override
     @Transactional
     public CreateVehicleForPartyResponse createVehicleForParty(UUID partyId, CreateVehicleForPartyRequest request) {
-        log.debug("Creating vehicle association for party: {}, VIN: {}", partyId,
+        log.debug(
+                "Creating vehicle association for party: {}, VIN: {}",
+                partyId,
                 request != null ? request.getVinNumber() : null);
         if (request == null || !StringUtils.hasText(request.getVinNumber())) {
             log.warn("CreateVehicleForParty failed: vinNumber is required");
@@ -461,8 +462,7 @@ public class PartyServiceImpl implements PartyService {
         if (snapshotCache != null) {
             Cache.ValueWrapper wrapper = snapshotCache.get(partyId);
             if (wrapper != null) {
-                CrmSnapshotDTO cached = (CrmSnapshotDTO) wrapper
-                        .get();
+                CrmSnapshotDTO cached = (CrmSnapshotDTO) wrapper.get();
                 if (cached != null && cached.getSnapshotMetadata() != null) {
                     cached.getSnapshotMetadata().setSource("CACHE");
                 }
@@ -507,15 +507,11 @@ public class PartyServiceImpl implements PartyService {
         List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(party);
         CrmSnapshotDTO.BillingPreferences prefs = buildBillingPreferences();
 
-        return new CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs,
-                BillingRuleRef.defaults());
+        return new CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs, BillingRuleRef.defaults());
     }
 
     private SnapshotMetadata createMetadata() {
-        SnapshotMetadata meta = new SnapshotMetadata(
-                UUIDv7Generator.generate(),
-                Instant.now(clock),
-                "1.0.0");
+        SnapshotMetadata meta = new SnapshotMetadata(UUIDv7Generator.generate(), Instant.now(clock), "1.0.0");
         meta.setSource("CRM_API");
         return meta;
     }
@@ -525,9 +521,7 @@ public class PartyServiceImpl implements PartyService {
         String legalName = requireText(party.getLegalName(), "legalName");
         PartyType partyType = requireNonNullField(party.getPartyType(), "partyType");
         String id = party.getPartyId().toString();
-        String name = StringUtils.hasText(party.getDisplayName())
-                ? party.getDisplayName()
-                : legalName;
+        String name = StringUtils.hasText(party.getDisplayName()) ? party.getDisplayName() : legalName;
         String type = partyType.name();
 
         return new AccountSummary(id, partyNumber, name, type);
@@ -547,17 +541,14 @@ public class PartyServiceImpl implements PartyService {
         return value;
     }
 
-    private List<ContactSummary> buildContactSummaries(
-            CommercialParty party) {
+    private List<ContactSummary> buildContactSummaries(CommercialParty party) {
         List<Contact> contacts = findContactsByPartyInternal(party);
 
         if (contacts == null || contacts.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return contacts.stream()
-                .map(this::convertContactToSummary)
-                .toList();
+        return contacts.stream().map(this::convertContactToSummary).toList();
     }
 
     private ContactSummary convertContactToSummary(Contact contact) {
@@ -613,33 +604,30 @@ public class PartyServiceImpl implements PartyService {
         return DEFAULT_CONTACT_NAME;
     }
 
-    private List<ContactSummary.PhoneNumberDTO> buildPhoneList(
-            Contact contact) {
+    private List<ContactSummary.PhoneNumberDTO> buildPhoneList(Contact contact) {
         List<ContactSummary.PhoneNumberDTO> phones = new ArrayList<>();
 
         if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
-            phones.add(new ContactSummary.PhoneNumberDTO("PRIMARY",
-                    contact.getPhoneNumber()));
+            phones.add(new ContactSummary.PhoneNumberDTO("PRIMARY", contact.getPhoneNumber()));
         }
 
         return phones;
     }
 
-    private List<ContactSummary.EmailAddressDTO> buildEmailList(
-            Contact contact) {
+    private List<ContactSummary.EmailAddressDTO> buildEmailList(Contact contact) {
         List<ContactSummary.EmailAddressDTO> emails = new ArrayList<>();
 
         if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            emails.add(new ContactSummary.EmailAddressDTO("PRIMARY",
-                    contact.getEmail()));
+            emails.add(new ContactSummary.EmailAddressDTO("PRIMARY", contact.getEmail()));
         }
 
         return emails;
     }
 
-    private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(
-            CommercialParty party) {
-        if (party == null || party.getVehicleVins() == null || party.getVehicleVins().isEmpty()) {
+    private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {
+        if (party == null
+                || party.getVehicleVins() == null
+                || party.getVehicleVins().isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -654,14 +642,17 @@ public class PartyServiceImpl implements PartyService {
 
     private CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
         try {
-            VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
+            VehicleResponse vehicleData =
+                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
             if (vehicleData == null) {
                 log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
                 return null;
             }
 
             CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
-            String vehicleId = vehicleData.getVehicleId() != null ? vehicleData.getVehicleId().toString() : vinCode;
+            String vehicleId = vehicleData.getVehicleId() != null
+                    ? vehicleData.getVehicleId().toString()
+                    : vinCode;
             summary.setVehicleId(vehicleId);
             summary.setVin(vehicleData.getVin() != null ? vehicleData.getVin() : vinCode);
             summary.setLicensePlate(vehicleData.getLicensePlate());

@@ -1,13 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -15,11 +8,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Entity for tracking idempotency keys to prevent duplicate payment processing.
@@ -31,9 +28,9 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "idempotency_keys", indexes = {
-        @Index(name = "idx_key_value", columnList = "keyValue", unique = true)
-})
+@Table(
+        name = "idempotency_keys",
+        indexes = {@Index(name = "idx_key_value", columnList = "keyValue", unique = true)})
 public class IdempotencyKey {
 
     @EqualsAndHashCode.Include
@@ -42,6 +39,7 @@ public class IdempotencyKey {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
     @Column(nullable = false, unique = true)
     private String keyValue;
 

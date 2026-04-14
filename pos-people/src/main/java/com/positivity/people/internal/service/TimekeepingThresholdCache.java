@@ -35,26 +35,36 @@ public class TimekeepingThresholdCache {
 
     private final boolean preloadGlobalPolicies;
 
-    public TimekeepingThresholdCache(TimekeepingPolicyRepository timekeepingPolicyRepository,
-            @Value("${pos.people.reports.threshold-cache.max-resolution-cache-entries:4096}") int maxResolutionCacheEntries,
-            @Value("${pos.people.reports.threshold-cache.preload-location-policies:true}") boolean preloadLocationPolicies,
-            @Value("${pos.people.reports.threshold-cache.preload-global-policies:true}") boolean preloadGlobalPolicies) {
+    public TimekeepingThresholdCache(
+            TimekeepingPolicyRepository timekeepingPolicyRepository,
+            @Value("${pos.people.reports.threshold-cache.max-resolution-cache-entries:4096}")
+                    int maxResolutionCacheEntries,
+            @Value("${pos.people.reports.threshold-cache.preload-location-policies:true}")
+                    boolean preloadLocationPolicies,
+            @Value("${pos.people.reports.threshold-cache.preload-global-policies:true}")
+                    boolean preloadGlobalPolicies) {
         this.timekeepingPolicyRepository = timekeepingPolicyRepository;
-        this.maxResolutionCacheEntries = maxResolutionCacheEntries > 0 ? maxResolutionCacheEntries
-                : DEFAULT_MAX_RESOLUTION_CACHE_ENTRIES;
+        this.maxResolutionCacheEntries =
+                maxResolutionCacheEntries > 0 ? maxResolutionCacheEntries : DEFAULT_MAX_RESOLUTION_CACHE_ENTRIES;
         this.preloadLocationPolicies = preloadLocationPolicies;
         this.preloadGlobalPolicies = preloadGlobalPolicies;
     }
 
     public ThresholdResolverContext createContext(Set<AttendanceReportKey> keys, ZoneId zoneId) {
         List<TimekeepingPolicy> globalPolicies = preloadGlobalPolicies
-                ? timekeepingPolicyRepository.findByScopeType(TimekeepingPolicyScopeType.GLOBAL) : List.of();
+                ? timekeepingPolicyRepository.findByScopeType(TimekeepingPolicyScopeType.GLOBAL)
+                : List.of();
 
-        Map<UUID, List<TimekeepingPolicy>> locationPoliciesById = preloadLocationPolicies
-                ? loadLocationPolicies(extractUuidLocationIds(keys)) : Map.of();
+        Map<UUID, List<TimekeepingPolicy>> locationPoliciesById =
+                preloadLocationPolicies ? loadLocationPolicies(extractUuidLocationIds(keys)) : Map.of();
 
-        return new ThresholdResolverContext(zoneId, maxResolutionCacheEntries, globalPolicies, locationPoliciesById,
-                preloadLocationPolicies, preloadGlobalPolicies);
+        return new ThresholdResolverContext(
+                zoneId,
+                maxResolutionCacheEntries,
+                globalPolicies,
+                locationPoliciesById,
+                preloadLocationPolicies,
+                preloadGlobalPolicies);
     }
 
     private Map<UUID, List<TimekeepingPolicy>> loadLocationPolicies(Set<UUID> locationIds) {
@@ -62,8 +72,8 @@ public class TimekeepingThresholdCache {
             return Map.of();
         }
 
-        List<TimekeepingPolicy> policies = timekeepingPolicyRepository
-            .findByScopeTypeAndScopeIdIn(TimekeepingPolicyScopeType.LOCATION, locationIds);
+        List<TimekeepingPolicy> policies = timekeepingPolicyRepository.findByScopeTypeAndScopeIdIn(
+                TimekeepingPolicyScopeType.LOCATION, locationIds);
         Map<UUID, List<TimekeepingPolicy>> grouped = new HashMap<>();
         for (TimekeepingPolicy policy : policies) {
             UUID scopeId = policy.getScopeId();
@@ -77,17 +87,16 @@ public class TimekeepingThresholdCache {
 
     private Set<UUID> extractUuidLocationIds(Collection<AttendanceReportKey> keys) {
         return keys.stream()
-            .map(AttendanceReportKey::getLocationId)
-            .map(this::tryParseUuid)
-            .flatMap(Optional::stream)
-            .collect(java.util.stream.Collectors.toSet());
+                .map(AttendanceReportKey::getLocationId)
+                .map(this::tryParseUuid)
+                .flatMap(Optional::stream)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     private Optional<UUID> tryParseUuid(String value) {
         try {
             return Optional.of(UUID.fromString(value));
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             return Optional.empty();
         }
     }
@@ -106,10 +115,13 @@ public class TimekeepingThresholdCache {
 
         private final LinkedHashMap<ThresholdKey, Integer> thresholdCache;
 
-        private ThresholdResolverContext(ZoneId zoneId, int maxCacheEntries,
+        private ThresholdResolverContext(
+                ZoneId zoneId,
+                int maxCacheEntries,
                 List<TimekeepingPolicy> preloadedGlobalPolicies,
                 Map<UUID, List<TimekeepingPolicy>> preloadedLocationPoliciesById,
-                boolean preloadLocationPoliciesEnabled, boolean preloadGlobalPoliciesEnabled) {
+                boolean preloadLocationPoliciesEnabled,
+                boolean preloadGlobalPoliciesEnabled) {
             this.zoneId = zoneId;
             this.preloadedGlobalPolicies = preloadedGlobalPolicies;
             this.preloadedLocationPoliciesById = preloadedLocationPoliciesById;
@@ -142,31 +154,33 @@ public class TimekeepingThresholdCache {
             if (locationUuid.isPresent()) {
                 List<TimekeepingPolicy> locationPolicies = preloadLocationPoliciesEnabled
                         ? preloadedLocationPoliciesById.getOrDefault(locationUuid.get(), List.of())
-                        : timekeepingPolicyRepository.findByScopeTypeAndScopeId(TimekeepingPolicyScopeType.LOCATION,
-                                locationUuid.get());
+                        : timekeepingPolicyRepository.findByScopeTypeAndScopeId(
+                                TimekeepingPolicyScopeType.LOCATION, locationUuid.get());
                 Optional<TimekeepingPolicy> locationPolicy = selectEffectivePolicy(locationPolicies, evaluationTime);
                 if (locationPolicy.isPresent()) {
                     return sanitizeThreshold(locationPolicy.get().getJobTimeDiscrepancyThresholdMinutes());
                 }
             }
 
-            List<TimekeepingPolicy> globalPolicies = preloadGlobalPoliciesEnabled ? preloadedGlobalPolicies
+            List<TimekeepingPolicy> globalPolicies = preloadGlobalPoliciesEnabled
+                    ? preloadedGlobalPolicies
                     : timekeepingPolicyRepository.findByScopeType(TimekeepingPolicyScopeType.GLOBAL);
             return selectEffectivePolicy(globalPolicies, evaluationTime)
-                .map(TimekeepingPolicy::getJobTimeDiscrepancyThresholdMinutes)
-                .map(TimekeepingThresholdCache.this::sanitizeThreshold)
-                .orElse(DEFAULT_THRESHOLD_MINUTES);
+                    .map(TimekeepingPolicy::getJobTimeDiscrepancyThresholdMinutes)
+                    .map(TimekeepingThresholdCache.this::sanitizeThreshold)
+                    .orElse(DEFAULT_THRESHOLD_MINUTES);
         }
 
-        private Optional<TimekeepingPolicy> selectEffectivePolicy(List<TimekeepingPolicy> candidates,
-                Instant evaluationTime) {
+        private Optional<TimekeepingPolicy> selectEffectivePolicy(
+                List<TimekeepingPolicy> candidates, Instant evaluationTime) {
             return candidates.stream()
-                .filter(policy -> isEffective(policy, evaluationTime))
-                .sorted(Comparator
-                    .comparing(TimekeepingPolicy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                    .thenComparing(TimekeepingPolicy::getEffectiveStartAt,
-                            Comparator.nullsLast(Comparator.reverseOrder())))
-                .findFirst();
+                    .filter(policy -> isEffective(policy, evaluationTime))
+                    .sorted(Comparator.comparing(
+                                    TimekeepingPolicy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(
+                                    TimekeepingPolicy::getEffectiveStartAt,
+                                    Comparator.nullsLast(Comparator.reverseOrder())))
+                    .findFirst();
         }
 
         private boolean isEffective(TimekeepingPolicy policy, Instant evaluationTime) {
@@ -176,7 +190,6 @@ public class TimekeepingThresholdCache {
                     || !policy.getEffectiveEndAt().isBefore(evaluationTime);
             return startsBeforeOrAt && endsAfterOrAt;
         }
-
     }
 
     private int sanitizeThreshold(Integer threshold) {
@@ -186,7 +199,5 @@ public class TimekeepingThresholdCache {
         return threshold;
     }
 
-    private record ThresholdKey(String locationId, LocalDate reportDate) {
-    }
-
+    private record ThresholdKey(String locationId, LocalDate reportDate) {}
 }

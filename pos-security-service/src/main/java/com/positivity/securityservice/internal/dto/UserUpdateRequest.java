@@ -9,4 +9,3 @@ public class UserUpdateRequest {
     private String password;
     private Set<String> roles;
 }
-

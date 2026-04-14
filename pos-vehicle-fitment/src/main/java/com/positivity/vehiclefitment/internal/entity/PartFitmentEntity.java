@@ -1,17 +1,14 @@
 package com.positivity.vehiclefitment.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import lombok.Data;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import com.positivity.shared.id.UUIDv7Id;
 
 @Entity
 @Data
@@ -52,8 +49,8 @@ public class PartFitmentEntity {
     @ManyToMany
     private List<VehicleVariableValue> vehicleVariableValues;
 
-    private String notes;// (Specific fitment notes, e.g., "Except with Off-Road Package," "Requires
-                         // Modification")
+    private String notes; // (Specific fitment notes, e.g., "Except with Off-Road Package," "Requires
+    // Modification")
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

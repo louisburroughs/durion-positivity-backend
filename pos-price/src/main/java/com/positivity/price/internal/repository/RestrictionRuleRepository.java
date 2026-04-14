@@ -1,14 +1,12 @@
 package com.positivity.price.internal.repository;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import com.positivity.price.internal.entity.RestrictionRule;
 import com.positivity.price.internal.enums.LocationTag;
 import com.positivity.price.internal.enums.ServiceTag;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RestrictionRuleRepository extends JpaRepository<RestrictionRule, UUID> {
 
@@ -17,7 +15,5 @@ public interface RestrictionRuleRepository extends JpaRepository<RestrictionRule
     Optional<RestrictionRule> findByRuleIdAndActiveTrue(UUID ruleId);
 
     List<RestrictionRule> findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            UUID productId,
-            LocationTag locationTag,
-            ServiceTag serviceTag);
+            UUID productId, LocationTag locationTag, ServiceTag serviceTag);
 }

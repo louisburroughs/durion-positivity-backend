@@ -1,21 +1,19 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
-import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 /**
  * Entity representing a payment applied to an invoice.
  * Stores payment transaction details for auditing and status calculation.
@@ -36,6 +34,7 @@ public class PaymentAppliedEvent {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
     @Column(nullable = false)
     private UUID invoiceId;
 
@@ -58,9 +57,13 @@ public class PaymentAppliedEvent {
     @Column
     private String transactionReference;
 
-    public PaymentAppliedEvent(UUID invoiceId, String transactionReference,
-            BigDecimal paymentAmount, BigDecimal invoiceTotal,
-            PaymentStatus status, String idempotencyKey) {
+    public PaymentAppliedEvent(
+            UUID invoiceId,
+            String transactionReference,
+            BigDecimal paymentAmount,
+            BigDecimal invoiceTotal,
+            PaymentStatus status,
+            String idempotencyKey) {
         this.invoiceId = invoiceId;
         this.transactionReference = transactionReference;
         this.paymentAmount = paymentAmount;

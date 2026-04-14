@@ -1,14 +1,6 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,8 +12,13 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Audit record for party merge operations.
@@ -35,11 +32,13 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "merge_audit", indexes = {
-        @Index(name = "idx_merge_audit_survivor", columnList = "survivor_party_id"),
-        @Index(name = "idx_merge_audit_source", columnList = "source_party_id"),
-        @Index(name = "idx_merge_audit_merged_at", columnList = "merged_at")
-})
+@Table(
+        name = "merge_audit",
+        indexes = {
+            @Index(name = "idx_merge_audit_survivor", columnList = "survivor_party_id"),
+            @Index(name = "idx_merge_audit_source", columnList = "source_party_id"),
+            @Index(name = "idx_merge_audit_merged_at", columnList = "merged_at")
+        })
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Audit record for party merge operations")
 public class MergeAudit {

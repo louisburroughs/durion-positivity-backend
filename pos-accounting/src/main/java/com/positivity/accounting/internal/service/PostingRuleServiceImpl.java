@@ -1,17 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.PostingRuleMapper;
 import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
 import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
@@ -24,9 +12,18 @@ import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.accounting.service.PostingRuleService;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for Posting Rule Set and Version management.
@@ -154,7 +151,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
      * transaction context without the proxy-bypass pitfall.
      */
     private PostingRuleSet findRuleSetById(UUID ruleSetId) {
-        return ruleSetRepository.findByIdWithVersions(ruleSetId)
+        return ruleSetRepository
+                .findByIdWithVersions(ruleSetId)
                 .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
     }
 
@@ -163,10 +161,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         PostingRuleSet ruleSet = findRuleSetById(ruleSetId);
 
         // Check if ruleset has a PUBLISHED version - cannot modify published rulesets
-        List<PostingRuleVersion> versions = versionRepository
-                .findByPostingRuleSet_PostingRuleSetId(ruleSetId);
-        boolean hasPublished = versions.stream()
-                .anyMatch(v -> v.getState() == PostingRuleSetState.PUBLISHED);
+        List<PostingRuleVersion> versions = versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
+        boolean hasPublished = versions.stream().anyMatch(v -> v.getState() == PostingRuleSetState.PUBLISHED);
 
         if (hasPublished) {
             throw new IllegalStateException(
@@ -199,14 +195,14 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         version.setUpdatedAt(Instant.now(clock));
 
         PostingRuleVersion saved = versionRepository.save(version);
-        log.info("Created version {} for rule set: {}",
-                saved.getVersionNumber(), ruleSet.getName());
+        log.info("Created version {} for rule set: {}", saved.getVersionNumber(), ruleSet.getName());
         return saved;
     }
 
     @Override
     public PostingRuleVersion updateVersion(UUID versionId, PostingRuleVersion updates) {
-        PostingRuleVersion version = versionRepository.findById(versionId)
+        PostingRuleVersion version = versionRepository
+                .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.DRAFT) {
@@ -222,7 +218,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion publishVersion(UUID versionId) {
-        PostingRuleVersion version = versionRepository.findById(versionId)
+        PostingRuleVersion version = versionRepository
+                .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.DRAFT) {
@@ -235,7 +232,9 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
         // Archive any existing PUBLISHED version
         List<PostingRuleVersion> published = versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
-                version.getPostingRuleSet() != null ? version.getPostingRuleSet().getPostingRuleSetId() : null,
+                version.getPostingRuleSet() != null
+                        ? version.getPostingRuleSet().getPostingRuleSetId()
+                        : null,
                 PostingRuleSetState.PUBLISHED);
         for (PostingRuleVersion oldVersion : published) {
             oldVersion.setState(PostingRuleSetState.ARCHIVED);
@@ -256,7 +255,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion archiveVersion(UUID versionId) {
-        PostingRuleVersion version = versionRepository.findById(versionId)
+        PostingRuleVersion version = versionRepository
+                .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.PUBLISHED) {
@@ -291,5 +291,3 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         return versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
     }
 }
-
-    

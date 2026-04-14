@@ -3,16 +3,16 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.client.SiteDefaultsClient;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.client.WorkorderValidationClient;
+import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
-import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryVariance;
 import com.positivity.inventory.internal.dto.receiving.ReceivingLineResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryVariance;
 import com.positivity.inventory.internal.entity.ReceivingLine;
 import com.positivity.inventory.internal.entity.ReceivingSession;
 import com.positivity.inventory.internal.enums.EntryMethod;
@@ -57,10 +57,8 @@ import org.springframework.web.servlet.HandlerMapping;
 public class ReceivingServiceImpl implements ReceivingService {
 
     private static final String PART_MATCH_OVERRIDE_PERMISSION = "inventory:override:part-match";
-    private static final UUID DEFAULT_STAGING_LOCATION_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID DEFAULT_CROSS_DOCK_LOCATION_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID DEFAULT_STAGING_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID DEFAULT_CROSS_DOCK_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
@@ -83,8 +81,7 @@ public class ReceivingServiceImpl implements ReceivingService {
 
     @Override
     public @NonNull ReceivingSessionResponse createReceivingSession(
-            @NonNull CreateReceivingSessionRequest request,
-            @NonNull String actorUserId) {
+            @NonNull CreateReceivingSessionRequest request, @NonNull String actorUserId) {
 
         String sourceDocumentId = request.getSourceDocumentId();
         EntryMethod entryMethod = parseEntryMethod(request.getEntryMethod());
@@ -109,18 +106,16 @@ public class ReceivingServiceImpl implements ReceivingService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull ReceivingSessionResponse getReceivingSession(@NonNull UUID sessionId) {
-        ReceivingSession session = receivingSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ReceivingSessionNotFoundException(
-                        "Receiving session not found: " + sessionId));
+        ReceivingSession session = receivingSessionRepository
+                .findById(sessionId)
+                .orElseThrow(() -> new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId));
         return mapToResponse(session);
     }
 
     @Override
     @NonNull
     public ReceiveItemsResponse receiveItemsIntoStaging(
-            @NonNull UUID sessionId,
-            @NonNull ReceiveItemsRequest request,
-            @NonNull String actorUserId) {
+            @NonNull UUID sessionId, @NonNull ReceiveItemsRequest request, @NonNull String actorUserId) {
         ReceivingSession session = resolveSessionForReceive(sessionId);
 
         Map<UUID, ReceivingLine> lineMap = session.getLines().stream()
@@ -149,22 +144,16 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.setStatus(ReceivingLineStatus.RECEIVED_OVER);
             }
 
-            createGoodsReceiptLedgerEntry(
-                    sessionId,
-                    line.getLineId(),
-                    line.getProductId(),
-                    receivedQty,
-                    actorUserId);
+            createGoodsReceiptLedgerEntry(sessionId, line.getLineId(), line.getProductId(), receivedQty, actorUserId);
 
             if (cmp != 0) {
-                InventoryVarianceType varianceType = cmp < 0
-                        ? InventoryVarianceType.SHORTAGE
-                        : InventoryVarianceType.OVERAGE;
+                InventoryVarianceType varianceType =
+                        cmp < 0 ? InventoryVarianceType.SHORTAGE : InventoryVarianceType.OVERAGE;
                 BigDecimal varianceQty = expectedQty.subtract(receivedQty).abs();
 
                 InventoryVariance variance = InventoryVariance.builder()
-                    .session(session)
-                    .line(line)
+                        .session(session)
+                        .line(line)
                         .productId(line.getProductId())
                         .varianceType(varianceType)
                         .varianceQuantity(varianceQty)
@@ -206,39 +195,40 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull UUID lineId,
             @NonNull CrossDockRequest request,
             @NonNull String actorUserId) {
-        ReceivingSession session = receivingSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ReceivingSessionNotFoundException(
-                        "Receiving session not found: " + sessionId));
+        ReceivingSession session = receivingSessionRepository
+                .findById(sessionId)
+                .orElseThrow(() -> new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId));
 
         ReceivingLine line = session.getLines().stream()
                 .filter(candidate -> lineId.equals(candidate.getLineId()))
                 .findFirst()
-                .orElseThrow(() -> new ReceivingSessionNotFoundException(
-                        "Receiving line not found in session: " + lineId));
+                .orElseThrow(
+                        () -> new ReceivingSessionNotFoundException("Receiving line not found in session: " + lineId));
 
         String workorderId = request.getWorkorderId();
-        WorkorderValidationClient.WorkorderLineValidation workorderValidation = workorderValidationClient
-                .getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
+        WorkorderValidationClient.WorkorderLineValidation workorderValidation =
+                workorderValidationClient.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
         if (isClosedWorkorderStatus(workorderValidation.status())) {
             throw new WorkorderClosedException("Cannot issue parts to a closed workorder: " + workorderId);
         }
-        validatePartMatchOrOverride(line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
+        validatePartMatchOrOverride(
+                line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
 
         int quantityDelta = toWholeLedgerQuantity(request.getQuantity(), "quantity");
-        BigDecimal existingReceivedQuantity = line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
+        BigDecimal existingReceivedQuantity =
+                line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
         BigDecimal expectedQuantity = line.getExpectedQuantity() != null ? line.getExpectedQuantity() : BigDecimal.ZERO;
         BigDecimal cumulativeReceivedQuantity = existingReceivedQuantity.add(request.getQuantity());
         if (cumulativeReceivedQuantity.compareTo(expectedQuantity) > 0) {
-            throw new IllegalArgumentException(
-                    "Cross-dock quantity exceeds expected quantity for line "
-                            + lineId
-                            + " (expected="
-                            + expectedQuantity
-                            + ", currentReceived="
-                            + existingReceivedQuantity
-                            + ", requested="
-                            + request.getQuantity()
-                            + ")");
+            throw new IllegalArgumentException("Cross-dock quantity exceeds expected quantity for line "
+                    + lineId
+                    + " (expected="
+                    + expectedQuantity
+                    + ", currentReceived="
+                    + existingReceivedQuantity
+                    + ", requested="
+                    + request.getQuantity()
+                    + ")");
         }
 
         UUID crossDockLocationId = resolveCrossDockLocationId();
@@ -328,11 +318,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
-            UUID sessionId,
-            UUID lineId,
-            String productId,
-            BigDecimal quantity,
-            String actorUserId) {
+            UUID sessionId, UUID lineId, String productId, BigDecimal quantity, String actorUserId) {
         int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -357,14 +343,13 @@ public class ReceivingServiceImpl implements ReceivingService {
         try {
             return quantity.intValueExact();
         } catch (ArithmeticException ex) {
-            throw new IllegalArgumentException(
-                    fieldName + " must be a whole number within 32-bit integer range",
-                    ex);
+            throw new IllegalArgumentException(fieldName + " must be a whole number within 32-bit integer range", ex);
         }
     }
 
     private int calculateQuantityAfter(String stockItemId, UUID locationId, int quantityDelta) {
-        Integer currentOnHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
+        Integer currentOnHand =
+                inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
         int onHand = currentOnHand != null ? currentOnHand : 0;
         return onHand + quantityDelta;
     }
@@ -431,8 +416,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             return UUID.fromString(configuredSiteId.trim());
         } catch (IllegalArgumentException ex) {
             throw new IllegalStateException(
-                    "pos.inventory.receiving.site-id must be a valid UUID: " + configuredSiteId,
-                    ex);
+                    "pos.inventory.receiving.site-id must be a valid UUID: " + configuredSiteId, ex);
         }
     }
 
@@ -449,10 +433,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void validatePartMatchOrOverride(
-            ReceivingLine line,
-            String actorUserId,
-            String workorderLineId,
-            String demandedProductId) {
+            ReceivingLine line, String actorUserId, String workorderLineId, String demandedProductId) {
         if (workorderLineId == null || workorderLineId.isBlank()) {
             throw new IllegalArgumentException("workorderLineId is required");
         }
@@ -475,10 +456,7 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         throw new PartMatchPermissionException(String.format(
                 "PART_MISMATCH_WITH_WORKORDER: received product %s does not match demanded product %s for workorderLineId %s. Required permission: %s",
-                line.getProductId(),
-                demandedProductId,
-                workorderLineId,
-                PART_MATCH_OVERRIDE_PERMISSION));
+                line.getProductId(), demandedProductId, workorderLineId, PART_MATCH_OVERRIDE_PERMISSION));
     }
 
     private boolean isClosedWorkorderStatus(String status) {
@@ -499,12 +477,13 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private ReceiveItemsResponse buildReceiveItemsResponse(
-            ReceivingSession session,
-            int linesProcessed,
-            List<InventoryVariance> variances) {
+            ReceivingSession session, int linesProcessed, List<InventoryVariance> variances) {
         List<ReceiveItemsResponse.VarianceSummaryResponse> varianceSummaries = variances.stream()
                 .map(variance -> ReceiveItemsResponse.VarianceSummaryResponse.builder()
-                .lineId(variance.getLine() == null ? null : variance.getLine().getLineId())
+                        .lineId(
+                                variance.getLine() == null
+                                        ? null
+                                        : variance.getLine().getLineId())
                         .productId(variance.getProductId())
                         .varianceType(variance.getVarianceType().name())
                         .varianceQuantity(variance.getVarianceQuantity())
@@ -534,16 +513,15 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private SourceDocumentType detectSourceDocumentType(String sourceDocumentId) {
-        if (sourceDocumentId != null && sourceDocumentId.toUpperCase(Locale.ROOT).startsWith("ASN")) {
+        if (sourceDocumentId != null
+                && sourceDocumentId.toUpperCase(Locale.ROOT).startsWith("ASN")) {
             return SourceDocumentType.ASN;
         }
         return SourceDocumentType.PO;
     }
 
     private List<ReceivingLine> buildLinesFromDocument(
-            String sourceDocumentId,
-            SourceDocumentType sourceDocumentType,
-            ReceivingSession session) {
+            String sourceDocumentId, SourceDocumentType sourceDocumentType, ReceivingSession session) {
         List<SourceDocumentLineStub> sourceLines = fetchSourceDocumentLines(sourceDocumentId, sourceDocumentType);
         List<ReceivingLine> lines = new ArrayList<>(sourceLines.size());
 
@@ -562,8 +540,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private List<SourceDocumentLineStub> fetchSourceDocumentLines(
-            String sourceDocumentId,
-            SourceDocumentType sourceDocumentType) {
+            String sourceDocumentId, SourceDocumentType sourceDocumentType) {
         String sourceService = resolveSourceDocumentService(sourceDocumentType);
 
         log.info(
@@ -572,10 +549,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 sourceDocumentType,
                 sourceDocumentId);
 
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = sourceDocumentStubClient.fetchDocument(
-                sourceService,
-                sourceDocumentType,
-                sourceDocumentId);
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
+                sourceDocumentStubClient.fetchDocument(sourceService, sourceDocumentType, sourceDocumentId);
         if (sourceDocument != null && sourceDocument.indicatesAlreadyReceived()) {
             throw new SourceDocumentAlreadyReceivedException(sourceDocumentId + " has already been fully received");
         }
@@ -584,9 +559,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 sourceDocument != null ? sourceDocument.getLines() : null;
 
         if (stubLines == null || stubLines.isEmpty()) {
-            throw new SourceDocumentNotFoundException(
-                    "No receiving lines returned for " + sourceDocumentType + " " + sourceDocumentId
-                            + " from service " + sourceService);
+            throw new SourceDocumentNotFoundException("No receiving lines returned for " + sourceDocumentType + " "
+                    + sourceDocumentId + " from service " + sourceService);
         }
 
         List<SourceDocumentLineStub> lines = new ArrayList<>(stubLines.size());
@@ -597,21 +571,17 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private SourceDocumentLineStub mapStubLine(
-            SourceDocumentStubClient.SourceDocumentLineDto stubLine,
-            String sourceDocumentId,
-            int lineNumber) {
+            SourceDocumentStubClient.SourceDocumentLineDto stubLine, String sourceDocumentId, int lineNumber) {
         String productId = stubLine != null ? stubLine.getProductId() : null;
         if (productId == null || productId.isBlank()) {
-            throw new IllegalStateException(
-                    "Invalid source document line " + lineNumber + " for " + sourceDocumentId
-                            + ": productId is required");
+            throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
+                    + ": productId is required");
         }
 
         BigDecimal expectedQuantity = stubLine != null ? stubLine.getExpectedQuantity() : null;
         if (expectedQuantity == null || expectedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException(
-                    "Invalid source document line " + lineNumber + " for " + sourceDocumentId
-                            + ": expectedQuantity must be greater than 0");
+            throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
+                    + ": expectedQuantity must be greater than 0");
         }
 
         return new SourceDocumentLineStub(productId, expectedQuantity);
@@ -624,23 +594,26 @@ public class ReceivingServiceImpl implements ReceivingService {
         return sourceDocumentType == SourceDocumentType.ASN ? "pos-shipments" : "pos-order";
     }
 
-    private record SourceDocumentLineStub(String productId, BigDecimal expectedQuantity) {
-    }
+    private record SourceDocumentLineStub(String productId, BigDecimal expectedQuantity) {}
 
     private ReceivingSessionResponse mapToResponse(ReceivingSession session) {
-        List<ReceivingLineResponse> lineResponses = session.getLines().stream()
-                .map(this::mapLineToResponse)
-                .toList();
+        List<ReceivingLineResponse> lineResponses =
+                session.getLines().stream().map(this::mapLineToResponse).toList();
 
         return ReceivingSessionResponse.builder()
                 .sessionId(session.getSessionId())
                 .sourceDocumentId(session.getSourceDocumentId())
                 .sourceDocumentType(
-                        session.getSourceDocumentType() != null ? session.getSourceDocumentType().name() : null)
+                        session.getSourceDocumentType() != null
+                                ? session.getSourceDocumentType().name()
+                                : null)
                 .supplierId(session.getSupplierId())
                 .shipmentReference(session.getShipmentReference())
                 .status(session.getStatus() != null ? session.getStatus().name() : null)
-                .entryMethod(session.getEntryMethod() != null ? session.getEntryMethod().name() : null)
+                .entryMethod(
+                        session.getEntryMethod() != null
+                                ? session.getEntryMethod().name()
+                                : null)
                 .createdByUserId(session.getCreatedByUserId())
                 .createdAt(session.getCreatedAt())
                 .lines(lineResponses)

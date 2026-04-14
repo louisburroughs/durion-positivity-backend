@@ -1,12 +1,10 @@
 package com.positivity.customer.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.positivity.customer.internal.enums.RedemptionStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import com.positivity.customer.internal.enums.RedemptionStatus;
-import com.fasterxml.jackson.annotation.JsonInclude;
-
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

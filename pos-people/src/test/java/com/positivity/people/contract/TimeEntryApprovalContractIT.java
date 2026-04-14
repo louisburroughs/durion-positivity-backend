@@ -18,17 +18,17 @@ import org.springframework.http.MediaType;
 @DisplayName("Time Entry Approval ContractIT")
 class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 
-	@Autowired
-	private TimeEntryRepository timeEntryRepository;
+    @Autowired
+    private TimeEntryRepository timeEntryRepository;
 
-	@Autowired
-	private PersonRepository personRepository;
+    @Autowired
+    private PersonRepository personRepository;
 
-	@Test
-	@DisplayName("CP-120-020: batch approve returns 200")
-	void CP_120_020_batchApprove_returns200() throws Exception {
-		UUID timeEntryId = seedSubmittedTimeEntry();
-		String payload = """
+    @Test
+    @DisplayName("CP-120-020: batch approve returns 200")
+    void CP_120_020_batchApprove_returns200() throws Exception {
+        UUID timeEntryId = seedSubmittedTimeEntry();
+        String payload = """
 				{
 				  "decisions": [
 				    { "timeEntryId": "%s" }
@@ -36,19 +36,19 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 				}
 				""".formatted(timeEntryId);
 
-		mockMvc
-			.perform(withAuth(post("/v1/people/timeEntries/approve").contentType(MediaType.APPLICATION_JSON)
-				.header("X-Permissions", "people:timeEntry:approve")
-				.header("X-User-Id", TEST_USER)
-				.content(payload)))
-			.andExpect(status().isOk());
-	}
+        mockMvc.perform(withAuth(post("/v1/people/timeEntries/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Permissions", "people:timeEntry:approve")
+                        .header("X-User-Id", TEST_USER)
+                        .content(payload)))
+                .andExpect(status().isOk());
+    }
 
-	@Test
-	@DisplayName("CP-120-021: batch reject with reason returns 200")
-	void CP_120_021_batchReject_withReason_returns200() throws Exception {
-		UUID timeEntryId = seedSubmittedTimeEntry();
-		String payload = """
+    @Test
+    @DisplayName("CP-120-021: batch reject with reason returns 200")
+    void CP_120_021_batchReject_withReason_returns200() throws Exception {
+        UUID timeEntryId = seedSubmittedTimeEntry();
+        String payload = """
 				{
 				  "decisions": [
 				    { "timeEntryId": "%s", "rejectionReason": "Late submission" }
@@ -56,19 +56,19 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 				}
 				""".formatted(timeEntryId);
 
-		mockMvc
-			.perform(withAuth(post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON)
-				.header("X-Permissions", "people:timeEntry:reject")
-				.header("X-User-Id", TEST_USER)
-				.content(payload)))
-			.andExpect(status().isOk());
-	}
+        mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Permissions", "people:timeEntry:reject")
+                        .header("X-User-Id", TEST_USER)
+                        .content(payload)))
+                .andExpect(status().isOk());
+    }
 
-	@Test
-	@DisplayName("VE-120-020: batch reject missing reason returns 400")
-	void VE_120_020_batchReject_missingReason_returns400() throws Exception {
-		UUID timeEntryId = seedSubmittedTimeEntry();
-		String payload = """
+    @Test
+    @DisplayName("VE-120-020: batch reject missing reason returns 400")
+    void VE_120_020_batchReject_missingReason_returns400() throws Exception {
+        UUID timeEntryId = seedSubmittedTimeEntry();
+        String payload = """
 				{
 				  "decisions": [
 				    { "timeEntryId": "%s" }
@@ -76,41 +76,42 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 				}
 				""".formatted(timeEntryId);
 
-		mockMvc
-			.perform(withAuth(
-					post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
-			.andExpect(status().isBadRequest());
-	}
+        mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isBadRequest());
+    }
 
-	@Test
-	@DisplayName("VE-120-021: batch approve empty decisions returns 400")
-	void VE_120_021_batchApprove_emptyDecisions_returns400() throws Exception {
-		String payload = """
+    @Test
+    @DisplayName("VE-120-021: batch approve empty decisions returns 400")
+    void VE_120_021_batchApprove_emptyDecisions_returns400() throws Exception {
+        String payload = """
 				{
 				  "decisions": []
 				}
 				""";
 
-		mockMvc
-			.perform(withAuth(
-					post("/v1/people/timeEntries/approve").contentType(MediaType.APPLICATION_JSON).content(payload)))
-			.andExpect(status().isBadRequest());
-	}
+        mockMvc.perform(withAuth(post("/v1/people/timeEntries/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isBadRequest());
+    }
 
-	private UUID seedSubmittedTimeEntry() {
-		UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		Person person = personRepository.findById(personId).orElseGet(() -> personRepository.save(Person.builder()
-				.id(personId)
-				.firstName("Contract")
-				.lastName("Approver")
-				.primaryEmail("contract-approver@example.com")
-				.build()));
+    private UUID seedSubmittedTimeEntry() {
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Person person = personRepository
+                .findById(personId)
+                .orElseGet(() -> personRepository.save(Person.builder()
+                        .id(personId)
+                        .firstName("Contract")
+                        .lastName("Approver")
+                        .primaryEmail("contract-approver@example.com")
+                        .build()));
 
-		TimeEntry timeEntry = new TimeEntry();
-		timeEntry.setPerson(person);
-		timeEntry.setTimesheetId("timesheet-2");
-		timeEntry.setStatus(TimeEntryStatus.SUBMITTED);
-		return timeEntryRepository.save(timeEntry).getTimeEntryId();
-	}
-
+        TimeEntry timeEntry = new TimeEntry();
+        timeEntry.setPerson(person);
+        timeEntry.setTimesheetId("timesheet-2");
+        timeEntry.setStatus(TimeEntryStatus.SUBMITTED);
+        return timeEntryRepository.save(timeEntry).getTimeEntryId();
+    }
 }

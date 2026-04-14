@@ -1,8 +1,7 @@
 package com.positivity.securityservice.service;
 
-import org.jspecify.annotations.NonNull;
-
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Public service interface for authentication lockout bookkeeping.

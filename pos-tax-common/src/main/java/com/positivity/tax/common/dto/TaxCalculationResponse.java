@@ -1,21 +1,19 @@
 package com.positivity.tax.common.dto;
 
+import com.positivity.tax.common.enums.TaxReferenceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import com.positivity.tax.common.enums.TaxReferenceType;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Response from tax calculation.
@@ -27,7 +25,9 @@ import com.positivity.tax.common.enums.TaxReferenceType;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(name = "TaxCalculationResponse", description = "Tax calculation response containing totals and jurisdiction/line-level tax breakdown")
+@Schema(
+        name = "TaxCalculationResponse",
+        description = "Tax calculation response containing totals and jurisdiction/line-level tax breakdown")
 public class TaxCalculationResponse {
 
     /**
@@ -59,7 +59,10 @@ public class TaxCalculationResponse {
      */
     @NotNull(message = "effectiveTaxRate is required")
     @PositiveOrZero(message = "effectiveTaxRate must be >= 0")
-    @Schema(description = "Effective tax rate as percentage", example = "10.00", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Effective tax rate as percentage",
+            example = "10.00",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal effectiveTaxRate;
 
     /**
@@ -67,7 +70,9 @@ public class TaxCalculationResponse {
      */
     @NotNull(message = "jurisdictions is required")
     @Valid
-    @Schema(description = "Applied tax jurisdictions with per-jurisdiction tax amounts", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Applied tax jurisdictions with per-jurisdiction tax amounts",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private List<TaxJurisdiction> jurisdictions;
 
     /**
@@ -90,7 +95,10 @@ public class TaxCalculationResponse {
      * Timestamp when the calculation was performed.
      */
     @NotNull(message = "calculatedAt is required")
-    @Schema(description = "Timestamp when calculation completed", example = "2026-02-21T09:18:40Z", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Timestamp when calculation completed",
+            example = "2026-02-21T09:18:40Z",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private Instant calculatedAt;
 
     /**
@@ -123,7 +131,10 @@ public class TaxCalculationResponse {
 
         @NotNull(message = "subtotal is required")
         @PositiveOrZero(message = "subtotal must be >= 0")
-        @Schema(description = "Line subtotal before tax", example = "100.00", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Line subtotal before tax",
+                example = "100.00",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal subtotal;
 
         @NotNull(message = "taxAmount is required")
@@ -133,7 +144,10 @@ public class TaxCalculationResponse {
 
         @NotNull(message = "total is required")
         @PositiveOrZero(message = "total must be >= 0")
-        @Schema(description = "Line total including tax", example = "110.00", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Line total including tax",
+                example = "110.00",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal total;
 
         @Schema(description = "Whether this line item is tax exempt", example = "false")

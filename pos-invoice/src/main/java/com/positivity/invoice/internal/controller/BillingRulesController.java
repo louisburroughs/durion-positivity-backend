@@ -1,7 +1,13 @@
 package com.positivity.invoice.internal.controller;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.invoice.service.BillingRulesService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.regex.Pattern;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,15 +20,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.positivity.events.EmitEvent;
-import com.positivity.invoice.internal.dto.BillingRulesDTO;
-import com.positivity.invoice.service.BillingRulesService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 
 /**
  * REST controller for billing rules management.
@@ -37,8 +34,8 @@ public class BillingRulesController {
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);
 
     // Pattern for valid UUID format to prevent injection attacks
-    private static final Pattern VALID_UUID_PATTERN = Pattern.compile(
-            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    private static final Pattern VALID_UUID_PATTERN =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final BillingRulesService billingRulesService;
 
@@ -48,7 +45,9 @@ public class BillingRulesController {
 
     @GetMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_GET", apiVersion = "1")
-    @Operation(summary = "Get billing rules for a party/customer", description = "Retrieve the current billing rules configuration for a commercial account")
+    @Operation(
+            summary = "Get billing rules for a party/customer",
+            description = "Retrieve the current billing rules configuration for a commercial account")
     @ApiResponse(responseCode = "200", description = "Billing rules found")
     @ApiResponse(responseCode = "404", description = "No billing rules configured for this party")
     public ResponseEntity<BillingRulesDTO> getBillingRules(@PathVariable @NonNull String partyId) {
@@ -60,20 +59,22 @@ public class BillingRulesController {
 
         log.debug("GET /v1/billing/rules/{}", partyId);
 
-        return billingRulesService.getBillingRules(partyId)
+        return billingRulesService
+                .getBillingRules(partyId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_UPSERT", apiVersion = "1")
-    @Operation(summary = "Create or update billing rules", description = "Idempotent upsert of billing rules for a commercial account")
+    @Operation(
+            summary = "Create or update billing rules",
+            description = "Idempotent upsert of billing rules for a commercial account")
     @ApiResponse(responseCode = "200", description = "Billing rules updated")
     @ApiResponse(responseCode = "201", description = "Billing rules created")
     @ApiResponse(responseCode = "400", description = "Invalid billing rules data")
     public ResponseEntity<BillingRulesDTO> upsertBillingRules(
-            @PathVariable @NonNull String partyId,
-            @Valid @RequestBody @NonNull BillingRulesDTO billingRulesDTO) {
+            @PathVariable @NonNull String partyId, @Valid @RequestBody @NonNull BillingRulesDTO billingRulesDTO) {
 
         // Validate partyId format
         if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
@@ -98,7 +99,7 @@ public class BillingRulesController {
     }
 
     /**
-     * 
+     *
      * to prevent log injection attacks.
      */
     private String sanitizeForLogging(String input) {

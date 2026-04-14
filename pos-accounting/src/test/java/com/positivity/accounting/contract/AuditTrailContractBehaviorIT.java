@@ -1,26 +1,10 @@
 package com.positivity.accounting.contract;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
@@ -28,6 +12,19 @@ import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
 import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Contract Behavioral Integration Tests for Audit Trail operations.
@@ -110,8 +107,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                 """.formatted(testOrderId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         int statusCode = result.getResponse().getStatus();
@@ -142,8 +139,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.auditId").exists())
                 .andExpect(jsonPath("$.exceptionType").value("REFUND"))
@@ -170,8 +167,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/cancellation"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.auditId").exists())
                 .andExpect(jsonPath("$.exceptionType").value("CANCELLATION"))
@@ -220,8 +217,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/type/PRICE_OVERRIDE")
-                .param("startDate", startDate.toString())
-                .param("endDate", endDate.toString())))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -239,8 +236,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/actor/" + TEST_USER)
-                .param("startDate", startDate.toString())
-                .param("endDate", endDate.toString())))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1));
@@ -258,8 +255,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/range")
-                .param("startDate", startDate.toString())
-                .param("endDate", endDate.toString())))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2));
@@ -282,8 +279,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isBadRequest());
     }
 
@@ -299,8 +296,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isBadRequest());
     }
 
@@ -326,8 +323,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         // When/Then - should return 403 if authorization logic is implemented
         // For now, testing that endpoint is reachable
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         // Accept either 201 (if policy allows) or 403 (if policy denies)
@@ -353,8 +350,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 403 if authorization logic is implemented
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         // Accept either 201 (if policy allows) or 403 (if policy denies)
@@ -388,8 +385,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 400 for invalid range
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_AUDIT + "/range")
-                .param("startDate", startDate.toString())
-                .param("endDate", endDate.toString())))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString())))
                 .andReturn();
 
         // Accept either 200 (if validation not implemented) or 400 (if validation

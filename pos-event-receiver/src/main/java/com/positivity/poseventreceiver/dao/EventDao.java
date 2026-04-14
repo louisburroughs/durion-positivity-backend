@@ -1,15 +1,13 @@
 package com.positivity.poseventreceiver.dao;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
+import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 import com.positivity.poseventreceiver.internal.entity.PreregisteredEvent;
-import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface EventDao {
     boolean isPreregistered(@NonNull String id);

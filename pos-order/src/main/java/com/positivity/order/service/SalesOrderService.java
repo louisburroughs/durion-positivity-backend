@@ -9,16 +9,16 @@ import org.jspecify.annotations.NonNull;
 public interface SalesOrderService {
 
     @NonNull
-    SalesOrderSummary createCart(@NonNull String clerkId, @NonNull String terminalId, String customerId,
-            String vehicleId);
+    SalesOrderSummary createCart(
+            @NonNull String clerkId, @NonNull String terminalId, String customerId, String vehicleId);
 
     @NonNull
-    SalesOrderLineSummary addItem(@NonNull UUID orderId, @NonNull String itemSku, int quantity, String reasonCode,
-            BigDecimal manualPrice);
+    SalesOrderLineSummary addItem(
+            @NonNull UUID orderId, @NonNull String itemSku, int quantity, String reasonCode, BigDecimal manualPrice);
 
     @NonNull
-    default SalesOrderLineSummary addItem(@NonNull UUID orderId, @NonNull String itemSku, int quantity,
-            String reasonCode) {
+    default SalesOrderLineSummary addItem(
+            @NonNull UUID orderId, @NonNull String itemSku, int quantity, String reasonCode) {
         return addItem(orderId, itemSku, quantity, reasonCode, null);
     }
 

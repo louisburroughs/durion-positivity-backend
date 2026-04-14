@@ -1,15 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
@@ -18,14 +8,21 @@ import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service for managing individual person records in the CRM system.
@@ -70,8 +67,12 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @Transactional
     public CreatePersonResponse createPerson(@NonNull CreatePersonRequest request, UUID userId) {
-        log.info("Creating person: firstName={}, lastName={}, preferredContactMethod={}, user={}",
-                request.getFirstName(), request.getLastName(), request.getPreferredContactMethod(), userId);
+        log.info(
+                "Creating person: firstName={}, lastName={}, preferredContactMethod={}, user={}",
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPreferredContactMethod(),
+                userId);
 
         // Validation is handled by @Valid on controller, but double-check required
         // fields
@@ -80,15 +81,13 @@ public class PersonServiceImpl implements PersonService {
         String primaryEmail = extractPrimaryEmail(request);
         String primaryPhone = extractPrimaryPhone(request);
         UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(
-                primaryEmail,
-                primaryPhone,
-                request.getLastName(),
-                request.getFirstName());
+                primaryEmail, primaryPhone, request.getLastName(), request.getFirstName());
 
         // Reuse existing person-party if already associated to this canonical person
         PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
         if (existing != null) {
-            int existingContactPointCount = contactPointRepository.findByPersonPartyId(existing.getPersonPartyId())
+            int existingContactPointCount = contactPointRepository
+                    .findByPersonPartyId(existing.getPersonPartyId())
                     .size();
             return CreatePersonResponse.from(existing, existingContactPointCount);
         }
@@ -103,8 +102,10 @@ public class PersonServiceImpl implements PersonService {
 
         // Save person first to get ID
         PersonParty savedPerson = personRepository.save(person);
-        log.debug("PersonParty created with partyId={} mapped to personId={}",
-                savedPerson.getPersonPartyId(), savedPerson.getPersonId());
+        log.debug(
+                "PersonParty created with partyId={} mapped to personId={}",
+                savedPerson.getPersonPartyId(),
+                savedPerson.getPersonId());
 
         // Create contact points
         List<ContactPoint> contactPoints = new ArrayList<>();
@@ -126,9 +127,8 @@ public class PersonServiceImpl implements PersonService {
         // Process phones
         if (request.getPhones() != null && !request.getPhones().isEmpty()) {
             for (CreatePersonRequest.PhoneInput phoneInput : request.getPhones()) {
-                ContactPointType phoneType = phoneInput.getType() != null
-                        ? phoneInput.getType()
-                        : ContactPointType.PHONE_MOBILE;
+                ContactPointType phoneType =
+                        phoneInput.getType() != null ? phoneInput.getType() : ContactPointType.PHONE_MOBILE;
 
                 ContactPoint cp = new ContactPoint();
                 cp.setPerson(savedPerson);
@@ -142,12 +142,17 @@ public class PersonServiceImpl implements PersonService {
         // Save all contact points
         if (!contactPoints.isEmpty()) {
             contactPointRepository.saveAll(contactPoints);
-            log.debug("Created {} contact points for personPartyId={}", contactPoints.size(),
+            log.debug(
+                    "Created {} contact points for personPartyId={}",
+                    contactPoints.size(),
                     savedPerson.getPersonPartyId());
         }
 
-        log.info("Successfully created person personId={} personPartyId={} with {} contact points",
-                savedPerson.getPersonId(), savedPerson.getPersonPartyId(), contactPoints.size());
+        log.info(
+                "Successfully created person personId={} personPartyId={} with {} contact points",
+                savedPerson.getPersonId(),
+                savedPerson.getPersonPartyId(),
+                contactPoints.size());
 
         return CreatePersonResponse.from(savedPerson, contactPoints.size());
     }
@@ -164,11 +169,10 @@ public class PersonServiceImpl implements PersonService {
     public GetPersonResponse getPerson(@NonNull UUID personId) {
         log.debug("Getting person: {}", personId);
 
-        PersonParty person = personRepository.findByPersonId(personId)
-                .orElseThrow(() -> {
-                    log.warn("Person not found: {}", personId);
-                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
-                });
+        PersonParty person = personRepository.findByPersonId(personId).orElseThrow(() -> {
+            log.warn("Person not found: {}", personId);
+            return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
+        });
 
         // Load contact points
         List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(person.getPersonPartyId());
@@ -190,8 +194,13 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @Transactional(readOnly = true)
     public List<GetPersonResponse> searchPersons(String name, String email, String phone, int limit, int offset) {
-        log.debug("Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
-                name, email, phone, limit, offset);
+        log.debug(
+                "Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
+                name,
+                email,
+                phone,
+                limit,
+                offset);
 
         List<PersonParty> persons;
 
@@ -218,8 +227,8 @@ public class PersonServiceImpl implements PersonService {
 
         return persons.stream()
                 .map(person -> {
-                    List<ContactPoint> contactPoints = contactPointRepository
-                            .findByPersonPartyId(person.getPersonPartyId());
+                    List<ContactPoint> contactPoints =
+                            contactPointRepository.findByPersonPartyId(person.getPersonPartyId());
                     person.getContactPoints().addAll(contactPoints);
                     return toGetPersonResponse(person);
                 })

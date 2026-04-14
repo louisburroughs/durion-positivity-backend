@@ -1,12 +1,11 @@
 package com.positivity.customer.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.Map;
 
 /**
  * Response DTO for retrieving communication preferences for a party.

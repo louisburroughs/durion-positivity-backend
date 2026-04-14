@@ -1,31 +1,37 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
-import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.*;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 @Entity
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@jakarta.persistence.Table(name = "workorder_part", uniqueConstraints = {
-        // CAP:004 Story #27 - prevent the same estimate item from being promoted more
-        // than once
-        @UniqueConstraint(name = "uq_workorder_part_origin_estimate_item", columnNames = { "origin_estimate_item_id" })
-}, check = {
-        @CheckConstraint(name = "ck_workorder_part_has_reference", constraint = "work_order_service_id IS NOT NULL OR work_order_id IS NOT NULL")
-})
+@jakarta.persistence.Table(
+        name = "workorder_part",
+        uniqueConstraints = {
+            // CAP:004 Story #27 - prevent the same estimate item from being promoted more
+            // than once
+            @UniqueConstraint(
+                    name = "uq_workorder_part_origin_estimate_item",
+                    columnNames = {"origin_estimate_item_id"})
+        },
+        check = {
+            @CheckConstraint(
+                    name = "ck_workorder_part_has_reference",
+                    constraint = "work_order_service_id IS NOT NULL OR work_order_id IS NOT NULL")
+        })
 @EntityListeners(AuditingEntityListener.class)
 public class WorkorderPart {
     public WorkorderPart(UUID id) {

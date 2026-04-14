@@ -1,21 +1,18 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.accounting.internal.entity.IdempotencyKey;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.service.IdempotencyService;
-
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service for managing idempotency keys to prevent duplicate processing.

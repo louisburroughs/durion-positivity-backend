@@ -1,12 +1,10 @@
 package com.positivity.workorder.internal.dto;
 
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Mapper for converting TechnicianAssignment entities to DTOs.
@@ -26,10 +24,7 @@ public final class TechnicianAssignmentMapper {
             String previousTechnicianId,
             @NonNull String message) {
         return TechnicianAssignmentResponse.fromAssignment(
-                assignment,
-                workorderStatus.name(),
-                previousTechnicianId,
-                message);
+                assignment, workorderStatus.name(), previousTechnicianId, message);
     }
 
     /**
@@ -39,10 +34,7 @@ public final class TechnicianAssignmentMapper {
             @NonNull TechnicianAssignment currentAssignment,
             @NonNull List<TechnicianAssignment> history,
             @NonNull WorkorderStatus workorderStatus) {
-        return TechnicianAssignmentResponse.withHistory(
-                currentAssignment,
-                history,
-                workorderStatus.name());
+        return TechnicianAssignmentResponse.withHistory(currentAssignment, history, workorderStatus.name());
     }
 
     /**

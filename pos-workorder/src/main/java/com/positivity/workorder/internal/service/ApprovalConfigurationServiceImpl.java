@@ -5,15 +5,13 @@ import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.service.ApprovalConfigurationService;
-
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,16 +21,14 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
 
     @Override
     public List<ApprovalConfigurationResponse> getAllConfigurations() {
-        return approvalConfigurationRepository.findAll()
-                .stream()
+        return approvalConfigurationRepository.findAll().stream()
                 .map(this::entityToResponse)
                 .toList();
     }
 
     @Override
     public Optional<ApprovalConfigurationResponse> getConfigurationById(UUID id) {
-        return approvalConfigurationRepository.findById(id)
-                .map(this::entityToResponse);
+        return approvalConfigurationRepository.findById(id).map(this::entityToResponse);
     }
 
     @Override
@@ -53,7 +49,8 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
     @Override
     @Transactional
     public ApprovalConfigurationResponse updateConfiguration(UUID id, ApprovalConfigurationRequest request) {
-        ApprovalConfiguration existing = approvalConfigurationRepository.findById(id)
+        ApprovalConfiguration existing = approvalConfigurationRepository
+                .findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Configuration not found: " + id));
 
         existing.setLocationId(request.getLocationId());
@@ -79,8 +76,8 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
     public Optional<ApprovalConfigurationResponse> getApplicableConfiguration(UUID locationId, UUID customerId) {
         // Try customer-specific first
         if (customerId != null) {
-            Optional<ApprovalConfiguration> config = approvalConfigurationRepository
-                    .findByLocationIdAndCustomerId(locationId, customerId);
+            Optional<ApprovalConfiguration> config =
+                    approvalConfigurationRepository.findByLocationIdAndCustomerId(locationId, customerId);
             if (config.isPresent()) {
                 return config.map(this::entityToResponse);
             }
@@ -88,15 +85,16 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
 
         // Try location-specific
         if (locationId != null) {
-            Optional<ApprovalConfiguration> config = approvalConfigurationRepository
-                    .findByLocationIdAndCustomerIdIsNull(locationId);
+            Optional<ApprovalConfiguration> config =
+                    approvalConfigurationRepository.findByLocationIdAndCustomerIdIsNull(locationId);
             if (config.isPresent()) {
                 return config.map(this::entityToResponse);
             }
         }
 
         // Fall back to default
-        return approvalConfigurationRepository.findByLocationIdIsNullAndCustomerIdIsNull()
+        return approvalConfigurationRepository
+                .findByLocationIdIsNullAndCustomerIdIsNull()
                 .map(this::entityToResponse);
     }
 

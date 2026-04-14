@@ -13,15 +13,24 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Request payload to add a new eligibility rule to a promotion")
 public class AddEligibilityRuleRequest {
 
-    @Schema(description = "Rule condition type to evaluate", requiredMode = Schema.RequiredMode.REQUIRED, example = "ACCOUNT_FLEET_SIZE")
+    @Schema(
+            description = "Rule condition type to evaluate",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "ACCOUNT_FLEET_SIZE")
     @NotNull(message = "conditionType is required")
     private ConditionType conditionType;
 
-    @Schema(description = "Comparison operator for the rule", requiredMode = Schema.RequiredMode.REQUIRED, example = "GREATER_THAN_OR_EQUAL_TO")
+    @Schema(
+            description = "Comparison operator for the rule",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "GREATER_THAN_OR_EQUAL_TO")
     @NotNull(message = "operator is required")
     private RuleOperator operator;
 
-    @Schema(description = "Rule threshold or comparison value", requiredMode = Schema.RequiredMode.REQUIRED, example = "1000")
+    @Schema(
+            description = "Rule threshold or comparison value",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "1000")
     @NotBlank(message = "value is required")
     @Size(max = 255, message = "value must not exceed 255 characters")
     private String value;

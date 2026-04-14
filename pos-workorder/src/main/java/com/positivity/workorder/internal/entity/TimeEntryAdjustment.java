@@ -15,6 +15,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,17 +27,14 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Entity representing a proposed adjustment to a time entry.
  * Implements Story #66 Approve Submitted Time.
  */
 @Entity
-@Table(name = "time_entry_adjustment", indexes = {
-        @Index(name = "idx_tea_time_entry_id", columnList = "time_entry_id")
-})
+@Table(
+        name = "time_entry_adjustment",
+        indexes = {@Index(name = "idx_tea_time_entry_id", columnList = "time_entry_id")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

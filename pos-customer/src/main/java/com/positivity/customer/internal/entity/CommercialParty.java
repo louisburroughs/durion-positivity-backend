@@ -1,15 +1,7 @@
 package com.positivity.customer.internal.entity;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.shared.id.UUIDv7Generator;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
@@ -28,10 +20,15 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Commercial PartyEntity entity (organization/company) implementing Party
@@ -45,7 +42,9 @@ import lombok.ToString;
 @Entity
 @Table(name = "commercial_party")
 @EntityListeners(AuditingEntityListener.class)
-@Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
+@Schema(
+        description =
+                "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class CommercialParty extends AbstractParty {
 
     @Column(unique = true, nullable = false)
@@ -89,7 +88,9 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "External identifiers keyed by source system")
     private Map<String, String> externalIdentifiers = new HashMap<>();
 
-    @Schema(description = "Primary address label or identifier for the organization", example = "123 Main St, Springfield")
+    @Schema(
+            description = "Primary address label or identifier for the organization",
+            example = "123 Main St, Springfield")
     private String primaryAddress;
 
     @OneToMany(mappedBy = "commercialParty", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -129,5 +130,4 @@ public class CommercialParty extends AbstractParty {
     public Class<?> uuidv7Dependency() {
         return UUIDv7Generator.class;
     }
-
 }

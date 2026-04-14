@@ -1,27 +1,24 @@
 package com.positivity.accounting.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import org.jspecify.annotations.Nullable;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.accounting.internal.enums.APPaymentStatus;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Response for an executed AP payment.
- * 
+ *
  * <p>
  * Includes payment details, allocations, gateway info, and GL posting status.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>

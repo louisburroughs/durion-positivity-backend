@@ -1,6 +1,13 @@
 package com.positivity.securityservice.internal.security;
 
 import com.positivity.securityservice.service.JwtService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,14 +17,6 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -39,13 +38,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Set<String> roles = jwtService.getRolesFromToken(token);
             Set<String> authorities = jwtService.getAuthoritiesFromToken(token);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    userDetails, null,
+                    userDetails,
+                    null,
                     java.util.stream.Stream.concat(
                                     roles.stream()
-                                            .map(r -> new org.springframework.security.core.authority.SimpleGrantedAuthority(
-                                                    "ROLE_" + r)),
+                                            .map(r ->
+                                                    new org.springframework.security.core.authority
+                                                            .SimpleGrantedAuthority("ROLE_" + r)),
                                     authorities.stream()
-                                            .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new))
+                                            .map(
+                                                    org.springframework.security.core.authority.SimpleGrantedAuthority
+                                                            ::new))
                             .collect(Collectors.toSet()));
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);

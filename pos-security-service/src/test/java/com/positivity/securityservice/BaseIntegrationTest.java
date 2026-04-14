@@ -8,7 +8,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -31,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>
  * Usage:
- * 
+ *
  * <pre>
  * &#64;SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
  * &#64;ActiveProfiles("test")
@@ -58,7 +57,8 @@ public abstract class BaseIntegrationTest {
     // Gateway header values — mirrors what pos-api-gateway injects after JWT
     // validation
     protected static final String TEST_USER = "testuser";
-    protected static final String TEST_AUTHORITIES = String.join(",",
+    protected static final String TEST_AUTHORITIES = String.join(
+            ",",
             "ROLE_ADMIN",
             "security:token:issue_internal",
             "security:auth:login",
@@ -93,7 +93,7 @@ public abstract class BaseIntegrationTest {
      * <p>
      * Subclasses can override this method to add additional MockMvc configuration,
      * but should call super.setUpMockMvc() first:
-     * 
+     *
      * <pre>
      * &#64;BeforeEach
      * void setUp() {
@@ -104,8 +104,7 @@ public abstract class BaseIntegrationTest {
      */
     @BeforeEach
     public void setUpMockMvc() {
-        this.mockMvc = MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
+        this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .defaultRequest(withAuth(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/")))
                 .apply(springSecurity())
                 .build();
@@ -120,7 +119,7 @@ public abstract class BaseIntegrationTest {
      *
      * <p>
      * Usage:
-     * 
+     *
      * <pre>
      * mockMvc.perform(withAuth(post("/v1/users"))
      *         .contentType(MediaType.APPLICATION_JSON)
@@ -132,9 +131,7 @@ public abstract class BaseIntegrationTest {
      * @return the builder with X-User and X-Authorities headers added
      */
     protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", TEST_AUTHORITIES);
+        return builder.header("X-User", TEST_USER).header("X-Authorities", TEST_AUTHORITIES);
     }
 
     /**
@@ -147,7 +144,7 @@ public abstract class BaseIntegrationTest {
      *
      * <p>
      * Usage:
-     * 
+     *
      * <pre>
      * mockMvc.perform(withAuth(post("/v1/users"), "security:users:view")
      *         .contentType(MediaType.APPLICATION_JSON)
@@ -160,8 +157,6 @@ public abstract class BaseIntegrationTest {
      * @return the builder with X-User and custom X-Authorities headers added
      */
     protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder, String authorities) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", authorities);
+        return builder.header("X-User", TEST_USER).header("X-Authorities", authorities);
     }
 }

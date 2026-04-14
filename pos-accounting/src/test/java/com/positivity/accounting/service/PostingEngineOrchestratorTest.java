@@ -1,10 +1,5 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
-import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
-import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -13,25 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -45,11 +21,32 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
+import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for PostingEngineOrchestrator
- * 
+ *
  * Tests posting engine orchestration including:
  * - Idempotency checks
  * - Rule evaluation
@@ -99,7 +96,8 @@ class PostingEngineOrchestratorTest {
     void setUp() {
         // Create orchestrator with all dependencies
         objectMapper = new ObjectMapper();
-        orchestrator = new PostingEngineOrchestrator(TEST_CLOCK,
+        orchestrator = new PostingEngineOrchestrator(
+                TEST_CLOCK,
                 postingRuleEvaluator,
                 journalEntryService,
                 idempotencyService,
@@ -193,7 +191,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);
@@ -221,9 +220,9 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult failureResult = PostingResult.failure(
-                    PostingFailureReason.UNMAPPED_EVENT_TYPE,
-                    "No mapping found for event type INVOICE_RECEIVED");
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(failureResult);
+                    PostingFailureReason.UNMAPPED_EVENT_TYPE, "No mapping found for event type INVOICE_RECEIVED");
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(failureResult);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -256,10 +255,10 @@ class PostingEngineOrchestratorTest {
             // Given
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
-            PostingResult failureResult = PostingResult.failure(
-                    PostingFailureReason.VALIDATION_ERROR,
-                    "Required field missing");
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(failureResult);
+            PostingResult failureResult =
+                    PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Required field missing");
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(failureResult);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -286,7 +285,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);
@@ -344,7 +344,8 @@ class PostingEngineOrchestratorTest {
                     .mappingVersionUsed(testMappingVersion)
                     .evaluationDetails(evaluationDetails)
                     .build();
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);
@@ -381,7 +382,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdDraft = new JournalEntry();
             createdDraft.setJournalEntryId(testJournalEntryId);
@@ -462,7 +464,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             when(journalEntryService.createJournalEntry(testJournalEntry))
                     .thenThrow(new RuntimeException("Failed to save journal entry"));
@@ -500,7 +503,8 @@ class PostingEngineOrchestratorTest {
                     .journalEntryDraft(null) // Missing draft!
                     .mappingVersionUsed(testMappingVersion)
                     .build();
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -567,7 +571,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);
@@ -597,7 +602,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);
@@ -626,7 +632,8 @@ class PostingEngineOrchestratorTest {
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
 
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
-            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
 
             JournalEntry createdEntry = new JournalEntry();
             createdEntry.setJournalEntryId(testJournalEntryId);

@@ -1,7 +1,7 @@
 package com.positivity.shopmanager.internal.dto;
 
-import lombok.Data;
 import java.util.List;
+import lombok.Data;
 
 @Data
 public class PersonDTO {
@@ -13,4 +13,3 @@ public class PersonDTO {
     private List<String> phoneNumbers;
     private String username;
 }
-

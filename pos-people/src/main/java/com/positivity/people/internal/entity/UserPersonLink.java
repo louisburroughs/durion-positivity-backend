@@ -1,18 +1,16 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.UserLinkStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.time.Instant;
-import java.util.UUID;
-
-import com.positivity.shared.id.UUIDv7Id;
 
 /**
  * Entity representing a link between a user and a person. Enforces a unique
@@ -23,8 +21,10 @@ import com.positivity.shared.id.UUIDv7Id;
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = {
-        "user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
+@Table(
+        name = "user_person_links",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id"}),
+        indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
 public class UserPersonLink {
@@ -76,5 +76,4 @@ public class UserPersonLink {
             status = UserLinkStatus.ACTIVE;
         }
     }
-
 }

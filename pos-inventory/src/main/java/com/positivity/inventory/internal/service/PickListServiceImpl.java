@@ -1,12 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
@@ -20,6 +13,11 @@ import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -61,22 +59,23 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull PickListResponse getPickList(@NonNull UUID pickListId) {
-        PickListEntity pickList = pickListRepository.findById(pickListId)
+        PickListEntity pickList = pickListRepository
+                .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         return toResponse(pickList);
     }
 
     @Override
     public @NonNull List<PickListResponse> getPickListsForWorkorder(@NonNull UUID workorderId) {
-        return pickListRepository.findByWorkorderId(workorderId)
-                .stream()
+        return pickListRepository.findByWorkorderId(workorderId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Override
     public @NonNull PickListResponse updatePickListStatus(@NonNull UUID pickListId, @NonNull PickListStatus status) {
-        PickListEntity pickList = pickListRepository.findById(pickListId)
+        PickListEntity pickList = pickListRepository
+                .findById(pickListId)
                 .orElseGet(() -> PickListEntity.builder()
                         .pickListId(pickListId)
                         .status(PickListStatus.DRAFT)
@@ -90,7 +89,8 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull PickListResponse releasePickList(@NonNull UUID pickListId) {
-        PickListEntity pickList = pickListRepository.findById(pickListId)
+        PickListEntity pickList = pickListRepository
+                .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         pickList.setStatus(PickListStatus.READY_TO_PICK);
         PickListEntity saved = pickListRepository.save(pickList);
@@ -104,9 +104,11 @@ public class PickListServiceImpl implements PickListService {
             @NonNull UUID scannedSkuId,
             @NonNull UUID scannedLocationId,
             int quantityPicked) {
-        PickListEntity pickList = pickListRepository.findById(pickListId)
+        PickListEntity pickList = pickListRepository
+                .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
-        PickTaskEntity task = pickTaskRepository.findById(pickTaskId)
+        PickTaskEntity task = pickTaskRepository
+                .findById(pickTaskId)
                 .orElseThrow(() -> new ResourceNotFoundException("PickTask", pickTaskId.toString()));
 
         if (task.getPickList() == null
@@ -142,16 +144,14 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull List<PickTaskResponse> getPickTasksForPickList(@NonNull UUID pickListId) {
-        return pickTaskRepository.findByPickList_PickListId(pickListId)
-                .stream()
+        return pickTaskRepository.findByPickList_PickListId(pickListId).stream()
                 .map(this::toTaskResponse)
                 .toList();
     }
 
     @Override
     public void cancelPickList(@NonNull UUID pickListId) {
-        PickListEntity pickList = pickListRepository.findById(pickListId)
-                .orElse(null);
+        PickListEntity pickList = pickListRepository.findById(pickListId).orElse(null);
         if (pickList == null) {
             return;
         }

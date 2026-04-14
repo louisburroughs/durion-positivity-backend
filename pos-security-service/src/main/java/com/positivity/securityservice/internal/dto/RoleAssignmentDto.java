@@ -24,4 +24,3 @@ public class RoleAssignmentDto {
     Instant lastModifiedAt;
     String lastModifiedBy;
 }
-

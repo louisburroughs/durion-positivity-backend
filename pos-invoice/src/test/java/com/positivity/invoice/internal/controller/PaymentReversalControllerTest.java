@@ -3,16 +3,21 @@ package com.positivity.invoice.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.invoice.internal.enums.RefundReason;
+import com.positivity.invoice.internal.enums.RefundStatus;
+import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
+import com.positivity.invoice.service.PaymentReversalService;
+import com.positivity.invoice.service.RefundPaymentResult;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,13 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import com.positivity.invoice.internal.enums.RefundReason;
-import com.positivity.invoice.internal.enums.RefundStatus;
-import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
-import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
-import com.positivity.invoice.service.PaymentReversalService;
-import com.positivity.invoice.service.RefundPaymentResult;
 
 /**
  * Controller-layer unit tests for {@link PaymentReversalController} covering
@@ -89,10 +87,9 @@ class PaymentReversalControllerTest {
     void voidPayment_returns200() throws Exception {
         // paymentReversalService.voidPayment is void; no stub needed — no-op default
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/void",
-                INVOICE_ID, PAYMENT_INTENT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"CUSTOMER_REQUEST\"}"))
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/void", INVOICE_ID, PAYMENT_INTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"CUSTOMER_REQUEST\"}"))
                 .andExpect(status().isOk());
     }
 
@@ -103,12 +100,12 @@ class PaymentReversalControllerTest {
     @Test
     void voidPayment_invalidState_returns409() throws Exception {
         doThrow(new InvalidPaymentStateException("payment not in AUTHORIZED state"))
-                .when(paymentReversalService).voidPayment(any(), any(), any(), any());
+                .when(paymentReversalService)
+                .voidPayment(any(), any(), any(), any());
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/void",
-                INVOICE_ID, PAYMENT_INTENT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"ENTRY_ERROR\"}"))
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/void", INVOICE_ID, PAYMENT_INTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"ENTRY_ERROR\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -122,8 +119,8 @@ class PaymentReversalControllerTest {
      */
     @Test
     void refundPayment_returns201() throws Exception {
-                RefundPaymentResult saved = new RefundPaymentResult();
-                saved.setRefundId(UUID.fromString("00000000-0000-7000-8000-000000000005"));
+        RefundPaymentResult saved = new RefundPaymentResult();
+        saved.setRefundId(UUID.fromString("00000000-0000-7000-8000-000000000005"));
         saved.setInvoiceId(INVOICE_ID);
         saved.setPaymentIntentId(PAYMENT_INTENT_ID);
         saved.setAmount(BigDecimal.valueOf(100.00));
@@ -131,12 +128,12 @@ class PaymentReversalControllerTest {
         saved.setStatus(RefundStatus.COMPLETED);
         saved.setCompletedAt(Instant.parse("2026-01-15T14:30:22Z"));
 
-        when(paymentReversalService.refundPayment(any(), any(), any(), any(), any())).thenReturn(saved);
+        when(paymentReversalService.refundPayment(any(), any(), any(), any(), any()))
+                .thenReturn(saved);
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds",
-                INVOICE_ID, PAYMENT_INTENT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"amount\":100.00,\"reason\":\"CUSTOMER_RETURN\"}"))
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_INTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":100.00,\"reason\":\"CUSTOMER_RETURN\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.refundId").value("00000000-0000-7000-8000-000000000005"));
     }
@@ -148,12 +145,12 @@ class PaymentReversalControllerTest {
     @Test
     void refundPayment_windowExpired_returns422() throws Exception {
         doThrow(new PaymentWindowExpiredException("refund window of 180 days has expired"))
-                .when(paymentReversalService).refundPayment(any(), any(), any(), any(), any());
+                .when(paymentReversalService)
+                .refundPayment(any(), any(), any(), any(), any());
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds",
-                INVOICE_ID, PAYMENT_INTENT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"amount\":50.00,\"reason\":\"GOODWILL\"}"))
-                                .andExpect(status().is(422));
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_INTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":50.00,\"reason\":\"GOODWILL\"}"))
+                .andExpect(status().is(422));
     }
 }

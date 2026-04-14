@@ -6,11 +6,18 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
+import com.positivity.securityservice.service.AuditEventService;
+import com.positivity.shared.error.ApiError;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,15 +44,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.WebRequest;
-
-import com.positivity.shared.error.ApiError;
-import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
-import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
-import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
-import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
-import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.exception.UserNotFoundException;
-import com.positivity.securityservice.service.AuditEventService;
 
 /**
  * Unit tests for GlobalExceptionHandler — covers PERM-004, AUTH-003, and
@@ -107,8 +105,8 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("handleInvalidRefreshTokenException returns 401 Unauthorized with INVALID_REFRESH_TOKEN code")
     void handleInvalidRefreshTokenException_returns401WithCorrectErrorCode() {
-        InvalidRefreshTokenException ex = new InvalidRefreshTokenException(
-                "Refresh token references a user that no longer exists");
+        InvalidRefreshTokenException ex =
+                new InvalidRefreshTokenException("Refresh token references a user that no longer exists");
         WebRequest request = mock(WebRequest.class);
         when(request.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
 
@@ -117,8 +115,7 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("INVALID_REFRESH_TOKEN");
-        assertThat(response.getBody().message()).isEqualTo(
-                "Refresh token references a user that no longer exists");
+        assertThat(response.getBody().message()).isEqualTo("Refresh token references a user that no longer exists");
         assertThat(response.getBody().status()).isEqualTo(401);
         assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
     }
@@ -380,8 +377,8 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
@@ -402,8 +399,8 @@ class GlobalExceptionHandlerTest {
             when(auth.getName()).thenReturn("alice");
             SecurityContextHolder.getContext().setAuthentication(auth);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
@@ -418,10 +415,12 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             AuditEventService auditService = mock(AuditEventService.class);
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
-            doThrow(new RuntimeException("Audit DB unavailable")).when(auditService).createEvent(any());
+            doThrow(new RuntimeException("Audit DB unavailable"))
+                    .when(auditService)
+                    .createEvent(any());
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
@@ -434,8 +433,7 @@ class GlobalExceptionHandlerTest {
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), null);
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(ex, requestWithHeader(), null);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
@@ -449,8 +447,8 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
@@ -514,8 +512,8 @@ class GlobalExceptionHandlerTest {
         @Test
         @DisplayName("returns 409 CONCURRENCY_CONFLICT")
         void returns409ConcurrencyConflict() {
-            ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException(
-                    Object.class, "id-123");
+            ObjectOptimisticLockingFailureException ex =
+                    new ObjectOptimisticLockingFailureException(Object.class, "id-123");
 
             ResponseEntity<ApiError> response = sut.handleOptimisticLockingFailure(ex, requestWithHeader());
 
@@ -601,8 +599,8 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             // Handler completed successfully — username was resolved from context
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -618,8 +616,8 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
@@ -645,8 +643,8 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
-                    ex, requestWithHeader(), httpReq);
+            ResponseEntity<ApiError> response =
+                    sut.handleAuthorizationDeniedException(ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
@@ -664,8 +662,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("returns 403 FORBIDDEN when ObjectProvider itself is null (direct instantiation)")
         void returns403WhenObjectProviderIsNull() {
             GlobalExceptionHandler handlerWithNullProvider = new GlobalExceptionHandler(
-                    Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC),
-                    null);
+                    Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC), null);
 
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
@@ -673,8 +670,8 @@ class GlobalExceptionHandlerTest {
             WebRequest req = mock(WebRequest.class);
             when(req.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
 
-            ResponseEntity<ApiError> response = handlerWithNullProvider.handleAuthorizationDeniedException(
-                    ex, req, httpReq);
+            ResponseEntity<ApiError> response =
+                    handlerWithNullProvider.handleAuthorizationDeniedException(ex, req, httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();

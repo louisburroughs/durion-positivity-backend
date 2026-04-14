@@ -10,8 +10,7 @@ public class TimeEntryDecisionResult {
 
     private String message;
 
-    public TimeEntryDecisionResult() {
-    }
+    public TimeEntryDecisionResult() {}
 
     public TimeEntryDecisionResult(String timeEntryId, boolean success, String errorCode, String message) {
         this.timeEntryId = timeEntryId;
@@ -51,5 +50,4 @@ public class TimeEntryDecisionResult {
     public void setMessage(String message) {
         this.message = message;
     }
-
 }

@@ -8,12 +8,12 @@ public enum PolicyValidationResult {
      * Override approved per policy.
      */
     APPROVED,
-    
+
     /**
      * Override rejected due to forbidden category.
      */
     REJECTED_FORBIDDEN,
-    
+
     /**
      * Override rejected due to threshold exceeded.
      */

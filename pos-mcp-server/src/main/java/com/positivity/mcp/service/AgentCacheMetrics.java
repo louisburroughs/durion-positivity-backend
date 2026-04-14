@@ -5,5 +5,5 @@ package com.positivity.mcp.service;
  */
 public interface AgentCacheMetrics {
 
-  long getCacheSize();
+    long getCacheSize();
 }

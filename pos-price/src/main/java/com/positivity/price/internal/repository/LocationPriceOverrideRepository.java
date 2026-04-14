@@ -1,5 +1,6 @@
 package com.positivity.price.internal.repository;
 
+import com.positivity.price.internal.entity.LocationPriceOverride;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,8 +11,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.positivity.price.internal.entity.LocationPriceOverride;
-
 /**
  * Location override repository.
  *
@@ -19,7 +18,8 @@ import com.positivity.price.internal.entity.LocationPriceOverride;
  */
 public interface LocationPriceOverrideRepository extends JpaRepository<LocationPriceOverride, UUID> {
 
-    List<LocationPriceOverride> findAllByProductIdAndLocationIdOrderByEffectiveFromDesc(UUID productId, UUID locationId);
+    List<LocationPriceOverride> findAllByProductIdAndLocationIdOrderByEffectiveFromDesc(
+            UUID productId, UUID locationId);
 
     @Query("""
             SELECT l FROM LocationPriceOverride l
@@ -36,7 +36,8 @@ public interface LocationPriceOverrideRepository extends JpaRepository<LocationP
             Pageable pageable);
 
     default Optional<LocationPriceOverride> findActiveAt(UUID productId, UUID locationId, Instant effectiveAt) {
-        return findActiveAt(productId, locationId, effectiveAt, PageRequest.of(0, 1)).stream().findFirst();
+        return findActiveAt(productId, locationId, effectiveAt, PageRequest.of(0, 1)).stream()
+                .findFirst();
     }
 
     @Query("""
@@ -55,10 +56,7 @@ public interface LocationPriceOverrideRepository extends JpaRepository<LocationP
             @Param("excludeId") UUID excludeId);
 
     default boolean existsOverlappingEffectiveWindow(
-            UUID productId,
-            UUID locationId,
-            Instant effectiveFrom,
-            Instant effectiveTo) {
+            UUID productId, UUID locationId, Instant effectiveFrom, Instant effectiveTo) {
         return existsOverlappingEffectiveWindow(productId, locationId, effectiveFrom, effectiveTo, null);
     }
 }

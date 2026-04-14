@@ -1,7 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
 import com.positivity.people.internal.entity.TimekeepingEntry;
@@ -9,6 +7,7 @@ import com.positivity.people.internal.enums.ApprovalStatus;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
 import com.positivity.people.service.TimekeepingIngestionService;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -40,10 +39,12 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
             throw new IllegalArgumentException("sessionId is required");
         }
 
-        boolean alreadyExists = timekeepingEntryRepository
-            .existsByTenantIdAndSourceSystemAndSourceSessionId(event.tenantId(), "shopmgr", event.sessionId());
+        boolean alreadyExists = timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(
+                event.tenantId(), "shopmgr", event.sessionId());
         if (alreadyExists) {
-            log.debug("Duplicate work session ingestion ignored: tenantId={}, sessionId={}", event.tenantId(),
+            log.debug(
+                    "Duplicate work session ingestion ignored: tenantId={}, sessionId={}",
+                    event.tenantId(),
                     event.sessionId());
             return;
         }
@@ -83,5 +84,4 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
 
         timekeepingEntryRepository.save(correctionEntry);
     }
-
 }

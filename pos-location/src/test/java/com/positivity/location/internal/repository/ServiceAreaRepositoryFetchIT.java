@@ -13,16 +13,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest(properties = {
-        "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false",
-        "spring.datasource.url=jdbc:h2:mem:location_test_db;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
-        "spring.datasource.driverClassName=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
-})
+@SpringBootTest(
+        properties = {
+            "eureka.client.enabled=false",
+            "spring.cloud.discovery.enabled=false",
+            "spring.datasource.url=jdbc:h2:mem:location_test_db;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+            "spring.datasource.driverClassName=org.h2.Driver",
+            "spring.datasource.username=sa",
+            "spring.datasource.password=",
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
+        })
 @ActiveProfiles("test")
 @Transactional
 class ServiceAreaRepositoryFetchIT {
@@ -40,8 +41,14 @@ class ServiceAreaRepositoryFetchIT {
                 .description("Cluster")
                 .active(Boolean.TRUE)
                 .postalCodes(new LinkedHashSet<>(List.of(
-                        ServiceAreaPostalCodeValue.builder().postalCode("98101").countryCode("US").build(),
-                        ServiceAreaPostalCodeValue.builder().postalCode("98102").countryCode("US").build())))
+                        ServiceAreaPostalCodeValue.builder()
+                                .postalCode("98101")
+                                .countryCode("US")
+                                .build(),
+                        ServiceAreaPostalCodeValue.builder()
+                                .postalCode("98102")
+                                .countryCode("US")
+                                .build())))
                 .build();
         serviceAreaRepository.saveAndFlush(entity);
         entityManager.clear();

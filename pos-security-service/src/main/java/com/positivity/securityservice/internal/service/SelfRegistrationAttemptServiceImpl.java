@@ -34,7 +34,8 @@ public class SelfRegistrationAttemptServiceImpl implements SelfRegistrationAttem
             @NonNull String email,
             @Nullable String username,
             @NonNull SelfRegistrationResponse response) {
-        SelfRegistrationAttempt attempt = selfRegistrationAttemptRepository.findByIdempotencyKey(idempotencyKey)
+        SelfRegistrationAttempt attempt = selfRegistrationAttemptRepository
+                .findByIdempotencyKey(idempotencyKey)
                 .orElseGet(SelfRegistrationAttempt::new);
         attempt.setIdempotencyKey(idempotencyKey);
         attempt.setRequestFingerprint(requestFingerprint);
@@ -63,7 +64,8 @@ public class SelfRegistrationAttemptServiceImpl implements SelfRegistrationAttem
             @NonNull String conflictCode,
             @NonNull String conflictMessage,
             @Nullable UUID referenceId) {
-        SelfRegistrationAttempt attempt = selfRegistrationAttemptRepository.findByIdempotencyKey(idempotencyKey)
+        SelfRegistrationAttempt attempt = selfRegistrationAttemptRepository
+                .findByIdempotencyKey(idempotencyKey)
                 .orElseGet(SelfRegistrationAttempt::new);
         attempt.setIdempotencyKey(idempotencyKey);
         attempt.setRequestFingerprint(requestFingerprint);

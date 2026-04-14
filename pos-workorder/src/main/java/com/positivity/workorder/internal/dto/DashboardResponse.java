@@ -2,12 +2,11 @@ package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Value;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import lombok.Builder;
+import lombok.Value;
 
 @Value
 @Builder
@@ -35,6 +34,8 @@ public class DashboardResponse {
     @Schema(description = "Timestamp when data was last refreshed")
     Instant lastRefreshed;
 
-    @Schema(description = "True when one or more upstream data sources were unavailable during aggregation; data may be incomplete")
+    @Schema(
+            description =
+                    "True when one or more upstream data sources were unavailable during aggregation; data may be incomplete")
     Boolean dataQualityWarning;
 }

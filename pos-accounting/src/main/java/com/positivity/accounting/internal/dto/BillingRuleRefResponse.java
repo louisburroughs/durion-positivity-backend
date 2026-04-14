@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.dto;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
-
 import lombok.Data;
 
 /**

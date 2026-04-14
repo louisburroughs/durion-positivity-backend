@@ -1,13 +1,12 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
-
-import java.math.BigDecimal;
 
 /**
  * Line item DTO used for invoice generation payloads and responses.
@@ -20,7 +19,10 @@ import java.math.BigDecimal;
 public class InvoiceLineItem {
 
     @NonNull
-    @Schema(description = "Line item description.", requiredMode = Schema.RequiredMode.REQUIRED, example = "Brake pad replacement")
+    @Schema(
+            description = "Line item description.",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "Brake pad replacement")
     private String description;
 
     @NonNull
@@ -32,6 +34,9 @@ public class InvoiceLineItem {
     private BigDecimal unitPrice;
 
     @NonNull
-    @Schema(description = "Line amount (quantity x unit price).", requiredMode = Schema.RequiredMode.REQUIRED, example = "90.00")
+    @Schema(
+            description = "Line amount (quantity x unit price).",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "90.00")
     private BigDecimal amount;
 }

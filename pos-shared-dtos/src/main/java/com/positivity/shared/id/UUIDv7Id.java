@@ -6,7 +6,6 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
-
 import org.hibernate.annotations.IdGeneratorType;
 
 /**
@@ -14,6 +13,5 @@ import org.hibernate.annotations.IdGeneratorType;
  */
 @IdGeneratorType(UUIDv7HibernateGenerator.class)
 @Retention(RUNTIME)
-@Target({ FIELD, METHOD })
-public @interface UUIDv7Id {
-}
+@Target({FIELD, METHOD})
+public @interface UUIDv7Id {}

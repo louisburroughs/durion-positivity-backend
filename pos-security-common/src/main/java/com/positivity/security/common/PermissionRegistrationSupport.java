@@ -3,7 +3,6 @@ package com.positivity.security.common;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +20,7 @@ import org.springframework.web.client.RestClientException;
  * <p>
  * Extend this class in each service to register its permissions:
  * </p>
- * 
+ *
  * <pre>
  * {
  *     &#64;code
@@ -118,8 +117,11 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             @NonNull String securityServiceUrl,
             boolean enabled,
             @NonNull String permissionsManifestPath) {
-        this(restClientBuilder, securityServiceUrl,
-                PermissionManifestLoader.loadFromClasspath(permissionsManifestPath), enabled);
+        this(
+                restClientBuilder,
+                securityServiceUrl,
+                PermissionManifestLoader.loadFromClasspath(permissionsManifestPath),
+                enabled);
     }
 
     private PermissionRegistrationSupport(
@@ -127,7 +129,8 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             @NonNull String securityServiceUrl,
             PermissionManifestLoader.PermissionManifest manifest,
             boolean enabled) {
-        this(restClientBuilder,
+        this(
+                restClientBuilder,
                 securityServiceUrl,
                 manifest.domain(),
                 manifest.serviceName(),
@@ -182,8 +185,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             return;
         }
 
-        logger.info("[{}] Registering {} permissions with security service...",
-                serviceName, permissions.size());
+        logger.info("[{}] Registering {} permissions with security service...", serviceName, permissions.size());
 
         registerWithRetry(permissions);
     }
@@ -201,34 +203,40 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                         .map(p -> new PermissionDto(p.name(), p.description()))
                         .toList();
 
-                PermissionRegistrationRequest request = new PermissionRegistrationRequest(
-                        domain, serviceName, permissionDtos, version);
+                PermissionRegistrationRequest request =
+                        new PermissionRegistrationRequest(domain, serviceName, permissionDtos, version);
 
-                var registrationRequest = restClient.post()
+                var registrationRequest = restClient
+                        .post()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request);
 
                 if (SecurityApiConstants.hasSecret(permissionRegistrationSecret)) {
                     registrationRequest.header(
-                            SecurityApiConstants.PERMISSION_SECRET_HEADER,
-                            permissionRegistrationSecret);
+                            SecurityApiConstants.PERMISSION_SECRET_HEADER, permissionRegistrationSecret);
                 }
 
                 registrationRequest.retrieve().toBodilessEntity();
 
-                logger.info("[{}] Successfully registered {} permissions",
-                        serviceName, permissions.size());
+                logger.info("[{}] Successfully registered {} permissions", serviceName, permissions.size());
                 return;
 
             } catch (RestClientException e) {
                 if (attempt.get() < MAX_RETRIES) {
-                    logger.warn("[{}] Permission registration attempt {} failed: {}. Retrying in {}ms...",
-                            serviceName, attempt.get(), e.getMessage(), RETRY_DELAY_MS);
+                    logger.warn(
+                            "[{}] Permission registration attempt {} failed: {}. Retrying in {}ms...",
+                            serviceName,
+                            attempt.get(),
+                            e.getMessage(),
+                            RETRY_DELAY_MS);
                     sleep(RETRY_DELAY_MS);
                 } else {
-                    logger.error("[{}] Permission registration failed after {} attempts: {}. " +
-                            "Service will start but permissions may need manual registration.",
-                            serviceName, MAX_RETRIES, e.getMessage());
+                    logger.error(
+                            "[{}] Permission registration failed after {} attempts: {}. "
+                                    + "Service will start but permissions may need manual registration.",
+                            serviceName,
+                            MAX_RETRIES,
+                            e.getMessage());
                 }
             }
         }
@@ -260,17 +268,10 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
      * Request body for permission registration (matches pos-security-service DTO).
      */
     public record PermissionRegistrationRequest(
-            String domain,
-            String serviceName,
-            Collection<PermissionDto> permissions,
-            String version) {
-    }
+            String domain, String serviceName, Collection<PermissionDto> permissions, String version) {}
 
     /**
      * Permission definition DTO (matches pos-security-service DTO).
      */
-    public record PermissionDto(
-            String name,
-            String description) {
-    }
+    public record PermissionDto(String name, String description) {}
 }

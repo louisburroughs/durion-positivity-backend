@@ -5,23 +5,26 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.jspecify.annotations.NonNull;
-
 import java.time.LocalDate;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 @Schema(description = "Request to update a staffing assignment")
 public class UpdateStaffingAssignmentRequest {
 
     @NonNull
     @NotNull
-    @Schema(description = "Person identifier", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Person identifier",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
     @NonNull
     @NotNull
-    @Schema(description = "Location identifier", example = "22222222-2222-2222-2222-222222222222",
+    @Schema(
+            description = "Location identifier",
+            example = "22222222-2222-2222-2222-222222222222",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
 
@@ -31,24 +34,32 @@ public class UpdateStaffingAssignmentRequest {
     private String role;
 
     @JsonProperty("isPrimary")
-    @Schema(description = "Whether this assignment is primary", example = "true",
+    @Schema(
+            description = "Whether this assignment is primary",
+            example = "true",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean primary;
 
     @NonNull
     @NotNull
-    @Schema(description = "Assignment effective start date", example = "2026-02-16",
+    @Schema(
+            description = "Assignment effective start date",
+            example = "2026-02-16",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveFrom;
 
     @Schema(description = "Assignment effective end date", example = "2026-12-31")
     private LocalDate effectiveTo;
 
-    public UpdateStaffingAssignmentRequest() {
-    }
+    public UpdateStaffingAssignmentRequest() {}
 
-    public UpdateStaffingAssignmentRequest(UUID personId, UUID locationId, String role, boolean primary,
-            LocalDate effectiveFrom, LocalDate effectiveTo) {
+    public UpdateStaffingAssignmentRequest(
+            UUID personId,
+            UUID locationId,
+            String role,
+            boolean primary,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo) {
         this.personId = personId;
         this.locationId = locationId;
         this.role = role;
@@ -114,5 +125,4 @@ public class UpdateStaffingAssignmentRequest {
         }
         return !effectiveTo.isBefore(effectiveFrom);
     }
-
 }

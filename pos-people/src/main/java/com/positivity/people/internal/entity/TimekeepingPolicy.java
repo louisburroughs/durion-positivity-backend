@@ -1,11 +1,13 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
@@ -15,15 +17,16 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
-
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "timekeeping_policy",
-        indexes = { @Index(name = "idx_timekeeping_policy_scope", columnList = "scope_type, scope_id"),
-                @Index(name = "idx_timekeeping_policy_scope_effective_updated",
-                        columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at") })
+@Table(
+        name = "timekeeping_policy",
+        indexes = {
+            @Index(name = "idx_timekeeping_policy_scope", columnList = "scope_type, scope_id"),
+            @Index(
+                    name = "idx_timekeeping_policy_scope_effective_updated",
+                    columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at")
+        })
 public class TimekeepingPolicy {
 
     @Id
@@ -119,14 +122,11 @@ public class TimekeepingPolicy {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {
-    }
+    public void setCreatedAt(Instant createdAt) {}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(Instant updatedAt) {
-    }
-
+    public void setUpdatedAt(Instant updatedAt) {}
 }

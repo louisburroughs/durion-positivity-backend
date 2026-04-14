@@ -1,5 +1,6 @@
 package com.positivity.price.internal.repository;
 
+import com.positivity.price.internal.entity.CustomerTierPricingRule;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,8 +11,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.positivity.price.internal.entity.CustomerTierPricingRule;
-
 /**
  * Customer tier rule repository.
  *
@@ -20,8 +19,7 @@ import com.positivity.price.internal.entity.CustomerTierPricingRule;
 public interface CustomerTierPricingRuleRepository extends JpaRepository<CustomerTierPricingRule, UUID> {
 
     List<CustomerTierPricingRule> findAllByProductIdAndCustomerTierIdOrderByEffectiveFromDesc(
-            UUID productId,
-            UUID customerTierId);
+            UUID productId, UUID customerTierId);
 
     @Query("""
             SELECT c FROM CustomerTierPricingRule c
@@ -38,7 +36,8 @@ public interface CustomerTierPricingRuleRepository extends JpaRepository<Custome
             Pageable pageable);
 
     default Optional<CustomerTierPricingRule> findActiveAt(UUID productId, UUID customerTierId, Instant effectiveAt) {
-        return findActiveAt(productId, customerTierId, effectiveAt, PageRequest.of(0, 1)).stream().findFirst();
+        return findActiveAt(productId, customerTierId, effectiveAt, PageRequest.of(0, 1)).stream()
+                .findFirst();
     }
 
     @Query("""
@@ -57,10 +56,7 @@ public interface CustomerTierPricingRuleRepository extends JpaRepository<Custome
             @Param("excludeId") UUID excludeId);
 
     default boolean existsOverlappingEffectiveWindow(
-            UUID productId,
-            UUID customerTierId,
-            Instant effectiveFrom,
-            Instant effectiveTo) {
+            UUID productId, UUID customerTierId, Instant effectiveFrom, Instant effectiveTo) {
         return existsOverlappingEffectiveWindow(productId, customerTierId, effectiveFrom, effectiveTo, null);
     }
 }

@@ -1,23 +1,15 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.shared.id.UUIDv7Id;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -25,25 +17,30 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import jakarta.persistence.GeneratedValue;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * AP Payment entity - manages payment workflow for vendor bills.
- * 
+ *
  * Lifecycle: INITIATED → GATEWAY_PENDING → GATEWAY_SUCCEEDED → GL_POST_PENDING
  * → GL_POSTED
- * 
+ *
  * Two-phase commit semantics:
  * - Gateway success = payment succeeded (bills allocated)
  * - GL posted = accounting completion (journal entry created)
- * 
+ *
  * Idempotency: paymentRef serves as unique idempotency key.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - AP Payment</a>
@@ -55,15 +52,17 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "vendorBill", "glJournalEntry" })
+@ToString(exclude = {"vendorBill", "glJournalEntry"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "ap_payment", indexes = {
-        @Index(name = "idx_ap_payment_vendor_bill", columnList = "vendor_bill_id"),
-        @Index(name = "idx_ap_payment_vendor", columnList = "vendor_id"),
-        @Index(name = "idx_ap_payment_status", columnList = "status"),
-        @Index(name = "idx_ap_payment_date", columnList = "payment_date")
-})
+@Table(
+        name = "ap_payment",
+        indexes = {
+            @Index(name = "idx_ap_payment_vendor_bill", columnList = "vendor_bill_id"),
+            @Index(name = "idx_ap_payment_vendor", columnList = "vendor_id"),
+            @Index(name = "idx_ap_payment_status", columnList = "status"),
+            @Index(name = "idx_ap_payment_date", columnList = "payment_date")
+        })
 public class APPayment {
 
     @EqualsAndHashCode.Include
@@ -178,5 +177,4 @@ public class APPayment {
     public void setGlJournalEntryId(UUID glJournalEntryId) {
         this.glJournalEntry = glJournalEntryId != null ? new JournalEntry(glJournalEntryId) : null;
     }
-
 }

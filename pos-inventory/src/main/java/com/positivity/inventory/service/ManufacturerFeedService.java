@@ -1,9 +1,8 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.ManufacturerFeedItemDto;
-import org.jspecify.annotations.NonNull;
-
 import java.util.Collection;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service contract for processing manufacturer inventory feeds.

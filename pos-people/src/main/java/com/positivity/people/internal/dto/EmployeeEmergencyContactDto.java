@@ -12,5 +12,4 @@ public class EmployeeEmergencyContactDto {
     private String phone;
 
     private String email;
-
 }

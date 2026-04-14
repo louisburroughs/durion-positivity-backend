@@ -1,11 +1,6 @@
 package com.positivity.order.internal.client;
 
+import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 
-import java.math.BigDecimal;
-
-public record PricingResult(
-        @NonNull BigDecimal price,
-        boolean stale,
-        boolean found) {
-}
+public record PricingResult(@NonNull BigDecimal price, boolean stale, boolean found) {}

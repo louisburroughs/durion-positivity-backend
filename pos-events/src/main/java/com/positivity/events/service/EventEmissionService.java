@@ -1,28 +1,25 @@
 package com.positivity.events.service;
 
-import java.time.Clock;
-import java.time.Instant;
-
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-
 import com.positivity.events.EmitEvent;
 import com.positivity.events.EmitEventAspect;
 import com.positivity.events.EmitEventProxy;
 import com.positivity.events.EventEmitted;
-
+import java.time.Clock;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
 /**
  * Core service for executing event-emitting operations with consistent
  * logging, timing, and event publication.
- * 
+ *
  * This service encapsulates the common event emission logic used by both
  * {@link EmitEventAspect} (for AOP-based interception) and
  * {@link EmitEventProxy} (for proxy-based interception), ensuring
  * consistent behavior across all event emission mechanisms.
- * 
+ *
  * The service handles:
  * <ul>
  * <li>Event start/end timestamp logging</li>
@@ -30,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  * <li>Domain event publication via Spring's ApplicationEventPublisher</li>
  * <li>Error logging with timestamps</li>
  * </ul>
- * 
+ *
  * @see EmitEvent
  * @see EmitEventAspect
  * @see EmitEventProxy
@@ -46,7 +43,7 @@ public class EventEmissionService {
     /**
      * Functional interface for operations that can throw any Throwable.
      * Used to wrap method invocations that may throw checked exceptions.
-     * 
+     *
      * @param <T> the return type of the operation
      */
     @FunctionalInterface
@@ -56,7 +53,7 @@ public class EventEmissionService {
 
     /**
      * Executes an operation with event emission tracking.
-     * 
+     *
      * @param <T>        the return type of the operation
      * @param eventId    the unique identifier for the event
      * @param apiVersion the API version that triggered the event
@@ -80,7 +77,11 @@ public class EventEmissionService {
         } catch (Throwable e) {
             long end = Instant.now(clock).toEpochMilli();
             long elapsedMs = end - start;
-            log.error("[EVENT-ERROR] id={} apiVersion={} timestamp={} elapsedMs={} error={}", eventId, apiVersion, end,
+            log.error(
+                    "[EVENT-ERROR] id={} apiVersion={} timestamp={} elapsedMs={} error={}",
+                    eventId,
+                    apiVersion,
+                    end,
                     elapsedMs,
                     e.getMessage());
             throw e;
@@ -89,7 +90,7 @@ public class EventEmissionService {
 
     /**
      * Publishes an EventEmitted domain event.
-     * 
+     *
      * @param eventId    the unique identifier for the event
      * @param apiVersion the API version that triggered the event
      * @param timestamp  the event completion timestamp
@@ -98,7 +99,10 @@ public class EventEmissionService {
     private void publishEvent(String eventId, String apiVersion, long timestamp, long elapsedMs) {
         EventEmitted event = EventEmitted.from(eventId, apiVersion, timestamp, elapsedMs, Instant.now(clock));
         publisher.publishEvent(event);
-        log.debug("[EVENT-PUBLISHED] id={} apiVersion={} elapsedMs={} to Event Receiver API", eventId, apiVersion,
+        log.debug(
+                "[EVENT-PUBLISHED] id={} apiVersion={} elapsedMs={} to Event Receiver API",
+                eventId,
+                apiVersion,
                 elapsedMs);
     }
 }

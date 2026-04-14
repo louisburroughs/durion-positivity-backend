@@ -1,17 +1,15 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Represents a permission in the system following the domain:resource:action

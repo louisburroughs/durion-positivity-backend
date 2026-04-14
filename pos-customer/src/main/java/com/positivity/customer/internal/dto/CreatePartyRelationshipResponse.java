@@ -1,17 +1,15 @@
 package com.positivity.customer.internal.dto;
 
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
-
-import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Response DTO for party relationship creation.

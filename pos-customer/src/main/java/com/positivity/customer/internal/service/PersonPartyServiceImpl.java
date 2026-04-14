@@ -1,26 +1,23 @@
 package com.positivity.customer.internal.service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.CustomerService;
-
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for managing Customer entities.
@@ -43,9 +40,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public List<CustomerDTO> getAllCustomers() {
         log.debug("Fetching all customers");
-        return customerRepository.findAll().stream()
-                .map(this::toDTO)
-                .toList();
+        return customerRepository.findAll().stream().map(this::toDTO).toList();
     }
 
     /**
@@ -59,9 +54,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     public Page<CustomerDTO> getAllCustomers(@NonNull Pageable pageable) {
         log.debug("Fetching all person customers with paging: {}", pageable);
         Page<PersonParty> page = customerRepository.findAll(pageable);
-        List<CustomerDTO> dtos = page.getContent().stream()
-                .map(this::toDTO)
-                .toList();
+        List<CustomerDTO> dtos = page.getContent().stream().map(this::toDTO).toList();
         return new PageImpl<>(dtos, pageable, page.getTotalElements());
     }
 
@@ -188,10 +181,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     private PersonParty toEntity(CustomerDTO dto) {
         PersonParty entity = createEntityByType(dto.getCustomerType());
         UUID canonicalPersonId = peopleClient.resolveOrCreatePersonId(
-                dto.getEmail(),
-                dto.getPhoneNumber(),
-                dto.getLastName(),
-                dto.getFirstName());
+                dto.getEmail(), dto.getPhoneNumber(), dto.getLastName(), dto.getFirstName());
         entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
         entity.setLastName(dto.getLastName());

@@ -35,9 +35,7 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
     private final Set<UUID> recentlyAppended = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public AuditLedgerServiceImpl(
-            NltiAuditEventRepository auditEventRepository,
-            Clock clock,
-            MeterRegistry meterRegistry) {
+            NltiAuditEventRepository auditEventRepository, Clock clock, MeterRegistry meterRegistry) {
         this.auditEventRepository = auditEventRepository;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
@@ -90,7 +88,9 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
                     .map(this::toResponse);
         } else if (query.eventType() != null) {
             NltiAuditEventType eventType = parseEventType(query.eventType());
-            return auditEventRepository.findByEventTypeOrderByTimestampAsc(eventType, pageable).map(this::toResponse);
+            return auditEventRepository
+                    .findByEventTypeOrderByTimestampAsc(eventType, pageable)
+                    .map(this::toResponse);
         }
 
         return auditEventRepository.findAll(pageable).map(this::toResponse);

@@ -1,23 +1,21 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.AccessLevel;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Represents a user's assignment to a role with optional scope and effective
@@ -110,7 +108,7 @@ public class RoleAssignment {
 
     @PrePersist
     protected void onCreate() {
-if (effectiveStartDate == null) {
+        if (effectiveStartDate == null) {
             effectiveStartDate = LocalDateTime.now(Clock.systemUTC());
         }
     }
@@ -144,7 +142,7 @@ if (effectiveStartDate == null) {
      * Custom setter for effectiveEndDate that automatically updates revokedAt.
      * When the effective end date is set (revocation), the revokedAt timestamp
      * is automatically set to the current time to track when the revocation occurred.
-     * 
+     *
      * @param effectiveEndDate the new effective end date
      */
     public void setEffectiveEndDate(LocalDateTime effectiveEndDate) {

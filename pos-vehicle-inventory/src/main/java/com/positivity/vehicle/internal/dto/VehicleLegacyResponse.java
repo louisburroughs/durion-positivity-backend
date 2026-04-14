@@ -2,7 +2,6 @@ package com.positivity.vehicle.internal.dto;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.Builder;
 import lombok.Value;
 

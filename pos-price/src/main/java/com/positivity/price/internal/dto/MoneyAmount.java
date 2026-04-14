@@ -17,8 +17,7 @@ public class MoneyAmount {
     @Schema(description = "ISO-4217 currency code", example = "USD")
     private String currency;
 
-    public MoneyAmount() {
-    }
+    public MoneyAmount() {}
 
     public MoneyAmount(BigDecimal amount, String currency) {
         this.amount = amount;

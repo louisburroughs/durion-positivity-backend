@@ -8,21 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
@@ -34,6 +19,19 @@ import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.MechanicSyncServiceImpl;
 import com.positivity.shopmanager.service.dto.HrMechanicEvent;
 import com.positivity.shopmanager.service.enums.HrEventType;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Service-layer unit tests for {@link MechanicSyncService} — HR mechanic roster
@@ -98,9 +96,8 @@ class MechanicSyncServiceTest {
     void ac1_mechanicUpserted_newPerson_createsOrUpdatesMechanicAndSkills() {
         // Arrange
         String personId = "HR-1001";
-        HrMechanicEvent event = buildUpsertEvent(personId, 1, List.of(
-                buildSkillPayload("OIL_CHANGE", 3),
-                buildSkillPayload("BRAKE_REPLACE", 2)));
+        HrMechanicEvent event = buildUpsertEvent(
+                personId, 1, List.of(buildSkillPayload("OIL_CHANGE", 3), buildSkillPayload("BRAKE_REPLACE", 2)));
 
         when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
         when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.empty());
@@ -196,8 +193,7 @@ class MechanicSyncServiceTest {
         // Arrange
         String personId = "HR-3001";
         Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 4);
-        HrMechanicEvent event = buildSkillsUpdatedEvent(personId, 5, List.of(
-                buildSkillPayload("TIRE_ROTATION", 1)));
+        HrMechanicEvent event = buildSkillsUpdatedEvent(personId, 5, List.of(buildSkillPayload("TIRE_ROTATION", 1)));
 
         when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
         when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
@@ -529,8 +525,7 @@ class MechanicSyncServiceTest {
     // Fixture helpers
     // -------------------------------------------------------------------------
 
-    private HrMechanicEvent buildUpsertEvent(String personId, Integer version,
-            List<SkillPayload> skills) {
+    private HrMechanicEvent buildUpsertEvent(String personId, Integer version, List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
@@ -551,8 +546,7 @@ class MechanicSyncServiceTest {
                 .build();
     }
 
-    private HrMechanicEvent buildSkillsUpdatedEvent(String personId, Integer version,
-            List<SkillPayload> skills) {
+    private HrMechanicEvent buildSkillsUpdatedEvent(String personId, Integer version, List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)
@@ -594,6 +588,5 @@ class MechanicSyncServiceTest {
         return new SkillPayload(skillCode, proficiencyLevel);
     }
 
-    private record SkillPayload(String skillCode, int proficiencyLevel) {
-    }
+    private record SkillPayload(String skillCode, int proficiencyLevel) {}
 }

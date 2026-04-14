@@ -5,13 +5,23 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.WorkorderServiceImpl;
+import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,18 +35,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.repository.AuditEventRepository;
-import com.positivity.workorder.internal.repository.EstimateItemRepository;
-import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.WorkorderPartRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import com.positivity.workorder.internal.service.WorkorderServiceImpl;
-import com.positivity.workorder.internal.service.WorkorderStateMachine;
 
 /**
  * Unit tests for {@link WorkorderServiceImpl} — CRM reference ID propagation
@@ -204,7 +202,8 @@ class WorkorderServiceImplCrmPropagationTest {
     }
 
     @Test
-    @DisplayName("createWorkorder(estimateId, customerId) — empty crmContactIds on estimate yields empty list in workorder")
+    @DisplayName(
+            "createWorkorder(estimateId, customerId) — empty crmContactIds on estimate yields empty list in workorder")
     void createWorkorder_withEstimateId_emptyCrmContactIds_workorderHasEmptyList() {
         Estimate estimate = buildEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
         when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
@@ -221,8 +220,8 @@ class WorkorderServiceImplCrmPropagationTest {
     // Helpers
     // =====================================================================
 
-    private static Estimate buildEstimateWithCrmFields(String crmPartyId, String crmVehicleId,
-            List<String> crmContactIds) {
+    private static Estimate buildEstimateWithCrmFields(
+            String crmPartyId, String crmVehicleId, List<String> crmContactIds) {
         return Estimate.builder()
                 .customerId(CUSTOMER_ID)
                 .crmPartyId(crmPartyId)

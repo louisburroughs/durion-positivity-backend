@@ -1,20 +1,18 @@
 package com.positivity.workorder.internal.repository;
 
+import com.positivity.workorder.internal.entity.IdempotencyKey;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import com.positivity.workorder.internal.entity.IdempotencyKey;
-
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
-
 /**
  * Repository for IdempotencyKey entities.
- * 
+ *
  * <p>
  * Provides data access methods for idempotency key management,
  * including lookup by key value and cleanup of expired keys.
@@ -25,7 +23,7 @@ public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, 
 
     /**
      * Find an idempotency key by its value.
-     * 
+     *
      * @param keyValue the idempotency key value to search for
      * @return Optional containing the IdempotencyKey if found
      */
@@ -33,7 +31,7 @@ public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, 
 
     /**
      * Delete expired idempotency keys.
-     * 
+     *
      * @param now the current timestamp; keys with expiresAt before this are deleted
      * @return count of deleted keys
      */

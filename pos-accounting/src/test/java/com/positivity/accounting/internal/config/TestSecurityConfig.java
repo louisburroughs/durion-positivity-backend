@@ -1,8 +1,12 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.security.common.GatewaySecurityConfig;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
-
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -20,13 +24,6 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import com.positivity.security.common.GatewaySecurityConfig;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Test security configuration that replaces gateway-based authentication
@@ -87,11 +84,9 @@ public class TestSecurityConfig {
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
     public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
+        http.csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll());
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
 
@@ -112,11 +107,10 @@ public class TestSecurityConfig {
      */
     private static class TestAutoAuthFilter extends OncePerRequestFilter {
         @Override
-        protected void doFilterInternal(HttpServletRequest request,
-                HttpServletResponse response, FilterChain filterChain)
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
                 throws ServletException, IOException {
-            var authentication = new UsernamePasswordAuthenticationToken(
-                    "testuser", null, TEST_AUTHORITIES);
+            var authentication = new UsernamePasswordAuthenticationToken("testuser", null, TEST_AUTHORITIES);
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         }

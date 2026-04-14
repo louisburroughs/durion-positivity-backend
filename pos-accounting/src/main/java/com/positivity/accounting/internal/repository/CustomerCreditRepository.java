@@ -1,14 +1,13 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CustomerCredit;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Repository for CustomerCredit entity.
@@ -19,7 +18,7 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
 
     /**
      * Find all credits for a customer.
-     * 
+     *
      * @param customerId customer identifier
      * @return list of credits
      */
@@ -27,7 +26,7 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
 
     /**
      * Find all credits for a customer with pagination.
-     * 
+     *
      * @param customerId customer identifier
      * @param pageable   pagination parameters
      * @return page of credits
@@ -36,7 +35,7 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
 
     /**
      * Find credits by source payment.
-     * 
+     *
      * @param sourcePaymentId payment identifier
      * @return list of credits
      */
@@ -44,7 +43,7 @@ public interface CustomerCreditRepository extends JpaRepository<CustomerCredit, 
 
     /**
      * Sum of all credit amounts for a customer.
-     * 
+     *
      * @param customerId customer identifier
      * @return total credit balance
      */

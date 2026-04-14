@@ -2,21 +2,9 @@ package com.positivity.workorder.contract;
 
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-
-import io.restassured.path.json.JsonPath;
-import io.restassured.response.Response;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
@@ -25,18 +13,26 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
+import io.restassured.path.json.JsonPath;
+import io.restassured.response.Response;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Contract behavioral tests for Estimate Tax Calculation endpoint.
  * Story #16 (Calculate Taxes and Totals)
- * 
+ *
  * Verifies:
  * - Happy path: Calculate subtotal, tax, and total for draft estimate
  * - Idempotency: Multiple calculations produce same result
  * - State constraints: Cannot calculate for non-DRAFT estimates
  * - Stub implementation: Documents 8.25% flat tax rate
  */
-
 class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
@@ -47,8 +43,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
     @AfterEach
     void tearDown() {
-                purgeTestData();
-        }
+        purgeTestData();
+    }
 
     @Test
     @DisplayName("Contract: Calculate taxes and totals for draft estimate - Happy Path")
@@ -62,8 +58,10 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
                 .statusCode(200)
-                .log().ifValidationFails()
-                .extract().response();
+                .log()
+                .ifValidationFails()
+                .extract()
+                .response();
 
         JsonPath body = response.jsonPath();
         assertEquals(estimateId.toString(), body.getString("estimate.id"));
@@ -128,7 +126,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
                 .statusCode(anyOf(is(409), is(404))) // 409 if approved, 404 if not found
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     @Test
@@ -143,7 +142,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
                 .statusCode(anyOf(is(200), is(404)))
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
 
         // Note: If 200, response should contain subtotal, taxAmount, total fields
         // Full field validation requires test database with known estimate
@@ -218,16 +218,20 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
         Estimate savedEstimate = estimateRepository.save(estimate);
 
-        estimateItemRepository.save(buildItem(savedEstimate, EstimateItemType.PART, "Front brake pads",
-                new BigDecimal("2"), new BigDecimal("50.00")));
-        estimateItemRepository.save(buildItem(savedEstimate, EstimateItemType.LABOR, "Brake labor",
-                new BigDecimal("5"), new BigDecimal("20.00")));
+        estimateItemRepository.save(buildItem(
+                savedEstimate,
+                EstimateItemType.PART,
+                "Front brake pads",
+                new BigDecimal("2"),
+                new BigDecimal("50.00")));
+        estimateItemRepository.save(buildItem(
+                savedEstimate, EstimateItemType.LABOR, "Brake labor", new BigDecimal("5"), new BigDecimal("20.00")));
 
         return savedEstimate.getId();
     }
 
-    private EstimateItem buildItem(Estimate estimate, EstimateItemType type, String description,
-            BigDecimal quantity, BigDecimal unitPrice) {
+    private EstimateItem buildItem(
+            Estimate estimate, EstimateItemType type, String description, BigDecimal quantity, BigDecimal unitPrice) {
         return EstimateItem.builder()
                 .estimate(estimate)
                 .itemType(type)

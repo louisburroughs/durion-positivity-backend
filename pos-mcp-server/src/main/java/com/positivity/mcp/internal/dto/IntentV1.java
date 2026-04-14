@@ -9,5 +9,4 @@ public record IntentV1(
         String status,
         String riskLevel,
         List<IntentSlot> slots,
-        List<ClarificationQuestion> clarificationQuestions) {
-}
+        List<ClarificationQuestion> clarificationQuestions) {}

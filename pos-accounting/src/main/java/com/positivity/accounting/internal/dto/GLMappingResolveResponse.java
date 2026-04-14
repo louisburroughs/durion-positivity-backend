@@ -1,11 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 /**
  * Response from GL mapping resolution.

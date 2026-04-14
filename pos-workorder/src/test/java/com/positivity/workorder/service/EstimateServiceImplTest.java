@@ -4,27 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
@@ -44,7 +23,25 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -130,7 +127,8 @@ class EstimateServiceImplTest {
     void searchEstimates_byCustomerId_returnsMatching() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Estimate> pagedEstimates = new PageImpl<>(List.of(estimate), pageable, 1);
-        when(estimateRepository.findByCustomerId(any(UUID.class), any(Pageable.class))).thenReturn(pagedEstimates);
+        when(estimateRepository.findByCustomerId(any(UUID.class), any(Pageable.class)))
+                .thenReturn(pagedEstimates);
 
         Page<EstimateSummaryResponse> result = estimateService.searchEstimates(customerId, null, pageable);
 
@@ -142,7 +140,8 @@ class EstimateServiceImplTest {
     void searchEstimates_byVehicleId_returnsMatching() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Estimate> pagedEstimates = new PageImpl<>(List.of(estimate), pageable, 1);
-        when(estimateRepository.findByVehicleId(any(UUID.class), any(Pageable.class))).thenReturn(pagedEstimates);
+        when(estimateRepository.findByVehicleId(any(UUID.class), any(Pageable.class)))
+                .thenReturn(pagedEstimates);
 
         Page<EstimateSummaryResponse> result = estimateService.searchEstimates(null, vehicleId, pageable);
 
@@ -171,8 +170,10 @@ class EstimateServiceImplTest {
                 .customerId(LOCAL_CUSTOMER_ID)
                 .vehicleId(LOCAL_VEHICLE_ID)
                 .build();
-        ApprovalConfiguration config = ApprovalConfiguration.builder().id(CONFIG_ID).build();
-        when(approvalConfigurationRepository.findApplicableConfigurations(any(), any())).thenReturn(List.of(config));
+        ApprovalConfiguration config =
+                ApprovalConfiguration.builder().id(CONFIG_ID).build();
+        when(approvalConfigurationRepository.findApplicableConfigurations(any(), any()))
+                .thenReturn(List.of(config));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
 
         EstimateResponse result = estimateService.createEstimate(request, username);
@@ -184,27 +185,23 @@ class EstimateServiceImplTest {
 
     @Test
     void createEstimate_missingCustomerId_throwsException() {
-        CreateEstimateRequest request = CreateEstimateRequest.builder()
-                .vehicleId(LOCAL_VEHICLE_ID)
-                .build();
+        CreateEstimateRequest request =
+                CreateEstimateRequest.builder().vehicleId(LOCAL_VEHICLE_ID).build();
         String username = "testuser";
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class,
-                () -> estimateService.createEstimate(request, username));
+                IllegalArgumentException.class, () -> estimateService.createEstimate(request, username));
         assertEquals("customerId is required", exception.getMessage());
     }
 
     @Test
     void createEstimate_missingVehicleId_throwsException() {
-        CreateEstimateRequest request = CreateEstimateRequest.builder()
-                .customerId(LOCAL_CUSTOMER_ID)
-                .build();
+        CreateEstimateRequest request =
+                CreateEstimateRequest.builder().customerId(LOCAL_CUSTOMER_ID).build();
         String username = "testuser";
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class,
-                () -> estimateService.createEstimate(request, username));
+                IllegalArgumentException.class, () -> estimateService.createEstimate(request, username));
         assertEquals("vehicleId is required", exception.getMessage());
     }
 
@@ -234,8 +231,14 @@ class EstimateServiceImplTest {
     void addEstimateItem_valid_addsItem() {
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
-        AddEstimateItemRequest request = new AddEstimateItemRequest(EstimateItemType.PART, "description",
-                BigDecimal.ONE, BigDecimal.TEN, "taxCode", LOCAL_VEHICLE_ID, null);
+        AddEstimateItemRequest request = new AddEstimateItemRequest(
+                EstimateItemType.PART,
+                "description",
+                BigDecimal.ONE,
+                BigDecimal.TEN,
+                "taxCode",
+                LOCAL_VEHICLE_ID,
+                null);
 
         EstimateItemResponse result = estimateService.addEstimateItem(estimate.getId(), request, "testuser");
 
@@ -244,7 +247,8 @@ class EstimateServiceImplTest {
 
     @Test
     void updateEstimateItem_valid_updatesItem() {
-        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
+        EstimateItem item =
+                EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));
@@ -258,7 +262,8 @@ class EstimateServiceImplTest {
 
     @Test
     void deleteEstimateItem_valid_deletesItem() {
-        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
+        EstimateItem item =
+                EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));

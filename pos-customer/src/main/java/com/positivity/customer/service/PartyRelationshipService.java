@@ -1,12 +1,11 @@
 package com.positivity.customer.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import java.util.List;
+import java.util.UUID;
 
 public interface PartyRelationshipService {
 
@@ -27,9 +26,7 @@ public interface PartyRelationshipService {
      * @return response with created relationship details
      */
     CreatePartyRelationshipResponse createRelationship(
-            UUID partyId,
-            CreatePartyRelationshipRequest request,
-            UUID userId);
+            UUID partyId, CreatePartyRelationshipRequest request, UUID userId);
 
     /**
      * Gets all contacts with roles for a commercial account.
@@ -42,9 +39,7 @@ public interface PartyRelationshipService {
      * @return contacts with their roles
      */
     GetCommercialAccountContactsResponse getContactsForCommercialAccount(
-            UUID partyId,
-            List<PartyRelationshipRole> roles,
-            String status);
+            UUID partyId, List<PartyRelationshipRole> roles, String status);
 
     /**
      * Deactivates a party relationship by setting the effective end date to today.
@@ -62,9 +57,5 @@ public interface PartyRelationshipService {
      * @param relationshipId the relationship to designate as primary
      * @param userId         the ID of the user making the change
      */
-    void designatePrimaryBillingContact(
-            UUID partyId,
-            UUID relationshipId,
-            UUID userId);
-
+    void designatePrimaryBillingContact(UUID partyId, UUID relationshipId, UUID userId);
 }

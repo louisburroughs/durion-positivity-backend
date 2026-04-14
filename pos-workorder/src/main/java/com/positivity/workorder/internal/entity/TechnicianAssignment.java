@@ -1,31 +1,27 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import com.positivity.shared.id.UUIDv7Generator;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -34,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Represents a technician assignment to a workorder.
  * Maintains history of assignments, with the most recent assignment marked as
  * current.
- * 
+ *
  * <p>
  * Note: This entity uses Long auto-increment ID for history tracking.
  * UUID fields (workorderId, technicianId, assignedBy) are foreign references
@@ -121,7 +117,7 @@ public class TechnicianAssignment {
 
     /**
      * Mark this assignment as no longer current and set unassignment timestamp.
-     * 
+     *
      * @param unassignmentTime the time the technician was unassigned
      * @param reason           optional reason for unassignment
      */

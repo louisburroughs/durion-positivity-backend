@@ -5,10 +5,9 @@ import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
 import com.positivity.workorder.internal.entity.TravelSegment;
 import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
-import org.jspecify.annotations.NonNull;
-
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface TravelSegmentService {
 
@@ -34,6 +33,6 @@ public interface TravelSegmentService {
      * Create a post-approval adjustment for an approved travel segment.
      */
     @NonNull
-    TravelSegmentAdjustment createAdjustment(@NonNull UUID travelSegmentId,
-            @NonNull CreateTravelSegmentAdjustmentRequest request);
+    TravelSegmentAdjustment createAdjustment(
+            @NonNull UUID travelSegmentId, @NonNull CreateTravelSegmentAdjustmentRequest request);
 }

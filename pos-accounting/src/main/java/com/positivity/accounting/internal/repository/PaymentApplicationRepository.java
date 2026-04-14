@@ -1,15 +1,14 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repository for PaymentApplication entity.
@@ -20,7 +19,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Find all applications for a payment.
-     * 
+     *
      * @param paymentId payment identifier
      * @return list of applications
      */
@@ -28,7 +27,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Find all applications for an invoice.
-     * 
+     *
      * @param invoiceId invoice identifier
      * @return list of applications
      */
@@ -36,7 +35,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Find all applications for a customer with pagination.
-     * 
+     *
      * @param customerId customer identifier
      * @param pageable   pagination parameters
      * @return page of applications
@@ -45,7 +44,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Find application by request ID (for idempotency).
-     * 
+     *
      * @param applicationRequestId idempotency key
      * @return application if already processed
      */
@@ -53,7 +52,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Find all applications by request ID (for multi-invoice idempotency).
-     * 
+     *
      * @param applicationRequestId idempotency key
      * @return list of all applications for this request
      */
@@ -61,7 +60,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Check if application request was already processed (idempotency check).
-     * 
+     *
      * @param applicationRequestId idempotency key
      * @return true if already processed
      */
@@ -69,16 +68,17 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
 
     /**
      * Sum of all applied amounts for a payment.
-     * 
+     *
      * @param paymentId payment identifier
      * @return total applied amount
      */
-    @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.payment.paymentId = :paymentId")
+    @Query(
+            "SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.payment.paymentId = :paymentId")
     java.math.BigDecimal sumAppliedAmountByPaymentId(UUID paymentId);
 
     /**
      * Sum of all applied amounts for an invoice.
-     * 
+     *
      * @param invoiceId invoice identifier
      * @return total applied amount
      */

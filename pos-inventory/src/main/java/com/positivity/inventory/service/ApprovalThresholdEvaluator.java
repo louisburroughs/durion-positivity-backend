@@ -2,7 +2,6 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
 import com.positivity.inventory.internal.enums.ApprovalTier;
-
 import java.util.Optional;
 
 /**

@@ -22,6 +22,5 @@ public final class McpPermissions {
     public static final String MCP_CHAT_STREAM = "mcp:chat:stream";
     public static final String MCP_CHAT_EXECUTE = "mcp:chat:execute";
 
-    private McpPermissions() {
-    }
+    private McpPermissions() {}
 }

@@ -1,16 +1,14 @@
 package com.positivity.accounting.service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface EventIngestionService {
 
@@ -73,13 +71,13 @@ public interface EventIngestionService {
      * Reprocesses a suspended accounting event.
      * Distinct from retry: reprocess is for business-rule mapping failures that
      * require manual intervention.
-     * 
+     *
      * Business Rules (BR-3: Idempotency):
      * - Reprocessing MUST be idempotent
      * - A single suspense entry can produce at most one successful downstream
      * posting
      * - Returns 409 Conflict if entry is already PROCESSED
-     * 
+     *
      * @param eventId the event identifier
      * @param request reprocess request with user context
      * @return updated accounting event response
@@ -92,7 +90,7 @@ public interface EventIngestionService {
     /**
      * Retrieves all reprocessing attempt history for an accounting event.
      * Used for audit trail and diagnostics.
-     * 
+     *
      * @param eventId the event identifier
      * @return list of reprocessing attempts, most recent first
      */
@@ -117,10 +115,7 @@ public interface EventIngestionService {
      * @param pageable       pagination parameters
      * @return paginated accounting event responses
      */
-    Page<AccountingEventResponse> listEvents(
-            UUID organizationId,
-            String status,
-            Pageable pageable);
+    Page<AccountingEventResponse> listEvents(UUID organizationId, String status, Pageable pageable);
 
     /**
      * Find all events from a specific source system.
@@ -130,9 +125,7 @@ public interface EventIngestionService {
      * @param pageable     pagination parameters
      * @return paginated accounting event responses
      */
-    Page<AccountingEventResponse> findBySourceSystem(
-            String sourceSystem,
-            Pageable pageable);
+    Page<AccountingEventResponse> findBySourceSystem(String sourceSystem, Pageable pageable);
 
     /**
      * Process all failed events asynchronously.
@@ -150,5 +143,4 @@ public interface EventIngestionService {
      * @return list of validation errors (empty if valid)
      */
     List<String> validateEvent(Map<String, Object> event);
-
 }

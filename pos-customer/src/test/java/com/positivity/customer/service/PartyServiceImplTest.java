@@ -1,11 +1,16 @@
 package com.positivity.customer.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
+import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
@@ -29,31 +34,24 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
 import com.positivity.shared.dto.VehicleResponse;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.ArgumentCaptor;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
-import org.springframework.web.server.ResponseStatusException;
-
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PartyServiceImplTest {
@@ -61,14 +59,19 @@ class PartyServiceImplTest {
 
     @Mock
     private CommercialPartyRepository partyRepository;
+
     @Mock
     private ContactRepository contactRepository;
+
     @Mock
     private CacheManager cacheManager;
+
     @Mock
     private Cache cache;
+
     @Mock
     private PeopleClient peopleClient;
+
     @Mock
     private VehicleInventoryClient vehicleInventoryClient;
 
@@ -76,8 +79,8 @@ class PartyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PartyServiceImpl(TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient,
-                vehicleInventoryClient);
+        service = new PartyServiceImpl(
+                TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient, vehicleInventoryClient);
     }
 
     private CommercialParty party(UUID id) {
@@ -508,7 +511,8 @@ class PartyServiceImplTest {
 
         assertThat(response.getTotalCount()).isEqualTo(1);
         assertThat(response.getResults()).hasSize(1);
-        assertThat(response.getResults().getFirst().getPartyId()).isEqualTo(match.getPartyId().toString());
+        assertThat(response.getResults().getFirst().getPartyId())
+                .isEqualTo(match.getPartyId().toString());
     }
 
     @Test
@@ -602,8 +606,8 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
 
-        UpdateContactRolesResponse response = service.updateContactRoles(partyId, contactId,
-                new UpdateContactRolesRequest());
+        UpdateContactRolesResponse response =
+                service.updateContactRoles(partyId, contactId, new UpdateContactRolesRequest());
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
         assertThat(response.getContactId()).isEqualTo(contactId.toString());
@@ -660,9 +664,8 @@ class PartyServiceImplTest {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(party(partyId));
 
-        UpsertCommunicationPreferencesResponse response = service.upsertCommunicationPreferences(
-                partyId,
-                new UpsertCommunicationPreferencesRequest());
+        UpsertCommunicationPreferencesResponse response =
+                service.upsertCommunicationPreferences(partyId, new UpsertCommunicationPreferencesRequest());
 
         assertThat(response.getPartyId()).isEqualTo(partyId.toString());
         assertThat(response.getStatus()).isEqualTo("SUCCESS");

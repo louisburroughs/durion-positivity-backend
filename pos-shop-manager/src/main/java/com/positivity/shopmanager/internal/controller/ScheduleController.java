@@ -40,11 +40,19 @@ public class ScheduleController {
     public ResponseEntity<ScheduleViewResponse> viewSchedule(
             @Parameter(description = "Location ID", required = true) @RequestParam UUID locationId,
             @Parameter(description = "Date in YYYY-MM-DD", required = true) @RequestParam LocalDate date,
-            @Parameter(description = "Optional resource type filter") @RequestParam(required = false) String resourceType,
-            @Parameter(description = "Optional single resource filter") @RequestParam(required = false) String resourceId,
-            @Parameter(description = "Include HR availability overlay", required = false) @RequestParam(defaultValue = "false") boolean includeAvailabilityOverlay,
-            @Parameter(description = "Schedule window range", required = false) @RequestParam(defaultValue = "LOCATION_HOURS") String range,
-            @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
+            @Parameter(description = "Optional resource type filter") @RequestParam(required = false)
+                    String resourceType,
+            @Parameter(description = "Optional single resource filter") @RequestParam(required = false)
+                    String resourceId,
+            @Parameter(description = "Include HR availability overlay", required = false)
+                    @RequestParam(defaultValue = "false")
+                    boolean includeAvailabilityOverlay,
+            @Parameter(description = "Schedule window range", required = false)
+                    @RequestParam(defaultValue = "LOCATION_HOURS")
+                    String range,
+            @Parameter(description = "Correlation ID for request tracing")
+                    @RequestHeader(value = "X-Correlation-Id", required = false)
+                    UUID correlationId) {
         ScheduleViewRequest request = new ScheduleViewRequest();
         request.setLocationId(locationId);
         request.setDate(date);
@@ -54,7 +62,13 @@ public class ScheduleController {
         request.setRange(range);
         log.info(
                 "Schedule view requested. locationId={}, date={}, resourceType={}, resourceId={}, includeAvailabilityOverlay={}, range={}, X-Correlation-Id={}",
-                locationId, date, resourceType, resourceId, includeAvailabilityOverlay, range, correlationId);
+                locationId,
+                date,
+                resourceType,
+                resourceId,
+                includeAvailabilityOverlay,
+                range,
+                correlationId);
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, correlationId);
         return ResponseEntity.ok(response);
     }

@@ -39,24 +39,24 @@ public class ReplenishmentController {
     @ApiResponse(
             responseCode = "200",
             description = "Replenishment tasks returned",
-            content = @Content(
-                    mediaType = "application/json",
-                    array = @ArraySchema(schema = @Schema(implementation = ReplenishmentTaskResponse.class))))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ReplenishmentTaskResponse.class))))
     public ResponseEntity<List<ReplenishmentTaskResponse>> getReplenishmentTasks() {
         return ResponseEntity.ok(replenishmentService.getReplenishmentTasks());
     }
 
     @GetMapping("/policies")
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @Operation(
-            summary = "List replenishment policies",
-            description = "Returns configured replenishment policies.")
+    @Operation(summary = "List replenishment policies", description = "Returns configured replenishment policies.")
     @ApiResponse(
             responseCode = "200",
             description = "Replenishment policies returned",
-            content = @Content(
-                    mediaType = "application/json",
-                    array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
     public ResponseEntity<List<ReplenishmentPolicyResponse>> getReplenishmentPolicies() {
         return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies());
     }
@@ -70,13 +70,13 @@ public class ReplenishmentController {
     @ApiResponse(
             responseCode = "201",
             description = "Replenishment policy created",
-            content = @Content(
-                    mediaType = "application/json",
-                    schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation failure")
     public ResponseEntity<ReplenishmentPolicyResponse> createReplenishmentPolicy(
             @Valid @RequestBody CreateReplenishmentPolicyRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(replenishmentService.createReplenishmentPolicy(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(replenishmentService.createReplenishmentPolicy(request));
     }
 }

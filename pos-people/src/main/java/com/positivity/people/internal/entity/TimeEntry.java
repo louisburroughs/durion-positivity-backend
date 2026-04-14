@@ -1,44 +1,44 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-
-import java.time.Instant;
-import java.util.UUID;
-
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.EnumType;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "time_entry", indexes = {
-        @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
-        @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
-        @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at") })
+@Table(
+        name = "time_entry",
+        indexes = {
+            @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
+            @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
+            @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at")
+        })
 public class TimeEntry {
 
     @Id
@@ -48,7 +48,11 @@ public class TimeEntry {
     private UUID timeEntryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "person_id", referencedColumnName = "id", columnDefinition = "UUID", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "person_id",
+            referencedColumnName = "id",
+            columnDefinition = "UUID",
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Person person;
@@ -98,5 +102,4 @@ public class TimeEntry {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
-
 }

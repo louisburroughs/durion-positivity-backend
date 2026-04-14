@@ -1,30 +1,29 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Posting Rule Version - versioned posting rules for JE generation.
- * 
+ *
  * State machine: DRAFT → PUBLISHED → ARCHIVED
  * - DRAFT: Editable, not used for JE generation
  * - PUBLISHED: Immutable, active for JE generation
  * - ARCHIVED: Immutable, inactive (historical)
- * 
+ *
  * rulesDefinition contains JSON with conditions and GL posting logic.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Posting Rules</a>
@@ -36,13 +35,17 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "posting_rule_version", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_posting_rule_set_version", columnNames = { "posting_rule_set_id",
-                "version_number" })
-}, indexes = {
-        @Index(name = "idx_posting_rule_version_set", columnList = "posting_rule_set_id"),
-        @Index(name = "idx_posting_rule_version_state", columnList = "state")
-})
+@Table(
+        name = "posting_rule_version",
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_posting_rule_set_version",
+                    columnNames = {"posting_rule_set_id", "version_number"})
+        },
+        indexes = {
+            @Index(name = "idx_posting_rule_version_set", columnList = "posting_rule_set_id"),
+            @Index(name = "idx_posting_rule_version_state", columnList = "state")
+        })
 public class PostingRuleVersion {
 
     @EqualsAndHashCode.Include
@@ -51,6 +54,7 @@ public class PostingRuleVersion {
     @UUIDv7Id
     @Column(name = "version_id", nullable = false, columnDefinition = "UUID")
     private UUID versionId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "posting_rule_set_id", nullable = false)
     private PostingRuleSet postingRuleSet;
@@ -99,7 +103,7 @@ public class PostingRuleVersion {
 
     /**
      * Check if this version is immutable (cannot be edited).
-     * 
+     *
      * @return true if state is PUBLISHED or ARCHIVED
      */
     @Transient

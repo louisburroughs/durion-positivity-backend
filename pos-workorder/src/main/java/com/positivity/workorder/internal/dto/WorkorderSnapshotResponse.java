@@ -2,14 +2,13 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,7 +16,9 @@ import java.util.UUID;
 @Builder
 @Schema(description = "Work order snapshot history entry")
 public class WorkorderSnapshotResponse {
-    @Schema(description = "Unique identifier for this snapshot record", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Unique identifier for this snapshot record",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID id;
 
     @Schema(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
@@ -29,7 +30,9 @@ public class WorkorderSnapshotResponse {
     @Schema(description = "Timestamp when the snapshot was captured")
     private Instant capturedAt;
 
-    @Schema(description = "Stable actor identifier who captured the snapshot", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Stable actor identifier who captured the snapshot",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     private String capturedBy;
 
     @Schema(description = "Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)", example = "MANUAL")

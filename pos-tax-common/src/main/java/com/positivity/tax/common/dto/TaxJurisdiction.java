@@ -8,12 +8,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
 
 /**
  * Represents a tax jurisdiction with its applicable rates.
@@ -27,7 +26,9 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(name = "TaxJurisdiction", description = "Tax jurisdiction entry with normalized international location fields and calculated tax values")
+@Schema(
+        name = "TaxJurisdiction",
+        description = "Tax jurisdiction entry with normalized international location fields and calculated tax values")
 @ValidSubdivisionForCountry
 public class TaxJurisdiction {
 
@@ -37,7 +38,11 @@ public class TaxJurisdiction {
     @NotNull(message = "countryCode is required")
     @Pattern(regexp = "^[A-Z]{2}$", message = "countryCode must be ISO 3166-1 alpha-2")
     @IsoCountryCode(message = "countryCode must be a valid ISO 3166-1 alpha-2 code")
-    @Schema(type = "string", description = "Country code in ISO 3166-1 alpha-2 format", example = "US", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            type = "string",
+            description = "Country code in ISO 3166-1 alpha-2 format",
+            example = "US",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String countryCode;
 
     /**
@@ -75,7 +80,10 @@ public class TaxJurisdiction {
      */
     @NotNull(message = "taxRate is required")
     @PositiveOrZero(message = "taxRate must be >= 0")
-    @Schema(description = "Tax rate as percentage points", example = "7.25", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Tax rate as percentage points",
+            example = "7.25",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal taxRate;
 
     /**
@@ -101,6 +109,9 @@ public class TaxJurisdiction {
      */
     @NotNull(message = "taxAmount is required")
     @PositiveOrZero(message = "taxAmount must be >= 0")
-    @Schema(description = "Calculated tax amount for this jurisdiction", example = "6.53", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Calculated tax amount for this jurisdiction",
+            example = "6.53",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal taxAmount;
 }

@@ -1,18 +1,17 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.jspecify.annotations.NonNull;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import lombok.experimental.Tolerate;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Tolerate;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Invoice details retrieved from Invoice service.

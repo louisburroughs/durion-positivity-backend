@@ -10,6 +10,11 @@
     <name>pos-dependencies</name>
     <description>BOM for internal Positivity microservice artifacts and shared dependencies</description>
 
+    <properties>
+        <spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
+        <palantir-java-format.version>2.90.0</palantir-java-format.version>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <!-- Shared Security Library (Gateway Authentication) -->
@@ -69,5 +74,22 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless-maven-plugin.version}</version>
+                <configuration>
+                    <java>
+                        <palantirJavaFormat>
+                            <version>${palantir-java-format.version}</version>
+                        </palantirJavaFormat>
+                    </java>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

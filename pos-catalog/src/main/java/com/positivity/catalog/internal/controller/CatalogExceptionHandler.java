@@ -45,16 +45,17 @@ public class CatalogExceptionHandler {
     }
 
     @ExceptionHandler(CatalogBusinessRuleException.class)
-    public ResponseEntity<ApiError> handleBusinessConflict(CatalogBusinessRuleException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleBusinessConflict(
+            CatalogBusinessRuleException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return buildResponse(HttpStatus.CONFLICT, "BUSINESS_RULE_VIOLATION", ex.getMessage(), correlationId);
     }
 
-    @ExceptionHandler({ ObjectOptimisticLockingFailureException.class, OptimisticLockException.class })
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
     public ResponseEntity<ApiError> handleConflict(RuntimeException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
-        return buildResponse(HttpStatus.CONFLICT, "CONFLICT",
-                "Resource was updated concurrently. Please retry.", correlationId);
+        return buildResponse(
+                HttpStatus.CONFLICT, "CONFLICT", "Resource was updated concurrently. Please retry.", correlationId);
     }
 
     @ExceptionHandler(ServletException.class)
@@ -62,23 +63,26 @@ public class CatalogExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         Throwable cause = ex.getCause();
         if (cause instanceof OptimisticLockException || cause instanceof ObjectOptimisticLockingFailureException) {
-            return buildResponse(HttpStatus.CONFLICT, "CONFLICT",
-                    "Resource was updated concurrently. Please retry.", correlationId);
+            return buildResponse(
+                    HttpStatus.CONFLICT, "CONFLICT", "Resource was updated concurrently. Please retry.", correlationId);
         }
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", ex.getMessage(), correlationId);
     }
 
-    private ResponseEntity<ApiError> buildResponse(HttpStatus status, String code, String message,
-            String correlationId) {
+    private ResponseEntity<ApiError> buildResponse(
+            HttpStatus status, String code, String message, String correlationId) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
                 ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
-                headers, status);
+                headers,
+                status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 }

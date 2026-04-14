@@ -12,23 +12,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
 import com.positivity.shopmanager.internal.client.CrmVehicleClient;
@@ -52,6 +35,21 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceNewBehaviorsTest {
@@ -59,24 +57,34 @@ class AppointmentsServiceNewBehaviorsTest {
 
     @Mock
     private AppointmentRepository appointmentRepository;
+
     @Mock
     private AppointmentAuditRepository appointmentAuditRepository;
+
     @Mock
     private RescheduleHistoryRepository rescheduleHistoryRepository;
+
     @Mock
     private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+
     @Mock
     private AppointmentLoadService appointmentLoadService;
+
     @Mock
     private CrmCustomerClient crmCustomerClient;
+
     @Mock
     private CrmVehicleClient crmVehicleClient;
+
     @Mock
     private HrAvailabilityClient hrAvailabilityClient;
+
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
+
     @Mock
     private ShopRepository shopRepository;
+
     @Mock
     private SourceEligibilityService sourceEligibilityService;
 
@@ -113,7 +121,9 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment.setEndAt(Instant.now(TEST_CLOCK).plus(25, ChronoUnit.HOURS));
         lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
-        lenient().when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(any(UUID.class))).thenReturn(List.of());
+        lenient()
+                .when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(any(UUID.class)))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -132,7 +142,8 @@ class AppointmentsServiceNewBehaviorsTest {
 
         assertNotNull(response);
         assertEquals(appointmentId, response.getAppointmentId());
-        assertEquals(newStart.truncatedTo(ChronoUnit.MILLIS), response.getStartAt().truncatedTo(ChronoUnit.MILLIS));
+        assertEquals(
+                newStart.truncatedTo(ChronoUnit.MILLIS), response.getStartAt().truncatedTo(ChronoUnit.MILLIS));
         verify(appointmentRepository, times(1)).save(any(Appointment.class));
         verify(appointmentAuditRepository, times(1)).save(any());
     }
@@ -307,8 +318,8 @@ class AppointmentsServiceNewBehaviorsTest {
         // Different customer so the de-duplicate filter does NOT exclude this record
         when(conflictingAppointment.getCrmCustomerId())
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                any(), any(), any())).thenReturn(List.of(conflictingAppointment));
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(conflictingAppointment));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -359,8 +370,7 @@ class AppointmentsServiceNewBehaviorsTest {
     @Test
     void createAppointment_throwsCrmCustomerNotFound_when404() {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(crmCustomerClient.getCustomerById(any()))
-                .thenThrow(new CrmCustomerNotFoundException(customerId));
+        when(crmCustomerClient.getCustomerById(any())).thenThrow(new CrmCustomerNotFoundException(customerId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -380,8 +390,7 @@ class AppointmentsServiceNewBehaviorsTest {
     void createAppointment_throwsCrmVehicleNotFound_when404() {
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // customer call succeeds; vehicle call throws 404
-        when(crmVehicleClient.getVehicleById(any()))
-                .thenThrow(new CrmVehicleNotFoundException(vehicleId));
+        when(crmVehicleClient.getVehicleById(any())).thenThrow(new CrmVehicleNotFoundException(vehicleId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));

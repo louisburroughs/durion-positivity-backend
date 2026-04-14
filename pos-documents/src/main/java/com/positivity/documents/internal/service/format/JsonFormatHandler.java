@@ -2,15 +2,14 @@ package com.positivity.documents.internal.service.format;
 
 import com.positivity.documents.internal.enums.DocumentFormat;
 import com.positivity.documents.internal.exception.RenderingException;
-import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class JsonFormatHandler implements FormatHandler {
@@ -24,9 +23,8 @@ public class JsonFormatHandler implements FormatHandler {
     @Override
     public String processContent(String rawContent, Map<String, Object> context) {
         try {
-            Map<String, Object> parsed = objectMapper.readValue(rawContent,
-                    new TypeReference<Map<String, Object>>() {
-                    });
+            Map<String, Object> parsed =
+                    objectMapper.readValue(rawContent, new TypeReference<Map<String, Object>>() {});
             context.put("model", parsed);
             return toHtml(parsed);
         } catch (Exception ex) {
@@ -43,12 +41,12 @@ public class JsonFormatHandler implements FormatHandler {
         StringBuilder builder = new StringBuilder();
         builder.append("<section><h2>JSON Content</h2>");
         builder.append("<table class=\"kv-table\"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>");
-        flattenMap("", data).forEach(entry ->
-            builder.append("<tr><td>")
-                .append(HtmlUtils.htmlEscape(entry.getKey()))
-                .append("</td><td>")
-                .append(HtmlUtils.htmlEscape(String.valueOf(entry.getValue())))
-                .append("</td></tr>"));
+        flattenMap("", data)
+                .forEach(entry -> builder.append("<tr><td>")
+                        .append(HtmlUtils.htmlEscape(entry.getKey()))
+                        .append("</td><td>")
+                        .append(HtmlUtils.htmlEscape(String.valueOf(entry.getValue())))
+                        .append("</td></tr>"));
         builder.append("</tbody></table></section>");
         return builder.toString();
     }

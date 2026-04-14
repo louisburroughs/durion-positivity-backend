@@ -8,15 +8,21 @@ import java.util.UUID;
 @Schema(description = "Time entry adjustment representing a proposed or approved change to a time entry")
 public class TimeEntryAdjustment {
 
-    @Schema(description = "Unique identifier for the adjustment", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Unique identifier for the adjustment",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             accessMode = Schema.AccessMode.READ_ONLY)
     private UUID adjustmentId;
 
-    @Schema(description = "Time entry identifier being adjusted", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Time entry identifier being adjusted",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID timeEntryId;
 
-    @Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK",
+    @Schema(
+            description = "Reason code for the adjustment",
+            example = "MISSED_BREAK",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
 
@@ -32,7 +38,9 @@ public class TimeEntryAdjustment {
     @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30")
     private Integer minutesDelta;
 
-    @Schema(description = "Current status of the adjustment", example = "PENDING",
+    @Schema(
+            description = "Current status of the adjustment",
+            example = "PENDING",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private AdjustmentStatus status;
 
@@ -143,5 +151,4 @@ public class TimeEntryAdjustment {
     public void setDecidedAt(Instant decidedAt) {
         this.decidedAt = decidedAt;
     }
-
 }

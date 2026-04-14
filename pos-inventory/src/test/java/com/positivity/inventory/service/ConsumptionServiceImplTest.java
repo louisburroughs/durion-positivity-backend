@@ -6,19 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
@@ -31,266 +18,283 @@ import com.positivity.inventory.internal.exception.WorkorderConsumptionException
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.service.ConsumptionServiceImpl;
+import java.time.Clock;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ConsumptionServiceImpl")
 class ConsumptionServiceImplTest {
 
-        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-                        java.time.ZoneOffset.UTC);
-        @Mock
-        private PickTaskRepository pickTaskRepository;
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
 
-        @Mock
-        private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    @Mock
+    private PickTaskRepository pickTaskRepository;
 
-        @Captor
-        private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
+    @Mock
+    private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-        private ConsumptionServiceImpl inMemoryService() {
-                return persistentService();
-        }
+    @Captor
+    private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
 
-        private ConsumptionServiceImpl persistentService() {
-                return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository, FIXED_CLOCK);
-        }
+    private ConsumptionServiceImpl inMemoryService() {
+        return persistentService();
+    }
 
-        // ─── CS1: consumePickedItems — valid picks → ConsumptionResponse fields ─────
+    private ConsumptionServiceImpl persistentService() {
+        return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository, FIXED_CLOCK);
+    }
 
-        @Test
-        @DisplayName("in-memory mode returns response with one ledger id per item")
-        void consumePickedItems_inMemoryMode_returnsPopulatedResponse() {
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickTaskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickTaskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                List<ConsumeItemLine> items = List.of(
-                                new ConsumeItemLine(pickTaskId1,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 2),
-                                new ConsumeItemLine(pickTaskId2,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 4));
-                ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, pickListId, items);
+    // ─── CS1: consumePickedItems — valid picks → ConsumptionResponse fields ─────
 
-                when(pickTaskRepository.findById(pickTaskId1)).thenReturn(Optional.of(
-                                PickTaskEntity.builder().pickTaskId(pickTaskId1).status(PickTaskStatus.PICKED)
-                                                .quantityPicked(2)
-                                                .build()));
-                when(pickTaskRepository.findById(pickTaskId2)).thenReturn(Optional.of(
-                                PickTaskEntity.builder().pickTaskId(pickTaskId2).status(PickTaskStatus.PICKED)
-                                                .quantityPicked(4)
-                                                .build()));
-                when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of(
-                                InventoryLedgerEntry.builder()
-                                                .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                                .build(),
-                                InventoryLedgerEntry.builder()
-                                                .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                                .build()));
+    @Test
+    @DisplayName("in-memory mode returns response with one ledger id per item")
+    void consumePickedItems_inMemoryMode_returnsPopulatedResponse() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickTaskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickTaskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        List<ConsumeItemLine> items = List.of(
+                new ConsumeItemLine(pickTaskId1, UUID.fromString("00000000-0000-0000-0000-000000000001"), 2),
+                new ConsumeItemLine(pickTaskId2, UUID.fromString("00000000-0000-0000-0000-000000000001"), 4));
+        ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, pickListId, items);
 
-                ConsumptionResponse result = inMemoryService().consumePickedItems(request);
+        when(pickTaskRepository.findById(pickTaskId1))
+                .thenReturn(Optional.of(PickTaskEntity.builder()
+                        .pickTaskId(pickTaskId1)
+                        .status(PickTaskStatus.PICKED)
+                        .quantityPicked(2)
+                        .build()));
+        when(pickTaskRepository.findById(pickTaskId2))
+                .thenReturn(Optional.of(PickTaskEntity.builder()
+                        .pickTaskId(pickTaskId2)
+                        .status(PickTaskStatus.PICKED)
+                        .quantityPicked(4)
+                        .build()));
+        when(inventoryLedgerEntryRepository.saveAll(any()))
+                .thenReturn(List.of(
+                        InventoryLedgerEntry.builder()
+                                .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .build(),
+                        InventoryLedgerEntry.builder()
+                                .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .build()));
 
-                assertThat(result.getConsumptionId()).isNotNull();
-                assertThat(result.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(result.getPickListId()).isEqualTo(pickListId);
-                assertThat(result.getTotalItemsConsumed()).isEqualTo(6); // sum of quantities (2 + 4)
-                assertThat(result.getCreatedAt()).isNotNull();
-                assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
-        }
+        ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
-        // ─── CS2: consumePickedItems — ledger entries created per consumed item ──────
+        assertThat(result.getConsumptionId()).isNotNull();
+        assertThat(result.getWorkorderId()).isEqualTo(workorderId);
+        assertThat(result.getPickListId()).isEqualTo(pickListId);
+        assertThat(result.getTotalItemsConsumed()).isEqualTo(6); // sum of quantities (2 + 4)
+        assertThat(result.getCreatedAt()).isNotNull();
+        assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
+    }
 
-        @Test
-        @DisplayName("null items are treated as empty list")
-        void consumePickedItems_inMemoryMode_withNullItems_returnsEmptyLedgerIds() {
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"), null);
+    // ─── CS2: consumePickedItems — ledger entries created per consumed item ──────
 
-                when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of());
+    @Test
+    @DisplayName("null items are treated as empty list")
+    void consumePickedItems_inMemoryMode_withNullItems_returnsEmptyLedgerIds() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ConsumeItemsRequest request =
+                new ConsumeItemsRequest(workorderId, UUID.fromString("00000000-0000-0000-0000-000000000001"), null);
 
-                ConsumptionResponse result = inMemoryService().consumePickedItems(request);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of());
 
-                assertThat(result.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(result.getTotalItemsConsumed()).isZero();
-                assertThat(result.getLedgerEntryIds()).isEmpty();
-        }
+        ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
-        // ─── CS3: consumePickedItems — pickTask NOT in PICKED status → exception ─────
+        assertThat(result.getWorkorderId()).isEqualTo(workorderId);
+        assertThat(result.getTotalItemsConsumed()).isZero();
+        assertThat(result.getLedgerEntryIds()).isEmpty();
+    }
 
-        @Test
-        @DisplayName("null workorderId throws IllegalArgumentException")
-        void consumePickedItems_withNullWorkorderId_throwsValidationException() {
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                null,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+    // ─── CS3: consumePickedItems — pickTask NOT in PICKED status → exception ─────
 
-                assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("workorderId");
-        }
+    @Test
+    @DisplayName("null workorderId throws IllegalArgumentException")
+    void consumePickedItems_withNullWorkorderId_throwsValidationException() {
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                null,
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        1)));
 
-        @Test
-        @DisplayName("rejects quantity that exceeds picked quantity")
-        void consumePickedItems_inMemoryMode_withTooLargeQuantity_throwsIllegalArgumentException() {
-                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(
-                                PickTaskEntity.builder().pickTaskId(pickTaskId).status(PickTaskStatus.PICKED)
-                                                .quantityPicked(0)
-                                                .build()));
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(pickTaskId,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 101)));
+        assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("workorderId");
+    }
 
-                assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
-                                .isInstanceOf(WorkorderConsumptionException.class)
-                                .hasMessageContaining("exceeds picked quantity");
-        }
+    @Test
+    @DisplayName("rejects quantity that exceeds picked quantity")
+    void consumePickedItems_inMemoryMode_withTooLargeQuantity_throwsIllegalArgumentException() {
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(Optional.of(PickTaskEntity.builder()
+                        .pickTaskId(pickTaskId)
+                        .status(PickTaskStatus.PICKED)
+                        .quantityPicked(0)
+                        .build()));
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 101)));
 
-        @Test
-        @DisplayName("in-memory mode with one quantity-1 item throws not picked exception")
-        void consumePickedItems_inMemoryMode_withSingleQuantityOneItem_throwsNotPicked() {
-                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(
-                                PickTaskEntity.builder().pickTaskId(pickTaskId).status(PickTaskStatus.PENDING)
-                                                .quantityPicked(10)
-                                                .build()));
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(pickTaskId,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+        assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
+                .isInstanceOf(WorkorderConsumptionException.class)
+                .hasMessageContaining("exceeds picked quantity");
+    }
 
-                assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
-                                .isInstanceOf(WorkorderConsumptionException.class)
-                                .hasMessageContaining("not picked");
-        }
+    @Test
+    @DisplayName("in-memory mode with one quantity-1 item throws not picked exception")
+    void consumePickedItems_inMemoryMode_withSingleQuantityOneItem_throwsNotPicked() {
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(Optional.of(PickTaskEntity.builder()
+                        .pickTaskId(pickTaskId)
+                        .status(PickTaskStatus.PENDING)
+                        .quantityPicked(10)
+                        .build()));
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
-        // ─── CS4: consumePickedItems — quantity exceeds picked → exception ────────
+        assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
+                .isInstanceOf(WorkorderConsumptionException.class)
+                .hasMessageContaining("not picked");
+    }
 
-        @Test
-        @DisplayName("persistent mode saves one ledger entry per line and returns non-null saved IDs")
-        void consumePickedItems_persistentMode_successPath_buildsAndSavesLedgerEntries() {
-                ConsumptionServiceImpl service = persistentService();
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickTaskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID pickTaskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID skuId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    // ─── CS4: consumePickedItems — quantity exceeds picked → exception ────────
 
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                workorderId,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(
-                                                new ConsumeItemLine(pickTaskId1, null, 2),
-                                                new ConsumeItemLine(pickTaskId2, skuId2, 3)));
+    @Test
+    @DisplayName("persistent mode saves one ledger entry per line and returns non-null saved IDs")
+    void consumePickedItems_persistentMode_successPath_buildsAndSavesLedgerEntries() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickTaskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID pickTaskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID skuId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                PickTaskEntity pickedTask1 = PickTaskEntity.builder()
-                                .pickTaskId(pickTaskId1)
-                                .status(PickTaskStatus.PICKED)
-                                .quantityPicked(5)
-                                .build();
-                PickTaskEntity pickedTask2 = PickTaskEntity.builder()
-                                .pickTaskId(pickTaskId2)
-                                .status(PickTaskStatus.PICKED)
-                                .quantityPicked(3)
-                                .build();
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                workorderId,
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId1, null, 2), new ConsumeItemLine(pickTaskId2, skuId2, 3)));
 
-                when(pickTaskRepository.findById(pickTaskId1)).thenReturn(Optional.of(pickedTask1));
-                when(pickTaskRepository.findById(pickTaskId2)).thenReturn(Optional.of(pickedTask2));
+        PickTaskEntity pickedTask1 = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId1)
+                .status(PickTaskStatus.PICKED)
+                .quantityPicked(5)
+                .build();
+        PickTaskEntity pickedTask2 = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId2)
+                .status(PickTaskStatus.PICKED)
+                .quantityPicked(3)
+                .build();
 
-                UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                InventoryLedgerEntry savedOne = InventoryLedgerEntry.builder().ledgerEntryId(savedId).build();
-                InventoryLedgerEntry savedTwo = InventoryLedgerEntry.builder().ledgerEntryId(null).build();
-                when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of(savedOne, savedTwo));
+        when(pickTaskRepository.findById(pickTaskId1)).thenReturn(Optional.of(pickedTask1));
+        when(pickTaskRepository.findById(pickTaskId2)).thenReturn(Optional.of(pickedTask2));
 
-                ConsumptionResponse response = service.consumePickedItems(request);
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        InventoryLedgerEntry savedOne =
+                InventoryLedgerEntry.builder().ledgerEntryId(savedId).build();
+        InventoryLedgerEntry savedTwo =
+                InventoryLedgerEntry.builder().ledgerEntryId(null).build();
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of(savedOne, savedTwo));
 
-                verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
-                assertThat(entriesCaptor.getValue()).hasSize(2);
-                InventoryLedgerEntry firstEntry = entriesCaptor.getValue().getFirst();
-                InventoryLedgerEntry secondEntry = entriesCaptor.getValue().get(1);
-                assertThat(firstEntry.getStockItemId()).isEqualTo("");
-                assertThat(firstEntry.getEventType()).isEqualTo(InventoryLedgerEventType.WORKORDER_CONSUMPTION);
-                assertThat(firstEntry.getChangeInQuantity()).isEqualTo(-2);
-                assertThat(firstEntry.getQuantityAfter()).isZero();
-                assertThat(firstEntry.getNotes()).contains(workorderId.toString());
-                assertThat(secondEntry.getStockItemId()).isEqualTo(skuId2.toString());
-                assertThat(secondEntry.getChangeInQuantity()).isEqualTo(-3);
+        ConsumptionResponse response = service.consumePickedItems(request);
 
-                assertThat(response.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(response.getTotalItemsConsumed()).isEqualTo(5);
-                assertThat(response.getLedgerEntryIds()).containsExactly(savedId);
-        }
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(2);
+        InventoryLedgerEntry firstEntry = entriesCaptor.getValue().getFirst();
+        InventoryLedgerEntry secondEntry = entriesCaptor.getValue().get(1);
+        assertThat(firstEntry.getStockItemId()).isEqualTo("");
+        assertThat(firstEntry.getEventType()).isEqualTo(InventoryLedgerEventType.WORKORDER_CONSUMPTION);
+        assertThat(firstEntry.getChangeInQuantity()).isEqualTo(-2);
+        assertThat(firstEntry.getQuantityAfter()).isZero();
+        assertThat(firstEntry.getNotes()).contains(workorderId.toString());
+        assertThat(secondEntry.getStockItemId()).isEqualTo(skuId2.toString());
+        assertThat(secondEntry.getChangeInQuantity()).isEqualTo(-3);
 
-        @Test
-        @DisplayName("persistent mode throws ResourceNotFoundException when pick task is missing")
-        void consumePickedItems_persistentMode_withMissingTask_throwsResourceNotFound() {
-                ConsumptionServiceImpl service = persistentService();
-                UUID missingTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        assertThat(response.getWorkorderId()).isEqualTo(workorderId);
+        assertThat(response.getTotalItemsConsumed()).isEqualTo(5);
+        assertThat(response.getLedgerEntryIds()).containsExactly(savedId);
+    }
 
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(missingTaskId,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+    @Test
+    @DisplayName("persistent mode throws ResourceNotFoundException when pick task is missing")
+    void consumePickedItems_persistentMode_withMissingTask_throwsResourceNotFound() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID missingTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                when(pickTaskRepository.findById(missingTaskId)).thenReturn(Optional.empty());
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(
+                        missingTaskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
-                assertThatThrownBy(() -> service.consumePickedItems(request))
-                                .isInstanceOf(ResourceNotFoundException.class)
-                                .hasMessageContaining("PickTask");
-        }
+        when(pickTaskRepository.findById(missingTaskId)).thenReturn(Optional.empty());
 
-        // ─── CS5: consumePickedItems — null workorderId → validation exception ────
+        assertThatThrownBy(() -> service.consumePickedItems(request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("PickTask");
+    }
 
-        @Test
-        @DisplayName("persistent mode throws not picked when task status is not PICKED")
-        void consumePickedItems_persistentMode_withTaskNotPicked_throwsWorkorderConsumptionException() {
-                ConsumptionServiceImpl service = persistentService();
-                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    // ─── CS5: consumePickedItems — null workorderId → validation exception ────
 
-                PickTaskEntity task = PickTaskEntity.builder()
-                                .pickTaskId(pickTaskId)
-                                .status(PickTaskStatus.PENDING)
-                                .quantityPicked(10)
-                                .build();
-                when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
+    @Test
+    @DisplayName("persistent mode throws not picked when task status is not PICKED")
+    void consumePickedItems_persistentMode_withTaskNotPicked_throwsWorkorderConsumptionException() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(pickTaskId,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+        PickTaskEntity task = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .status(PickTaskStatus.PENDING)
+                .quantityPicked(10)
+                .build();
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
 
-                assertThatThrownBy(() -> service.consumePickedItems(request))
-                                .isInstanceOf(WorkorderConsumptionException.class)
-                                .hasMessageContaining("not picked");
-        }
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
-        @Test
-        @DisplayName("persistent mode throws when requested quantity exceeds picked quantity")
-        void consumePickedItems_persistentMode_withQuantityExceedingPicked_throwsWorkorderConsumptionException() {
-                ConsumptionServiceImpl service = persistentService();
-                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        assertThatThrownBy(() -> service.consumePickedItems(request))
+                .isInstanceOf(WorkorderConsumptionException.class)
+                .hasMessageContaining("not picked");
+    }
 
-                PickTaskEntity task = PickTaskEntity.builder()
-                                .pickTaskId(pickTaskId)
-                                .status(PickTaskStatus.PICKED)
-                                .quantityPicked(2)
-                                .build();
-                when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
+    @Test
+    @DisplayName("persistent mode throws when requested quantity exceeds picked quantity")
+    void consumePickedItems_persistentMode_withQuantityExceedingPicked_throwsWorkorderConsumptionException() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                ConsumeItemsRequest request = new ConsumeItemsRequest(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                List.of(new ConsumeItemLine(pickTaskId,
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 3)));
+        PickTaskEntity task = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .status(PickTaskStatus.PICKED)
+                .quantityPicked(2)
+                .build();
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
 
-                assertThatThrownBy(() -> service.consumePickedItems(request))
-                                .isInstanceOf(WorkorderConsumptionException.class)
-                                .hasMessageContaining("exceeds picked quantity");
-        }
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 3)));
+
+        assertThatThrownBy(() -> service.consumePickedItems(request))
+                .isInstanceOf(WorkorderConsumptionException.class)
+                .hasMessageContaining("exceeds picked quantity");
+    }
 }

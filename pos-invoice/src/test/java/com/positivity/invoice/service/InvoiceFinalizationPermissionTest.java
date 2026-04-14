@@ -1,7 +1,10 @@
 package com.positivity.invoice.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -10,6 +13,13 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,18 +32,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 /**
  * Permission matrix unit tests for {@link InvoiceFinalizationService} — Story
@@ -88,8 +86,7 @@ class InvoiceFinalizationPermissionTest {
      */
     private void withServiceAdvisorContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "advisor-001", null,
-                List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
+                "advisor-001", null, List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "advisor-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -99,8 +96,7 @@ class InvoiceFinalizationPermissionTest {
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "manager-001", null,
-                List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+                "manager-001", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -119,13 +115,12 @@ class InvoiceFinalizationPermissionTest {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // SERVICE_ADVISOR context is configured in @BeforeEach; $499.99 within cap
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("499.99"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("499.99"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest(null);
 
-        assertThatCode(() -> service.completeInvoice(invoiceId, request))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> service.completeInvoice(invoiceId, request)).doesNotThrowAnyException();
     }
 
     /**
@@ -138,8 +133,8 @@ class InvoiceFinalizationPermissionTest {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // SERVICE_ADVISOR context; invoice total $500.01 > cap; no approval code
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("500.01"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("500.01"))));
         FinalizationRequest request = buildRequest(null);
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
@@ -157,8 +152,8 @@ class InvoiceFinalizationPermissionTest {
         // SERVICE_ADVISOR with approval code; invoice $750 > cap → allowed (override
         // audited)
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("750.00"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest("MGR-APPROVAL-XYZ");
 
@@ -182,8 +177,8 @@ class InvoiceFinalizationPermissionTest {
         // C1: SHOP_MANAGER role in SecurityContext → bypasses all amount caps
         withShopManagerContext();
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("10000.00"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("10000.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest(null);
 

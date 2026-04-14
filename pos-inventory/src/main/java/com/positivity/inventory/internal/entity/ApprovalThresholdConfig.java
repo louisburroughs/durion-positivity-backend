@@ -1,25 +1,23 @@
 package com.positivity.inventory.internal.entity;
 
-import jakarta.persistence.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.shared.id.UUIDv7Id;
-
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Configuration for approval thresholds used to evaluate cycle count
  * adjustments.
- * 
+ *
  * <p>
  * Uses a composite threshold model: approval is required if ANY threshold is
  * exceeded.
@@ -90,5 +88,4 @@ public class ApprovalThresholdConfig {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
-
 }

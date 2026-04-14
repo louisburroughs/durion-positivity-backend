@@ -1,5 +1,11 @@
 package com.positivity.mcp.internal.discovery;
 
+import com.positivity.mcp.internal.config.McpServerProperties;
+import com.positivity.shared.id.UUIDv7Generator;
+import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.spec.McpSchema;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -7,19 +13,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-
-import com.positivity.mcp.internal.config.McpServerProperties;
-import com.positivity.shared.id.UUIDv7Generator;
-
-import io.modelcontextprotocol.server.McpServerFeatures;
-import io.modelcontextprotocol.spec.McpSchema;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.Operation;
 
 @Component
 public class OpenApiToolMapper {
@@ -29,16 +26,14 @@ public class OpenApiToolMapper {
     private final McpServerProperties properties;
     private final OperationProxyFactory proxyFactory;
 
-    public OpenApiToolMapper(@NonNull McpServerProperties properties,
-            @NonNull OperationProxyFactory proxyFactory) {
+    public OpenApiToolMapper(@NonNull McpServerProperties properties, @NonNull OperationProxyFactory proxyFactory) {
         this.properties = properties;
         this.proxyFactory = proxyFactory;
     }
 
     @NonNull
-    public List<McpServerFeatures.AsyncToolSpecification> toToolSpecifications(@NonNull String serviceId,
-            @NonNull URI baseUri,
-            @NonNull OpenAPI openApi) {
+    public List<McpServerFeatures.AsyncToolSpecification> toToolSpecifications(
+            @NonNull String serviceId, @NonNull URI baseUri, @NonNull OpenAPI openApi) {
         var specs = new ArrayList<McpServerFeatures.AsyncToolSpecification>();
         if (openApi.getPaths() == null) {
             return specs;
@@ -57,7 +52,8 @@ public class OpenApiToolMapper {
         return specs;
     }
 
-    private void addOperation(@NonNull List<McpServerFeatures.AsyncToolSpecification> specs,
+    private void addOperation(
+            @NonNull List<McpServerFeatures.AsyncToolSpecification> specs,
             @NonNull String serviceId,
             @NonNull URI baseUri,
             @NonNull String path,
@@ -87,40 +83,29 @@ public class OpenApiToolMapper {
                 .build());
     }
 
-    private McpSchema.JsonSchema buildInputSchema(@NonNull HttpMethod method,
-            @NonNull String path,
-            @NonNull Operation operation) {
+    private McpSchema.JsonSchema buildInputSchema(
+            @NonNull HttpMethod method, @NonNull String path, @NonNull Operation operation) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("httpMethod", Map.of(
-                "type", "string",
-                "const", method.name(),
-                DESCRIPTION, "HTTP method for the underlying API call"));
-        properties.put("path", Map.of(
-                "type", "string",
-                "const", path,
-                DESCRIPTION, "Path template for the API call"));
-        properties.put("pathParams", Map.of(
-                "type", OBJECT,
-                DESCRIPTION, "Path parameters keyed by template name"));
-        properties.put("queryParams", Map.of(
-                "type", OBJECT,
-                DESCRIPTION, "Query string parameters"));
-        properties.put("headers", Map.of(
-                "type", OBJECT,
-                DESCRIPTION, "Additional HTTP headers to include"));
+        properties.put(
+                "httpMethod",
+                Map.of(
+                        "type",
+                        "string",
+                        "const",
+                        method.name(),
+                        DESCRIPTION,
+                        "HTTP method for the underlying API call"));
+        properties.put("path", Map.of("type", "string", "const", path, DESCRIPTION, "Path template for the API call"));
+        properties.put("pathParams", Map.of("type", OBJECT, DESCRIPTION, "Path parameters keyed by template name"));
+        properties.put("queryParams", Map.of("type", OBJECT, DESCRIPTION, "Query string parameters"));
+        properties.put("headers", Map.of("type", OBJECT, DESCRIPTION, "Additional HTTP headers to include"));
         if (operation.getRequestBody() != null) {
-            properties.put("body", Map.of(
-                    "type", OBJECT,
-                    DESCRIPTION, "Request body payload matching the operation schema"));
+            properties.put(
+                    "body", Map.of("type", OBJECT, DESCRIPTION, "Request body payload matching the operation schema"));
         }
 
         return new McpSchema.JsonSchema(
-                OBJECT,
-                properties,
-                List.of("httpMethod", "path"),
-                Boolean.TRUE,
-                Map.of(),
-                Map.of());
+                OBJECT, properties, List.of("httpMethod", "path"), Boolean.TRUE, Map.of(), Map.of());
     }
 
     private String sanitizeName(@NonNull String raw) {

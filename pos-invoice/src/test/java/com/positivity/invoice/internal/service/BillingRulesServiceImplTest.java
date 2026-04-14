@@ -5,12 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.invoice.internal.entity.BillingRules;
+import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
+import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.invoice.internal.repository.BillingRulesRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,12 +23,6 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import com.positivity.invoice.internal.dto.BillingRulesDTO;
-import com.positivity.invoice.internal.entity.BillingRules;
-import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
-import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
-import com.positivity.invoice.internal.repository.BillingRulesRepository;
 
 @ExtendWith(MockitoExtension.class)
 class BillingRulesServiceImplTest {

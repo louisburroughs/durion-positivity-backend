@@ -12,13 +12,12 @@ import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -30,8 +29,8 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private final PersonRepository personRepository;
 
-    public UserPersonLinkServiceImpl(@NonNull UserPersonLinkRepository linkRepository,
-            @NonNull PersonRepository personRepository) {
+    public UserPersonLinkServiceImpl(
+            @NonNull UserPersonLinkRepository linkRepository, @NonNull PersonRepository personRepository) {
         this.linkRepository = linkRepository;
         this.personRepository = personRepository;
     }
@@ -52,8 +51,8 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
         Person person = personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
         if (linkRepository.existsByUserId(userId)) {
-            UserPersonLink existingLink = linkRepository.findByUserId(userId)
-                    .orElseThrow(() -> new UserAlreadyLinkedException(userId));
+            UserPersonLink existingLink =
+                    linkRepository.findByUserId(userId).orElseThrow(() -> new UserAlreadyLinkedException(userId));
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
@@ -83,7 +82,9 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     public List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId) {
         personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        return linkRepository.findByPerson_Id(personId).stream().map(this::toResponse).toList();
+        return linkRepository.findByPerson_Id(personId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
@@ -118,10 +119,11 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Transactional(readOnly = true)
     @NonNull
     public PersonResponse findPersonByUserId(@NonNull UUID userId) {
-        UserPersonLink link = linkRepository.findByUserId(userId)
-                .orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
+        UserPersonLink link =
+                linkRepository.findByUserId(userId).orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
 
-        Person person = personRepository.findById(link.getPersonId())
+        Person person = personRepository
+                .findById(link.getPersonId())
                 .orElseThrow(() -> new PersonNotFoundException(link.getPersonId()));
 
         return toPersonResponse(person);
@@ -133,7 +135,9 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
         personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        return linkRepository.findByPerson_Id(personId).stream().map(UserPersonLink::getUserId).toList();
+        return linkRepository.findByPerson_Id(personId).stream()
+                .map(UserPersonLink::getUserId)
+                .toList();
     }
 
     @Override
@@ -143,8 +147,8 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
         personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
         UserPersonLink link = linkRepository
-                .findFirstByPerson_IdAndStatusOrderByCreatedAtDesc(personId,
-                        com.positivity.people.internal.enums.UserLinkStatus.ACTIVE)
+                .findFirstByPerson_IdAndStatusOrderByCreatedAtDesc(
+                        personId, com.positivity.people.internal.enums.UserLinkStatus.ACTIVE)
                 .orElseThrow(() -> new UserPersonLinkNotFoundException(personId));
 
         return toResponse(link);
@@ -173,5 +177,4 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
                 .username(person.getUsername())
                 .build();
     }
-
 }

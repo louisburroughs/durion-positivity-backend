@@ -22,5 +22,4 @@ public interface EmitEventService {
      * @return {@code true} when the event id is preregistered and the event is queued
      */
     boolean receiveEvent(@NonNull EmitEventRequest request);
-
 }

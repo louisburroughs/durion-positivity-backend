@@ -1,7 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.people.internal.dto.TimeEntryException;
 import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
@@ -11,6 +9,7 @@ import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.people.service.TimeEntryExceptionService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -28,8 +27,8 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     private final TimeEntryAuditRepository auditRepository;
 
-    public TimeEntryExceptionServiceImpl(TimeEntryExceptionRepository exceptionRepository,
-            TimeEntryAuditRepository auditRepository, Clock clock) {
+    public TimeEntryExceptionServiceImpl(
+            TimeEntryExceptionRepository exceptionRepository, TimeEntryAuditRepository auditRepository, Clock clock) {
         this.clock = clock;
         this.exceptionRepository = exceptionRepository;
         this.auditRepository = auditRepository;
@@ -37,16 +36,17 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional
-    @NonNull public TimeEntryExceptionResponse createException(@NonNull TimeEntryExceptionRequest request) {
-        com.positivity.people.internal.entity.TimeEntryException exception = new com.positivity.people.internal.entity.TimeEntryException();
+    @NonNull
+    public TimeEntryExceptionResponse createException(@NonNull TimeEntryExceptionRequest request) {
+        com.positivity.people.internal.entity.TimeEntryException exception =
+                new com.positivity.people.internal.entity.TimeEntryException();
         exception.setEmployeeId(request.getEmployeeId());
         exception.setExceptionCode(request.getExceptionCode());
         if (request.getSeverity() != null) {
             try {
-                exception
-                    .setSeverity(com.positivity.people.internal.enums.ExceptionSeverity.valueOf(request.getSeverity()));
-            }
-            catch (IllegalArgumentException invalidSeverity) {
+                exception.setSeverity(
+                        com.positivity.people.internal.enums.ExceptionSeverity.valueOf(request.getSeverity()));
+            } catch (IllegalArgumentException invalidSeverity) {
                 exception.setSeverity(com.positivity.people.internal.enums.ExceptionSeverity.WARNING);
             }
         }
@@ -54,8 +54,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
         exception.setResolutionNotes(request.getResolutionNotes());
         if (request.getDetectedAt() != null) {
             exception.setDetectedAt(request.getDetectedAt().toInstant());
-        }
-        else {
+        } else {
             exception.setDetectedAt(Instant.now(clock));
         }
         exception.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
@@ -66,20 +65,25 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional(readOnly = true)
-    @NonNull public List<TimeEntryException> listByEmployee(String employeeId) {
-        List<com.positivity.people.internal.entity.TimeEntryException> exceptions = employeeId == null
-                ? exceptionRepository.findAll() : exceptionRepository.findByEmployeeId(employeeId);
+    @NonNull
+    public List<TimeEntryException> listByEmployee(String employeeId) {
+        List<com.positivity.people.internal.entity.TimeEntryException> exceptions =
+                employeeId == null ? exceptionRepository.findAll() : exceptionRepository.findByEmployeeId(employeeId);
         return exceptions.stream().map(this::toDto).toList();
     }
 
     @Override
     @Transactional
-    public void actionException(@NonNull UUID exceptionId, @NonNull ExceptionStatus targetStatus, String actionNotes,
+    public void actionException(
+            @NonNull UUID exceptionId,
+            @NonNull ExceptionStatus targetStatus,
+            String actionNotes,
             String correlationId) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-            .orElseThrow(() -> new IllegalStateException("No current user"));
-        com.positivity.people.internal.entity.TimeEntryException ex = exceptionRepository.findById(exceptionId)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
+                .orElseThrow(() -> new IllegalStateException("No current user"));
+        com.positivity.people.internal.entity.TimeEntryException ex = exceptionRepository
+                .findById(exceptionId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
 
         // Validate transition is allowed
         if (ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.RESOLVED
@@ -106,20 +110,24 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
             audit.setDetails("Exception " + targetStatus.toString().toLowerCase() + ": "
                     + (actionNotes != null ? actionNotes : ""));
             auditRepository.save(audit);
-        }
-        catch (Exception ignore) {
+        } catch (Exception ignore) {
             // Audit logging failure should not prevent exception action from succeeding
         }
     }
 
     @Override
     @Transactional
-    public void resolveException(@NonNull UUID exceptionId, Set<String> permissions, String resolutionNotes,
-            String resolutionAction, String correlationId) {
+    public void resolveException(
+            @NonNull UUID exceptionId,
+            Set<String> permissions,
+            String resolutionNotes,
+            String resolutionAction,
+            String correlationId) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-            .orElseThrow(() -> new IllegalStateException("No current user"));
-        com.positivity.people.internal.entity.TimeEntryException ex = exceptionRepository.findById(exceptionId)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
+                .orElseThrow(() -> new IllegalStateException("No current user"));
+        com.positivity.people.internal.entity.TimeEntryException ex = exceptionRepository
+                .findById(exceptionId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
 
         boolean allowed = permissions != null
                 && (permissions.contains("people:timeException:resolve") || permissions.contains("admin"));
@@ -132,8 +140,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
                 audit.setCorrelationId(correlationId);
                 audit.setDetails("Permission denied for exception resolve");
                 auditRepository.save(audit);
-            }
-            catch (Exception ignore) {
+            } catch (Exception ignore) {
                 // Audit logging failure should not prevent exception action from
                 // succeeding
             }
@@ -144,12 +151,10 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
         try {
             if (resolutionAction != null) {
                 ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.valueOf(resolutionAction));
-            }
-            else {
+            } else {
                 ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
             }
-        }
-        catch (IllegalArgumentException iae) {
+        } catch (IllegalArgumentException iae) {
             ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
         }
         ex.setResolvedBy(actorId);
@@ -167,8 +172,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
             audit.setCorrelationId(correlationId);
             audit.setDetails("Exception resolved: " + (resolutionNotes != null ? resolutionNotes : ""));
             auditRepository.save(audit);
-        }
-        catch (Exception ignore) {
+        } catch (Exception ignore) {
             // Audit logging failure should not prevent exception action from succeeding
         }
     }
@@ -188,5 +192,4 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
         dto.setResolvedAt(exception.getResolvedAt());
         return dto;
     }
-
 }

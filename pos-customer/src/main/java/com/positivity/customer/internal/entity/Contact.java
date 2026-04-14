@@ -1,24 +1,20 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-
 import java.time.Instant;
 import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.shared.id.UUIDv7Id;
-
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Data
 @NoArgsConstructor
@@ -79,8 +75,7 @@ public class Contact {
         return updatedAt;
     }
 
-    public void setModifiedAt(Instant modifiedAt) {
-}
+    public void setModifiedAt(Instant modifiedAt) {}
 
     @Transient
     public UUID getId() {
@@ -92,7 +87,7 @@ public class Contact {
     }
 
     public void setPreferredContactMethod(PreferredContactMethod preferredContactMethod) {
-        this.preferredContactMethod = preferredContactMethod == null ? PreferredContactMethod.NONE
-                : preferredContactMethod;
+        this.preferredContactMethod =
+                preferredContactMethod == null ? PreferredContactMethod.NONE : preferredContactMethod;
     }
 }

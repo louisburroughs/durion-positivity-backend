@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
+import com.positivity.accounting.internal.client.WorkorderServiceException;
+import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
+import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,11 +22,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
-import com.positivity.accounting.internal.client.WorkorderServiceException;
-import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
-import com.positivity.shared.dto.InvoiceGenerationResponse;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("InvoiceRegenerationService Unit Tests")
@@ -51,7 +49,8 @@ class InvoiceRegenerationServiceTest {
                 .status("DRAFT")
                 .build();
 
-        when(workorderInvoiceClient.regenerateInvoiceFromWorkorder(workorderId, idempotencyKey)).thenReturn(expected);
+        when(workorderInvoiceClient.regenerateInvoiceFromWorkorder(workorderId, idempotencyKey))
+                .thenReturn(expected);
 
         InvoiceGenerationResponse actual = service.regenerateInvoiceFromWorkorder(workorderId, idempotencyKey);
 

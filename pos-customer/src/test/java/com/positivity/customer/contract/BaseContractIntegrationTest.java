@@ -1,7 +1,6 @@
 package com.positivity.customer.contract;
 
 import com.positivity.customer.config.TestSecurityConfig;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

@@ -1,25 +1,23 @@
 package com.positivity.poseventreceiver.internal.dao;
 
+import com.positivity.poseventreceiver.dao.EventDao;
+import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 import com.positivity.poseventreceiver.internal.entity.PreregisteredEvent;
-import com.positivity.poseventreceiver.dao.EventDao;
-import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
 import com.positivity.poseventreceiver.internal.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.internal.repository.PreregisteredEventRepository;
-import org.jspecify.annotations.NonNull;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import jakarta.annotation.PreDestroy;
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
@@ -31,7 +29,9 @@ public class EventDaoImpl implements EventDao {
     /** Thread-safe queue for batching emitted events */
     private final ConcurrentLinkedQueue<EmittedEvent> eventBatch = new ConcurrentLinkedQueue<>();
 
-    public EventDaoImpl(PreregisteredEventRepository preregRepo, EmittedEventRepository emittedRepo,
+    public EventDaoImpl(
+            PreregisteredEventRepository preregRepo,
+            EmittedEventRepository emittedRepo,
             EventTypeRepository eventTypeRepo) {
         this.preregRepo = preregRepo;
         this.emittedRepo = emittedRepo;
@@ -53,11 +53,7 @@ public class EventDaoImpl implements EventDao {
     @Override
     public EmittedEvent saveEmittedEvent(@NonNull EmitEventRequest request) {
         EmittedEvent event = new EmittedEvent(
-                request.id(),
-                request.apiVersion(),
-                request.timestamp(),
-                request.elapsedMs(),
-                request.publishedAt());
+                request.id(), request.apiVersion(), request.timestamp(), request.elapsedMs(), request.publishedAt());
         return saveEmittedEvent(event);
     }
 

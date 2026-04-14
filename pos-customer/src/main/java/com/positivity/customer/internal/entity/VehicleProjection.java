@@ -1,19 +1,17 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import com.positivity.shared.id.UUIDv7Generator;
 
 /**
  * Local projection of vehicle attributes from inbound workorder events.

@@ -1,16 +1,14 @@
 package com.positivity.accounting.internal.audit.dto;
 
+import com.positivity.accounting.internal.enums.RefundPaymentStatus;
+import com.positivity.accounting.internal.enums.RefundType;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import com.positivity.accounting.internal.enums.RefundPaymentStatus;
-import com.positivity.accounting.internal.enums.RefundType;
 
 /**
  * Request to record a refund.

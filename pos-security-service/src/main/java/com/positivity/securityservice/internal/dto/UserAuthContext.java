@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.dto;
 
-import java.util.UUID;
 import java.util.Set;
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
 

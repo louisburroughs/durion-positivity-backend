@@ -4,12 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.positivity.location.internal.dto.SiteDefaultsRequest;
+import com.positivity.location.internal.dto.SiteDefaultsResponse;
+import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.StorageLocationRepository;
+import com.positivity.location.internal.service.SiteDefaultsServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,15 +26,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.location.internal.dto.SiteDefaultsRequest;
-import com.positivity.location.internal.dto.SiteDefaultsResponse;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.StorageLocationEntity;
-import com.positivity.location.internal.enums.StorageLocationType;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.StorageLocationRepository;
-import com.positivity.location.internal.service.SiteDefaultsServiceImpl;
 
 /**
  * Unit tests for SiteDefaultsService — configure and retrieve default staging
@@ -151,8 +149,7 @@ class SiteDefaultsServiceTest {
         UUID quarantineId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
-        when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
-                .thenReturn(Optional.empty());
+        when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId)).thenReturn(Optional.empty());
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
 
@@ -178,8 +175,7 @@ class SiteDefaultsServiceTest {
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
         when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
                 .thenReturn(Optional.of(storageLocation(stagingId, siteId)));
-        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId))
-                .thenReturn(Optional.empty());
+        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId)).thenReturn(Optional.empty());
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
 
@@ -204,10 +200,12 @@ class SiteDefaultsServiceTest {
         UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         Location location = site(siteId);
-        location.setDefaultStagingLocation(
-                StorageLocationEntity.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000009")).build());
-        location.setDefaultQuarantineLocation(
-                StorageLocationEntity.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000011")).build());
+        location.setDefaultStagingLocation(StorageLocationEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                .build());
+        location.setDefaultQuarantineLocation(StorageLocationEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000011"))
+                .build());
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(location));
 
         SiteDefaultsResponse response = siteDefaultsService.getDefaults(siteId);
@@ -267,10 +265,6 @@ class SiteDefaultsServiceTest {
     }
 
     private Location site(UUID siteId) {
-        return Location.builder()
-                .id(siteId)
-                .name("Site-" + siteId)
-                .active(true)
-                .build();
+        return Location.builder().id(siteId).name("Site-" + siteId).active(true).build();
     }
 }

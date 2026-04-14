@@ -1,26 +1,23 @@
 package com.positivity.accounting.internal.handler;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.exception.GLPostingException;
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 import com.positivity.accounting.service.EventIngestionService;
-
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Event handler for vendor bill GL posting events.
- * 
+ *
  * <p>
  * Listens to {@link VendorBillGLPostingEvent} and creates accounting events for
  * journal entry generation. The posting engine will create:
@@ -29,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  * <li>Dr Expense Account (for non-inventory items)</li>
  * <li>Cr Accounts Payable</li>
  * </ul>
- * 
+ *
  * <p>
  * This handler converts the domain event into an
  * {@link com.positivity.accounting.internal.entity.AccountingEvent}
@@ -40,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  * <li>Create balanced journal entry</li>
  * <li>Auto-post if rule set allows</li>
  * </ol>
- * 
+ *
  * @see EventIngestionServiceImpl
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/130">Issue
@@ -56,14 +53,17 @@ public class VendorBillGLPostingEventHandler {
     /**
      * Handle vendor bill GL posting event → create accounting event for journal
      * entry generation.
-     * 
+     *
      * @param event Vendor bill GL posting event
      */
     @EventListener
     @Transactional
     public void onVendorBillGLPosting(@NonNull VendorBillGLPostingEvent event) {
-        log.info("Received VendorBillGLPostingEvent | eventId={} | billId={} | amount={}",
-                event.getEventId(), event.getVendorBillId(), event.getTotalAmount());
+        log.info(
+                "Received VendorBillGLPostingEvent | eventId={} | billId={} | amount={}",
+                event.getEventId(),
+                event.getVendorBillId(),
+                event.getTotalAmount());
 
         try {
             // Convert domain event to accounting event payload
@@ -72,12 +72,19 @@ public class VendorBillGLPostingEventHandler {
             // Submit to event ingestion service for posting engine processing
             AccountingEventResponse response = eventIngestionService.submitEvent(accountingEventPayload);
 
-            log.info("GL posting event submitted | billId={} | accountingEventId={} | status={}",
-                    event.getVendorBillId(), response.getEventId(), response.getStatus());
+            log.info(
+                    "GL posting event submitted | billId={} | accountingEventId={} | status={}",
+                    event.getVendorBillId(),
+                    response.getEventId(),
+                    response.getStatus());
 
         } catch (Exception e) {
-            log.error("Failed to process VendorBillGLPostingEvent | billId={} | eventId={} | error={}",
-                    event.getVendorBillId(), event.getEventId(), e.getMessage(), e);
+            log.error(
+                    "Failed to process VendorBillGLPostingEvent | billId={} | eventId={} | error={}",
+                    event.getVendorBillId(),
+                    event.getEventId(),
+                    e.getMessage(),
+                    e);
             // In production, this would trigger a retry mechanism or dead letter queue
             throw new GLPostingException("GL posting failed for bill: " + event.getVendorBillId(), e);
         }
@@ -85,13 +92,13 @@ public class VendorBillGLPostingEventHandler {
 
     /**
      * Convert VendorBillGLPostingEvent to AccountingEvent payload format.
-     * 
+     *
      * The payload structure follows the accounting event schema with:
      * - eventType: VENDOR_BILL_GL_POSTING
      * - sourceSystem: POS (Durion POS backend)
      * - transactionDate: Bill date
      * - payload: Vendor bill details including line items with isInventoryItem flag
-     * 
+     *
      * @param event Vendor bill GL posting event
      * @return AccountingEvent payload map
      */

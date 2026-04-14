@@ -1,21 +1,19 @@
 package com.positivity.nhtsa.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.nhtsa.internal.entity.*;
 import com.positivity.nhtsa.internal.exception.CarApiException;
 import com.positivity.nhtsa.internal.repository.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.LocalDateTime;
-import java.time.Duration;
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -41,10 +39,7 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
@@ -68,10 +63,7 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
@@ -96,10 +88,7 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
@@ -120,17 +109,15 @@ public class VehicleReferenceService {
     }
 
     public List<Make> getMakesByManufacturer(UUID manufacturerId) {
-        Manufacturer manufacturer = manufacturerRepository.findById(manufacturerId)
+        Manufacturer manufacturer = manufacturerRepository
+                .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
@@ -152,17 +139,15 @@ public class VehicleReferenceService {
     }
 
     public List<Model> getModelsByMake(UUID makeId) {
-        Make make = makeRepository.findById(makeId)
+        Make make = makeRepository
+                .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
@@ -184,17 +169,15 @@ public class VehicleReferenceService {
     }
 
     public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
-        Make make = makeRepository.findById(makeId)
+        Make make = makeRepository
+                .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");

@@ -1,16 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
 import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnResponse;
@@ -24,8 +13,16 @@ import com.positivity.inventory.internal.repository.InventoryReturnRepository;
 import com.positivity.inventory.service.ReturnService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -49,8 +46,7 @@ public class ReturnServiceImpl implements ReturnService {
 
         InventoryReturnEntity inventoryReturn = buildReturnEntity(request, items);
         InventoryReturnEntity savedReturn = Objects.requireNonNull(
-                inventoryReturnRepository.save(inventoryReturn),
-                "inventoryReturnRepository.save(...) returned null");
+                inventoryReturnRepository.save(inventoryReturn), "inventoryReturnRepository.save(...) returned null");
 
         List<InventoryLedgerEntry> ledgerEntries = new ArrayList<>();
         for (ReturnItemLine item : items) {
@@ -64,8 +60,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .toList();
 
         UUID returnId = savedReturn.getReturnId() != null ? savedReturn.getReturnId() : UUIDv7Generator.generate();
-        Instant createdAt = savedReturn.getCreatedAt() != null ? savedReturn.getCreatedAt()
-                : Instant.now(clock);
+        Instant createdAt = savedReturn.getCreatedAt() != null ? savedReturn.getCreatedAt() : Instant.now(clock);
 
         return new ReturnResponse(
                 returnId,
@@ -119,8 +114,8 @@ public class ReturnServiceImpl implements ReturnService {
             throw new IllegalArgumentException("quantityReturned must be positive");
         }
 
-        List<InventoryLedgerEntry> consumptionEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+        List<InventoryLedgerEntry> consumptionEntries =
+                inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         item.getSkuId().toString(),
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());

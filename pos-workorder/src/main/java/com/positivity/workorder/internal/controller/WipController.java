@@ -4,10 +4,10 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.service.WipService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,8 +22,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.UUID;
 
 /**
  * REST controller for Work In Progress (WIP) status visibility.
@@ -44,19 +42,24 @@ public class WipController {
 
     private final WipService wipService;
 
-    @Operation(summary = "List active WIP workorders", description = "Returns a paginated list of workorders in active WIP statuses. "
-            + "When the caller holds workorder:wip:view_all_locations, results span all locations.")
+    @Operation(
+            summary = "List active WIP workorders",
+            description = "Returns a paginated list of workorders in active WIP statuses. "
+                    + "When the caller holds workorder:wip:view_all_locations, results span all locations.")
     @GetMapping
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_LIST", apiVersion = "1")
     public ResponseEntity<Page<WorkorderStatusView>> listWip(
             @Parameter(description = "Location ID to filter workorders by") @RequestParam String locationId,
-            @Parameter(description = "Request cross-location results; requires workorder:wip:view_all_locations") @RequestParam(defaultValue = "false") boolean multiLocation,
+            @Parameter(description = "Request cross-location results; requires workorder:wip:view_all_locations")
+                    @RequestParam(defaultValue = "false")
+                    boolean multiLocation,
             @PageableDefault(size = 25) Pageable pageable,
             Authentication authentication) {
 
-        if (multiLocation && authentication.getAuthorities().stream()
-                .noneMatch(a -> WIP_VIEW_ALL_LOCATIONS.equals(a.getAuthority()))) {
+        if (multiLocation
+                && authentication.getAuthorities().stream()
+                        .noneMatch(a -> WIP_VIEW_ALL_LOCATIONS.equals(a.getAuthority()))) {
             throw new AccessDeniedException("Missing required permission: " + WIP_VIEW_ALL_LOCATIONS);
         }
 
@@ -66,7 +69,9 @@ public class WipController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(summary = "Get WIP detail for a workorder", description = "Returns full WIP detail for a single workorder including status history.")
+    @Operation(
+            summary = "Get WIP detail for a workorder",
+            description = "Returns full WIP detail for a single workorder including status history.")
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_VIEW", apiVersion = "1")
@@ -83,10 +88,8 @@ public class WipController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

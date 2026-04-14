@@ -1,11 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Data;
 
 /**
  * Response containing Credit Memo details.

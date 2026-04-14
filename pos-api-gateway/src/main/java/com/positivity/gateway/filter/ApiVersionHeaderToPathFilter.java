@@ -1,15 +1,14 @@
 package com.positivity.gateway.filter;
 
 import java.util.regex.Pattern;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * GlobalFilter: API Version Header to Path Rewriter
@@ -41,8 +40,8 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(ApiVersionHeaderToPathFilter.class);
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange,
-            org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+    public Mono<Void> filter(
+            ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
 
         var req = exchange.getRequest();
         var rawPath = req.getURI().getRawPath();
@@ -88,9 +87,7 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
         var newPath = "/" + serviceId + "/v" + version + remainder;
         log.debug("Rewriting {} -> {} (version header: {})", rawPath, newPath, version);
 
-        var mutated = exchange.mutate()
-                .request(r -> r.path(newPath))
-                .build();
+        var mutated = exchange.mutate().request(r -> r.path(newPath)).build();
 
         return chain.filter(mutated);
     }

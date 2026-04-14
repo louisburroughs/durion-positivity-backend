@@ -11,17 +11,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,7 +47,7 @@ class AuditWriteFailureTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
     private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-7000-8000-000000000200");
-    private static final UUID EVENT_ID       = UUID.fromString("00000000-0000-7000-8000-000000000203");
+    private static final UUID EVENT_ID = UUID.fromString("00000000-0000-7000-8000-000000000203");
 
     private static final Instant FIXED_INSTANT = Instant.parse("2026-01-01T12:00:00Z");
 

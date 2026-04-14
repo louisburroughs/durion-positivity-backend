@@ -5,13 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
 import com.positivity.mcp.service.AuditLedgerService;
-
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.time.Clock;
 import java.util.UUID;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,12 +55,20 @@ class IntentClassifierBenchmarkTest {
         org.mockito.Mockito.lenient().when(clock.instant()).thenReturn(java.time.Instant.parse("2026-03-12T10:00:00Z"));
         org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         // Stub repository.save to return the saved entity
-        org.mockito.Mockito.lenient().when(intentRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .when(intentRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> inv.getArgument(0));
         // Stub meterRegistry to prevent NPE from lazy counter initialization
-        io.micrometer.core.instrument.Counter parseCounter = org.mockito.Mockito.mock(io.micrometer.core.instrument.Counter.class);
-        io.micrometer.core.instrument.Counter clarificationCounter = org.mockito.Mockito.mock(io.micrometer.core.instrument.Counter.class);
-        org.mockito.Mockito.lenient().when(meterRegistry.counter("nlt.intent.parse.count")).thenReturn(parseCounter);
-        org.mockito.Mockito.lenient().when(meterRegistry.counter("nlt.intent.clarification.count")).thenReturn(clarificationCounter);
+        io.micrometer.core.instrument.Counter parseCounter =
+                org.mockito.Mockito.mock(io.micrometer.core.instrument.Counter.class);
+        io.micrometer.core.instrument.Counter clarificationCounter =
+                org.mockito.Mockito.mock(io.micrometer.core.instrument.Counter.class);
+        org.mockito.Mockito.lenient()
+                .when(meterRegistry.counter("nlt.intent.parse.count"))
+                .thenReturn(parseCounter);
+        org.mockito.Mockito.lenient()
+                .when(meterRegistry.counter("nlt.intent.clarification.count"))
+                .thenReturn(clarificationCounter);
     }
 
     // ─── Benchmark data sources ──────────────────────────────────────────────
@@ -159,8 +164,7 @@ class IntentClassifierBenchmarkTest {
         assertThat(result.status()).isEqualTo(expectedStatus);
         assertThat(result.riskLevel()).isEqualTo(expectedRisk);
         assertThat(result.clarificationQuestions()).hasSizeGreaterThanOrEqualTo(1);
-        result.clarificationQuestions()
-              .forEach(q -> assertThat(q.options()).hasSizeGreaterThanOrEqualTo(2));
+        result.clarificationQuestions().forEach(q -> assertThat(q.options()).hasSizeGreaterThanOrEqualTo(2));
     }
 
     /**

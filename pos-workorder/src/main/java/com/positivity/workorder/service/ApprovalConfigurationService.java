@@ -1,11 +1,10 @@
 package com.positivity.workorder.service;
 
+import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
+import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
-import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 
 public interface ApprovalConfigurationService {
 
@@ -23,5 +22,4 @@ public interface ApprovalConfigurationService {
      * Get the most specific configuration for a location and customer
      */
     Optional<ApprovalConfigurationResponse> getApplicableConfiguration(UUID locationId, UUID customerId);
-
 }

@@ -1,12 +1,10 @@
 package com.positivity.documents.service;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.documents.internal.service.format.TextFormatHandler;
-
 import java.util.HashMap;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class TextFormatHandlerTest {
 

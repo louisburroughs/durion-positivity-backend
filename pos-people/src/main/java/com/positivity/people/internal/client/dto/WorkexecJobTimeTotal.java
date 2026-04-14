@@ -44,5 +44,4 @@ public class WorkexecJobTimeTotal {
     public void setTotalJobMinutes(Integer totalJobMinutes) {
         this.totalJobMinutes = totalJobMinutes;
     }
-
 }

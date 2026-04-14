@@ -1,7 +1,7 @@
 package com.positivity.location.internal.entity;
 
-import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.enums.StorageLocationStatus;
+import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

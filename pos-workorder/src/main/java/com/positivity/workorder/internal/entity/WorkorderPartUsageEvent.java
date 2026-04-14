@@ -1,10 +1,9 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -13,7 +12,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.EntityListeners;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,15 +25,11 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Immutable append-only entity tracking parts usage events on workorders.
- * 
+ *
  * CAP:005 Story #158 - Parts Usage Tracking
- * 
+ *
  * Records ISSUE, CONSUME, and RETURN events for parts on workorders.
  * These events form an audit trail and are aggregated to compute
  * quantityIssued, quantityConsumed, and quantityReturned on WorkorderPart.
@@ -42,11 +40,13 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "workorder_part_usage_event", indexes = {
-        @Index(name = "idx_workorder_part_usage_part_id", columnList = "workorder_part_id"),
-        @Index(name = "idx_workorder_part_usage_workorder_id", columnList = "workorder_id"),
-        @Index(name = "idx_workorder_part_usage_performed_at", columnList = "performed_at")
-})
+@Table(
+        name = "workorder_part_usage_event",
+        indexes = {
+            @Index(name = "idx_workorder_part_usage_part_id", columnList = "workorder_part_id"),
+            @Index(name = "idx_workorder_part_usage_workorder_id", columnList = "workorder_id"),
+            @Index(name = "idx_workorder_part_usage_performed_at", columnList = "performed_at")
+        })
 public class WorkorderPartUsageEvent {
 
     @Id
@@ -60,7 +60,7 @@ public class WorkorderPartUsageEvent {
         if (performedAt == null) {
             performedAt = Instant.now(Clock.systemUTC());
         }
-}
+    }
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "workorder_part_id", nullable = false)

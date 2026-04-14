@@ -11,5 +11,6 @@ public interface ConflictOverrideService {
      * Requires canonical schedule-editing authority (AC-2).
      */
     @PreAuthorize("hasAnyAuthority('shop:schedule:edit', 'appointments:reschedule')")
-    @NonNull ConflictOverrideResponse execute(@NonNull ConflictOverrideRequest request);
+    @NonNull
+    ConflictOverrideResponse execute(@NonNull ConflictOverrideRequest request);
 }

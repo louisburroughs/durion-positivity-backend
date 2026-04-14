@@ -1,9 +1,6 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -26,6 +23,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Bay aggregate for location service operations.
@@ -33,9 +33,13 @@ import lombok.NoArgsConstructor;
  * Issue: CAP-136 #77
  */
 @Entity
-@Table(name = "bays", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_bays_location_normalized_name", columnNames = { "location_id", "normalized_name" })
-})
+@Table(
+        name = "bays",
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uq_bays_location_normalized_name",
+                    columnNames = {"location_id", "normalized_name"})
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

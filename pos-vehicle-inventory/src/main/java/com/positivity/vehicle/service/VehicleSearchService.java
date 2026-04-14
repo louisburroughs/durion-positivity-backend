@@ -10,5 +10,4 @@ public interface VehicleSearchService {
      * Ranking tiers: exact match → prefix match → contains match (if enabled)
      */
     SearchVehiclesResponse search(SearchVehiclesRequest request);
-
 }

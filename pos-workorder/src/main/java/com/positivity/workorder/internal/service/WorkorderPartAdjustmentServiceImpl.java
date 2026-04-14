@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
@@ -9,7 +8,13 @@ import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEvent
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderPartAdjustmentService;
-import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,18 +22,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.UUID;
-
 /**
  * Service for managing part adjustments (substitutions, returns, corrections).
- * 
+ *
  * CAP:005 Story #157 - Handle Part Substitutions and Returns
- * 
+ *
  * <p>
  * Provides methods to:
  * </p>
@@ -37,7 +35,7 @@ import java.util.UUID;
  * <li>Return unused quantity</li>
  * <li>Correct part quantity (administrative corrections)</li>
  * </ul>
- * 
+ *
  * <p>
  * All operations are idempotent when an idempotency key is provided.
  * </p>
@@ -50,7 +48,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private final Clock clock;
 
     private static final String ADJUSTMENT_EVENT_NOT_FOUND = "Adjustment event not found: ";
-    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT = "Idempotency key {} already processed, returning existing adjustment event {}";
+    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT =
+            "Idempotency key {} already processed, returning existing adjustment event {}";
     private static final String MISSING_AUTHENTICATED_USERNAME = "Missing authenticated username";
     private static final String IDEMPOTENCY_OPERATION_PART_SUBSTITUTE = "part-adjustment.substitute";
     private static final String IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN = "part-adjustment.additional-return";
@@ -75,13 +74,13 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
     /**
      * Substitute one part for another.
-     * 
+     *
      * <p>
      * Creates a new WorkorderPart entry for the substitute and records a
      * SUBSTITUTION adjustment event.
      * The original part is preserved for history—it is NOT deleted.
      * </p>
-     * 
+     *
      * @param workorderId      workorder ID
      * @param originalPartId   ID of the part to substitute
      * @param substitutePartId ID of the new part (must be different from original)
@@ -110,20 +109,23 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
-                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE,
-                    idempotencyKey);
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
-                        idempotencyKey, existingEventId.get());
-                return adjustmentEventRepository.findById(existingEventId.get())
+                log.info(
+                        IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
+                        idempotencyKey,
+                        existingEventId.get());
+                return adjustmentEventRepository
+                        .findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException(
-                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(
+                                () -> new IllegalStateException(ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
         // Validate original part exists
-        WorkorderPart originalPart = workorderPartRepository.findById(originalPartId)
+        WorkorderPart originalPart = workorderPartRepository
+                .findById(originalPartId)
                 .orElseThrow(() -> new NoSuchElementException("Original part not found: " + originalPartId));
 
         // Verify part belongs to workorder
@@ -147,7 +149,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .workOrderService(originalPart.getWorkOrderService())
                 .productEntityId(substitutePartId)
                 .description(originalPart.getDescription() + " (Substitute)") // Will be updated by caller with actual
-                                                                              // description
+                // description
                 .quantity(originalPart.getQuantity())
                 .unitPrice(originalPart.getUnitPrice())
                 .lineTotal(originalPart.getLineTotal())
@@ -160,7 +162,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         substitutePart = workorderPartRepository.save(substitutePart);
         if (log.isInfoEnabled()) {
-            log.info("Created substitute part {} for original part {}",
+            log.info(
+                    "Created substitute part {} for original part {}",
                     maskForLog(substitutePart.getId()),
                     maskForLog(originalPartId));
         }
@@ -183,13 +186,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.markKeyProcessedForPartAdjustment(
-                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE,
-                    idempotencyKey,
-                    event.getId());
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE, idempotencyKey, event.getId());
         }
 
         if (log.isInfoEnabled()) {
-            log.info("Substituted part {} with {} on workorder {}",
+            log.info(
+                    "Substituted part {} with {} on workorder {}",
                     maskForLog(originalPartId),
                     maskForLog(substitutePart.getId()),
                     maskForLog(workorderId));
@@ -199,12 +201,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
     /**
      * Return unused quantity of a part.
-     * 
+     *
      * <p>
      * This supplements the normal return flow and records an ADDITIONAL_RETURN
      * adjustment event.
      * </p>
-     * 
+     *
      * @param workorderId    workorder ID
      * @param partId         part line item ID
      * @param quantity       quantity to return (must be positive and <= available)
@@ -230,15 +232,17 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
-                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN,
-                    idempotencyKey);
+                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
-                        idempotencyKey, existingEventId.get());
-                return adjustmentEventRepository.findById(existingEventId.get())
+                log.info(
+                        IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
+                        idempotencyKey,
+                        existingEventId.get());
+                return adjustmentEventRepository
+                        .findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException(
-                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(
+                                () -> new IllegalStateException(ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
@@ -248,7 +252,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         }
 
         // Validate part exists
-        WorkorderPart part = workorderPartRepository.findById(partId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partId)
                 .orElseThrow(() -> new NoSuchElementException("Part not found: " + partId));
 
         // Verify part belongs to workorder
@@ -257,13 +262,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         }
 
         // Calculate available quantity to return (issued - consumed - already returned)
-        BigDecimal availableToReturn = part.getQuantityIssued()
-                .subtract(part.getQuantityConsumed())
-                .subtract(part.getQuantityReturned());
+        BigDecimal availableToReturn =
+                part.getQuantityIssued().subtract(part.getQuantityConsumed()).subtract(part.getQuantityReturned());
 
         if (quantity.compareTo(availableToReturn) > 0) {
-            throw new IllegalArgumentException("Return quantity " + quantity +
-                    " exceeds available quantity " + availableToReturn);
+            throw new IllegalArgumentException(
+                    "Return quantity " + quantity + " exceeds available quantity " + availableToReturn);
         }
 
         // Update part.quantityReturned
@@ -288,23 +292,18 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.markKeyProcessedForPartAdjustment(
-                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN,
-                    idempotencyKey,
-                    event.getId());
+                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN, idempotencyKey, event.getId());
         }
 
         if (log.isInfoEnabled()) {
-            log.info("Returned {} of part {} on workorder {}",
-                    quantity,
-                    maskForLog(partId),
-                    maskForLog(workorderId));
+            log.info("Returned {} of part {} on workorder {}", quantity, maskForLog(partId), maskForLog(workorderId));
         }
         return toResponse(event);
     }
 
     /**
      * Correct part quantity (administrative correction for data entry errors).
-     * 
+     *
      * @param workorderId    workorder ID
      * @param partId         part line item ID
      * @param newQuantity    new authorized quantity (must be positive)
@@ -330,15 +329,17 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
-                    IDEMPOTENCY_OPERATION_PART_CORRECTION,
-                    idempotencyKey);
+                    IDEMPOTENCY_OPERATION_PART_CORRECTION, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
-                        idempotencyKey, existingEventId.get());
-                return adjustmentEventRepository.findById(existingEventId.get())
+                log.info(
+                        IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
+                        idempotencyKey,
+                        existingEventId.get());
+                return adjustmentEventRepository
+                        .findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException(
-                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(
+                                () -> new IllegalStateException(ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
@@ -348,7 +349,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         }
 
         // Validate part exists
-        WorkorderPart part = workorderPartRepository.findById(partId)
+        WorkorderPart part = workorderPartRepository
+                .findById(partId)
                 .orElseThrow(() -> new NoSuchElementException("Part not found: " + partId));
 
         // Verify part belongs to workorder
@@ -386,13 +388,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.markKeyProcessedForPartAdjustment(
-                    IDEMPOTENCY_OPERATION_PART_CORRECTION,
-                    idempotencyKey,
-                    event.getId());
+                    IDEMPOTENCY_OPERATION_PART_CORRECTION, idempotencyKey, event.getId());
         }
 
         if (log.isInfoEnabled()) {
-            log.info("Corrected quantity of part {} from {} to {} on workorder {}",
+            log.info(
+                    "Corrected quantity of part {} from {} to {} on workorder {}",
                     maskForLog(partId),
                     oldQuantity,
                     newQuantity,
@@ -403,30 +404,28 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
     /**
      * Get adjustment history for a workorder.
-     * 
+     *
      * @param workorderId workorder ID
      * @return list of adjustment events as DTOs (newest first)
      */
     @Transactional(readOnly = true)
     @NonNull
     public List<WorkorderPartAdjustmentEventResponse> getAdjustmentHistory(@NonNull UUID workorderId) {
-        return adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId)
-                .stream()
+        return adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     /**
      * Get adjustment history for a specific part.
-     * 
+     *
      * @param partId part line item ID
      * @return list of adjustment events as DTOs (newest first)
      */
     @Transactional(readOnly = true)
     @NonNull
     public List<WorkorderPartAdjustmentEventResponse> getPartAdjustmentHistory(@NonNull UUID partId) {
-        return adjustmentEventRepository.findByOriginalPartIdOrderByPerformedAtDesc(partId)
-                .stream()
+        return adjustmentEventRepository.findByOriginalPartIdOrderByPerformedAtDesc(partId).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -457,10 +456,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";
@@ -474,7 +471,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private UUID getWorkorderIdForPart(WorkorderPart part) {
         if (part.getWorkorder() != null) {
             return part.getWorkorder().getId();
-        } else if (part.getWorkOrderService() != null && part.getWorkOrderService().getWorkOrder() != null) {
+        } else if (part.getWorkOrderService() != null
+                && part.getWorkOrderService().getWorkOrder() != null) {
             return part.getWorkOrderService().getWorkOrder().getId();
         } else {
             throw new IllegalStateException("Part has no workorder reference");

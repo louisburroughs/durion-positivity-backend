@@ -1,10 +1,9 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.entity.GLMapping;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
-
-import com.positivity.accounting.internal.entity.GLMapping;
 
 public interface GLMappingResolver {
 
@@ -28,7 +27,9 @@ public interface GLMappingResolver {
      * @return GL account ID for posting
      * @throws IllegalArgumentException if no valid mapping found
      */
-    UUID resolveGLAccount(UUID postingCategoryId, UUID mappingKeyId,
+    UUID resolveGLAccount(
+            UUID postingCategoryId,
+            UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext);
 
@@ -66,8 +67,7 @@ public interface GLMappingResolver {
      * @param transactionDate   effective date (LocalDateTime)
      * @return effective GL account ID
      */
-    UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId,
-            LocalDateTime transactionDate);
+    UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId, LocalDateTime transactionDate);
 
     /**
      * Get mapping history for audit trail.
@@ -78,5 +78,4 @@ public interface GLMappingResolver {
      * @return list of all historical mappings sorted by effective date
      */
     java.util.List<GLMapping> getMappingHistory(UUID postingCategoryId, UUID mappingKeyId);
-
 }

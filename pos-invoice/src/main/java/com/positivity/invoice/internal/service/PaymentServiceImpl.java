@@ -4,13 +4,13 @@ import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.enums.PaymentFlow;
+import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
-import com.positivity.invoice.internal.enums.PaymentFlow;
-import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.payment.GatewayCaptureRequest;
 import com.positivity.invoice.internal.payment.GatewayPaymentResult;
 import com.positivity.invoice.internal.payment.GatewayVoidRequest;
@@ -20,13 +20,12 @@ import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.service.PaymentService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -54,9 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @NonNull
-    public InitiatePaymentResponse initiatePayment(
-            @NonNull UUID invoiceId,
-            @NonNull InitiatePaymentRequest request) {
+    public InitiatePaymentResponse initiatePayment(@NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request) {
         requireAuthority(PROCESS_PAYMENT);
 
         if (request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0) {
@@ -67,7 +64,8 @@ public class PaymentServiceImpl implements PaymentService {
             requireAuthority(SELECT_PAYMENT_FLOW);
         }
 
-        return paymentIntentRepository.findByIdempotencyKey(request.getIdempotencyKey())
+        return paymentIntentRepository
+                .findByIdempotencyKey(request.getIdempotencyKey())
                 .map(paymentIntent -> {
                     validateIdempotentReplayPayload(paymentIntent, invoiceId, request);
                     return toResponse(paymentIntent);
@@ -84,28 +82,27 @@ public class PaymentServiceImpl implements PaymentService {
             @NonNull String captureIdempotencyKey) {
         requireAuthority(MANUAL_CAPTURE);
 
-        PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
+        PaymentIntent paymentIntent = paymentIntentRepository
+                .findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("Payment intent not found: " + paymentIntentId));
 
-        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null
+                || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException(
                     "Payment intent " + paymentIntentId + " not found under invoice " + invoiceId);
         }
 
         if (paymentIntent.getStatus() != PaymentIntentStatus.AUTHORIZED) {
             throw new InvalidPaymentStateException(
-                    "Payment intent must be in AUTHORIZED status for capture, but was "
-                            + paymentIntent.getStatus());
+                    "Payment intent must be in AUTHORIZED status for capture, but was " + paymentIntent.getStatus());
         }
 
         String originalGatewayReference = paymentIntent.getGatewayReference();
         paymentIntent.setStatus(PaymentIntentStatus.PENDING);
         PaymentIntent pendingPaymentIntent = paymentIntentRepository.save(paymentIntent);
 
-        GatewayCaptureRequest captureRequest = new GatewayCaptureRequest(
-                originalGatewayReference,
-                amount,
-                captureIdempotencyKey);
+        GatewayCaptureRequest captureRequest =
+                new GatewayCaptureRequest(originalGatewayReference, amount, captureIdempotencyKey);
 
         GatewayPaymentResult captureResult = gatewayPort.capture(captureRequest);
 
@@ -138,10 +135,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     @NonNull
     private InitiatePaymentResponse createAndProcessPaymentIntent(
-            @NonNull UUID invoiceId,
-            @NonNull InitiatePaymentRequest request) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+            @NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request) {
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
 
         PaymentIntent paymentIntent = new PaymentIntent();
         paymentIntent.setInvoice(invoice);
@@ -156,10 +152,7 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentIntent savedPaymentIntent = paymentIntentRepository.save(paymentIntent);
 
         PaymentGatewayRequest gatewayRequest = new PaymentGatewayRequest(
-                request.getAmount(),
-                request.getPaymentToken(),
-                request.getIdempotencyKey(),
-                invoiceId);
+                request.getAmount(), request.getPaymentToken(), request.getIdempotencyKey(), invoiceId);
 
         GatewayPaymentResult result;
         if (request.getPaymentFlow() == PaymentFlow.SALE_CAPTURE) {
@@ -207,10 +200,9 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void validateIdempotentReplayPayload(
-            @NonNull PaymentIntent paymentIntent,
-            @NonNull UUID invoiceId,
-            @NonNull InitiatePaymentRequest request) {
-        boolean matchesInvoice = paymentIntent.getInvoice() != null && invoiceId.equals(paymentIntent.getInvoice().getId());
+            @NonNull PaymentIntent paymentIntent, @NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request) {
+        boolean matchesInvoice = paymentIntent.getInvoice() != null
+                && invoiceId.equals(paymentIntent.getInvoice().getId());
         boolean matchesFlow = paymentIntent.getPaymentFlow() == request.getPaymentFlow();
         boolean matchesAmount = sameAmount(paymentIntent.getAuthorizedAmount(), request.getAmount());
         boolean matchesToken = paymentIntent.getPaymentToken() != null

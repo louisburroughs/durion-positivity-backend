@@ -1,13 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.EstimateStatus;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,6 +15,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -34,13 +31,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Immutable snapshot of an estimate's complete state at a point in time.
  * Used for audit trail, version history, and compliance.
- * 
+ *
  * Captures full estimate + all line items as JSON for historical reference.
  */
 @Entity
 @Table(name = "estimate_snapshot")
 @Getter
-@ToString(exclude = { "estimate" })
+@ToString(exclude = {"estimate"})
 @EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor

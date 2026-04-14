@@ -5,13 +5,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,14 +29,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
-import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
-import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
-import com.positivity.accounting.internal.entity.VendorBill;
-import com.positivity.accounting.internal.enums.VendorBillStatus;
-import com.positivity.accounting.internal.repository.VendorBillLineRepository;
-import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.service.VendorBillServiceImpl;
-
 /**
  * Unit tests for GL posting event emission in VendorBillServiceImpl.
  * Tests verify that VendorBillGLPostingEvent is emitted after bill creation.
@@ -39,8 +37,9 @@ import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 @DisplayName("VendorBillService - GL Posting Event Emission")
 class VendorBillServiceGLPostingTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
+
     @Spy
     Clock clock = FIXED_CLOCK;
 
@@ -107,8 +106,7 @@ class VendorBillServiceGLPostingTest {
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
         // Then: GL posting event should be emitted
-        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor
-                .forClass(VendorBillGLPostingEvent.class);
+        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor.forClass(VendorBillGLPostingEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
 
         VendorBillGLPostingEvent emittedEvent = captor.getValue();
@@ -136,11 +134,11 @@ class VendorBillServiceGLPostingTest {
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
         // Then: isInventoryItem flag should be preserved for each line item
-        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor
-                .forClass(VendorBillGLPostingEvent.class);
+        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor.forClass(VendorBillGLPostingEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
 
-        List<VendorBillGLPostingEvent.BillLineItem> lineItems = captor.getValue().getLineItems();
+        List<VendorBillGLPostingEvent.BillLineItem> lineItems =
+                captor.getValue().getLineItems();
         assertThat(lineItems).hasSize(2);
 
         // First line: Inventory item
@@ -167,8 +165,7 @@ class VendorBillServiceGLPostingTest {
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
         // Then: PO ID should be included
-        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor
-                .forClass(VendorBillGLPostingEvent.class);
+        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor.forClass(VendorBillGLPostingEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
 
         VendorBillGLPostingEvent emittedEvent = captor.getValue();
@@ -189,11 +186,11 @@ class VendorBillServiceGLPostingTest {
         vendorBillService.handleGoodsReceivedEvent(testEvent);
 
         // Then: All line item fields should be mapped correctly
-        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor
-                .forClass(VendorBillGLPostingEvent.class);
+        ArgumentCaptor<VendorBillGLPostingEvent> captor = ArgumentCaptor.forClass(VendorBillGLPostingEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
 
-        VendorBillGLPostingEvent.BillLineItem firstLine = captor.getValue().getLineItems().get(0);
+        VendorBillGLPostingEvent.BillLineItem firstLine =
+                captor.getValue().getLineItems().get(0);
         assertThat(firstLine.getProductId()).isEqualTo(testProductId1);
         assertThat(firstLine.getDescription()).isEqualTo("Widget Type A");
         assertThat(firstLine.getQuantity()).isEqualByComparingTo("100.00");

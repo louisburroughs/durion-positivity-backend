@@ -1,17 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
@@ -19,9 +7,18 @@ import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.service.OutboxService;
-
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 /**
  * Background processor that polls the outbox table and publishes pending
@@ -38,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
  * seconds)</li>
  * <li>Max retries: maximum attempts before marking as FAILED (default: 5)</li>
  * </ul>
- * 
+ *
  * @see <a href=
  *      "https://microservices.io/patterns/data/transactional-outbox.html">
  *      Transactional Outbox Pattern</a>
@@ -49,7 +46,6 @@ import lombok.extern.slf4j.Slf4j;
 public class OutboxProcessor {
     private final Clock clock;
 
-
     private final EventOutboxRepository outboxRepository;
     private final OutboxService outboxService;
     private final ApplicationEventPublisher eventPublisher;
@@ -58,8 +54,8 @@ public class OutboxProcessor {
     private static final int BATCH_SIZE = 10;
     private static final int MAX_RETRIES = 5;
     private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
-    private static final Map<String, Class<?>> EVENT_TYPE_REGISTRY = Map.of(
-            APPaymentGLPostingEvent.class.getName(), APPaymentGLPostingEvent.class);
+    private static final Map<String, Class<?>> EVENT_TYPE_REGISTRY =
+            Map.of(APPaymentGLPostingEvent.class.getName(), APPaymentGLPostingEvent.class);
 
     /**
      * Scheduled task to process pending outbox events.
@@ -73,9 +69,7 @@ public class OutboxProcessor {
             Instant retryThreshold = Instant.now(clock).minus(RETRY_DELAY);
 
             List<EventOutbox> pendingEvents = outboxRepository.findPendingForRetry(
-                    OutboxStatus.PENDING,
-                    retryThreshold,
-                    PageRequest.of(0, BATCH_SIZE));
+                    OutboxStatus.PENDING, retryThreshold, PageRequest.of(0, BATCH_SIZE));
 
             if (pendingEvents.isEmpty()) {
                 return;
@@ -94,7 +88,7 @@ public class OutboxProcessor {
 
     /**
      * Process a single outbox event.
-     * 
+     *
      * @param outbox the outbox entry to process
      */
     private void processEvent(@NonNull EventOutbox outbox) {
@@ -107,12 +101,19 @@ public class OutboxProcessor {
             // Mark as published
             outboxService.markAsPublished(outbox.getOutboxId());
 
-            log.info("Event published | outboxId={} | eventId={} | eventType={}",
-                    outbox.getOutboxId(), outbox.getEventId(), outbox.getEventType());
+            log.info(
+                    "Event published | outboxId={} | eventId={} | eventType={}",
+                    outbox.getOutboxId(),
+                    outbox.getEventId(),
+                    outbox.getEventType());
 
         } catch (Exception e) {
-            log.error("Failed to publish event | outboxId={} | eventId={} | error={}",
-                    outbox.getOutboxId(), outbox.getEventId(), e.getMessage(), e);
+            log.error(
+                    "Failed to publish event | outboxId={} | eventId={} | error={}",
+                    outbox.getOutboxId(),
+                    outbox.getEventId(),
+                    e.getMessage(),
+                    e);
 
             outboxService.markAsFailed(outbox.getOutboxId(), e.getMessage(), MAX_RETRIES);
         }
@@ -120,7 +121,7 @@ public class OutboxProcessor {
 
     /**
      * Deserialize the event payload based on event type.
-     * 
+     *
      * @param outbox the outbox entry containing the serialized payload
      * @return deserialized event object
      * @throws JsonProcessingException

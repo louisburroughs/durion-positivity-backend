@@ -1,9 +1,8 @@
 package com.positivity.invoice.service;
 
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
-import org.jspecify.annotations.NonNull;
-
 import java.util.Optional;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for managing billing rules.

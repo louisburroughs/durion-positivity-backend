@@ -2,11 +2,10 @@ package com.positivity.invoice.internal.dto;
 
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * DTO for billing rules responses.
@@ -15,32 +14,43 @@ import java.util.UUID;
 public class BillingRulesDTO {
     @Nullable
     private UUID id;
+
     @NonNull
     private String partyId;
+
     private boolean purchaseOrderRequired;
+
     @NonNull
     private String paymentTermsCode;
+
     @NonNull
     private InvoiceDeliveryMethod invoiceDeliveryMethod;
+
     @NonNull
     private InvoiceGroupingStrategy invoiceGroupingStrategy;
+
     @NonNull
     private Integer version;
+
     @NonNull
     private Instant createdAt;
+
     @NonNull
     private Instant updatedAt;
+
     @NonNull
     private String updatedBy;
 
     // Constructors
 
-    public BillingRulesDTO() {
-    }
+    public BillingRulesDTO() {}
 
-    public BillingRulesDTO(@NonNull String partyId, boolean purchaseOrderRequired, @NonNull String paymentTermsCode,
-                           @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
-                           @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
+    public BillingRulesDTO(
+            @NonNull String partyId,
+            boolean purchaseOrderRequired,
+            @NonNull String paymentTermsCode,
+            @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
+            @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
         this.partyId = partyId;
         this.purchaseOrderRequired = purchaseOrderRequired;
         this.paymentTermsCode = paymentTermsCode;

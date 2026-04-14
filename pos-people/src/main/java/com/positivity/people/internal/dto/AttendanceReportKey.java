@@ -7,19 +7,22 @@ import java.util.Objects;
 @Schema(description = "Composite key for attendance report aggregation")
 public class AttendanceReportKey {
 
-    @Schema(description = "Technician identifier", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Technician identifier",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String technicianId;
 
-    @Schema(description = "Location identifier", example = "22222222-2222-2222-2222-222222222222",
+    @Schema(
+            description = "Location identifier",
+            example = "22222222-2222-2222-2222-222222222222",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String locationId;
 
     @Schema(description = "Report local date", example = "2026-02-16", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate reportDate;
 
-    public AttendanceReportKey() {
-    }
+    public AttendanceReportKey() {}
 
     public AttendanceReportKey(String technicianId, String locationId, LocalDate reportDate) {
         this.technicianId = technicianId;
@@ -59,7 +62,8 @@ public class AttendanceReportKey {
         if (!(o instanceof AttendanceReportKey that)) {
             return false;
         }
-        return Objects.equals(technicianId, that.technicianId) && Objects.equals(locationId, that.locationId)
+        return Objects.equals(technicianId, that.technicianId)
+                && Objects.equals(locationId, that.locationId)
                 && Objects.equals(reportDate, that.reportDate);
     }
 
@@ -73,5 +77,4 @@ public class AttendanceReportKey {
         return "AttendanceReportKey{" + "technicianId='" + technicianId + '\'' + ", locationId='" + locationId + '\''
                 + ", reportDate=" + reportDate + '}';
     }
-
 }

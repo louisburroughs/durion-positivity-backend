@@ -1,11 +1,10 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.PartyType;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-
-import com.positivity.customer.internal.enums.AccountStatus;
-import com.positivity.customer.internal.enums.PartyType;
 
 /**
  * High-level Party abstraction for vehicle associations (CAP:091 Story #104).

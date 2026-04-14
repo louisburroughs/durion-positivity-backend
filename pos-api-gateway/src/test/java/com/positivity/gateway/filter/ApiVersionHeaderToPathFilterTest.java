@@ -16,10 +16,15 @@ class ApiVersionHeaderToPathFilterTest {
 
     @Test
     void shouldRejectRequestWhenVersionHeaderMissing() {
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/customer/crm/accounts").build());
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/customer/crm/accounts").build());
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = chainedExchange -> {
-            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
             return Mono.empty();
         };
 
@@ -31,10 +36,9 @@ class ApiVersionHeaderToPathFilterTest {
 
     @Test
     void shouldRejectRequestWhenVersionHeaderIsInvalid() {
-        var exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/customer/crm/accounts")
-                        .header("X-API-Version", "v1")
-                        .build());
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/customer/crm/accounts")
+                .header("X-API-Version", "v1")
+                .build());
 
         filter.filter(exchange, ignored -> Mono.empty()).block();
 
@@ -43,13 +47,16 @@ class ApiVersionHeaderToPathFilterTest {
 
     @Test
     void shouldRewritePathToServiceScopedVersionedPath() {
-        var exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/customer/crm/accounts")
-                        .header("X-API-Version", "1")
-                        .build());
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/customer/crm/accounts")
+                .header("X-API-Version", "1")
+                .build());
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = chainedExchange -> {
-            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
             return Mono.empty();
         };
 
@@ -61,10 +68,15 @@ class ApiVersionHeaderToPathFilterTest {
 
     @Test
     void shouldBypassActuatorPathWithoutVersionHeader() {
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/actuator/health").build());
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/actuator/health").build());
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = chainedExchange -> {
-            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
             return Mono.empty();
         };
 
@@ -80,7 +92,11 @@ class ApiVersionHeaderToPathFilterTest {
                 MockServerHttpRequest.post("/security-service/v1/auth/login").build());
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = chainedExchange -> {
-            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
             return Mono.empty();
         };
 
@@ -96,7 +112,11 @@ class ApiVersionHeaderToPathFilterTest {
                 MockServerHttpRequest.get("/customer/v1/crm/accounts").build());
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = chainedExchange -> {
-            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
             return Mono.empty();
         };
 

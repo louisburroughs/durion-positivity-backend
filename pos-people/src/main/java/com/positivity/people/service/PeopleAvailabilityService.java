@@ -1,15 +1,15 @@
 package com.positivity.people.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
-import org.jspecify.annotations.NonNull;
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface PeopleAvailabilityService {
 
-    @NonNull List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date);
+    @NonNull
+    List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date);
 
     /**
      * Resolve the current authenticated user's primary location ID. Uses the security
@@ -19,6 +19,6 @@ public interface PeopleAvailabilityService {
      * @throws jakarta.persistence.EntityNotFoundException if user context is missing or
      * no active assignment exists
      */
-    @NonNull UUID resolveCurrentUserPrimaryLocationId();
-
+    @NonNull
+    UUID resolveCurrentUserPrimaryLocationId();
 }

@@ -37,7 +37,10 @@ public class ItemCostController {
     @PutMapping("/{itemId}/standard-cost")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasAuthority('inventory.cost.standard.update')")
     @Operation(summary = "Update standard item cost")
-    @ApiResponse(responseCode = "200", description = "Updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostsDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Updated",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostsDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid payload")
     @EmitEvent(id = "CATALOG_ITEM_COST_STANDARD_UPDATE", apiVersion = "1")
     public ResponseEntity<ItemCostsDto> updateStandardCost(
@@ -49,7 +52,10 @@ public class ItemCostController {
     @GetMapping("/{itemId}/costs")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('CATALOG_VIEW')")
     @Operation(summary = "Get current item costs")
-    @ApiResponse(responseCode = "200", description = "Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostsDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostsDto.class)))
     public ResponseEntity<ItemCostsDto> getItemCosts(@Parameter(required = true) @PathVariable UUID itemId) {
         return ResponseEntity.ok(itemCostService.getItemCosts(itemId));
     }
@@ -57,7 +63,11 @@ public class ItemCostController {
     @GetMapping("/{itemId}/costs/audit")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('CATALOG_VIEW')")
     @Operation(summary = "Get item cost audit history")
-    @ApiResponse(responseCode = "200", description = "Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostAuditDto.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Found",
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostAuditDto.class)))
     public ResponseEntity<List<ItemCostAuditDto>> getAuditHistory(
             @Parameter(required = true) @PathVariable UUID itemId) {
         return ResponseEntity.ok(itemCostService.getAuditHistory(itemId));

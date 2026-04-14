@@ -1,12 +1,10 @@
 package com.positivity.customer.internal.repository;
 
+import com.positivity.customer.internal.entity.ProcessingLog;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import com.positivity.customer.internal.entity.ProcessingLog;
 
 /**
  * Spring Data JPA repository for {@link ProcessingLog} entities.

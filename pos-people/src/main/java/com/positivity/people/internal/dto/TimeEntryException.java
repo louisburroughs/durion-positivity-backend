@@ -11,34 +11,47 @@ import java.util.UUID;
 @SuppressWarnings("java:S2166")
 public class TimeEntryException {
 
-    @Schema(description = "Unique identifier for the exception", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Unique identifier for the exception",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             accessMode = Schema.AccessMode.READ_ONLY)
     private UUID exceptionId;
 
-    @Schema(description = "Employee identifier associated with the exception", example = "EMP-001",
+    @Schema(
+            description = "Employee identifier associated with the exception",
+            example = "EMP-001",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String employeeId;
 
-    @Schema(description = "Work date when the exception occurred", example = "2026-02-17",
+    @Schema(
+            description = "Work date when the exception occurred",
+            example = "2026-02-17",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate workDate;
 
-    @Schema(description = "Exception code identifying the type of exception", example = "MISSED_CLOCK_OUT",
+    @Schema(
+            description = "Exception code identifying the type of exception",
+            example = "MISSED_CLOCK_OUT",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String exceptionCode;
 
-    @Schema(description = "Severity level of the exception", example = "HIGH",
+    @Schema(
+            description = "Severity level of the exception",
+            example = "HIGH",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private ExceptionSeverity severity;
 
-    @Schema(description = "Current status of the exception", example = "PENDING",
+    @Schema(
+            description = "Current status of the exception",
+            example = "PENDING",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private ExceptionStatus status;
 
     @Schema(description = "Associated time entry identifier", example = "te-12345")
     private String timeEntryId;
 
-    @Schema(description = "Notes describing resolution or actions taken",
+    @Schema(
+            description = "Notes describing resolution or actions taken",
             example = "Manager manually adjusted time entry")
     private String resolutionNotes;
 
@@ -138,5 +151,4 @@ public class TimeEntryException {
     public void setResolvedAt(Instant resolvedAt) {
         this.resolvedAt = resolvedAt;
     }
-
 }

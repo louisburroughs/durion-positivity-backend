@@ -10,5 +10,4 @@ import org.springframework.stereotype.Repository;
 public interface WorkSessionBreakRepository extends JpaRepository<WorkSessionBreak, UUID> {
 
     Optional<WorkSessionBreak> findBySession_SessionIdAndEndedAtIsNull(UUID sessionId);
-
 }

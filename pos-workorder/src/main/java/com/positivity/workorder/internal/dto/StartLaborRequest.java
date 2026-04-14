@@ -3,17 +3,16 @@ package com.positivity.workorder.internal.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
-import java.util.UUID;
-
 /**
  * Request DTO for starting a labor session.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #159 - Record Labor Performed
  */

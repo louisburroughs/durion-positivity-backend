@@ -9,11 +9,15 @@ import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.LockoutService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AccountExpiredException;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.CredentialsExpiredException;
 import org.springframework.security.authentication.DisabledException;
@@ -23,11 +27,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Internal implementation of {@link AuthenticationService} that coordinates
@@ -79,16 +78,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         this.lockoutService = lockoutService;
         this.userRepository = userRepository;
         this.authSuccessCounter = Counter.builder(COUNTER_AUTH_SUCCESS).register(meterRegistry);
-        this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_BAD_CREDENTIALS)
+        this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE)
+                .tag(TAG_REASON, REASON_BAD_CREDENTIALS)
                 .register(meterRegistry);
-        this.accountLockedCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_LOCKED)
+        this.accountLockedCounter = Counter.builder(COUNTER_AUTH_FAILURE)
+                .tag(TAG_REASON, REASON_ACCOUNT_LOCKED)
                 .register(meterRegistry);
-        this.accountDisabledCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_DISABLED)
+        this.accountDisabledCounter = Counter.builder(COUNTER_AUTH_FAILURE)
+                .tag(TAG_REASON, REASON_ACCOUNT_DISABLED)
                 .register(meterRegistry);
-        this.accountExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_EXPIRED)
+        this.accountExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE)
+                .tag(TAG_REASON, REASON_ACCOUNT_EXPIRED)
                 .register(meterRegistry);
         this.credentialsExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE)
-                .tag(TAG_REASON, REASON_CREDENTIALS_EXPIRED).register(meterRegistry);
+                .tag(TAG_REASON, REASON_CREDENTIALS_EXPIRED)
+                .register(meterRegistry);
     }
 
     @Override
@@ -110,8 +114,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             lockoutService.unlockIfCooldownExpired(userIdForLockout);
             if (lockoutService.isLockedOut(userIdForLockout)) {
                 incrementFailureCounter(REASON_ACCOUNT_LOCKED);
-                log.warn("Login rejected due to active lockout. username={}, userId={}",
-                        request.username(), userIdForLockout);
+                log.warn(
+                        "Login rejected due to active lockout. username={}, userId={}",
+                        request.username(),
+                        userIdForLockout);
                 throw new LockedException("Account is locked");
             }
         }
@@ -132,10 +138,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // fail fast rather than silently issuing a token bound to an untrackable
         // identity.
         if (!(authentication.getPrincipal() instanceof CustomUserDetailsService.SecurityUserPrincipal p)) {
-            log.error("Authenticated principal type mismatch for username={}. principalType={}",
-                    username, authentication.getPrincipal().getClass().getName());
-            throw new IllegalStateException(
-                    "Unexpected principal type: " + authentication.getPrincipal().getClass().getName());
+            log.error(
+                    "Authenticated principal type mismatch for username={}. principalType={}",
+                    username,
+                    authentication.getPrincipal().getClass().getName());
+            throw new IllegalStateException("Unexpected principal type: "
+                    + authentication.getPrincipal().getClass().getName());
         }
         UUID userId = p.userId();
 
@@ -166,9 +174,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      * authentication failures.
      */
     private void handleAuthenticationFailure(
-            @NonNull AuthenticationException ex,
-            UUID userIdForLockout,
-            @NonNull String username) {
+            @NonNull AuthenticationException ex, UUID userIdForLockout, @NonNull String username) {
         if (userIdForLockout != null && ex instanceof BadCredentialsException) {
             lockoutService.recordFailedAttempt(userIdForLockout);
             incrementFailureCounter(REASON_BAD_CREDENTIALS);

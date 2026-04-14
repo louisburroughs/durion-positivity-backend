@@ -5,9 +5,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
+import com.positivity.accounting.internal.enums.PaymentStatus;
+import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import java.math.BigDecimal;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,11 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
-
-import com.positivity.accounting.BaseContractIntegrationTest;
-import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
-import com.positivity.accounting.internal.enums.PaymentStatus;
-import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 
 /**
  * Contract Behavioral Integration Tests for Invoice Payment operations.
@@ -59,7 +57,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
         // Setup test IDs
         testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testIdempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        testIdempotencyKey =
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
     }
 
     @AfterEach
@@ -78,8 +77,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         // 201 when payment application succeeds, 404/409/503 depending on data and
@@ -101,17 +100,18 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When - submit first payment
         MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         int firstStatusCode = firstResult.getResponse().getStatus();
 
         // Then - submit duplicate with same idempotency key
         if (firstStatusCode == 201) {
-            MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(payload))
+            MvcResult secondResult = mockMvc.perform(
+                            withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(payload))
                     .andReturn();
 
             // Idempotent retries should not create a duplicate application.
@@ -124,8 +124,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get invoice status - happy path")
     void testGetInvoiceStatus_Success() throws Exception {
         // Given - payment event exists for this invoice
-        createTestPaymentAppliedEvent(testInvoiceId, PaymentStatus.PAID,
-                new BigDecimal("100.00"), new BigDecimal("100.00"));
+        createTestPaymentAppliedEvent(
+                testInvoiceId, PaymentStatus.PAID, new BigDecimal("100.00"), new BigDecimal("100.00"));
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/" + testInvoiceId + "/status")))
@@ -168,8 +168,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 400 for malformed UUID path variable
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/not-a-uuid/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         int statusCode = result.getResponse().getStatus();
@@ -188,8 +188,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         int statusCode = result.getResponse().getStatus();
@@ -203,8 +203,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         int statusCode = result.getResponse().getStatus();
@@ -227,8 +227,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andReturn();
 
         // Implemented behavior:
@@ -252,8 +252,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isBadRequest());
     }
 
@@ -285,8 +285,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"), "accounting:je:view")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isForbidden());
     }
 
@@ -312,8 +312,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"), "accounting:je:view")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isForbidden());
     }
 
@@ -330,8 +330,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
         MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(firstPayment))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstPayment))
                 .andReturn();
 
         // Then - if implemented, status should be PARTIALLY_PAID
@@ -347,8 +347,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID.fromString("00000000-0000-0000-0000-000000000002").toString());
 
         MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(secondPayment))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(secondPayment))
                 .andReturn();
 
         // Then - if implemented, status should be PAID
@@ -372,8 +372,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
      * @param amount       the payment amount
      * @param invoiceTotal the total invoice amount (used for status calculation)
      */
-    private void createTestPaymentAppliedEvent(UUID invoiceId, PaymentStatus status,
-            BigDecimal amount, BigDecimal invoiceTotal) {
+    private void createTestPaymentAppliedEvent(
+            UUID invoiceId, PaymentStatus status, BigDecimal amount, BigDecimal invoiceTotal) {
         var event = new PaymentAppliedEvent(
                 invoiceId,
                 "TXN-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),

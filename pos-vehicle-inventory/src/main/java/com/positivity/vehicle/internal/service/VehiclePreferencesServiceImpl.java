@@ -5,17 +5,15 @@ import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.service.VehiclePreferencesService;
-
 import jakarta.persistence.EntityNotFoundException;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service for managing vehicle care preferences (CAP:091 Story #102).
@@ -96,15 +94,12 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
     @Override
     @Transactional
     public VehicleCarePreference mergePreferences(
-            @NonNull UUID vehicleId,
-            @NonNull Map<String, Object> partialPreferences,
-            UUID updatedByUserId) {
+            @NonNull UUID vehicleId, @NonNull Map<String, Object> partialPreferences, UUID updatedByUserId) {
 
         log.info("Merging preferences for vehicleId={}, keys={}", vehicleId, partialPreferences.keySet());
 
         var existing = getPreferences(vehicleId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No preferences found for vehicle: " + vehicleId));
+                .orElseThrow(() -> new EntityNotFoundException("No preferences found for vehicle: " + vehicleId));
 
         // Merge new values into existing preferences
         var currentPreferences = existing.getPreferences();
@@ -129,10 +124,9 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
     public void deletePreferences(@NonNull UUID vehicleId) {
         log.info("Deleting preferences for vehicleId={}", vehicleId);
 
-        preferencesRepository.findByVehicle_VehicleId(vehicleId)
-                .ifPresent(preference -> {
-                    preferencesRepository.delete(preference);
-                    log.info("Deleted preferences: id={}", preference.getId());
-                });
+        preferencesRepository.findByVehicle_VehicleId(vehicleId).ifPresent(preference -> {
+            preferencesRepository.delete(preference);
+            log.info("Deleted preferences: id={}", preference.getId());
+        });
     }
 }

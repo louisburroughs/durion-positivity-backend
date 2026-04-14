@@ -20,8 +20,10 @@ public class CreateAssignmentRequest {
     List<MechanicAssignmentItem> mechanics;
     /** Optional — bay or mobile unit to associate with this assignment. */
     UUID resourceId;
+
     String resourceType;
     /** When true the caller is asserting override for detected conflicts (AC-5). */
     boolean override;
+
     String overrideReason;
 }

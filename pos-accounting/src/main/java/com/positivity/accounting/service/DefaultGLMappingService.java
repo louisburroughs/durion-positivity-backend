@@ -1,14 +1,12 @@
 package com.positivity.accounting.service;
 
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Service for managing default GL account mappings for event types.
@@ -18,7 +16,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Creates a new default GL mapping.
-     * 
+     *
      * @param request the mapping request to create
      * @return the created mapping response
      */
@@ -27,7 +25,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Updates an existing default GL mapping.
-     * 
+     *
      * @param mappingId the ID of the mapping to update
      * @param request   the updated mapping data
      * @return the updated mapping response
@@ -38,7 +36,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Deactivates a default GL mapping (soft delete).
-     * 
+     *
      * @param mappingId the ID of the mapping to deactivate
      * @throws IllegalArgumentException if mapping not found
      */
@@ -46,7 +44,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Retrieves a default GL mapping by ID.
-     * 
+     *
      * @param mappingId the mapping ID
      * @return the mapping response
      * @throws IllegalArgumentException if mapping not found
@@ -56,7 +54,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Lists all default mappings with pagination.
-     * 
+     *
      * @param page page index
      * @param size page size
      * @return paginated list of default mappings
@@ -66,7 +64,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Finds active default mapping for a specific event type and organization.
-     * 
+     *
      * @param eventType      the event type
      * @param organizationId the organization ID (null for global defaults)
      * @return the most specific active default mapping, if found
@@ -76,7 +74,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Lists all active default mappings for a specific event type.
-     * 
+     *
      * @param eventType the event type
      * @return list of active defaults
      */
@@ -85,7 +83,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Lists all active default mappings for a specific organization.
-     * 
+     *
      * @param organizationId the organization ID
      * @return list of active defaults
      */
@@ -94,7 +92,7 @@ public interface DefaultGLMappingService {
 
     /**
      * Lists all global default mappings (organizationId IS NULL).
-     * 
+     *
      * @return list of global active defaults
      */
     @NonNull

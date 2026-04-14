@@ -6,12 +6,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
+import com.positivity.accounting.internal.entity.EventOutbox;
+import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
+import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.accounting.internal.service.OutboxProcessor;
+import com.positivity.accounting.internal.service.OutboxServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,14 +28,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
-import com.positivity.accounting.internal.entity.EventOutbox;
-import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
-import com.positivity.accounting.internal.repository.EventOutboxRepository;
-import com.positivity.accounting.internal.service.OutboxProcessor;
-import com.positivity.accounting.internal.service.OutboxServiceImpl;
 
 /**
  * Unit tests for OutboxProcessor.
@@ -85,8 +83,7 @@ class OutboxProcessorTest {
     @Test
     @DisplayName("processPendingEvents - does nothing when no pending events")
     void processPendingEvents_emptyQueue() {
-        when(outboxRepository.findPendingForRetry(
-                eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
 
         processor.processPendingEvents();
@@ -112,8 +109,7 @@ class OutboxProcessorTest {
         String payload = objectMapper.writeValueAsString(event);
         testOutbox.setPayload(payload);
 
-        when(outboxRepository.findPendingForRetry(
-                eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(testOutbox));
 
         processor.processPendingEvents();
@@ -128,8 +124,7 @@ class OutboxProcessorTest {
         testOutbox.setEventType("com.example.UnknownEvent");
         testOutbox.setPayload("{\"test\":true}");
 
-        when(outboxRepository.findPendingForRetry(
-                eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(testOutbox));
 
         processor.processPendingEvents();
@@ -141,8 +136,7 @@ class OutboxProcessorTest {
     @Test
     @DisplayName("processPendingEvents - handles repository exception gracefully")
     void processPendingEvents_repositoryException() {
-        when(outboxRepository.findPendingForRetry(
-                eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
                 .thenThrow(new RuntimeException("DB connection lost"));
 
         // Should not propagate exception
@@ -164,8 +158,7 @@ class OutboxProcessorTest {
     @Test
     @DisplayName("cleanupOldEvents - handles exception gracefully")
     void cleanupOldEvents_exception() {
-        when(outboxService.cleanupOldEvents(any(Instant.class)))
-                .thenThrow(new RuntimeException("DB error"));
+        when(outboxService.cleanupOldEvents(any(Instant.class))).thenThrow(new RuntimeException("DB error"));
 
         // Should not propagate
         processor.cleanupOldEvents();

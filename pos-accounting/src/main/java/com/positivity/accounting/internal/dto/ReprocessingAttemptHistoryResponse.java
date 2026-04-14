@@ -1,10 +1,8 @@
 package com.positivity.accounting.internal.dto;
 
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.positivity.accounting.internal.enums.ReprocessingOutcome;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +10,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for reprocessing attempt history response.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Reprocessing History</a>

@@ -74,13 +74,7 @@ class RestrictionRuleServiceImplTest {
     @DisplayName("RRS-001: valid request → non-null ruleId, active=true")
     void givenValidRequest_whenCreateRule_thenReturnsRuleResponse() {
         var request = new CreateRestrictionRuleRequest(
-                UUID.randomUUID(),
-                LocationTag.RETAIL_STORE,
-                ServiceTag.WORKORDER,
-                LocalDate.now(),
-                null,
-                null,
-                true);
+                UUID.randomUUID(), LocationTag.RETAIL_STORE, ServiceTag.WORKORDER, LocalDate.now(), null, null, true);
 
         var result = service.createRule(request);
 
@@ -112,8 +106,7 @@ class RestrictionRuleServiceImplTest {
     @Test
     @DisplayName("RRS-003: unknown id → throws not-found exception")
     void givenUnknownId_whenGetRuleById_thenThrowsNotFoundException() {
-        assertThatThrownBy(() -> service.getRuleById(unknownId))
-                .isInstanceOf(RestrictionRuleNotFoundException.class);
+        assertThatThrownBy(() -> service.getRuleById(unknownId)).isInstanceOf(RestrictionRuleNotFoundException.class);
     }
 
     /**
@@ -140,13 +133,7 @@ class RestrictionRuleServiceImplTest {
     @DisplayName("RRS-005b: createRule with explicit policyVersion preserves provided version")
     void givenExplicitPolicyVersion_whenCreateRule_thenVersionPreserved() {
         var request = new CreateRestrictionRuleRequest(
-                UUID.randomUUID(),
-                LocationTag.RETAIL_STORE,
-                ServiceTag.WORKORDER,
-                LocalDate.now(),
-                null,
-                2,
-                true);
+                UUID.randomUUID(), LocationTag.RETAIL_STORE, ServiceTag.WORKORDER, LocalDate.now(), null, 2, true);
 
         var result = service.createRule(request);
 
@@ -177,8 +164,7 @@ class RestrictionRuleServiceImplTest {
     void givenAlreadyInactiveRule_whenDeactivateRule_thenThrowsIllegalStateException() {
         UUID ruleId = knownInactiveId;
 
-        assertThatThrownBy(() -> service.deactivateRule(ruleId))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.deactivateRule(ruleId)).isInstanceOf(IllegalStateException.class);
     }
 
     private RestrictionRule activeRule() {

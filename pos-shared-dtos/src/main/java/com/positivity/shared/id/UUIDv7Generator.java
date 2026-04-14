@@ -1,10 +1,8 @@
 package com.positivity.shared.id;
 
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.github.f4b6a3.uuid.UuidCreator;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * UUID v7 generator utility for platform entities.
@@ -22,7 +20,7 @@ import com.github.f4b6a3.uuid.UuidCreator;
  * <p>
  * <strong>Usage in JPA entities:</strong>
  * </p>
- * 
+ *
  * <pre>
  * {
  *     &#64;code
@@ -57,7 +55,6 @@ public final class UUIDv7Generator {
      *
      * @return a new UUID v7 instance
      */
-
     public static @NonNull UUID generate() {
         UUID uuid = UuidCreator.getTimeOrderedEpoch();
         if (uuid == null) {

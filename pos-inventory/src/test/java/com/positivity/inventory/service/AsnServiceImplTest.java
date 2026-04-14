@@ -13,28 +13,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 import com.positivity.inventory.internal.dto.asn.AsnResponse;
 import com.positivity.inventory.internal.dto.asn.CreateAsnLineRequest;
 import com.positivity.inventory.internal.dto.asn.CreateAsnRequest;
@@ -59,13 +37,33 @@ import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.service.AsnServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AsnServiceImpl Unit Tests")
 class AsnServiceImplTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
 
     @Mock
     private AsnRepository asnRepository;
@@ -92,7 +90,8 @@ class AsnServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        asnService = new AsnServiceImpl(FIXED_CLOCK,
+        asnService = new AsnServiceImpl(
+                FIXED_CLOCK,
                 asnRepository,
                 asnLineRepository,
                 goodsReceiptRepository,
@@ -151,21 +150,19 @@ class AsnServiceImplTest {
         when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(approvedPo));
         when(asnRepository.findByVendorIdAndAsnReferenceNumber(vendorId, "ASN-2026-UNIT-001"))
                 .thenReturn(Optional.empty());
-        when(asnRepository.save(any(AdvanceShippingNoticeEntity.class)))
-                .thenAnswer(invocation -> {
-                    AdvanceShippingNoticeEntity entity = invocation.getArgument(0);
-                    entity.setAsnId(asnId);
-                    if (entity.getLines() == null) {
-                        entity.setLines(new ArrayList<>());
-                    }
-                    return entity;
-                });
-        when(asnLineRepository.saveAll(anyList()))
-                .thenAnswer(invocation -> {
-                    @SuppressWarnings("unchecked")
-                    List<AsnLineEntity> lines = (List<AsnLineEntity>) invocation.getArgument(0);
-                    return lines;
-                });
+        when(asnRepository.save(any(AdvanceShippingNoticeEntity.class))).thenAnswer(invocation -> {
+            AdvanceShippingNoticeEntity entity = invocation.getArgument(0);
+            entity.setAsnId(asnId);
+            if (entity.getLines() == null) {
+                entity.setLines(new ArrayList<>());
+            }
+            return entity;
+        });
+        when(asnLineRepository.saveAll(anyList())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<AsnLineEntity> lines = (List<AsnLineEntity>) invocation.getArgument(0);
+            return lines;
+        });
 
         asnService.createAsn(request, "asn-unit-tester");
 
@@ -242,7 +239,8 @@ class AsnServiceImplTest {
     @DisplayName("getAsn returns AsnResponse when found")
     void getAsn_returnsAsnResponse_whenFound() {
         UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        AdvanceShippingNoticeEntity asnEntity = AdvanceShippingNoticeEntity.builder().asnId(asnId).build();
+        AdvanceShippingNoticeEntity asnEntity =
+                AdvanceShippingNoticeEntity.builder().asnId(asnId).build();
         when(asnRepository.findById(asnId)).thenReturn(Optional.of(asnEntity));
 
         AsnResponse response = asnService.getAsn(asnId);
@@ -296,7 +294,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-            .purchaseOrder(approvedPo)
+                .purchaseOrder(approvedPo)
                 .sku("SKU-TEST-001")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -359,7 +357,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-            .purchaseOrder(approvedPo)
+                .purchaseOrder(approvedPo)
                 .sku("SKU-OVR-001")
                 .quantityShipped(BigDecimal.ONE)
                 .quantityReceived(BigDecimal.ZERO)
@@ -413,13 +411,13 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-            .purchaseOrder(approvedPo)
+                .purchaseOrder(approvedPo)
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
                 .build();
         AsnLineEntity asnLine2 = AsnLineEntity.builder()
-            .purchaseOrder(approvedPo)
+                .purchaseOrder(approvedPo)
                 .sku("SKU-2")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -483,7 +481,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-            .purchaseOrder(approvedPo)
+                .purchaseOrder(approvedPo)
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -516,7 +514,8 @@ class AsnServiceImplTest {
     @DisplayName("getGoodsReceipt returns GoodsReceiptResponse when found")
     void getGoodsReceipt_returnsGoodsReceiptResponse_whenFound() {
         UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        GoodsReceiptEntity receiptEntity = GoodsReceiptEntity.builder().receiptId(receiptId).build();
+        GoodsReceiptEntity receiptEntity =
+                GoodsReceiptEntity.builder().receiptId(receiptId).build();
         when(goodsReceiptRepository.findById(receiptId)).thenReturn(Optional.of(receiptEntity));
 
         GoodsReceiptResponse response = assertDoesNotThrow(() -> asnService.getGoodsReceipt(receiptId));

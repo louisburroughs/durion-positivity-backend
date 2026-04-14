@@ -1,11 +1,10 @@
 package com.positivity.securityservice.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 /**
  * Request DTO for registering permissions from a service
@@ -41,7 +40,7 @@ public class PermissionRegistrationRequest {
         /**
          * Permission name in format domain:resource:action
          */
-        @JsonAlias({ "id" })
+        @JsonAlias({"id"})
         private String name;
 
         /**

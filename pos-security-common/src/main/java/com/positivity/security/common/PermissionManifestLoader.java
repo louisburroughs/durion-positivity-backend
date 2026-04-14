@@ -5,7 +5,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.config.YamlMapFactoryBean;
 import org.springframework.core.io.ClassPathResource;
@@ -16,8 +15,7 @@ import org.springframework.core.io.Resource;
  */
 public final class PermissionManifestLoader {
 
-    private PermissionManifestLoader() {
-    }
+    private PermissionManifestLoader() {}
 
     /**
      * Load a permission manifest from a classpath resource.
@@ -29,16 +27,14 @@ public final class PermissionManifestLoader {
     public static PermissionManifest loadFromClasspath(@NonNull String classpathLocation) {
         Resource resource = new ClassPathResource(classpathLocation);
         if (!resource.exists()) {
-            throw new IllegalStateException(
-                    "Permission manifest not found on classpath: " + classpathLocation);
+            throw new IllegalStateException("Permission manifest not found on classpath: " + classpathLocation);
         }
 
         YamlMapFactoryBean yamlFactory = new YamlMapFactoryBean();
         yamlFactory.setResources(resource);
         Map<String, Object> root = yamlFactory.getObject();
         if (root == null || root.isEmpty()) {
-            throw new IllegalStateException(
-                    "Permission manifest is empty: " + classpathLocation);
+            throw new IllegalStateException("Permission manifest is empty: " + classpathLocation);
         }
 
         String domain = requireString(root, "domain", classpathLocation);
@@ -112,6 +108,5 @@ public final class PermissionManifestLoader {
             @NonNull String domain,
             @NonNull String serviceName,
             @NonNull String version,
-            @NonNull List<PermissionDefinition> permissions) {
-    }
+            @NonNull List<PermissionDefinition> permissions) {}
 }

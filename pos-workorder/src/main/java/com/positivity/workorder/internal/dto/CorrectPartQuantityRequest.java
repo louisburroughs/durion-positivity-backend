@@ -1,16 +1,15 @@
 package com.positivity.workorder.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Request DTO for correcting part quantity (administrative correction).

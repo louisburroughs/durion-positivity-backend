@@ -1,38 +1,34 @@
 package com.positivity.accounting.internal.controller;
 
-import java.util.UUID;
-
-import jakarta.persistence.EntityNotFoundException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.RegenerateInvoiceFromWorkorderRequest;
 import com.positivity.accounting.service.BillingRulesService;
-import com.positivity.accounting.service.InvoiceRegenerationService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
+import com.positivity.accounting.service.InvoiceRegenerationService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * REST Controller for invoice payment operations.
@@ -61,14 +57,17 @@ public class InvoicePaymentController {
 
     /**
      * Get current payment status of an invoice.
-     * 
+     *
      * @param invoiceId Invoice identifier
      * @return Current invoice status
      */
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get invoice status", description = "Retrieve current payment status for an invoice.")
-    @ApiResponse(responseCode = "200", description = "Invoice status returned", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Invoice status returned",
+            content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
     @ApiResponse(responseCode = "404", description = "Invoice not found")
     @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
@@ -87,8 +86,7 @@ public class InvoicePaymentController {
             return ResponseEntity.badRequest().build();
 
         } catch (Exception e) {
-            log.error("Error retrieving status for invoice {}: {}",
-                    invoiceId, e.getMessage(), e);
+            log.error("Error retrieving status for invoice {}: {}", invoiceId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -105,8 +103,7 @@ public class InvoicePaymentController {
             @Valid @RequestBody RegenerateInvoiceFromWorkorderRequest request) {
 
         InvoiceGenerationResponse response = invoiceRegenerationService.regenerateInvoiceFromWorkorder(
-                request.getWorkorderId(),
-                request.getIdempotencyKey());
+                request.getWorkorderId(), request.getIdempotencyKey());
         return ResponseEntity.ok(response);
     }
 

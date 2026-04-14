@@ -41,10 +41,7 @@ public interface BayRepository extends JpaRepository<BayEntity, UUID> {
               AND b.bayType = :bayType
             """)
     Page<BayEntity> findByLocationIdAndStatusAndBayType(
-            UUID locationId,
-            String status,
-            String bayType,
-            Pageable pageable);
+            UUID locationId, String status, String bayType, Pageable pageable);
 
     @Query("SELECT b FROM BayEntity b WHERE b.id = :id AND b.location.id = :locationId")
     Optional<BayEntity> findByIdAndLocationId(UUID id, UUID locationId);

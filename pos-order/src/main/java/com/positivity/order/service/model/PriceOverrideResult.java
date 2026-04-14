@@ -25,5 +25,4 @@ public record PriceOverrideResult(
         Boolean affectsCommission,
         String requestedByUserId,
         Instant createdAt,
-        String message) {
-}
+        String message) {}

@@ -4,9 +4,4 @@ import java.util.UUID;
 import lombok.Builder;
 
 @Builder
-public record PeopleLinkUserRequest(
-        UUID userId,
-        UUID personId,
-        String linkType,
-        String notes) {
-}
+public record PeopleLinkUserRequest(UUID userId, UUID personId, String linkType, String notes) {}

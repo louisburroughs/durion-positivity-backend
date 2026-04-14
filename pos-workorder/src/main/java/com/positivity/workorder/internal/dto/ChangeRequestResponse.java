@@ -2,13 +2,12 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * DTO for ChangeRequest responses.
@@ -69,7 +68,8 @@ public class ChangeRequestResponse {
 
         return ChangeRequestResponse.builder()
                 .id(entity.getId())
-            .workorderId(entity.getWorkorder() != null ? entity.getWorkorder().getId() : null)
+                .workorderId(
+                        entity.getWorkorder() != null ? entity.getWorkorder().getId() : null)
                 .requestedByUserId(entity.getRequestedByUserId())
                 .requestedAt(entity.getRequestedAt())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)

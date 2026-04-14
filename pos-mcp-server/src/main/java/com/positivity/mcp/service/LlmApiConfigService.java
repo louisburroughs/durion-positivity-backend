@@ -1,10 +1,9 @@
 package com.positivity.mcp.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
+import java.util.List;
+import java.util.UUID;
 
 public interface LlmApiConfigService {
 
@@ -17,5 +16,4 @@ public interface LlmApiConfigService {
     LlmApiConfigResponse update(UUID id, LlmApiConfigRequest request);
 
     void delete(UUID id);
-
 }

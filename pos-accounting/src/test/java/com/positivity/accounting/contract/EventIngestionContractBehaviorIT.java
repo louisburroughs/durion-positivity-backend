@@ -6,18 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
-
 import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
@@ -25,6 +13,16 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Contract Behavioral Integration Tests for Event Ingestion operations.
@@ -49,6 +47,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;
+
     @Autowired
     private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
@@ -91,8 +90,8 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_EVENTS))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.eventId").exists())
@@ -112,9 +111,9 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - list with pagination
         mockMvc.perform(withAuth(get(API_V1_EVENTS))
-                .param("organizationId", testOrganizationId.toString())
-                .param("page", "0")
-                .param("size", "3"))
+                        .param("organizationId", testOrganizationId.toString())
+                        .param("page", "0")
+                        .param("size", "3"))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -137,8 +136,8 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - filter by PROCESSED status
         mockMvc.perform(withAuth(get(API_V1_EVENTS))
-                .param("organizationId", testOrganizationId.toString())
-                .param("status", "PROCESSED"))
+                        .param("organizationId", testOrganizationId.toString())
+                        .param("status", "PROCESSED"))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -188,13 +187,14 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setTriggeredByUserId(
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Manual reprocessing after rule update");
 
         // When/Then - reprocess the event
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.eventId").value(eventId.toString()));
@@ -211,12 +211,13 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When - reprocess the event to create history
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setTriggeredByUserId(
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("First reprocessing attempt");
 
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted());
 
         // Then - get reprocessing history
@@ -273,13 +274,14 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setTriggeredByUserId(
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Test");
 
         // When/Then - expect 404 Not Found
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", nonExistentId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
                 .andExpect(status().isNotFound());
     }
@@ -294,13 +296,14 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setTriggeredByUserId(
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Attempt to reprocess");
 
         // When/Then - expect 409 Conflict
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
                 .andExpect(status().isConflict());
     }
@@ -340,8 +343,8 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - expect 400 Bad Request
         mockMvc.perform(withAuth(post(API_V1_EVENTS))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
                 .andExpect(status().isBadRequest());
     }
@@ -365,8 +368,8 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                 .build();
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_EVENTS))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted())
                 .andReturn();
 

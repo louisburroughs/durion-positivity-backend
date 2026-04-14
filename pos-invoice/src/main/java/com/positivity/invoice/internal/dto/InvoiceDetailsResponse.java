@@ -1,13 +1,12 @@
 package com.positivity.invoice.internal.dto;
 
 import com.positivity.invoice.internal.enums.InvoiceStatus;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public class InvoiceDetailsResponse {
 
@@ -209,5 +208,4 @@ public class InvoiceDetailsResponse {
     public void setAdjustmentEntries(List<InvoiceAdjustmentResponse> adjustments) {
         this.adjustmentEntries = adjustments;
     }
-
 }

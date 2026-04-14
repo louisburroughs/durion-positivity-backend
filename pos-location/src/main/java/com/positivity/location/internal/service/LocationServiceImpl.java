@@ -1,19 +1,18 @@
 package com.positivity.location.internal.service;
 
-import com.positivity.location.service.LocationService;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
-import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
+import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
+import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
@@ -21,21 +20,10 @@ import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
-import com.positivity.location.internal.dto.PersonDTO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
+import com.positivity.location.service.LocationService;
 import java.time.DateTimeException;
-import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +31,16 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -95,7 +93,8 @@ public class LocationServiceImpl implements LocationService {
 
     @Transactional(readOnly = true)
     public LocationValidationResponseDTO getLocationValidation(UUID id) {
-        return locationRepository.findById(id)
+        return locationRepository
+                .findById(id)
                 .map(location -> LocationValidationResponseDTO.builder()
                         .locationId(id)
                         .exists(true)
@@ -157,12 +156,14 @@ public class LocationServiceImpl implements LocationService {
      */
     @Transactional
     public LocationResponseDTO patchLocation(UUID id, LocationPatchRequest patch) {
-        Location location = locationRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        Location location =
+                locationRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
         if (patch.getName() != null && !patch.getName().isBlank()) {
             String normalizedName = normalizeName(patch.getName());
-            if (locationRepository.findByNormalizedNameAndIdNot(normalizedName, id).isPresent()) {
+            if (locationRepository
+                    .findByNormalizedNameAndIdNot(normalizedName, id)
+                    .isPresent()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, LOCATION_NAME_TAKEN);
             }
             location.setName(patch.getName());
@@ -218,7 +219,9 @@ public class LocationServiceImpl implements LocationService {
         if (parentTypeValue != null && !parentTypeValue.isBlank()) {
             parentType = toParentType(parentTypeValue);
         }
-        return findChildren(parentId, parentType).stream().map(this::toLocationResponse).toList();
+        return findChildren(parentId, parentType).stream()
+                .map(this::toLocationResponse)
+                .toList();
     }
 
     public List<Location> getAllLocations() {
@@ -353,10 +356,10 @@ public class LocationServiceImpl implements LocationService {
     }
 
     public PersonDTO getResponsiblePerson(UUID locationId) {
-        Location location = locationRepository.findById(locationId)
+        Location location = locationRepository
+                .findById(locationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        if (location.getResponsiblePersonId() == null)
-            return null;
+        if (location.getResponsiblePersonId() == null) return null;
         return personClient.getPersonById(location.getResponsiblePersonId());
     }
 
@@ -424,8 +427,7 @@ public class LocationServiceImpl implements LocationService {
         }
     }
 
-    private void validateOperatingHours(
-            List<OperatingHoursRequest> operatingHours) {
+    private void validateOperatingHours(List<OperatingHoursRequest> operatingHours) {
         if (operatingHours == null) {
             return;
         }
@@ -434,7 +436,8 @@ public class LocationServiceImpl implements LocationService {
             if (!days.add(hours.getDayOfWeek())) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_OPERATING_HOURS);
             }
-            if (hours.getOpenTime() == null || hours.getCloseTime() == null
+            if (hours.getOpenTime() == null
+                    || hours.getCloseTime() == null
                     || !hours.getOpenTime().isBefore(hours.getCloseTime())) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_OPERATING_HOURS);
             }
@@ -443,20 +446,30 @@ public class LocationServiceImpl implements LocationService {
 
     private String serializeOperatingHours(List<OperatingHoursRequest> operatingHours) {
         List<OperatingHoursJsonEntry> canonical = operatingHours.stream()
-                .sorted(Comparator.comparing(OperatingHoursRequest::getDayOfWeek, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(OperatingHoursRequest::getOpenTime, Comparator.nullsLast(java.time.LocalTime::compareTo))
-                        .thenComparing(OperatingHoursRequest::getCloseTime, Comparator.nullsLast(java.time.LocalTime::compareTo)))
+                .sorted(Comparator.comparing(
+                                OperatingHoursRequest::getDayOfWeek, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(
+                                OperatingHoursRequest::getOpenTime,
+                                Comparator.nullsLast(java.time.LocalTime::compareTo))
+                        .thenComparing(
+                                OperatingHoursRequest::getCloseTime,
+                                Comparator.nullsLast(java.time.LocalTime::compareTo)))
                 .map(hours -> new OperatingHoursJsonEntry(
                         hours.getDayOfWeek(),
-                        hours.getOpenTime() == null ? null : DateTimeFormatter.ISO_LOCAL_TIME.format(hours.getOpenTime()),
-                        hours.getCloseTime() == null ? null : DateTimeFormatter.ISO_LOCAL_TIME.format(hours.getCloseTime())))
+                        hours.getOpenTime() == null
+                                ? null
+                                : DateTimeFormatter.ISO_LOCAL_TIME.format(hours.getOpenTime()),
+                        hours.getCloseTime() == null
+                                ? null
+                                : DateTimeFormatter.ISO_LOCAL_TIME.format(hours.getCloseTime())))
                 .toList();
         return serializeAsJson(canonical, "operatingHours");
     }
 
     private String serializeHolidayClosures(List<HolidayClosureRequest> holidayClosures) {
         List<HolidayClosureJsonEntry> canonical = holidayClosures.stream()
-                .sorted(Comparator.comparing(HolidayClosureRequest::getDate, Comparator.nullsLast(java.time.LocalDate::compareTo))
+                .sorted(Comparator.comparing(
+                                HolidayClosureRequest::getDate, Comparator.nullsLast(java.time.LocalDate::compareTo))
                         .thenComparing(HolidayClosureRequest::getReason, Comparator.nullsLast(String::compareTo)))
                 .map(closure -> new HolidayClosureJsonEntry(
                         closure.getDate() == null ? null : DateTimeFormatter.ISO_LOCAL_DATE.format(closure.getDate()),
@@ -469,16 +482,16 @@ public class LocationServiceImpl implements LocationService {
         try {
             return JSON_MAPPER.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "FAILED_TO_SERIALIZE_" + fieldName.toUpperCase(Locale.ROOT), exception);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "FAILED_TO_SERIALIZE_" + fieldName.toUpperCase(Locale.ROOT),
+                    exception);
         }
     }
 
-    private record OperatingHoursJsonEntry(String dayOfWeek, String openTime, String closeTime) {
-    }
+    private record OperatingHoursJsonEntry(String dayOfWeek, String openTime, String closeTime) {}
 
-    private record HolidayClosureJsonEntry(String date, String reason) {
-    }
+    private record HolidayClosureJsonEntry(String date, String reason) {}
 
     private String normalizeName(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT).trim();
@@ -497,16 +510,18 @@ public class LocationServiceImpl implements LocationService {
         }
 
         if (locationTypeDto.getId() != null) {
-            return locationTypeRepository.findById(locationTypeDto.getId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Unknown location type id: " + locationTypeDto.getId()));
+            return locationTypeRepository
+                    .findById(locationTypeDto.getId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "Unknown location type id: " + locationTypeDto.getId()));
         }
 
         if (locationTypeDto.getName() == null || locationTypeDto.getName().isBlank()) {
             return null;
         }
 
-        return locationTypeRepository.findByNameIgnoreCase(locationTypeDto.getName())
+        return locationTypeRepository
+                .findByNameIgnoreCase(locationTypeDto.getName())
                 .orElseGet(() -> locationTypeRepository.save(LocationType.builder()
                         .name(locationTypeDto.getName())
                         .description(locationTypeDto.getDescription())
@@ -546,9 +561,18 @@ public class LocationServiceImpl implements LocationService {
     private LocationParentResponseDTO toLocationParentResponse(LocationParent locationParent) {
         return LocationParentResponseDTO.builder()
                 .id(locationParent.getId())
-                .parentId(locationParent.getParent() != null ? locationParent.getParent().getId() : null)
-                .childId(locationParent.getChild() != null ? locationParent.getChild().getId() : null)
-                .parentType(locationParent.getParentType() != null ? locationParent.getParentType().name() : null)
+                .parentId(
+                        locationParent.getParent() != null
+                                ? locationParent.getParent().getId()
+                                : null)
+                .childId(
+                        locationParent.getChild() != null
+                                ? locationParent.getChild().getId()
+                                : null)
+                .parentType(
+                        locationParent.getParentType() != null
+                                ? locationParent.getParentType().name()
+                                : null)
                 .build();
     }
 }

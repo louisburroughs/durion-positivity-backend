@@ -67,17 +67,14 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
         // Arrange
         when(orderCancellationService.cancelOrder(eq(ORDER_ID), any()))
                 .thenReturn(new CancellationResult(
-                        ORDER_ID,
-                        "CANCELLED",
-                        "Order cancelled successfully",
-                        "test-idempotency-key"));
+                        ORDER_ID, "CANCELLED", "Order cancelled successfully", "test-idempotency-key"));
 
         // Act & Assert
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(VALID_CANCEL_BODY),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_CANCEL_BODY),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.cancellationIdempotencyKey").value("test-idempotency-key"));
     }
@@ -90,7 +87,8 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
      * matching the pattern established in PriceOverrideControllerTest.
      */
     @Test
-    @DisplayName("CC-C02: POST /{orderId}/cancel, service throws AccessDeniedException → 403 Forbidden with ORDER_FORBIDDEN code")
+    @DisplayName(
+            "CC-C02: POST /{orderId}/cancel, service throws AccessDeniedException → 403 Forbidden with ORDER_FORBIDDEN code")
     void cancelOrder_forbidden_returns403() throws Exception {
         // Arrange
         when(orderCancellationService.cancelOrder(eq(ORDER_ID), any()))
@@ -98,10 +96,10 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
 
         // Act & Assert — expects 403
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(VALID_CANCEL_BODY),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_CANCEL_BODY),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
@@ -126,10 +124,10 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
 
         // Act & Assert — expects 400 from @NotBlank validation
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyWithBlankReason),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(bodyWithBlankReason),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isBadRequest());
     }
 
@@ -142,16 +140,13 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
         // Arrange
         when(orderCancellationService.retryCancellation(eq(ORDER_ID), any()))
                 .thenReturn(new CancellationResult(
-                        ORDER_ID,
-                        "CANCELLED",
-                        "Order cancellation completed on retry",
-                        "test-idempotency-key"));
+                        ORDER_ID, "CANCELLED", "Order cancellation completed on retry", "test-idempotency-key"));
 
         // Act & Assert
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel/retry", ORDER_ID)
-                        .param("idempotencyKey", "idem-key-001"),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel/retry", ORDER_ID)
+                                .param("idempotencyKey", "idem-key-001"),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cancellationIdempotencyKey").value("test-idempotency-key"));
     }
@@ -164,10 +159,10 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
                 .thenThrow(new IllegalStateException("Order cannot be cancelled in current state: COMPLETED"));
 
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(VALID_CANCEL_BODY),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_CANCEL_BODY),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_CANCELLATION_INVALID"))
                 .andExpect(jsonPath("$.status").value(409));
@@ -181,10 +176,10 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
                 .thenThrow(new SalesOrderNotFoundException(ORDER_ID));
 
         mockMvc.perform(withGatewayAuth(
-                post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(VALID_CANCEL_BODY),
-                OrderPermissions.ORDER_CANCEL))
+                        post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_CANCEL_BODY),
+                        OrderPermissions.ORDER_CANCEL))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
     }

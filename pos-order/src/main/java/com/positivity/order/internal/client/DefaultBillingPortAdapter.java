@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 public class DefaultBillingPortAdapter implements BillingPort {
 
     @Override
-    public @NonNull PaymentReversalResult reversePayment(@NonNull UUID paymentId,
-            @NonNull ReversePaymentCommand command) {
+    public @NonNull PaymentReversalResult reversePayment(
+            @NonNull UUID paymentId, @NonNull ReversePaymentCommand command) {
         return new PaymentReversalResult(true, "VOID", "Reversed by default adapter");
     }
 }

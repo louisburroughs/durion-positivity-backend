@@ -1,11 +1,10 @@
 package com.positivity.invoice.internal.repository;
 
 import com.positivity.invoice.internal.entity.PaymentIntent;
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
  * Repository for {@link PaymentIntent} entities.

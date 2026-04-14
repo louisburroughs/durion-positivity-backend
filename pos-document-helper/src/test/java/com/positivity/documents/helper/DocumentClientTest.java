@@ -1,5 +1,10 @@
 package com.positivity.documents.helper;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
 import com.positivity.documents.helper.exception.DocumentRenderException;
 import com.positivity.documents.helper.exception.TemplateRegistrationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,38 +17,33 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
 /**
  * Unit tests for DocumentClient with error handling scenarios.
- * 
+ *
  * Issue: ADR-0020
  */
 @ExtendWith(MockitoExtension.class)
 class DocumentClientTest {
-    
+
     @Mock
     private RestClient restClient;
-    
+
     @Mock
     private RestClient.RequestBodyUriSpec requestBodyUriSpec;
-    
+
     @Mock
     private RestClient.RequestBodySpec requestBodySpec;
-    
+
     @Mock
     private RestClient.ResponseSpec responseSpec;
-    
+
     private DocumentClient documentClient;
-    
+
     @BeforeEach
     void setUp() {
         documentClient = new DocumentClient(restClient, "http://pos-documents:8080");
     }
-    
+
     @Test
     void shouldRegisterTemplate() {
         // Given
@@ -54,18 +54,18 @@ class DocumentClientTest {
                 .description("Test template")
                 .owner("pos-test")
                 .build();
-        
+
         when(restClient.put()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString(), any(Object[].class))).thenReturn(requestBodySpec);
         when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
         when(requestBodySpec.body(any(TemplateRegistration.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.toBodilessEntity()).thenReturn(ResponseEntity.ok().build());
-        
+
         // When/Then
         assertThatNoException().isThrownBy(() -> documentClient.registerTemplate(registration));
     }
-    
+
     @Test
     void shouldThrowExceptionWhenTemplateRegistrationFails() {
         // Given
@@ -76,20 +76,20 @@ class DocumentClientTest {
                 .description("Test template")
                 .owner("pos-test")
                 .build();
-        
+
         when(restClient.put()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString(), any(Object[].class))).thenReturn(requestBodySpec);
         when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
         when(requestBodySpec.body(any(TemplateRegistration.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenThrow(new RestClientException("Connection refused"));
-        
+
         // When/Then
         assertThatThrownBy(() -> documentClient.registerTemplate(registration))
                 .isInstanceOf(TemplateRegistrationException.class)
                 .hasMessageContaining("TEST_TEMPLATE")
                 .hasMessageContaining("HTTP PUT failed");
     }
-    
+
     @Test
     void shouldRenderDocument() {
         // Given
@@ -98,24 +98,23 @@ class DocumentClientTest {
                 .templateId("TEST_TEMPLATE")
                 .content("{\"test\": \"data\"}")
                 .build();
-        
-        byte[] expectedPdf = new byte[]{1, 2, 3, 4, 5};
-        
+
+        byte[] expectedPdf = new byte[] {1, 2, 3, 4, 5};
+
         when(restClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
         when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
         when(requestBodySpec.body(any(RenderRequest.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.toEntity(byte[].class))
-                .thenReturn(ResponseEntity.ok(expectedPdf));
-        
+        when(responseSpec.toEntity(byte[].class)).thenReturn(ResponseEntity.ok(expectedPdf));
+
         // When
         byte[] result = documentClient.renderDocument(request);
-        
+
         // Then
         assertThat(result).isEqualTo(expectedPdf);
     }
-    
+
     @Test
     void shouldThrowExceptionWhenRenderingFails() {
         // Given
@@ -124,20 +123,20 @@ class DocumentClientTest {
                 .templateId("TEST_TEMPLATE")
                 .content("{\"test\": \"data\"}")
                 .build();
-        
+
         when(restClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
         when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
         when(requestBodySpec.body(any(RenderRequest.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenThrow(new RestClientException("Service unavailable"));
-        
+
         // When/Then
         assertThatThrownBy(() -> documentClient.renderDocument(request))
                 .isInstanceOf(DocumentRenderException.class)
                 .hasMessageContaining("TEST_TEMPLATE")
                 .hasMessageContaining("HTTP POST failed");
     }
-    
+
     @Test
     void shouldThrowExceptionWhenRenderResponseIsNotOk() {
         // Given
@@ -146,31 +145,30 @@ class DocumentClientTest {
                 .templateId("TEST_TEMPLATE")
                 .content("{\"test\": \"data\"}")
                 .build();
-        
+
         when(restClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
         when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
         when(requestBodySpec.body(any(RenderRequest.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.toEntity(byte[].class))
-                .thenReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
-        
+                .thenReturn(
+                        ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+
         // When/Then
         assertThatThrownBy(() -> documentClient.renderDocument(request))
                 .isInstanceOf(DocumentRenderException.class)
                 .hasMessageContaining("TEST_TEMPLATE")
                 .hasMessageContaining("Unexpected response status");
     }
-    
+
     @Test
     void shouldRejectNullRegistration() {
-        assertThatThrownBy(() -> documentClient.registerTemplate(null))
-                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> documentClient.registerTemplate(null)).isInstanceOf(NullPointerException.class);
     }
-    
+
     @Test
     void shouldRejectNullRenderRequest() {
-        assertThatThrownBy(() -> documentClient.renderDocument(null))
-                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> documentClient.renderDocument(null)).isInstanceOf(NullPointerException.class);
     }
 }

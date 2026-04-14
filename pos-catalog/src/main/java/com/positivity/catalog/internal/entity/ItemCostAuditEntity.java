@@ -1,12 +1,11 @@
 package com.positivity.catalog.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.catalog.internal.enums.ChangeSourceType;
 import com.positivity.catalog.internal.enums.CostType;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -15,21 +14,23 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.EntityListeners;
+
 @Getter
 @Setter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "item_cost_audit", indexes = {
-        @Index(name = "idx_item_cost_audit_item_id", columnList = "item_id"),
-        @Index(name = "idx_item_cost_audit_timestamp", columnList = "audit_timestamp")
-})
+@Table(
+        name = "item_cost_audit",
+        indexes = {
+            @Index(name = "idx_item_cost_audit_item_id", columnList = "item_id"),
+            @Index(name = "idx_item_cost_audit_timestamp", columnList = "audit_timestamp")
+        })
 public class ItemCostAuditEntity {
 
     @Id

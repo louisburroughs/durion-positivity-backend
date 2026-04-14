@@ -1,8 +1,8 @@
 package com.positivity.people.internal.dto;
 
-import java.util.UUID;
-import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 
 public class WorkSessionRequest {
 
@@ -28,5 +28,4 @@ public class WorkSessionRequest {
     public void setActor(String actor) {
         this.actor = actor;
     }
-
 }

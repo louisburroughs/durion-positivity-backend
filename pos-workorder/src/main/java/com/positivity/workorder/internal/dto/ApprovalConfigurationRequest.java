@@ -1,10 +1,9 @@
 package com.positivity.workorder.internal.dto;
 
-import java.util.UUID;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,10 +19,14 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request DTO for approval configuration creation and updates")
 public class ApprovalConfigurationRequest {
 
-    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "00000000-0000-0000-0000-000000000001")
+    @Schema(
+            description = "Location ID for this configuration (null = applies to all locations)",
+            example = "00000000-0000-0000-0000-000000000001")
     private UUID locationId;
 
-    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "00000000-0000-0000-0000-000000000002")
+    @Schema(
+            description = "Customer ID for this configuration (null = applies to all customers)",
+            example = "00000000-0000-0000-0000-000000000002")
     private UUID customerId;
 
     @NotNull(message = "approvalMethod is required")
@@ -38,6 +41,8 @@ public class ApprovalConfigurationRequest {
     private Boolean requireSignature;
 
     @Min(value = 0, message = "priority must be 0 or greater")
-    @Schema(description = "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)", example = "0")
+    @Schema(
+            description = "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)",
+            example = "0")
     private Integer priority;
 }

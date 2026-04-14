@@ -1,20 +1,17 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-
-import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -41,7 +38,9 @@ public class KafkaCommandListener {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
 
-    @KafkaListener(topics = "${workorder.kafka.commands-topic:workorder.commands.v1}", groupId = "${workorder.kafka.consumer-group:workorder-commands}")
+    @KafkaListener(
+            topics = "${workorder.kafka.commands-topic:workorder.commands.v1}",
+            groupId = "${workorder.kafka.consumer-group:workorder-commands}")
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
@@ -59,11 +58,8 @@ public class KafkaCommandListener {
                 return;
             }
 
-            JsonNode payloadNode = hasCommandType
-                    && root.has(PAYLOAD)
-                    && !root.get(PAYLOAD).isNull()
-                            ? root.get(PAYLOAD)
-                            : root;
+            JsonNode payloadNode =
+                    hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull() ? root.get(PAYLOAD) : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
             if (event.getWorkorderId() == null || event.getPayload() == null) {

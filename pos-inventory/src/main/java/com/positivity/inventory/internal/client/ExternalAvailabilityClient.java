@@ -1,10 +1,8 @@
 package com.positivity.inventory.internal.client;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
-
 import java.util.List;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Calls Positivity Domain for external purchase availability.

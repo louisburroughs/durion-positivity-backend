@@ -1,8 +1,7 @@
 package com.positivity.vehicle.internal.util;
 
-import org.jspecify.annotations.NonNull;
-
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Utility class for VIN validation and normalization per CAP:091 Story #105.
@@ -25,9 +24,7 @@ public final class VinUtils {
             throw new IllegalArgumentException("VIN cannot be null or blank");
         }
 
-        return vin.trim()
-                .toUpperCase()
-                .replaceAll("[^A-Z0-9]", "");
+        return vin.trim().toUpperCase().replaceAll("[^A-Z0-9]", "");
     }
 
     /**

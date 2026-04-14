@@ -19,10 +19,7 @@ public class EncumbranceEventPublisher {
 
     @Retryable(maxAttempts = 3)
     public void publishEncumbranceEvent(
-            @NonNull UUID purchaseOrderId,
-            @NonNull String poNumber,
-            long grandTotalMinor,
-            @NonNull String currency) {
+            @NonNull UUID purchaseOrderId, @NonNull String poNumber, long grandTotalMinor, @NonNull String currency) {
         log.info("Publishing encumbrance event for PO {}", purchaseOrderId);
         applicationEventPublisher.publishEvent(Map.of(
                 "type", "PurchaseOrderEncumbrance",
@@ -39,14 +36,19 @@ public class EncumbranceEventPublisher {
             @NonNull String poNumber,
             long grandTotalMinor,
             @NonNull String currency) {
-        log.error("Encumbrance event publishing failed after retries for PO {}: {}", purchaseOrderId,
-                e.getMessage());
+        log.error("Encumbrance event publishing failed after retries for PO {}: {}", purchaseOrderId, e.getMessage());
         applicationEventPublisher.publishEvent(Map.of(
-                "type", "PurchaseOrderAccountingError",
-                "purchaseOrderId", purchaseOrderId.toString(),
-                "poNumber", poNumber,
-                "grandTotalMinor", grandTotalMinor,
-                "currency", currency,
-                "error", e.getMessage() != null ? e.getMessage() : "Unknown error"));
+                "type",
+                "PurchaseOrderAccountingError",
+                "purchaseOrderId",
+                purchaseOrderId.toString(),
+                "poNumber",
+                poNumber,
+                "grandTotalMinor",
+                grandTotalMinor,
+                "currency",
+                currency,
+                "error",
+                e.getMessage() != null ? e.getMessage() : "Unknown error"));
     }
 }

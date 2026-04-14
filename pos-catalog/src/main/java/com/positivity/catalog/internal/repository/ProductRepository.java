@@ -1,30 +1,26 @@
 package com.positivity.catalog.internal.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.positivity.catalog.internal.entity.ProductEntity;
-
-import java.util.List;
-import java.util.UUID;
-
 public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
-  List<ProductEntity> findByName(String name);
+    List<ProductEntity> findByName(String name);
 
-  boolean existsBySkuIgnoreCase(String sku);
+    boolean existsBySkuIgnoreCase(String sku);
 
-  boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCase(UUID manufacturerId,
-      String manufacturerPartNumber);
+    boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCase(
+            UUID manufacturerId, String manufacturerPartNumber);
 
-  boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCaseAndIdNot(
-      UUID manufacturerId,
-      String manufacturerPartNumber,
-      UUID id);
+    boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCaseAndIdNot(
+            UUID manufacturerId, String manufacturerPartNumber, UUID id);
 
-  @Query("""
+    @Query("""
       SELECT p FROM ProductEntity p
       WHERE (:sku IS NULL OR LOWER(p.sku) = LOWER(:sku))
         AND (:mpn IS NULL OR LOWER(p.manufacturerPartNumber) = LOWER(:mpn))
@@ -34,19 +30,16 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
           OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', :q, '%'))
         )
       """)
-  Page<ProductEntity> searchProducts(
-      @Param("q") String q,
-      @Param("sku") String sku,
-      @Param("mpn") String mpn,
-      Pageable pageable);
+    Page<ProductEntity> searchProducts(
+            @Param("q") String q, @Param("sku") String sku, @Param("mpn") String mpn, Pageable pageable);
 
-  /**
-   * Filtered search for the catalog search endpoint (CAP-247 Story #17).
-   * Supports free-text query against name and description, exact SKU match
-   * (SKU used as an exact AND filter), brand filter, and category filter.
-   * No additional SKU ranking is applied at the service layer.
-   */
-  @Query("""
+    /**
+     * Filtered search for the catalog search endpoint (CAP-247 Story #17).
+     * Supports free-text query against name and description, exact SKU match
+     * (SKU used as an exact AND filter), brand filter, and category filter.
+     * No additional SKU ranking is applied at the service layer.
+     */
+    @Query("""
       SELECT p FROM ProductEntity p
       LEFT JOIN p.category c
       WHERE (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
@@ -55,10 +48,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
         AND (:brand IS NULL OR LOWER(p.manufacturerBrand) = LOWER(:brand))
         AND (:category IS NULL OR LOWER(c.name) = LOWER(:category))
       """)
-  Page<ProductEntity> searchProductsFiltered(
-      @Param("q") String q,
-      @Param("sku") String sku,
-      @Param("brand") String brand,
-      @Param("category") String category,
-      Pageable pageable);
+    Page<ProductEntity> searchProductsFiltered(
+            @Param("q") String q,
+            @Param("sku") String sku,
+            @Param("brand") String brand,
+            @Param("category") String category,
+            Pageable pageable);
 }

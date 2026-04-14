@@ -6,16 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
-
+import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -24,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,9 +51,9 @@ class NltiMetricsTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
     private static final UUID SESSION_ID = UUID.fromString("00000000-0000-7000-8000-000000000901");
-    private static final UUID CORR_ID    = UUID.fromString("00000000-0000-7000-8000-000000000902");
-    private static final UUID CORR_ID_2  = UUID.fromString("00000000-0000-7000-8000-000000000903");
-    private static final String SUBJECT  = "nlti-metrics-user";
+    private static final UUID CORR_ID = UUID.fromString("00000000-0000-7000-8000-000000000902");
+    private static final UUID CORR_ID_2 = UUID.fromString("00000000-0000-7000-8000-000000000903");
+    private static final String SUBJECT = "nlti-metrics-user";
 
     private static final Instant FIXED_INSTANT = Instant.parse("2026-03-12T10:00:00Z");
 
@@ -72,7 +69,7 @@ class NltiMetricsTest {
     // Real in-process registry — counter/timer counts are queryable
     private SimpleMeterRegistry registry;
     private Counter requestCount;
-    private Timer   requestLatencyMs;
+    private Timer requestLatencyMs;
     private Counter errorCount;
 
     // Service constructed directly — @InjectMocks not used because the registry
@@ -85,14 +82,13 @@ class NltiMetricsTest {
     void setUp() {
         registry = new SimpleMeterRegistry();
         // Pre-register metrics exactly as NltiObservabilityMetricsConfig does at runtime
-        requestCount     = Counter.builder("nlt.request.count").register(registry);
+        requestCount = Counter.builder("nlt.request.count").register(registry);
         requestLatencyMs = Timer.builder("nlt.request.latency_ms").register(registry);
-        errorCount       = Counter.builder("nlt.error.count").register(registry);
+        errorCount = Counter.builder("nlt.error.count").register(registry);
 
         service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, registry);
 
-        UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
@@ -104,7 +100,8 @@ class NltiMetricsTest {
         session.setSubjectId(SUBJECT);
         session.setCreatedAt(OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC));
         session.setUpdatedAt(OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC));
-        lenient().when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT))
+        lenient()
+                .when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT))
                 .thenReturn(Optional.of(session));
 
         request = new NltiRequestDTO("list open workorders", SESSION_ID, null);
@@ -170,11 +167,9 @@ class NltiMetricsTest {
     @Test
     @DisplayName("submit() increments nlt.error.count when a dependency throws")
     void submit_onException_incrementsErrorCount() {
-        when(requestRepository.save(any()))
-                .thenThrow(new RuntimeException("simulated repository failure"));
+        when(requestRepository.save(any())).thenThrow(new RuntimeException("simulated repository failure"));
 
-        assertThatThrownBy(() -> service.submit(request, CORR_ID))
-                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> service.submit(request, CORR_ID)).isInstanceOf(RuntimeException.class);
 
         assertThat(errorCount.count())
                 .as("nlt.error.count should be 1.0 after exception in submit()")

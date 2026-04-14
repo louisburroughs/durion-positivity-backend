@@ -1,17 +1,15 @@
 package com.positivity.accounting.internal.dto;
 
 import java.math.BigDecimal;
-
-import org.jspecify.annotations.NonNull;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Drilldown response showing a GL account that contributes to a statement line.
- * 
+ *
  * Each response represents one account's contribution.
  * Service returns a list of these for all accounts mapped to a statement line.
  */

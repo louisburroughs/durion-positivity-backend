@@ -12,5 +12,4 @@ public record PeopleResolvePersonResponse(
         String firstName,
         String lastName,
         String primaryEmail,
-        List<String> phoneNumbers) {
-}
+        List<String> phoneNumbers) {}

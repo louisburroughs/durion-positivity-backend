@@ -1,35 +1,32 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
-import java.time.Instant;
-import java.util.UUID;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.EntityListeners;
+
 /**
  * Accounting Audit Log - comprehensive audit trail for high-risk operations.
- * 
+ *
  * Required for: post JE, reverse JE, approve/reject vendor bills,
  * publish/archive rules, deactivate accounts.
- * 
+ *
  * Retention: 7 years (financial regulatory compliance).
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Audit Trail</a>
@@ -41,13 +38,15 @@ import jakarta.persistence.EntityListeners;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "accounting_audit_log", indexes = {
-        @Index(name = "idx_audit_log_entity", columnList = "entity_type, entity_id"),
-        @Index(name = "idx_audit_log_operation", columnList = "operation"),
-        @Index(name = "idx_audit_log_user", columnList = "user_id"),
-        @Index(name = "idx_audit_log_timestamp", columnList = "timestamp"),
-        @Index(name = "idx_audit_log_trace", columnList = "trace_id")
-})
+@Table(
+        name = "accounting_audit_log",
+        indexes = {
+            @Index(name = "idx_audit_log_entity", columnList = "entity_type, entity_id"),
+            @Index(name = "idx_audit_log_operation", columnList = "operation"),
+            @Index(name = "idx_audit_log_user", columnList = "user_id"),
+            @Index(name = "idx_audit_log_timestamp", columnList = "timestamp"),
+            @Index(name = "idx_audit_log_trace", columnList = "trace_id")
+        })
 public class AccountingAuditLog {
 
     @EqualsAndHashCode.Include
@@ -91,5 +90,4 @@ public class AccountingAuditLog {
 
     @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
-
 }

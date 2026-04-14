@@ -1,18 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
@@ -24,9 +11,19 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for Journal Entry operations.
@@ -78,8 +75,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Validate all GL accounts are active at transaction date
         for (JournalEntryLine line : entry.getLines()) {
-            glAccountService.validateAccountForPosting(
-                    line.getGlAccountId(), entry.getTransactionDate());
+            glAccountService.validateAccountForPosting(line.getGlAccountId(), entry.getTransactionDate());
         }
 
         // Set entry metadata
@@ -88,8 +84,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.save(entry);
-        log.info("Created journal entry {} in DRAFT status with {} lines",
-                saved.getJournalEntryId(), saved.getLines().size());
+        log.info(
+                "Created journal entry {} in DRAFT status with {} lines",
+                saved.getJournalEntryId(),
+                saved.getLines().size());
         return saved;
     }
 
@@ -118,9 +116,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             relatedEntries = List.of(JournalEntryMapper.toResponse(entry));
         } else {
             relatedEntries = journalEntryRepository.findBySourceEvent(entry.getSourceEventId()).stream()
-                    .sorted(Comparator
-                            .comparing(JournalEntry::getTransactionDate,
-                                    Comparator.nullsLast(Comparator.naturalOrder()))
+                    .sorted(Comparator.comparing(
+                                    JournalEntry::getTransactionDate, Comparator.nullsLast(Comparator.naturalOrder()))
                             .thenComparing(JournalEntry::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
                     .map(JournalEntryMapper::toResponse)
                     .toList();
@@ -128,14 +125,16 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         JournalEntryResponse originalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
         if (originalEntry == null) {
-            originalEntry = journalEntryRepository.findByReversalReference(journalEntryId)
+            originalEntry = journalEntryRepository
+                    .findByReversalReference(journalEntryId)
                     .map(JournalEntryMapper::toResponse)
                     .orElse(null);
         }
 
         JournalEntryResponse reversalEntry = toResponseOrNull(entry.getReversedByJournalEntryId());
-        if (reversalEntry == null && entry.getReversalJournalEntryId() != null &&
-                (originalEntry == null
+        if (reversalEntry == null
+                && entry.getReversalJournalEntryId() != null
+                && (originalEntry == null
                         || !entry.getReversalJournalEntryId().equals(originalEntry.getJournalEntryId()))) {
             reversalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
         }
@@ -155,7 +154,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * transaction context without the proxy-bypass pitfall.
      */
     private JournalEntry findById(UUID journalEntryId) {
-        return journalEntryRepository.findById(journalEntryId)
+        return journalEntryRepository
+                .findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
     }
 
@@ -163,7 +163,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         if (journalEntryId == null) {
             return null;
         }
-        return journalEntryRepository.findById(journalEntryId)
+        return journalEntryRepository
+                .findById(journalEntryId)
                 .map(JournalEntryMapper::toResponse)
                 .orElse(null);
     }
@@ -229,8 +230,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // Final validation before posting
         validateBalance(entry);
         for (JournalEntryLine line : entry.getLines()) {
-            glAccountService.validateAccountForPosting(
-                    line.getGlAccountId(), entry.getTransactionDate());
+            glAccountService.validateAccountForPosting(line.getGlAccountId(), entry.getTransactionDate());
         }
 
         entry.setStatus(JournalEntryStatus.POSTED);
@@ -238,8 +238,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.save(entry);
-        log.info("Posted journal entry {} with total debits/credits: {}",
-                saved.getJournalEntryId(), saved.getLines().size());
+        log.info(
+                "Posted journal entry {} with total debits/credits: {}",
+                saved.getJournalEntryId(),
+                saved.getLines().size());
         return saved;
     }
 

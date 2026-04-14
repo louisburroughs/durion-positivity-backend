@@ -1,5 +1,9 @@
 package com.positivity.vehicle.internal.config;
 
+import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
+import com.positivity.vehicle.service.VehicleEventIngestionService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,12 +11,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Component;
-
-import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
-import com.positivity.vehicle.service.VehicleEventIngestionService;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -30,15 +28,15 @@ import tools.jackson.databind.ObjectMapper;
 public class EventListenerConfig {
 
     @Bean
-    public VehicleEventListener vehicleEventListener(VehicleEventIngestionService ingestionService,
-            ObjectMapper objectMapper) {
+    public VehicleEventListener vehicleEventListener(
+            VehicleEventIngestionService ingestionService, ObjectMapper objectMapper) {
         return new VehicleEventListener(ingestionService, objectMapper);
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void startKafkaListeners(ApplicationReadyEvent event) {
-        KafkaListenerEndpointRegistry registry = event.getApplicationContext()
-                .getBean(KafkaListenerEndpointRegistry.class);
+        KafkaListenerEndpointRegistry registry =
+                event.getApplicationContext().getBean(KafkaListenerEndpointRegistry.class);
         registry.start();
         log.info("Kafka listeners started after application ready");
     }
@@ -60,7 +58,11 @@ public class EventListenerConfig {
          *
          * @param payload JSON event payload from message broker
          */
-        @KafkaListener(topics = "vehicle.updates", groupId = "pos-vehicle-inventory-group", containerFactory = "kafkaListenerContainerFactory", autoStartup = "false")
+        @KafkaListener(
+                topics = "vehicle.updates",
+                groupId = "pos-vehicle-inventory-group",
+                containerFactory = "kafkaListenerContainerFactory",
+                autoStartup = "false")
         public void onVehicleUpdated(String payload) {
             try {
                 log.debug("Received vehicle update event: {}", payload);
@@ -78,7 +80,11 @@ public class EventListenerConfig {
          *
          * @param payload JSON event payload
          */
-        @KafkaListener(topics = "workorder.completed", groupId = "pos-vehicle-inventory-group", containerFactory = "kafkaListenerContainerFactory", autoStartup = "false")
+        @KafkaListener(
+                topics = "workorder.completed",
+                groupId = "pos-vehicle-inventory-group",
+                containerFactory = "kafkaListenerContainerFactory",
+                autoStartup = "false")
         public void onWorkorderCompleted(String payload) {
             try {
                 log.debug("Received workorder completion event: {}", payload);

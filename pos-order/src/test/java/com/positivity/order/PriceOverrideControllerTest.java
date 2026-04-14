@@ -73,17 +73,18 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body), PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/price-overrides")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
                 .andExpect(status().isCreated());
     }
 
     @Test
     @DisplayName("PO-002: POST /v1/orders/price-overrides unauthorized returns 403 Forbidden")
     void applyPriceOverride_whenServiceDeniesAccess_thenReturns403Forbidden() throws Exception {
-        when(priceOverrideService.applyPriceOverride(any()))
-                .thenThrow(new AccessDeniedException("Forbidden"));
+        when(priceOverrideService.applyPriceOverride(any())).thenThrow(new AccessDeniedException("Forbidden"));
 
         String body = """
                 {
@@ -96,9 +97,11 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body), PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/price-overrides")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
@@ -122,9 +125,11 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body), PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/price-overrides")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT"))
                 .andExpect(jsonPath("$.status").value(409));
@@ -136,15 +141,18 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
         UUID overrideId = UUID.randomUUID();
         when(priceOverrideService.approveOverride(any(), any())).thenReturn(sampleDetail("APPROVED"));
 
-        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/approve", overrideId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"comments\":\"ok\"}"),
-                PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + ",ROLE_MANAGER"))
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/price-overrides/{overrideId}/approve", overrideId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"comments\":\"ok\"}"),
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + ",ROLE_MANAGER"))
                 .andExpect(status().isOk());
 
-        verify(priceOverrideService).approveOverride(any(), argThat(command ->
-                "MANAGER".equals(command.approverRole())
-                        && "ok".equals(command.comments())));
+        verify(priceOverrideService)
+                .approveOverride(
+                        any(),
+                        argThat(command ->
+                                "MANAGER".equals(command.approverRole()) && "ok".equals(command.comments())));
     }
 
     @Test
@@ -153,16 +161,19 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
         UUID overrideId = UUID.randomUUID();
         when(priceOverrideService.rejectOverride(any(), any())).thenReturn(sampleDetail("REJECTED"));
 
-        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/reject", overrideId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"policy\",\"comments\":\"no role\"}"),
-                PriceOverridePermissions.PRICE_OVERRIDE_REJECT))
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/price-overrides/{overrideId}/reject", overrideId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"policy\",\"comments\":\"no role\"}"),
+                        PriceOverridePermissions.PRICE_OVERRIDE_REJECT))
                 .andExpect(status().isOk());
 
-        verify(priceOverrideService).rejectOverride(any(), argThat(command ->
-                "UNKNOWN".equals(command.reviewerRole())
-                        && "policy".equals(command.reason())
-                        && "no role".equals(command.comments())));
+        verify(priceOverrideService)
+                .rejectOverride(
+                        any(),
+                        argThat(command -> "UNKNOWN".equals(command.reviewerRole())
+                                && "policy".equals(command.reason())
+                                && "no role".equals(command.comments())));
     }
 
     private PriceOverrideDetail sampleDetail(String status) {

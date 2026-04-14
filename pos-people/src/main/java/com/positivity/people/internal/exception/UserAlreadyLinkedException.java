@@ -12,5 +12,4 @@ public class UserAlreadyLinkedException extends RuntimeException {
         super("User " + userId + " is already linked to person " + currentPersonId + " and cannot be linked to person "
                 + requestedPersonId);
     }
-
 }

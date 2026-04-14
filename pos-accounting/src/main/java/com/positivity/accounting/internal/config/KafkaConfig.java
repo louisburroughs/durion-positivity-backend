@@ -17,5 +17,4 @@ import org.springframework.kafka.annotation.EnableKafka;
 @Configuration
 @EnableKafka
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
-public class KafkaConfig {
-}
+public class KafkaConfig {}

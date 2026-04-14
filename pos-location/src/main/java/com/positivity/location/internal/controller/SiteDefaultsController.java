@@ -35,8 +35,16 @@ public class SiteDefaultsController {
     private final SiteDefaultsService siteDefaultsService;
 
     @PutMapping
-    @Operation(summary = "Configure site defaults", description = "Create or update default site configuration for a location.")
-    @ApiResponse(responseCode = "200", description = "Site defaults configured", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SiteDefaultsResponse.class)))
+    @Operation(
+            summary = "Configure site defaults",
+            description = "Create or update default site configuration for a location.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Site defaults configured",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = SiteDefaultsResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Location not found")
@@ -50,7 +58,13 @@ public class SiteDefaultsController {
 
     @GetMapping
     @Operation(summary = "Get site defaults", description = "Retrieve default site configuration for a location.")
-    @ApiResponse(responseCode = "200", description = "Site defaults returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SiteDefaultsResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Site defaults returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = SiteDefaultsResponse.class)))
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Location not found")
     @PreAuthorize("hasAuthority('location:read')")

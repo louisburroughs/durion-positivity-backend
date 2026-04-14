@@ -1,7 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.domain.TravelSegmentStartedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStoppedEvent;
@@ -17,17 +15,17 @@ import com.positivity.workorder.internal.exception.TravelSegmentNotFoundExceptio
 import com.positivity.workorder.internal.repository.TravelSegmentAdjustmentRepository;
 import com.positivity.workorder.internal.repository.TravelSegmentRepository;
 import com.positivity.workorder.service.TravelSegmentService;
-import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service implementation for mobile travel segment capture (Story #67).
@@ -54,7 +52,8 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         }
         // AC3: block if an active segment already exists for this assignment
         if (travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
-                request.getMobileWorkAssignmentId(), TravelSegmentStatus.IN_PROGRESS) > 0) {
+                        request.getMobileWorkAssignmentId(), TravelSegmentStatus.IN_PROGRESS)
+                > 0) {
             throw new TravelSegmentConflictException("An active travel segment already exists for this assignment");
         }
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
@@ -73,23 +72,25 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 .createdBy(actor)
                 .build();
         TravelSegment saved = travelSegmentRepository.save(segment);
-        eventPublisher.publishEvent(new TravelSegmentStartedEvent(
-                saved.getTravelSegmentId(), saved.getTechnicianId(), saved.getStartAt()));
+        eventPublisher.publishEvent(
+                new TravelSegmentStartedEvent(saved.getTravelSegmentId(), saved.getTechnicianId(), saved.getStartAt()));
         return saved;
     }
 
     @Override
     @Transactional
-    public @NonNull TravelSegment stopTravelSegment(@NonNull UUID travelSegmentId,
-            @NonNull StopTravelSegmentRequest request) {
-        TravelSegment segment = travelSegmentRepository.findById(travelSegmentId)
+    public @NonNull TravelSegment stopTravelSegment(
+            @NonNull UUID travelSegmentId, @NonNull StopTravelSegmentRequest request) {
+        TravelSegment segment = travelSegmentRepository
+                .findById(travelSegmentId)
                 .orElseThrow(() -> new TravelSegmentNotFoundException(travelSegmentId));
         if (segment.getStatus() != TravelSegmentStatus.IN_PROGRESS) {
             throw new TravelSegmentConflictException("Cannot stop a segment that is not IN_PROGRESS");
         }
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant endAt = Instant.now(clock);
-        int minutes = Math.toIntExact(Duration.between(segment.getStartAt(), endAt).toMinutes());
+        int minutes =
+                Math.toIntExact(Duration.between(segment.getStartAt(), endAt).toMinutes());
         segment.setEndAt(endAt);
         if (request.getToLocationId() != null) {
             segment.setToLocationId(request.getToLocationId());
@@ -117,12 +118,13 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
             throw new IllegalArgumentException("Invalid technician id in security context username: " + username);
         }
 
-        List<TravelSegment> all = new ArrayList<>(travelSegmentRepository
-                .findByMobileWorkAssignmentIdAndTechnicianId(mobileWorkAssignmentId, technicianId)
-                .stream()
-                .filter(s -> s.getStatus() == TravelSegmentStatus.IN_PROGRESS
-                        || s.getStatus() == TravelSegmentStatus.COMPLETED)
-                .toList());
+        List<TravelSegment> all = new ArrayList<>(
+                travelSegmentRepository
+                        .findByMobileWorkAssignmentIdAndTechnicianId(mobileWorkAssignmentId, technicianId)
+                        .stream()
+                        .filter(s -> s.getStatus() == TravelSegmentStatus.IN_PROGRESS
+                                || s.getStatus() == TravelSegmentStatus.COMPLETED)
+                        .toList());
         if (all.isEmpty()) {
             throw new TravelSegmentNotFoundException(mobileWorkAssignmentId);
         }
@@ -135,7 +137,8 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
     @Transactional
     public @NonNull TravelSegmentAdjustment createAdjustment(
             @NonNull UUID travelSegmentId, @NonNull CreateTravelSegmentAdjustmentRequest request) {
-        TravelSegment segment = travelSegmentRepository.findById(travelSegmentId)
+        TravelSegment segment = travelSegmentRepository
+                .findById(travelSegmentId)
                 .orElseThrow(() -> new TravelSegmentNotFoundException(travelSegmentId));
         if (segment.getStatus() != TravelSegmentStatus.APPROVED) {
             throw new TravelSegmentConflictException("Adjustments can only be created for approved segments");

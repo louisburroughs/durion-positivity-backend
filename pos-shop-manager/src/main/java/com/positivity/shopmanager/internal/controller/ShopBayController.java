@@ -1,5 +1,13 @@
 package com.positivity.shopmanager.internal.controller;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.service.BayService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,16 +19,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.events.EmitEvent;
-import com.positivity.shopmanager.service.BayService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 @Slf4j
 @Tag(name = "Shop Bay API", description = "Operations for managing bays within shop locations")
 @RestController
@@ -30,12 +28,15 @@ public class ShopBayController {
 
     private final BayService bayService;
 
-    @Operation(summary = "Get bays", description = "List all bays or get a specific bay detail by locationId and bayId.")
+    @Operation(
+            summary = "Get bays",
+            description = "List all bays or get a specific bay detail by locationId and bayId.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
-    @GetMapping({ "/bays", "/{locationId}/bays/{bayId}" })
+    @GetMapping({"/bays", "/{locationId}/bays/{bayId}"})
     @PreAuthorize("hasAuthority('shop:bay:view')")
     public ResponseEntity<Object> getBays(
-            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false) Long locationId,
+            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false)
+                    Long locationId,
             @Parameter(description = "Bay ID (optional for specific bay)") @PathVariable(required = false) Long bayId) {
         log.info("Fetching bays - locationId(mask)={}, bayId(mask)={}", maskForLog(locationId), maskForLog(bayId));
         Object bays = bayService.getBays(locationId, bayId);
@@ -76,8 +77,7 @@ public class ShopBayController {
     public ResponseEntity<Void> deleteBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {
-        log.info("Deleting bay ID(mask): {} for shop location ID(mask): {}", maskForLog(bayId),
-                maskForLog(locationId));
+        log.info("Deleting bay ID(mask): {} for shop location ID(mask): {}", maskForLog(bayId), maskForLog(locationId));
         bayService.deleteBay(locationId, bayId);
         return ResponseEntity.noContent().build();
     }
@@ -86,10 +86,8 @@ public class ShopBayController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

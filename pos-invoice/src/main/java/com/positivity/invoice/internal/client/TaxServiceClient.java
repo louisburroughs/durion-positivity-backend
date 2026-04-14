@@ -1,5 +1,8 @@
 package com.positivity.invoice.internal.client;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -8,10 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Map;
 
 @Component
 public class TaxServiceClient {
@@ -32,12 +31,11 @@ public class TaxServiceClient {
             log.debug("Calculating tax for subtotal {} and partyId(mask) {}", subtotal, maskForLog(partyId));
         }
 
-        TaxCalculationResponse response = restClient.post()
+        TaxCalculationResponse response = restClient
+                .post()
                 .uri("/calculate")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of(
-                        "subtotal", subtotal,
-                        "partyId", partyId == null ? "" : partyId))
+                .body(Map.of("subtotal", subtotal, "partyId", partyId == null ? "" : partyId))
                 .retrieve()
                 .body(TaxCalculationResponse.class);
 
@@ -62,10 +60,8 @@ public class TaxServiceClient {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

@@ -2,11 +2,10 @@ package com.positivity.securityservice.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-
-import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
 
 class RoleAuthorityServiceTest {
 
@@ -26,9 +25,7 @@ class RoleAuthorityServiceTest {
     void expandRolesToAuthorities_handlesPrefixedAndBlankRoles() {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("ROLE_CSR", " "));
 
-        assertThat(authorities)
-                .contains("ROLE_CSR")
-                .contains("crm:party:view");
+        assertThat(authorities).contains("ROLE_CSR").contains("crm:party:view");
     }
 
     @Test
@@ -92,9 +89,7 @@ class RoleAuthorityServiceTest {
     void expandRolesToAuthorities_controllerIncludesArchivePermission() {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("CONTROLLER"));
 
-        assertThat(authorities)
-                .contains("ROLE_CONTROLLER")
-                .contains("accounting:posting_rules:archive");
+        assertThat(authorities).contains("ROLE_CONTROLLER").contains("accounting:posting_rules:archive");
     }
 
     @Test

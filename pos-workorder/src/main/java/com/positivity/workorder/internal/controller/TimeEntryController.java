@@ -8,12 +8,11 @@ import com.positivity.workorder.service.TimeEntryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 @Tag(name = "Time Entry API", description = "Endpoints for approving and rejecting submitted time entries")
 @RestController
@@ -36,8 +35,7 @@ public class TimeEntryController {
     @PreAuthorize("hasAuthority('TimeEntry:Reject')")
     @Operation(summary = "Reject a time entry in SUBMITTED state")
     public ResponseEntity<TimeEntryResponse> rejectTimeEntry(
-            @PathVariable UUID timeEntryId,
-            @Valid @RequestBody RejectTimeEntryRequest request) {
+            @PathVariable UUID timeEntryId, @Valid @RequestBody RejectTimeEntryRequest request) {
         return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.rejectTimeEntry(timeEntryId, request)));
     }
 }

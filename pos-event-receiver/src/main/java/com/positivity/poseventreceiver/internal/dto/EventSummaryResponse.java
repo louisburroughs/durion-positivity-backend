@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "Event count grouped by event type for a given timeframe")
 public record EventSummaryResponse(
-    @Schema(description = "Event type identifier", example = "ORDER_ORDER_CREATE") String eventTypeId,
-    @Schema(description = "Number of events of this type in the timeframe", example = "42") long count) {
-}
+        @Schema(description = "Event type identifier", example = "ORDER_ORDER_CREATE")
+        String eventTypeId,
+
+        @Schema(description = "Number of events of this type in the timeframe", example = "42")
+        long count) {}

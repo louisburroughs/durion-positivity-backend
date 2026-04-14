@@ -1,12 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import java.util.UUID;
-
-import org.springframework.stereotype.Service;
-
 import com.positivity.shopmanager.internal.client.PersonClient;
 import com.positivity.shopmanager.internal.client.ServiceEntityClient;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
@@ -15,6 +8,10 @@ import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.repository.ShopServiceRepository;
 import com.positivity.shopmanager.internal.repository.TechnicianRepository;
 import com.positivity.shopmanager.service.ShopService;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -28,18 +25,18 @@ public class ShopServiceImpl implements ShopService {
 
     @Override
     public PersonDTO getTechnicianPerson(UUID locationId, UUID technicianId) {
-        Technician tech = technicianRepository.findByIdAndShopId(technicianId, locationId).orElseThrow();
-        if (tech.getPersonId() == null)
-            return null;
+        Technician tech =
+                technicianRepository.findByIdAndShopId(technicianId, locationId).orElseThrow();
+        if (tech.getPersonId() == null) return null;
         return personClient.getPersonById(tech.getPersonId());
     }
 
     @Override
     public ServiceEntityDTO getShopServiceDetails(UUID locationId, UUID shopServiceId) {
         com.positivity.shopmanager.internal.entity.ShopServiceEntry shopService = shopServiceRepository
-                .findByIdAndShopId(shopServiceId, locationId).orElseThrow();
-        if (shopService.getServiceEntityId() == null)
-            return null;
+                .findByIdAndShopId(shopServiceId, locationId)
+                .orElseThrow();
+        if (shopService.getServiceEntityId() == null) return null;
         return serviceEntityClient.getServiceById(shopService.getServiceEntityId());
     }
 }

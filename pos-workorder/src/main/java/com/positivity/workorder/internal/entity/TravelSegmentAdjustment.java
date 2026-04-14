@@ -11,6 +11,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,17 +23,14 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Entity representing an adjustment applied to a travel segment.
  * Implements Story #67 Mobile Travel Segment Capture.
  */
 @Entity
-@Table(name = "travel_segment_adjustment", indexes = {
-        @Index(name = "idx_tsa_travel_segment_id", columnList = "travel_segment_id")
-})
+@Table(
+        name = "travel_segment_adjustment",
+        indexes = {@Index(name = "idx_tsa_travel_segment_id", columnList = "travel_segment_id")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

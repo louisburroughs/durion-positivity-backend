@@ -9,9 +9,11 @@ import org.jspecify.annotations.NonNull;
 @Value
 @Builder
 public class ConflictOverrideRequest {
-    @NonNull UUID appointmentId;
+    @NonNull
+    UUID appointmentId;
     /** Non-blank reason for the override, e.g. "Customer waiting on-site". */
-    @NonNull String overrideReason;
+    @NonNull
+    String overrideReason;
     /** JSON string describing the conflict, e.g. {"type":"TECHNICIAN_DOUBLE_BOOKED","resourceId":"..."}. */
     String conflictDetails;
 }

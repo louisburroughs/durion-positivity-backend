@@ -7,6 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
+import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -14,7 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,10 +25,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.repository.PermissionRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PermissionServiceImpl")
@@ -53,8 +51,7 @@ class PermissionServiceImplTest {
                     "pricing",
                     "pos-price",
                     List.of(new PermissionRegistrationRequest.PermissionDefinition(
-                            "pricing:price_book:edit",
-                            "Allows editing price books")),
+                            "pricing:price_book:edit", "Allows editing price books")),
                     "1.0");
 
             when(permissionRepository.findByName("pricing:price_book:edit")).thenReturn(Optional.empty());
@@ -83,8 +80,7 @@ class PermissionServiceImplTest {
                     "pricing",
                     "pos-price",
                     List.of(new PermissionRegistrationRequest.PermissionDefinition(
-                            "pricing:price_book:edit",
-                            "Updated description")),
+                            "pricing:price_book:edit", "Updated description")),
                     "1.0");
 
             when(permissionRepository.findByName("pricing:price_book:edit"))
@@ -103,9 +99,7 @@ class PermissionServiceImplTest {
             PermissionRegistrationRequest request = new PermissionRegistrationRequest(
                     "pricing",
                     "pos-price",
-                    List.of(new PermissionRegistrationRequest.PermissionDefinition(
-                            "invalid_key",
-                            "Invalid format")),
+                    List.of(new PermissionRegistrationRequest.PermissionDefinition("invalid_key", "Invalid format")),
                     "1.0");
 
             assertThatThrownBy(() -> sut.registerPermissions(request))

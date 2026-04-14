@@ -1,16 +1,14 @@
 package com.positivity.securityservice.internal.entity;
 
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * JPA entity for storing JWT tokens in the database.

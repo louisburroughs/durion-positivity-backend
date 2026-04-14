@@ -20,8 +20,5 @@ public interface AuditLogEventRepository extends JpaRepository<AuditLogEvent, UU
     List<AuditLogEvent> findByEntityIdAndEntityTypeOrderByTimestampDesc(String entityId, String entityType);
 
     List<AuditLogEvent> findByEntityIdAndEntityTypeAndTimestampBetweenOrderByTimestampDesc(
-            String entityId,
-            String entityType,
-            Instant from,
-            Instant to);
+            String entityId, String entityType, Instant from, Instant to);
 }

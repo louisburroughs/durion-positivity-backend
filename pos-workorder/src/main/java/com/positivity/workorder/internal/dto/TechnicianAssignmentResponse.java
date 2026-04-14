@@ -1,18 +1,15 @@
 package com.positivity.workorder.internal.dto;
 
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Response DTO for technician assignment operations.
@@ -39,7 +36,9 @@ public class TechnicianAssignmentResponse {
     @Schema(description = "ID of user who assigned the technician", example = "550e8400-e29b-41d4-a716-446655440000")
     private String assignedBy;
 
-    @Schema(description = "Previous technician ID if this was a reassignment", example = "550e8400-e29b-41d4-a716-446655440049")
+    @Schema(
+            description = "Previous technician ID if this was a reassignment",
+            example = "550e8400-e29b-41d4-a716-446655440049")
     private String previousTechnicianId;
 
     @Schema(description = "Previous technician name if this was a reassignment", example = "Jane Doe")
@@ -103,7 +102,9 @@ public class TechnicianAssignmentResponse {
     @AllArgsConstructor
     @Schema(description = "Assignment history entry")
     public static class AssignmentHistoryEntry {
-        @Schema(description = "Technician ID for this assignment period", example = "550e8400-e29b-41d4-a716-446655440050")
+        @Schema(
+                description = "Technician ID for this assignment period",
+                example = "550e8400-e29b-41d4-a716-446655440050")
         private String technicianId;
 
         @Schema(description = "Technician display name", example = "John Smith")
@@ -112,10 +113,14 @@ public class TechnicianAssignmentResponse {
         @Schema(description = "When the technician was assigned", example = "2024-01-27T14:30:00")
         private LocalDateTime assignedAt;
 
-        @Schema(description = "ID of user who assigned the technician", example = "550e8400-e29b-41d4-a716-446655440000")
+        @Schema(
+                description = "ID of user who assigned the technician",
+                example = "550e8400-e29b-41d4-a716-446655440000")
         private String assignedBy;
 
-        @Schema(description = "When the technician was unassigned (null for current assignment)", example = "2024-01-27T16:00:00")
+        @Schema(
+                description = "When the technician was unassigned (null for current assignment)",
+                example = "2024-01-27T16:00:00")
         private LocalDateTime unassignedAt;
 
         @Schema(description = "Reason for reassignment/unassignment", example = "Technician called out sick")
@@ -149,9 +154,8 @@ public class TechnicianAssignmentResponse {
             @NonNull TechnicianAssignment currentAssignment,
             @NonNull List<TechnicianAssignment> history,
             @NonNull String currentWorkorderStatus) {
-        List<AssignmentHistoryEntry> historyEntries = history.stream()
-                .map(AssignmentHistoryEntry::fromEntity)
-                .toList();
+        List<AssignmentHistoryEntry> historyEntries =
+                history.stream().map(AssignmentHistoryEntry::fromEntity).toList();
 
         return TechnicianAssignmentResponse.builder()
                 .workorderId(currentAssignment.getWorkorderId().toString())

@@ -1,11 +1,10 @@
 package com.positivity.mcp.internal.config;
 
 import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider;
-import org.jspecify.annotations.NonNull;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-
 import java.time.Duration;
 import java.util.List;
+import org.jspecify.annotations.NonNull;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "mcp.server")
 public record McpServerProperties(
@@ -15,8 +14,7 @@ public record McpServerProperties(
         @NonNull String openApiPath,
         Duration discoveryTimeout,
         @NonNull List<String> includedServices,
-        @NonNull List<String> includedPathPrefixes
-) {
+        @NonNull List<String> includedPathPrefixes) {
     public McpServerProperties {
         if (baseUrl == null) {
             baseUrl = "http://localhost:8080";
@@ -45,15 +43,13 @@ public record McpServerProperties(
         if (includedServices.isEmpty()) {
             return true;
         }
-        return includedServices.stream()
-                .anyMatch(candidate -> candidate.equalsIgnoreCase(serviceId));
+        return includedServices.stream().anyMatch(candidate -> candidate.equalsIgnoreCase(serviceId));
     }
 
     public boolean includesPath(@NonNull String path) {
         if (includedPathPrefixes.isEmpty()) {
             return true;
         }
-        return includedPathPrefixes.stream()
-                .anyMatch(path::startsWith);
+        return includedPathPrefixes.stream().anyMatch(path::startsWith);
     }
 }

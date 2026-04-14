@@ -1,29 +1,12 @@
 package com.positivity.invoice.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
@@ -35,6 +18,21 @@ import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.service.PaymentService;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Controller-layer unit tests for {@link PaymentController} covering Story #9:
@@ -99,8 +97,8 @@ class PaymentControllerTest {
         when(paymentService.initiatePayment(eq(INVOICE_ID), any())).thenReturn(response);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("CAPTURED"))
                 .andExpect(jsonPath("$.capturedAmount").exists());
@@ -115,20 +113,18 @@ class PaymentControllerTest {
         var emptyBody = "{}";
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/payments", INVOICE_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(emptyBody))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(emptyBody))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void initiatePayment_returns404_whenPaymentIntentNotFound() throws Exception {
-        when(paymentService.initiatePayment(any(), any()))
-                .thenThrow(new PaymentIntentNotFoundException("not found"));
+        when(paymentService.initiatePayment(any(), any())).thenThrow(new PaymentIntentNotFoundException("not found"));
 
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                        """
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                                 {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
                                 """))
                 .andExpect(status().isNotFound());
@@ -136,13 +132,11 @@ class PaymentControllerTest {
 
     @Test
     void initiatePayment_returns409_whenInvalidPaymentState() throws Exception {
-        when(paymentService.initiatePayment(any(), any()))
-                .thenThrow(new InvalidPaymentStateException("invalid state"));
+        when(paymentService.initiatePayment(any(), any())).thenThrow(new InvalidPaymentStateException("invalid state"));
 
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                        """
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                                 {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
                                 """))
                 .andExpect(status().isConflict());
@@ -154,9 +148,8 @@ class PaymentControllerTest {
                 .thenThrow(new PaymentIdempotencyConflictException("idempotency conflict"));
 
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                        """
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                                 {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
                                 """))
                 .andExpect(status().isConflict());
@@ -164,13 +157,11 @@ class PaymentControllerTest {
 
     @Test
     void initiatePayment_returns422_whenPaymentDeclined() throws Exception {
-        when(paymentService.initiatePayment(any(), any()))
-                .thenThrow(new PaymentDeclinedException("declined"));
+        when(paymentService.initiatePayment(any(), any())).thenThrow(new PaymentDeclinedException("declined"));
 
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                        """
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                                 {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
                                 """))
                 .andExpect(status().is(422));
@@ -190,10 +181,9 @@ class PaymentControllerTest {
         when(paymentService.capturePayment(eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), anyString()))
                 .thenReturn(response);
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture",
-                INVOICE_ID, PAYMENT_INTENT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"amount\": 200.00, \"captureIdempotencyKey\": \"capture-key-001\"}"))
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/capture", INVOICE_ID, PAYMENT_INTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 200.00, \"captureIdempotencyKey\": \"capture-key-001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CAPTURED"));
     }
@@ -201,8 +191,8 @@ class PaymentControllerTest {
     @Test
     void capturePayment_returns400_whenInvalidCaptureBody() throws Exception {
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments/" + PAYMENT_INTENT_ID + "/capture")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 

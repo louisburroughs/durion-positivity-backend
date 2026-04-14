@@ -8,17 +8,16 @@ import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityR
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Inventory availability service implementation backed by inventory ledger
@@ -70,20 +69,16 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     @Override
     @Transactional(readOnly = true)
     public AvailabilityView queryAvailability(
-            @NonNull String productSku,
-            @NonNull UUID locationId,
-            @Nullable UUID storageLocationId) {
-        List<InventoryLedgerEntry> allProductEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdOrderByTimestampAsc(productSku);
+            @NonNull String productSku, @NonNull UUID locationId, @Nullable UUID storageLocationId) {
+        List<InventoryLedgerEntry> allProductEntries =
+                inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku);
         if (allProductEntries.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
 
-        UUID scopeLocationId = storageLocationId != null
-                ? storageLocationId
-                : locationId;
-        List<InventoryLedgerEntry> locationEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdAndLocationIdOrderByTimestampAsc(
+        UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
+        List<InventoryLedgerEntry> locationEntries =
+                inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(
                         productSku, scopeLocationId);
 
         int onHand = locationEntries.stream()
@@ -124,8 +119,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             return false;
         }
         if (ledgerEntry.getChangeInQuantity() == null) {
-            log.warn("Skipping inventory ledger entry {} with null changeInQuantity",
-                    ledgerEntry.getLedgerEntryId());
+            log.warn("Skipping inventory ledger entry {} with null changeInQuantity", ledgerEntry.getLedgerEntryId());
             return false;
         }
         return true;
@@ -137,14 +131,14 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
 
     private LocationAvailabilityDto toLocationAvailability(UUID locationId, List<InventoryLedgerEntry> entries) {
         int onHandQuantity = entries.stream()
-                .filter(ledgerEntry -> ledgerEntry.getEventType() != null && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity()
-                        : 0)
+                .filter(ledgerEntry -> ledgerEntry.getEventType() != null
+                        && ledgerEntry.getEventType().affectsOnHand())
+                .mapToInt(ledgerEntry ->
+                        ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
                 .sum();
 
-        int activeReservations = entries.stream()
-                .mapToInt(this::reservationDelta)
-                .sum();
+        int activeReservations =
+                entries.stream().mapToInt(this::reservationDelta).sum();
 
         int atpQuantity = onHandQuantity - activeReservations;
 
@@ -172,8 +166,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private int safeQuantity(InventoryLedgerEntry ledgerEntry) {
         Integer quantity = ledgerEntry.getChangeInQuantity();
         if (quantity == null) {
-            log.warn("Ledger entry {} has null changeInQuantity; treating as 0",
-                    ledgerEntry.getLedgerEntryId());
+            log.warn("Ledger entry {} has null changeInQuantity; treating as 0", ledgerEntry.getLedgerEntryId());
             return 0;
         }
         return quantity;

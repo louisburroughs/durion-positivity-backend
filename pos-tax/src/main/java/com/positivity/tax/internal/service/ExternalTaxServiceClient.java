@@ -3,14 +3,12 @@ package com.positivity.tax.internal.service;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.internal.exception.TaxCalculationException;
-
 import io.github.resilience4j.retry.Retry;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.util.function.Supplier;
 
 /**
  * Client for external tax service API.
@@ -44,7 +42,8 @@ public class ExternalTaxServiceClient {
 
         Supplier<TaxCalculationResponse> supplier = () -> {
             try {
-                TaxCalculationResponse response = restClient.post()
+                TaxCalculationResponse response = restClient
+                        .post()
                         .uri("/v1/calculate")
                         .body(request)
                         .retrieve()
@@ -57,7 +56,8 @@ public class ExternalTaxServiceClient {
                 // Mark response as not from test mode
                 response.setTestMode(false);
 
-                log.info("Successfully received tax calculation from external service. Total tax: {}",
+                log.info(
+                        "Successfully received tax calculation from external service. Total tax: {}",
                         response.getTotalTax());
 
                 return response;

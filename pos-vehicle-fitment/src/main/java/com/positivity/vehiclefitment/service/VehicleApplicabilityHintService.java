@@ -1,13 +1,12 @@
 package com.positivity.vehiclefitment.service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public interface VehicleApplicabilityHintService {
 
@@ -42,5 +41,4 @@ public interface VehicleApplicabilityHintService {
      * provided attributes.
      */
     FilterProductsResponse filterProductsByVehicleAttributes(Map<String, String> vehicleAttributes);
-
 }

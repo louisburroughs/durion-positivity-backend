@@ -1,13 +1,12 @@
 package com.positivity.image.internal.controller;
 
-import java.util.Optional;
-
 import com.positivity.image.internal.dto.ImageFileView;
 import com.positivity.image.service.ImageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
@@ -47,7 +46,8 @@ public class ImageController {
     @ApiResponse(responseCode = "404", description = "Image not found.")
     @GetMapping("/filename/{filename}")
     public ResponseEntity<Resource> getImageByFilename(
-            @Parameter(description = "Filename of the image to retrieve", example = "logo.png") @PathVariable String filename) {
+            @Parameter(description = "Filename of the image to retrieve", example = "logo.png") @PathVariable
+                    String filename) {
         Optional<ImageFileView> imageOpt = imageService.findByFilename(filename);
         if (imageOpt.isEmpty()) {
             return ResponseEntity.notFound().build();

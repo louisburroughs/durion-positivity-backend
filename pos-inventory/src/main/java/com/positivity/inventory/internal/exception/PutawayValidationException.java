@@ -6,17 +6,17 @@ package com.positivity.inventory.internal.exception;
  */
 public class PutawayValidationException extends RuntimeException {
     private final String errorCode;
-    
+
     public PutawayValidationException(String errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
     }
-    
+
     public PutawayValidationException(String errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
     }
-    
+
     public String getErrorCode() {
         return errorCode;
     }

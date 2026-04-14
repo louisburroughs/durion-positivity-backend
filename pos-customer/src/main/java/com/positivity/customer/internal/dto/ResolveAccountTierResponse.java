@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Response DTO for account tier resolution/calculation.
- * 
+ *
  * Contains the recommended tier based on business rules and whether
  * it was applied to the account.
  */

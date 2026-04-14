@@ -1,25 +1,22 @@
 package com.positivity.poseventreceiver.internal.entity;
 
-import java.util.UUID;
-
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * EventType represents a classification or category of preregistered events.
  * Maps to PreregisteredEvent via eventTypeId.
- * 
+ *
  * Includes latency percentile thresholds (p50, p95, p99) in microseconds
  * for monitoring event execution performance against SLOs.
  */
@@ -42,6 +39,7 @@ public class EventType {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
     @Column(nullable = false, unique = true)
     private String typeCode;
 
@@ -90,8 +88,8 @@ public class EventType {
         this.p99Micros = DEFAULT_THRESHOLD_MICROS;
     }
 
-    public EventType(String typeCode, String description, String apiVersion, long p50Micros, long p95Micros,
-            long p99Micros) {
+    public EventType(
+            String typeCode, String description, String apiVersion, long p50Micros, long p95Micros, long p99Micros) {
         this.typeCode = typeCode;
         this.description = description;
         this.active = true;

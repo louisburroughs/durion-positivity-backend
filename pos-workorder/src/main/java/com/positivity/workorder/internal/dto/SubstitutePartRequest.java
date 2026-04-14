@@ -2,13 +2,12 @@ package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
-
-import java.util.UUID;
 
 /**
  * Request DTO for substituting a part with another part.
@@ -38,7 +37,9 @@ public class SubstitutePartRequest {
      * Reason for substitution (required for audit).
      */
     @NotNull(message = "Reason is required")
-    @Schema(description = "Audit reason for substitution", example = "Original part unavailable, equivalent substitute used")
+    @Schema(
+            description = "Audit reason for substitution",
+            example = "Original part unavailable, equivalent substitute used")
     private String reason;
 
     /**

@@ -13,7 +13,4 @@ import org.jspecify.annotations.Nullable;
  *                                finalization proceeds.
  */
 public record FinalizationEligibilityResult(
-        boolean eligible,
-        @Nullable String reason,
-        boolean requiresManagerApproval) {
-}
+        boolean eligible, @Nullable String reason, boolean requiresManagerApproval) {}

@@ -24,5 +24,4 @@ public interface RoleAuthorityService {
      * AP_CLERK, etc.).
      */
     Set<String> expandRolesToAuthorities(Set<String> roles);
-
 }

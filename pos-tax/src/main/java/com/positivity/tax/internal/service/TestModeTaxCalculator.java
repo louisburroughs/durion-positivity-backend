@@ -1,22 +1,20 @@
 package com.positivity.tax.internal.service;
 
-import java.time.Clock;
-
-import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxJurisdiction;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
-import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Component;
-
+import com.positivity.tax.internal.config.TaxProperties;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Component;
 
 /**
  * Test mode tax calculator using configurable rates.
@@ -29,7 +27,6 @@ import java.util.List;
 @Component
 public class TestModeTaxCalculator {
     private final Clock clock;
-
 
     private final TaxProperties properties;
 
@@ -49,22 +46,19 @@ public class TestModeTaxCalculator {
         log.info("Calculating tax in TEST MODE for postal code: {}", request.getPostalCode());
 
         // Calculate subtotal from all line items
-        BigDecimal subtotal = request.getLineItems().stream()
-                .map(TaxLineItem::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal subtotal =
+                request.getLineItems().stream().map(TaxLineItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Get applicable jurisdictions based on location
         List<TaxJurisdiction> jurisdictions = determineJurisdictions(request);
 
         // Calculate total tax across all jurisdictions
-        BigDecimal totalTax = jurisdictions.stream()
-                .map(TaxJurisdiction::getTaxAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalTax =
+                jurisdictions.stream().map(TaxJurisdiction::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Calculate per-line-item tax breakdown
-        List<TaxCalculationResponse.LineItemTax> lineItemTaxes = calculateLineItemTaxes(
-                request.getLineItems(),
-                jurisdictions);
+        List<TaxCalculationResponse.LineItemTax> lineItemTaxes =
+                calculateLineItemTaxes(request.getLineItems(), jurisdictions);
 
         // Calculate effective tax rate
         BigDecimal effectiveTaxRate = subtotal.compareTo(BigDecimal.ZERO) > 0
@@ -107,8 +101,7 @@ public class TestModeTaxCalculator {
         // Apply state tax if configured
         BigDecimal stateRate = defaultRates.getOrDefault(TaxJurisdictionType.STATE.code(), BigDecimal.ZERO);
         if (stateRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal stateTax = taxBase.multiply(stateRate)
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal stateTax = taxBase.multiply(stateRate).setScale(2, RoundingMode.HALF_UP);
             jurisdictions.add(TaxJurisdiction.builder()
                     .countryCode(request.getCountryCode())
                     .regionCode(request.getStateCode())
@@ -124,8 +117,7 @@ public class TestModeTaxCalculator {
         // Apply county tax if configured
         BigDecimal countyRate = defaultRates.getOrDefault(TaxJurisdictionType.COUNTY.code(), BigDecimal.ZERO);
         if (countyRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal countyTax = taxBase.multiply(countyRate)
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal countyTax = taxBase.multiply(countyRate).setScale(2, RoundingMode.HALF_UP);
             jurisdictions.add(TaxJurisdiction.builder()
                     .countryCode(request.getCountryCode())
                     .regionCode(request.getStateCode())
@@ -141,8 +133,7 @@ public class TestModeTaxCalculator {
         // Apply city tax if configured
         BigDecimal cityRate = defaultRates.getOrDefault(TaxJurisdictionType.CITY.code(), BigDecimal.ZERO);
         if (cityRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal cityTax = taxBase.multiply(cityRate)
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal cityTax = taxBase.multiply(cityRate).setScale(2, RoundingMode.HALF_UP);
             jurisdictions.add(TaxJurisdiction.builder()
                     .countryCode(request.getCountryCode())
                     .regionCode(request.getStateCode())
@@ -167,8 +158,7 @@ public class TestModeTaxCalculator {
      */
     @NonNull
     private List<TaxCalculationResponse.LineItemTax> calculateLineItemTaxes(
-            @NonNull List<TaxLineItem> lineItems,
-            @NonNull List<TaxJurisdiction> jurisdictions) {
+            @NonNull List<TaxLineItem> lineItems, @NonNull List<TaxJurisdiction> jurisdictions) {
         // Calculate combined tax rate from all jurisdictions
         BigDecimal combinedRate = jurisdictions.stream()
                 .map(j -> j.getTaxRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))

@@ -1,30 +1,27 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
-import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import com.positivity.accounting.service.IdempotencyService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
-
+import jakarta.persistence.EntityNotFoundException;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import jakarta.persistence.EntityNotFoundException;
-import org.springframework.dao.DataAccessException;
-import org.springframework.dao.OptimisticLockingFailureException;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Service for managing invoice payment status updates.
@@ -59,11 +56,15 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      */
     @Override
     @Transactional
-    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2), retryFor = {
-            DataAccessException.class, OptimisticLockingFailureException.class })
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2),
+            retryFor = {DataAccessException.class, OptimisticLockingFailureException.class})
     public InvoiceStatusResponse processPaymentApplied(PaymentAppliedRequest request) {
-        log.info("Processing payment for invoice {} with idempotency key {}",
-                request.getInvoiceId(), request.getIdempotencyKey());
+        log.info(
+                "Processing payment for invoice {} with idempotency key {}",
+                request.getInvoiceId(),
+                request.getIdempotencyKey());
 
         // Check idempotency
         if (idempotencyService.isKeyProcessed(request.getIdempotencyKey())) {
@@ -73,9 +74,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
 
         // Determine payment status
         PaymentStatus paymentStatus = determinePaymentStatus(
-                request.getPaymentAmount(),
-                request.getInvoiceTotal(),
-                request.isPaymentFailed());
+                request.getPaymentAmount(), request.getInvoiceTotal(), request.isPaymentFailed());
 
         // Create and save payment event
         PaymentAppliedEvent event = new PaymentAppliedEvent(
@@ -86,8 +85,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
                 paymentStatus,
                 request.getIdempotencyKey());
         paymentEventRepository.save(event);
-        log.info("Saved payment event for invoice {} with status {}",
-                request.getInvoiceId(), paymentStatus);
+        log.info("Saved payment event for invoice {} with status {}", request.getInvoiceId(), paymentStatus);
 
         // Update invoice status view
         updateInvoiceStatusView(request.getInvoiceId(), request.getTransactionReference());
@@ -116,7 +114,8 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         if (log.isInfoEnabled()) {
             log.info("Querying status for invoice {}", maskInvoiceId(invoiceId));
         }
-        InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
+        InvoiceStatusView statusView = statusViewRepository
+                .findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
         return new InvoiceStatusResponse(
@@ -141,9 +140,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      * Determine payment status based on amounts.
      */
     private PaymentStatus determinePaymentStatus(
-            BigDecimal paymentAmount,
-            BigDecimal invoiceTotal,
-            boolean paymentFailed) {
+            BigDecimal paymentAmount, BigDecimal invoiceTotal, boolean paymentFailed) {
 
         if (paymentFailed) {
             return PaymentStatus.FAILED;
@@ -168,9 +165,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         BigDecimal totalPaid = paymentEventRepository.calculateTotalPaid(invoiceId);
 
         // Get invoice total from latest event
-        PaymentAppliedEvent latestEvent = paymentEventRepository
-                .findByInvoiceIdOrderByTimestampDesc(invoiceId)
-                .stream()
+        PaymentAppliedEvent latestEvent = paymentEventRepository.findByInvoiceIdOrderByTimestampDesc(invoiceId).stream()
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No payment events found for invoice: " + invoiceId));
 
@@ -180,7 +175,8 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         PaymentStatus overallStatus = determineOverallStatus(totalPaid, invoiceTotal);
 
         // Update or create status view
-        InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
+        InvoiceStatusView statusView = statusViewRepository
+                .findByInvoiceId(invoiceId)
                 .orElse(new InvoiceStatusView(invoiceId, overallStatus, totalPaid, invoiceTotal));
 
         statusView.setCurrentStatus(overallStatus);
@@ -190,8 +186,12 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         statusView.setLastUpdated(Instant.now(clock));
 
         statusViewRepository.saveAndFlush(statusView);
-        log.info("Updated invoice status view for {} - status: {}, totalPaid: {}, total: {}",
-                invoiceId, overallStatus, totalPaid, invoiceTotal);
+        log.info(
+                "Updated invoice status view for {} - status: {}, totalPaid: {}, total: {}",
+                invoiceId,
+                overallStatus,
+                totalPaid,
+                invoiceTotal);
     }
 
     /**

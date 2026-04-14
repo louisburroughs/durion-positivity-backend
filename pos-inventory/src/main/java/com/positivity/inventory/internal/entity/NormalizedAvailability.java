@@ -23,8 +23,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Normalized manufacturer availability snapshot.
  */
 @Entity
-@Table(name = "normalized_availability", uniqueConstraints = @UniqueConstraint(columnNames = { "product_id",
-        "manufacturer_id", "as_of" }))
+@Table(
+        name = "normalized_availability",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"product_id", "manufacturer_id", "as_of"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

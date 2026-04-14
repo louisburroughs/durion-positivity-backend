@@ -1,18 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.domain.Persistable;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -30,20 +19,28 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.domain.Persistable;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * General Ledger Account entity.
- * 
+ *
  * Status is derived from activationDate and deactivationDate, not stored:
  * - ACTIVE: activationDate <= today < deactivationDate (or null)
  * - INACTIVE: deactivationDate <= today
  * - NOT_YET_ACTIVE: activationDate > today
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GLAccount</a>
@@ -55,12 +52,14 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "gl_account", indexes = {
-        @Index(name = "idx_account_code", columnList = "account_code", unique = true),
-        @Index(name = "idx_account_type", columnList = "account_type"),
-        @Index(name = "idx_activation_date", columnList = "activation_date"),
-        @Index(name = "idx_deactivation_date", columnList = "deactivation_date")
-})
+@Table(
+        name = "gl_account",
+        indexes = {
+            @Index(name = "idx_account_code", columnList = "account_code", unique = true),
+            @Index(name = "idx_account_type", columnList = "account_type"),
+            @Index(name = "idx_activation_date", columnList = "activation_date"),
+            @Index(name = "idx_deactivation_date", columnList = "deactivation_date")
+        })
 public class GLAccount implements Persistable<UUID> {
 
     /**
@@ -167,7 +166,7 @@ public class GLAccount implements Persistable<UUID> {
 
     /**
      * Derive account status from activation and deactivation dates.
-     * 
+     *
      * @return "ACTIVE", "INACTIVE", or "NOT_YET_ACTIVE"
      */
     @Transient

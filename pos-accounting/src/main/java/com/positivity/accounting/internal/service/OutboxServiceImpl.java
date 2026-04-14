@@ -1,23 +1,20 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.service.OutboxService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for managing event outbox operations.
@@ -31,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 public class OutboxServiceImpl implements OutboxService {
     private final Clock clock;
 
-
     private final EventOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
@@ -41,7 +37,7 @@ public class OutboxServiceImpl implements OutboxService {
      * This method MUST be called within the same transaction as the business
      * operation
      * to ensure atomicity.
-     * 
+     *
      * @param eventId       unique event identifier (idempotency key)
      * @param aggregateType type of aggregate (e.g., "APPayment")
      * @param aggregateId   ID of the aggregate
@@ -61,23 +57,20 @@ public class OutboxServiceImpl implements OutboxService {
         try {
             String payload = objectMapper.writeValueAsString(event);
 
-            EventOutbox outbox = EventOutbox.create(
-                    eventId,
-                    aggregateType,
-                    aggregateId,
-                    eventType,
-                    payload);
+            EventOutbox outbox = EventOutbox.create(eventId, aggregateType, aggregateId, eventType, payload);
 
             EventOutbox saved = outboxRepository.save(outbox);
 
-            log.debug("Event saved to outbox | eventId={} | aggregateType={} | aggregateId={}",
-                    eventId, aggregateType, aggregateId);
+            log.debug(
+                    "Event saved to outbox | eventId={} | aggregateType={} | aggregateId={}",
+                    eventId,
+                    aggregateType,
+                    aggregateId);
 
             return saved;
 
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize event to JSON | eventId={} | eventType={}",
-                    eventId, eventType, e);
+            log.error("Failed to serialize event to JSON | eventId={} | eventType={}", eventId, eventType, e);
             throw new IllegalArgumentException("Failed to serialize event for outbox", e);
         }
     }
@@ -87,7 +80,7 @@ public class OutboxServiceImpl implements OutboxService {
      * <p>
      * Uses REQUIRES_NEW to ensure publication status is committed even if
      * the message broker transaction fails.
-     * 
+     *
      * @param outboxId the outbox entry ID
      */
     @Override
@@ -98,8 +91,7 @@ public class OutboxServiceImpl implements OutboxService {
             outbox.setPublishedAt(Instant.now(clock));
             outboxRepository.save(outbox);
 
-            log.debug("Event marked as published | outboxId={} | eventId={}",
-                    outboxId, outbox.getEventId());
+            log.debug("Event marked as published | outboxId={} | eventId={}", outboxId, outbox.getEventId());
         });
     }
 
@@ -108,7 +100,7 @@ public class OutboxServiceImpl implements OutboxService {
      * <p>
      * Increments retry count and stores error message. Marks as FAILED if max
      * retries exceeded.
-     * 
+     *
      * @param outboxId   the outbox entry ID
      * @param errorMsg   error message from publication attempt
      * @param maxRetries maximum number of retries before marking as FAILED
@@ -123,11 +115,20 @@ public class OutboxServiceImpl implements OutboxService {
 
             if (outbox.getRetryCount() >= maxRetries) {
                 outbox.setStatus(OutboxStatus.FAILED);
-                log.error("Event publication failed after {} retries | outboxId={} | eventId={} | error={}",
-                        maxRetries, outboxId, outbox.getEventId(), errorMsg);
+                log.error(
+                        "Event publication failed after {} retries | outboxId={} | eventId={} | error={}",
+                        maxRetries,
+                        outboxId,
+                        outbox.getEventId(),
+                        errorMsg);
             } else {
-                log.warn("Event publication failed (retry {}/{}) | outboxId={} | eventId={} | error={}",
-                        outbox.getRetryCount(), maxRetries, outboxId, outbox.getEventId(), errorMsg);
+                log.warn(
+                        "Event publication failed (retry {}/{}) | outboxId={} | eventId={} | error={}",
+                        outbox.getRetryCount(),
+                        maxRetries,
+                        outboxId,
+                        outbox.getEventId(),
+                        errorMsg);
             }
 
             outboxRepository.save(outbox);
@@ -136,7 +137,7 @@ public class OutboxServiceImpl implements OutboxService {
 
     /**
      * Cleanup old published events (for scheduled archival).
-     * 
+     *
      * @param beforeDate delete events published before this date
      * @return number of deleted records
      */

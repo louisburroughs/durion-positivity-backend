@@ -1,7 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
@@ -16,6 +14,7 @@ import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.PeopleReportsService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -30,17 +29,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
-
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 public class PeopleReportsServiceImpl implements PeopleReportsService {
 
-    private static final Pattern UUID_PATTERN = Pattern
-            .compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    private static final Pattern UUID_PATTERN =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final Clock clock;
 
@@ -54,9 +52,13 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     private final TimekeepingThresholdCache timekeepingThresholdCache;
 
-    public PeopleReportsServiceImpl(TimeEntryRepository timeEntryRepository, PersonRepository personRepository,
-            WorkexecJobTimeClient workexecJobTimeClient, LocationReferenceClient locationReferenceClient,
-            TimekeepingThresholdCache timekeepingThresholdCache, Clock clock) {
+    public PeopleReportsServiceImpl(
+            TimeEntryRepository timeEntryRepository,
+            PersonRepository personRepository,
+            WorkexecJobTimeClient workexecJobTimeClient,
+            LocationReferenceClient locationReferenceClient,
+            TimekeepingThresholdCache timekeepingThresholdCache,
+            Clock clock) {
         this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
         this.personRepository = personRepository;
@@ -67,12 +69,18 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     @Override
     @NonNull
-    public List<ApprovedTimeExportResponse> getApprovedTimeForExport(@NonNull LocalDate startDate,
-            @NonNull LocalDate endDate, @NonNull List<UUID> locationIds, @NonNull String actorId,
+    public List<ApprovedTimeExportResponse> getApprovedTimeForExport(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull List<UUID> locationIds,
+            @NonNull String actorId,
             String correlationId) {
         log.info(
                 "Reading approved time export rows actorId={}, correlationId={}, startDate={}, endDate={}, locationCount={}",
-                maskValue(actorId), maskValue(correlationId), maskDate(startDate), maskDate(endDate),
+                maskValue(actorId),
+                maskValue(correlationId),
+                maskDate(startDate),
+                maskDate(endDate),
                 locationIds.size());
 
         // Issue #79: enforce stable approved-only export read contract.
@@ -90,10 +98,11 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         Instant windowStartInclusive = startDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
-        Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant();
+        Instant windowEndExclusive =
+                endDate.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant();
 
-        List<TimeEntry> entries = timeEntryRepository.findApprovedForExport(TimeEntryStatus.APPROVED,
-                windowStartInclusive, windowEndExclusive, locationIds);
+        List<TimeEntry> entries = timeEntryRepository.findApprovedForExport(
+                TimeEntryStatus.APPROVED, windowStartInclusive, windowEndExclusive, locationIds);
 
         if (entries.isEmpty()) {
             return List.of();
@@ -102,24 +111,34 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
 
         return entries.stream()
-                .filter(entry -> entry.getApprovedAt() != null && entry.getApprovedBy() != null
-                        && entry.getAttendanceStartAt() != null && entry.getAttendanceEndAt() != null
+                .filter(entry -> entry.getApprovedAt() != null
+                        && entry.getApprovedBy() != null
+                        && entry.getAttendanceStartAt() != null
+                        && entry.getAttendanceEndAt() != null
                         && !entry.getAttendanceEndAt().isBefore(entry.getAttendanceStartAt()))
                 .map(entry -> {
-                    BigDecimal hoursWorked = BigDecimal
-                            .valueOf(Duration.between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
-                                    .toMinutes())
+                    BigDecimal hoursWorked = BigDecimal.valueOf(
+                                    Duration.between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
+                                            .toMinutes())
                             .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
                     String employeeId = getPersonIdString(entry);
                     String employeeName = resolveDisplayName(entry.getPerson(), employeeId);
-                    String locationName = locationNamesById.getOrDefault(entry.getLocationId(),
-                            entry.getLocationId().toString());
+                    String locationName = locationNamesById.getOrDefault(
+                            entry.getLocationId(), entry.getLocationId().toString());
 
-                    return new ApprovedTimeExportResponse(entry.getTimeEntryId().toString(), employeeId, employeeName,
-                            entry.getLocationId(), locationName,
-                            entry.getAttendanceStartAt().atZone(ZoneId.of("UTC")).toLocalDate(), hoursWorked,
-                            entry.getApprovedAt(), entry.getApprovedBy());
+                    return new ApprovedTimeExportResponse(
+                            entry.getTimeEntryId().toString(),
+                            employeeId,
+                            employeeName,
+                            entry.getLocationId(),
+                            locationName,
+                            entry.getAttendanceStartAt()
+                                    .atZone(ZoneId.of("UTC"))
+                                    .toLocalDate(),
+                            hoursWorked,
+                            entry.getApprovedAt(),
+                            entry.getApprovedBy());
                 })
                 .sorted(Comparator.comparing(ApprovedTimeExportResponse::entryDate)
                         .thenComparing(ApprovedTimeExportResponse::timeEntryId))
@@ -128,13 +147,25 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     @Override
     @NonNull
-    public List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(@NonNull LocalDate startDate,
-            @NonNull LocalDate endDate, @NonNull String timezone, UUID locationId, @NonNull List<UUID> technicianIds,
-            boolean flaggedOnly, @NonNull String actorId, String correlationId) {
+    public List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull String timezone,
+            UUID locationId,
+            @NonNull List<UUID> technicianIds,
+            boolean flaggedOnly,
+            @NonNull String actorId,
+            String correlationId) {
         log.info(
                 "Generating attendance job-time discrepancy report actorId={}, correlationId={}, startDate={}, endDate={}, timezone={}, locationId={}, technicianCount={}, flaggedOnly={}",
-                maskValue(actorId), maskValue(correlationId), maskDate(startDate), maskDate(endDate),
-                maskValue(timezone), maskUuid(locationId), technicianIds.size(), flaggedOnly);
+                maskValue(actorId),
+                maskValue(correlationId),
+                maskDate(startDate),
+                maskDate(endDate),
+                maskValue(timezone),
+                maskUuid(locationId),
+                technicianIds.size(),
+                flaggedOnly);
 
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("endDate must be on or after startDate");
@@ -145,14 +176,14 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(zoneId).toInstant();
         boolean includeAllTechnicians = technicianIds.isEmpty();
 
-        List<TimeEntry> attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(windowStartInclusive,
-                windowEndExclusive, locationId, technicianIds, includeAllTechnicians);
+        List<TimeEntry> attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(
+                windowStartInclusive, windowEndExclusive, locationId, technicianIds, includeAllTechnicians);
 
-        Map<AttendanceReportKey, Long> attendanceMinutesByKey = aggregateAttendanceMinutes(attendanceEntries,
-                windowStartInclusive, windowEndExclusive, zoneId);
+        Map<AttendanceReportKey, Long> attendanceMinutesByKey =
+                aggregateAttendanceMinutes(attendanceEntries, windowStartInclusive, windowEndExclusive, zoneId);
 
-        List<WorkexecJobTimeTotal> jobTotals = workexecJobTimeClient.getJobTimeTotals(startDate, endDate, timezone,
-                locationId, technicianIds);
+        List<WorkexecJobTimeTotal> jobTotals =
+                workexecJobTimeClient.getJobTimeTotals(startDate, endDate, timezone, locationId, technicianIds);
         Map<AttendanceReportKey, Long> jobMinutesByKey = aggregateJobMinutes(jobTotals);
 
         Set<AttendanceReportKey> allKeys = new HashSet<>();
@@ -178,10 +209,16 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                 continue;
             }
 
-            rows.add(new AttendanceDiscrepancyReportResponse(key.getTechnicianId(),
-                    technicianNamesById.getOrDefault(key.getTechnicianId(), key.getTechnicianId()), key.getLocationId(),
-                    key.getReportDate(), attendanceMinutes / 60.0d, jobMinutes / 60.0d, discrepancyMinutes / 60.0d,
-                    flagged, thresholdMinutes));
+            rows.add(new AttendanceDiscrepancyReportResponse(
+                    key.getTechnicianId(),
+                    technicianNamesById.getOrDefault(key.getTechnicianId(), key.getTechnicianId()),
+                    key.getLocationId(),
+                    key.getReportDate(),
+                    attendanceMinutes / 60.0d,
+                    jobMinutes / 60.0d,
+                    discrepancyMinutes / 60.0d,
+                    flagged,
+                    thresholdMinutes));
         }
 
         rows.sort(Comparator.comparing(AttendanceDiscrepancyReportResponse::getReportDate)
@@ -223,8 +260,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         return raw.substring(0, 8) + "-****-****-****-************";
     }
 
-    private Map<AttendanceReportKey, Long> aggregateAttendanceMinutes(List<TimeEntry> entries,
-            Instant windowStartInclusive, Instant windowEndExclusive, ZoneId zoneId) {
+    private Map<AttendanceReportKey, Long> aggregateAttendanceMinutes(
+            List<TimeEntry> entries, Instant windowStartInclusive, Instant windowEndExclusive, ZoneId zoneId) {
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
         Instant now = Instant.now(clock);
 
@@ -235,8 +272,13 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         return minutesByKey;
     }
 
-    private void accumulateAttendanceForEntry(TimeEntry entry, Instant windowStartInclusive, Instant windowEndExclusive,
-            ZoneId zoneId, Instant now, Map<AttendanceReportKey, Long> minutesByKey) {
+    private void accumulateAttendanceForEntry(
+            TimeEntry entry,
+            Instant windowStartInclusive,
+            Instant windowEndExclusive,
+            ZoneId zoneId,
+            Instant now,
+            Map<AttendanceReportKey, Long> minutesByKey) {
         if (!hasAttendanceDimensions(entry)) {
             return;
         }
@@ -251,8 +293,10 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     }
 
     private boolean hasAttendanceDimensions(TimeEntry entry) {
-        return entry.getAttendanceStartAt() != null && entry.getPerson() != null
-                && entry.getPerson().getId() != null && entry.getLocationId() != null;
+        return entry.getAttendanceStartAt() != null
+                && entry.getPerson() != null
+                && entry.getPerson().getId() != null
+                && entry.getLocationId() != null;
     }
 
     private Instant resolveAttendanceEnd(TimeEntry entry, Instant now) {
@@ -267,8 +311,12 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         return left.isAfter(right) ? right : left;
     }
 
-    private void accumulateDailyAttendanceSegments(TimeEntry entry, Instant startInclusive, Instant endExclusive,
-            ZoneId zoneId, Map<AttendanceReportKey, Long> minutesByKey) {
+    private void accumulateDailyAttendanceSegments(
+            TimeEntry entry,
+            Instant startInclusive,
+            Instant endExclusive,
+            ZoneId zoneId,
+            Map<AttendanceReportKey, Long> minutesByKey) {
         Instant cursor = startInclusive;
         while (cursor.isBefore(endExclusive)) {
             LocalDate localDate = cursor.atZone(zoneId).toLocalDate();
@@ -279,15 +327,20 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
     }
 
-    private void addAttendanceSegmentMinutes(Map<AttendanceReportKey, Long> minutesByKey, TimeEntry entry,
-            LocalDate localDate, Instant segmentStartInclusive, Instant segmentEndExclusive) {
-        long segmentMinutes = Duration.between(segmentStartInclusive, segmentEndExclusive).toMinutes();
+    private void addAttendanceSegmentMinutes(
+            Map<AttendanceReportKey, Long> minutesByKey,
+            TimeEntry entry,
+            LocalDate localDate,
+            Instant segmentStartInclusive,
+            Instant segmentEndExclusive) {
+        long segmentMinutes =
+                Duration.between(segmentStartInclusive, segmentEndExclusive).toMinutes();
         if (segmentMinutes <= 0) {
             return;
         }
 
-        AttendanceReportKey key = new AttendanceReportKey(getPersonIdString(entry), entry.getLocationId().toString(),
-                localDate);
+        AttendanceReportKey key = new AttendanceReportKey(
+                getPersonIdString(entry), entry.getLocationId().toString(), localDate);
         long currentMinutes = minutesByKey.getOrDefault(key, 0L);
         minutesByKey.put(key, currentMinutes + segmentMinutes);
     }
@@ -303,12 +356,16 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             return fallbackId;
         }
         String displayName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
-                + (person.getLastName() == null ? "" : person.getLastName()))
+                        + (person.getLastName() == null ? "" : person.getLastName()))
                 .trim();
-        if (displayName.isBlank() && person.getLegalName() != null && !person.getLegalName().isBlank()) {
+        if (displayName.isBlank()
+                && person.getLegalName() != null
+                && !person.getLegalName().isBlank()) {
             displayName = person.getLegalName();
         }
-        if (displayName.isBlank() && person.getPreferredName() != null && !person.getPreferredName().isBlank()) {
+        if (displayName.isBlank()
+                && person.getPreferredName() != null
+                && !person.getPreferredName().isBlank()) {
             displayName = person.getPreferredName();
         }
         return displayName.isBlank() ? fallbackId : displayName;
@@ -317,12 +374,14 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     private Map<AttendanceReportKey, Long> aggregateJobMinutes(List<WorkexecJobTimeTotal> rows) {
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
         for (WorkexecJobTimeTotal row : rows) {
-            if (row.getTechnicianId() == null || row.getLocationId() == null || row.getLocalDate() == null
+            if (row.getTechnicianId() == null
+                    || row.getLocationId() == null
+                    || row.getLocalDate() == null
                     || row.getTotalJobMinutes() == null) {
                 continue;
             }
-            AttendanceReportKey key = new AttendanceReportKey(row.getTechnicianId().toString(),
-                    row.getLocationId().toString(), row.getLocalDate());
+            AttendanceReportKey key = new AttendanceReportKey(
+                    row.getTechnicianId().toString(), row.getLocationId().toString(), row.getLocalDate());
             long currentMinutes = minutesByKey.getOrDefault(key, 0L);
             minutesByKey.put(key, currentMinutes + row.getTotalJobMinutes().longValue());
         }
@@ -342,7 +401,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         if (skippedTechnicianIds > 0 && log.isWarnEnabled()) {
-            log.warn("Skipping {} non-UUID technician identifier(s) while loading technician names",
+            log.warn(
+                    "Skipping {} non-UUID technician identifier(s) while loading technician names",
                     skippedTechnicianIds);
         }
 
@@ -353,9 +413,11 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Map<String, String> namesById = new HashMap<>();
         for (Person person : personRepository.findAllById(technicianIds)) {
             String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
-                    + (person.getLastName() == null ? "" : person.getLastName()))
+                            + (person.getLastName() == null ? "" : person.getLastName()))
                     .trim();
-            namesById.put(person.getId().toString(), fullName.isBlank() ? person.getId().toString() : fullName);
+            namesById.put(
+                    person.getId().toString(),
+                    fullName.isBlank() ? person.getId().toString() : fullName);
         }
         return namesById;
     }
@@ -374,5 +436,4 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
         return namesById;
     }
-
 }

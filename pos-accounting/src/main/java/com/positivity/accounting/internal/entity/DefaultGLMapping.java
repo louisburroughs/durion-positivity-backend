@@ -1,16 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.jspecify.annotations.Nullable;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -24,23 +15,29 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Default GL Account Mapping for event types without explicit posting rules.
  * Provides fallback debit/credit GL accounts to prevent event processing
  * failures.
- * 
+ *
  * Resolution priority:
  * 1. PostingRuleVersion (explicit rules)
  * 2. DefaultGLMapping with matching organizationId
  * 3. DefaultGLMapping with NULL organizationId (global default)
  * 4. Fail with UNMAPPED_EVENT_TYPE
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Default GL Mapping</a>
@@ -52,10 +49,12 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "default_gl_mapping", indexes = {
-        @Index(name = "idx_default_gl_mapping_event_type", columnList = "event_type, organization_id"),
-        @Index(name = "idx_default_gl_mapping_active", columnList = "active")
-})
+@Table(
+        name = "default_gl_mapping",
+        indexes = {
+            @Index(name = "idx_default_gl_mapping_event_type", columnList = "event_type, organization_id"),
+            @Index(name = "idx_default_gl_mapping_active", columnList = "active")
+        })
 public class DefaultGLMapping {
 
     @EqualsAndHashCode.Include

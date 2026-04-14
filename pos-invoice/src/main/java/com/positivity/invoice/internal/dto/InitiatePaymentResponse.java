@@ -2,10 +2,9 @@ package com.positivity.invoice.internal.dto;
 
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+import lombok.Data;
 
 /**
  * Response representing the created or updated payment intent.

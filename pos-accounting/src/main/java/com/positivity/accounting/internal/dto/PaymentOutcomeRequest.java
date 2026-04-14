@@ -21,7 +21,9 @@ import lombok.NoArgsConstructor;
 public class PaymentOutcomeRequest {
 
     @NotNull(message = "invoiceId is required")
-    @Schema(description = "Invoice UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901",
+    @Schema(
+            description = "Invoice UUID",
+            example = "01936e5b-4567-7a3d-8b6e-1a2345678901",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID invoiceId;
     /**
@@ -33,12 +35,16 @@ public class PaymentOutcomeRequest {
     private String transactionId;
     /** Fallback idempotency key when transactionId is absent. */
     @Size(max = 100, message = "idempotencyKey must not exceed 100 characters")
-    @Schema(description = "Fallback idempotency key when transactionId is unavailable", example = "pay-outcome-20260115-001")
+    @Schema(
+            description = "Fallback idempotency key when transactionId is unavailable",
+            example = "pay-outcome-20260115-001")
     private String idempotencyKey;
 
     @NotNull(message = "amountMinor is required")
     @Positive(message = "amountMinor must be greater than zero")
-    @Schema(description = "Payment amount in minor units (e.g., cents)", example = "125000",
+    @Schema(
+            description = "Payment amount in minor units (e.g., cents)",
+            example = "125000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private Long amountMinor;
 
@@ -48,11 +54,14 @@ public class PaymentOutcomeRequest {
     private String currency;
 
     @NotNull(message = "outcomeType is required")
-    @Schema(description = "Payment outcome classification", example = "FULL_PAYMENT",
+    @Schema(
+            description = "Payment outcome classification",
+            example = "FULL_PAYMENT",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private PaymentOutcomeType outcomeType;
 
-    @Schema(description = "Customer UUID. Required for OVERPAYMENT outcomes.",
+    @Schema(
+            description = "Customer UUID. Required for OVERPAYMENT outcomes.",
             example = "01936e5a-7890-7a3d-8b6e-2b3456789012")
     private UUID customerId;
 

@@ -3,10 +3,10 @@ package com.positivity.vehicle.internal.service;
 import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
 import com.positivity.vehicle.internal.repository.VehicleRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public class VehicleDaoImpl implements VehicleDao {

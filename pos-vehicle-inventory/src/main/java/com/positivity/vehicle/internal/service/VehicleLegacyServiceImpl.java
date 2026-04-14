@@ -26,12 +26,8 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
     private static final int MIN_MODEL_YEAR = 1886;
     private static final int FUTURE_YEAR_BUFFER = 1;
-    private static final Set<String> ALLOWED_VEHICLE_TYPES = Set.of(
-            "CAR",
-            "VAN",
-            "COMMERCIAL_TRUCK",
-            "PASSENGER_TRUCK",
-            "TRUCK");
+    private static final Set<String> ALLOWED_VEHICLE_TYPES =
+            Set.of("CAR", "VAN", "COMMERCIAL_TRUCK", "PASSENGER_TRUCK", "TRUCK");
 
     private final VehicleDao vehicleDao;
 
@@ -50,8 +46,7 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
     @Override
     public Optional<VehicleLegacyResponse> getVehicle(@NonNull UUID id) {
         validateId(id);
-        return vehicleDao.findById(id)
-                .map(VehicleLegacyMapper::toResponse);
+        return vehicleDao.findById(id).map(VehicleLegacyMapper::toResponse);
     }
 
     @Override
@@ -105,12 +100,12 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
     @Override
     public Optional<VehicleLegacyResponse> getVehicleByVin(@NonNull String vin) {
         var normalizedVin = normalizeRequiredVin(vin, "vin");
-        return vehicleDao.findByVIN(normalizedVin)
-                .map(VehicleLegacyMapper::toResponse);
+        return vehicleDao.findByVIN(normalizedVin).map(VehicleLegacyMapper::toResponse);
     }
 
     @Override
-    public Optional<VehicleLegacyResponse> updateVehicleByVin(@NonNull String vin, @NonNull VehicleLegacyRequest updated) {
+    public Optional<VehicleLegacyResponse> updateVehicleByVin(
+            @NonNull String vin, @NonNull VehicleLegacyRequest updated) {
         var normalizedVin = normalizeRequiredVin(vin, "vin");
         validateVehicleRequest(updated, false);
 
@@ -179,8 +174,7 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
         int maxYear = Year.now().getValue() + FUTURE_YEAR_BUFFER;
         if (year < MIN_MODEL_YEAR || year > maxYear) {
-            throw new IllegalArgumentException(
-                    "year must be between " + MIN_MODEL_YEAR + " and " + maxYear);
+            throw new IllegalArgumentException("year must be between " + MIN_MODEL_YEAR + " and " + maxYear);
         }
     }
 

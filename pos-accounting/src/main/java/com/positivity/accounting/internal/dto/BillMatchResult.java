@@ -2,11 +2,10 @@ package com.positivity.accounting.internal.dto;
 
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.MatchConfidence;
+import java.util.List;
 import lombok.Builder;
 import lombok.Value;
 import org.jspecify.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * Result of bill-to-invoice matching operation.

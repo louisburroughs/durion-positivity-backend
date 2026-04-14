@@ -16,21 +16,24 @@ public class LocationClient {
     }
 
     public Object getBays() {
-        return restClient.get()
+        return restClient
+                .get()
                 .uri(locationServiceUrl + "/v1/locations/bays")
                 .retrieve()
                 .body(Object.class);
     }
 
     public Object getBayById(Long locationId, Long bayId) {
-        return restClient.get()
+        return restClient
+                .get()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
                 .retrieve()
                 .body(Object.class);
     }
 
     public Object createBay(Long locationId, Object request) {
-        return restClient.post()
+        return restClient
+                .post()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/bays", locationId)
                 .body(request)
                 .retrieve()
@@ -38,7 +41,8 @@ public class LocationClient {
     }
 
     public Object updateBays(Object request) {
-        restClient.put()
+        restClient
+                .put()
                 .uri(locationServiceUrl + "/v1/locations/bays")
                 .body(request)
                 .retrieve();
@@ -46,27 +50,31 @@ public class LocationClient {
     }
 
     public void deleteBay(Long locationId, Long bayId) {
-        restClient.delete()
+        restClient
+                .delete()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
                 .retrieve();
     }
 
     public Object getMobileUnits() {
-        return restClient.get()
+        return restClient
+                .get()
                 .uri(locationServiceUrl + "/v1/locations/mobileUnit")
                 .retrieve()
                 .body(Object.class);
     }
 
     public Object getMobileUnitById(Long locationId, Long bayId) {
-        return restClient.get()
+        return restClient
+                .get()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
                 .retrieve()
                 .body(Object.class);
     }
 
     public Object createMobileUnit(Long locationId, Object request) {
-        return restClient.post()
+        return restClient
+                .post()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/mobileUnit", locationId)
                 .body(request)
                 .retrieve()
@@ -74,7 +82,8 @@ public class LocationClient {
     }
 
     public Object updateMobileUnits(Object request) {
-        restClient.put()
+        restClient
+                .put()
                 .uri(locationServiceUrl + "/v1/locations/mobileUnit")
                 .body(request)
                 .retrieve();
@@ -82,7 +91,8 @@ public class LocationClient {
     }
 
     public void deleteMobileUnit(Long locationId, Long bayId) {
-        restClient.delete()
+        restClient
+                .delete()
                 .uri(locationServiceUrl + "/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
                 .retrieve();
     }

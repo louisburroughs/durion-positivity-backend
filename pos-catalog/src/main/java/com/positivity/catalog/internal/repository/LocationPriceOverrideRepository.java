@@ -10,12 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LocationPriceOverrideRepository extends JpaRepository<LocationPriceOverrideEntity, UUID> {
 
     Optional<LocationPriceOverrideEntity> findTopByLocationIdAndProductIdAndStatusOrderByCreatedAtDesc(
-            UUID locationId,
-            UUID productId,
-            PriceOverrideStatus status);
+            UUID locationId, UUID productId, PriceOverrideStatus status);
 
     List<LocationPriceOverrideEntity> findByLocationIdAndProductIdAndStatus(
-            UUID locationId,
-            UUID productId,
-            PriceOverrideStatus status);
+            UUID locationId, UUID productId, PriceOverrideStatus status);
 }

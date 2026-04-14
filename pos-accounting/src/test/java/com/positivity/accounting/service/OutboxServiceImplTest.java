@@ -8,12 +8,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.accounting.internal.entity.EventOutbox;
+import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
+import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.accounting.internal.service.OutboxServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,13 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.accounting.internal.entity.EventOutbox;
-import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
-import com.positivity.accounting.internal.repository.EventOutboxRepository;
-import com.positivity.accounting.internal.service.OutboxServiceImpl;
 
 /**
  * Unit tests for OutboxServiceImpl.
@@ -65,7 +63,10 @@ class OutboxServiceImplTest {
         outboxId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         aggregateId = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
-        testOutbox = EventOutbox.create(eventId, "APPayment", aggregateId,
+        testOutbox = EventOutbox.create(
+                eventId,
+                "APPayment",
+                aggregateId,
                 "com.positivity.accounting.internal.dto.APPaymentGLPostingEvent",
                 "{\"paymentId\":\"test\"}");
         testOutbox.setOutboxId(outboxId);
@@ -85,8 +86,12 @@ class OutboxServiceImplTest {
             when(objectMapper.writeValueAsString(event)).thenReturn("{\"test\":true}");
             when(outboxRepository.save(any(EventOutbox.class))).thenReturn(testOutbox);
 
-            EventOutbox result = service.saveToOutbox(eventId, "APPayment", aggregateId,
-                    "com.positivity.accounting.internal.dto.APPaymentGLPostingEvent", event);
+            EventOutbox result = service.saveToOutbox(
+                    eventId,
+                    "APPayment",
+                    aggregateId,
+                    "com.positivity.accounting.internal.dto.APPaymentGLPostingEvent",
+                    event);
 
             assertThat(result).isNotNull();
             assertThat(result.getEventId()).isEqualTo(eventId);
@@ -101,8 +106,7 @@ class OutboxServiceImplTest {
                     .thenThrow(new com.fasterxml.jackson.core.JsonGenerationException(
                             "Serialization failed", (com.fasterxml.jackson.core.JsonGenerator) null));
 
-            assertThatThrownBy(() -> service.saveToOutbox(eventId, "APPayment", aggregateId,
-                    "SomeEventType", event))
+            assertThatThrownBy(() -> service.saveToOutbox(eventId, "APPayment", aggregateId, "SomeEventType", event))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Failed to serialize");
 

@@ -5,11 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -17,6 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Unit tests for {@link ShopmgrOperationalContextClient}.
@@ -81,8 +80,8 @@ class ShopmgrOperationalContextClientTest {
     @DisplayName("getOperationalContext wraps ResourceAccessException in IllegalStateException")
     void getOperationalContext_throwsIllegalStateException_onConnectionRefused() {
         // Port 1 is reserved/not listening — triggers ResourceAccessException
-        ShopmgrOperationalContextClient client = new ShopmgrOperationalContextClient(
-                RestClient.builder(), "http://localhost:1");
+        ShopmgrOperationalContextClient client =
+                new ShopmgrOperationalContextClient(RestClient.builder(), "http://localhost:1");
 
         assertThatThrownBy(() -> client.getOperationalContext(WORKORDER_ID))
                 .isInstanceOf(IllegalStateException.class)
@@ -155,8 +154,8 @@ class ShopmgrOperationalContextClientTest {
     @DisplayName("getBayStatusForLocation returns empty list on connection failure")
     void getBayStatusForLocation_returnsEmptyList_onConnectionFailure() {
         // Port 1 is reserved/not listening — triggers ResourceAccessException
-        ShopmgrOperationalContextClient client = new ShopmgrOperationalContextClient(
-                RestClient.builder(), "http://localhost:1");
+        ShopmgrOperationalContextClient client =
+                new ShopmgrOperationalContextClient(RestClient.builder(), "http://localhost:1");
 
         List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays = client.getBayStatusForLocation(LOCATION_ID);
 
@@ -172,8 +171,7 @@ class ShopmgrOperationalContextClientTest {
         return new ShopmgrOperationalContextClient(RestClient.builder(), baseUrl);
     }
 
-    private HttpServer startServer(int statusCode, String body, AtomicInteger callCount)
-            throws IOException {
+    private HttpServer startServer(int statusCode, String body, AtomicInteger callCount) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/", exchange -> {
             callCount.incrementAndGet();

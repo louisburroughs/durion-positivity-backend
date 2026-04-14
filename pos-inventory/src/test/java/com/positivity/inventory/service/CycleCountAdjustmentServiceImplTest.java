@@ -7,23 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
@@ -36,6 +19,21 @@ import com.positivity.inventory.internal.repository.CycleCountAdjustmentReposito
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.CycleCountAdjustmentServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for CycleCountAdjustmentServiceImpl.
@@ -170,7 +168,8 @@ class CycleCountAdjustmentServiceImplTest {
             return entry;
         });
 
-        ApproveAdjustmentRequest request = ApproveAdjustmentRequest.builder().notes("Looks good").build();
+        ApproveAdjustmentRequest request =
+                ApproveAdjustmentRequest.builder().notes("Looks good").build();
         AdjustmentResponse response = service.approveAdjustment(adjustmentId, request, "corr-id-001");
 
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
@@ -311,8 +310,8 @@ class CycleCountAdjustmentServiceImplTest {
      * {@link com.positivity.security.common.SecurityContextHelper}.
      */
     private void setUpAuthenticatedActor() {
-        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
-                ACTOR_USERNAME, "password", "ROLE_MANAGER");
+        TestingAuthenticationToken authentication =
+                new TestingAuthenticationToken(ACTOR_USERNAME, "password", "ROLE_MANAGER");
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USER_ID, ACTOR_USER_ID,
                 GatewaySecurityConstants.DETAIL_USERNAME, ACTOR_USERNAME));

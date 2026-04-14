@@ -2,10 +2,9 @@ package com.positivity.invoice.service;
 
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Public service interface for payment initiation and capture operations.
@@ -27,8 +26,7 @@ public interface PaymentService {
      * @return the created payment intent with status and amounts
      */
     @NonNull
-    InitiatePaymentResponse initiatePayment(@NonNull UUID invoiceId,
-            @NonNull InitiatePaymentRequest request);
+    InitiatePaymentResponse initiatePayment(@NonNull UUID invoiceId, @NonNull InitiatePaymentRequest request);
 
     /**
      * Explicitly captures an authorized payment hold.
@@ -39,7 +37,8 @@ public interface PaymentService {
      * @return the updated payment intent with CAPTURED status and amounts
      */
     @NonNull
-    InitiatePaymentResponse capturePayment(@NonNull UUID invoiceId,
+    InitiatePaymentResponse capturePayment(
+            @NonNull UUID invoiceId,
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
             @NonNull String captureIdempotencyKey);

@@ -34,8 +34,8 @@ public interface StorageLocationRepository extends JpaRepository<StorageLocation
 
     Page<StorageLocationEntity> findBySiteIdAndStatus(UUID siteId, StorageLocationStatus status, Pageable pageable);
 
-    Page<StorageLocationEntity> findBySiteIdAndTypeAndStatus(UUID siteId, StorageLocationType type,
-            StorageLocationStatus status, Pageable pageable);
+    Page<StorageLocationEntity> findBySiteIdAndTypeAndStatus(
+            UUID siteId, StorageLocationType type, StorageLocationStatus status, Pageable pageable);
 
     Optional<StorageLocationEntity> findByParentStorageLocationId(UUID parentId);
 

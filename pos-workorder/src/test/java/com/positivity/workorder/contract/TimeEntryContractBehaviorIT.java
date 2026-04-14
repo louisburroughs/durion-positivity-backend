@@ -1,19 +1,6 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.hamcrest.Matchers.equalTo;
-
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.TimeEntry;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -21,8 +8,17 @@ import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.repository.TimeEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
-
 import io.restassured.http.ContentType;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 
 /**
  * Contract behavior integration tests for Approve Submitted Time
@@ -102,7 +98,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post(randomEntryPath("/approve"))
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(404);
     }
 
@@ -123,7 +120,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post(randomEntryPath("/reject"))
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(404);
     }
 
@@ -145,7 +143,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post(randomEntryPath("/reject"))
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(400);
     }
 
@@ -166,7 +165,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post(randomEntryPath("/reject"))
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(400);
     }
 
@@ -187,7 +187,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/timeEntries/{id}/approve", entry.getTimeEntryId())
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(200)
                 .body("status", equalTo("APPROVED"));
     }
@@ -210,7 +211,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/timeEntries/{id}/reject", entry.getTimeEntryId())
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(200)
                 .body("status", equalTo("REJECTED"));
     }
@@ -232,7 +234,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/timeEntries/{id}/approve", entry.getTimeEntryId())
                 .then()
-                .log().ifValidationFails()
+                .log()
+                .ifValidationFails()
                 .statusCode(409)
                 .body("code", equalTo("TIME_ENTRY_INVALID_STATE"));
     }

@@ -2,17 +2,15 @@ package com.positivity.accounting.internal.dto;
 
 import java.time.Instant;
 import java.util.UUID;
-
-import org.jspecify.annotations.Nullable;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 /**
  * DTO for default GL account mapping response.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - DefaultGLMapping Response</a>

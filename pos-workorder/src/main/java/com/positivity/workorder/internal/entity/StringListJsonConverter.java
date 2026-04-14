@@ -32,8 +32,7 @@ public class StringListJsonConverter implements AttributeConverter<List<String>,
             return new ArrayList<>();
         }
         try {
-            return OBJECT_MAPPER.readValue(dbData, new TypeReference<List<String>>() {
-            });
+            return OBJECT_MAPPER.readValue(dbData, new TypeReference<List<String>>() {});
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("Unable to deserialize string list", exception);
         }

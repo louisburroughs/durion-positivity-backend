@@ -13,7 +13,7 @@ public interface AppointmentLoadService {
      * Loads the create appointment form model for a source document (Estimate or
      * Work Order).
      * Per DECISION-SHOPMGMT-012: facility scoping enforced.
-     * 
+     *
      * @param sourceType    ESTIMATE or WORKORDER
      * @param sourceId      The source identifier (estimateId or workOrderId)
      * @param facilityId    The facility identifier (required per
@@ -32,7 +32,7 @@ public interface AppointmentLoadService {
     /**
      * Gets facility timezone information.
      * Per DECISION-SHOPMGMT-015: used for display and input conversion.
-     * 
+     *
      * @param facilityId The facility identifier
      * @return IANA timezone ID (e.g., America/New_York)
      */

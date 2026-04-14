@@ -33,13 +33,14 @@ public class PriceRestrictionsController {
     private final RestrictionOverrideService overrideService;
 
     public PriceRestrictionsController(
-            RestrictionEvaluationService evaluationService,
-            RestrictionOverrideService overrideService) {
+            RestrictionEvaluationService evaluationService, RestrictionOverrideService overrideService) {
         this.evaluationService = evaluationService;
         this.overrideService = overrideService;
     }
 
-    @Operation(summary = "Evaluate price restrictions", description = "Evaluates whether products are subject to restrictions in the given context.")
+    @Operation(
+            summary = "Evaluate price restrictions",
+            description = "Evaluates whether products are subject to restrictions in the given context.")
     @ApiResponse(responseCode = "200", description = "Evaluation results per product.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
@@ -49,12 +50,15 @@ public class PriceRestrictionsController {
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<RestrictionEvaluationResponse> evaluateRestrictions(
             @Valid @RequestBody RestrictionEvaluationRequest request) {
-        log.info("POST /v1/price/restrictions:evaluate items={}", request.items().size());
+        log.info(
+                "POST /v1/price/restrictions:evaluate items={}", request.items().size());
         List<RestrictionEvaluationResult> results = evaluationService.evaluate(request);
         return ResponseEntity.ok(new RestrictionEvaluationResponse(results));
     }
 
-    @Operation(summary = "Override price restrictions", description = "Issues an override for price restrictions. Requires pricing:restriction:override authority.")
+    @Operation(
+            summary = "Override price restrictions",
+            description = "Issues an override for price restrictions. Requires pricing:restriction:override authority.")
     @ApiResponse(responseCode = "200", description = "Override issued. Returns overrideId and expiresAt.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")

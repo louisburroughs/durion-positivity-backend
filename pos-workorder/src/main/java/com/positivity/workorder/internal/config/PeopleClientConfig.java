@@ -16,8 +16,6 @@ public class PeopleClientConfig {
     public RestClient peopleServiceRestClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.people.base-url:http://pos-people:8084}") String peopleServiceBaseUrl) {
-        return restClientBuilder
-                .baseUrl(peopleServiceBaseUrl)
-                .build();
+        return restClientBuilder.baseUrl(peopleServiceBaseUrl).build();
     }
 }

@@ -1,7 +1,5 @@
 package com.positivity.price.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.price.internal.dto.MoneyAmount;
 import com.positivity.price.internal.dto.PriceQuoteRequest;
 import com.positivity.price.internal.dto.PriceQuoteResponse;
@@ -16,6 +14,7 @@ import com.positivity.price.internal.repository.ProductBasePriceRepository;
 import com.positivity.price.service.PriceQuoteService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PriceQuoteServiceImpl implements PriceQuoteService {
     private final Clock clock;
-
 
     private final ProductBasePriceRepository productPriceRepository;
     private final LocationPriceOverrideRepository locationOverrideRepository;
@@ -53,9 +51,11 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     @NonNull
     @Transactional(readOnly = true)
     public PriceQuoteResponse calculatePrice(@NonNull PriceQuoteRequest request) {
-        Instant effectiveAt = request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now(clock);
+        Instant effectiveAt =
+                request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now(clock);
 
-        ProductBasePrice basePrice = productPriceRepository.findActiveAt(request.getProductId(), effectiveAt)
+        ProductBasePrice basePrice = productPriceRepository
+                .findActiveAt(request.getProductId(), effectiveAt)
                 .orElseThrow(() -> new ProductNotFoundException(request.getProductId()));
 
         List<PricingBreakdownEntry> breakdownEntries = new ArrayList<>();
@@ -63,34 +63,21 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
         BigDecimal currentPrice = basePrice.getMsrp();
         String priceSource = "MSRP_FALLBACK";
 
-        breakdownEntries.add(createBreakdownEntry(
-                "BASE_PRICE",
-                "BASE_PRICE",
-                BigDecimal.ZERO,
-                currentPrice,
-                currency));
+        breakdownEntries.add(createBreakdownEntry("BASE_PRICE", "BASE_PRICE", BigDecimal.ZERO, currentPrice, currency));
 
-        Optional<LocationPriceOverride> locationOverride = locationOverrideRepository.findActiveAt(
-                request.getProductId(),
-                request.getLocationId(),
-                effectiveAt);
+        Optional<LocationPriceOverride> locationOverride =
+                locationOverrideRepository.findActiveAt(request.getProductId(), request.getLocationId(), effectiveAt);
 
         if (locationOverride.isPresent()) {
             BigDecimal adjustment = locationOverride.get().getOverridePrice().subtract(currentPrice);
             currentPrice = locationOverride.get().getOverridePrice();
             priceSource = "CALCULATED";
-            breakdownEntries.add(createBreakdownEntry(
-                    "LOCATION_OVERRIDE",
-                    "LOCATION_OVERRIDE",
-                    adjustment,
-                    currentPrice,
-                    currency));
+            breakdownEntries.add(
+                    createBreakdownEntry("LOCATION_OVERRIDE", "LOCATION_OVERRIDE", adjustment, currentPrice, currency));
         }
 
         Optional<CustomerTierPricingRule> tierRule = customerTierPricingRuleRepository.findActiveAt(
-                request.getProductId(),
-                request.getCustomerTierId(),
-                effectiveAt);
+                request.getProductId(), request.getCustomerTierId(), effectiveAt);
 
         if (tierRule.isPresent()) {
             BigDecimal discountAmount = currentPrice.multiply(tierRule.get().getDiscountRate());
@@ -98,11 +85,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
             currentPrice = currentPrice.subtract(discountAmount);
             priceSource = "CALCULATED";
             breakdownEntries.add(createBreakdownEntry(
-                    "CUSTOMER_TIER_DISCOUNT",
-                    "CUSTOMER_TIER",
-                    adjustment,
-                    currentPrice,
-                    currency));
+                    "CUSTOMER_TIER_DISCOUNT", "CUSTOMER_TIER", adjustment, currentPrice, currency));
         }
 
         BigDecimal unitPrice = currentPrice.setScale(2, RoundingMode.HALF_EVEN);
@@ -121,11 +104,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     }
 
     private PricingBreakdownEntry createBreakdownEntry(
-            String ruleName,
-            String ruleType,
-            BigDecimal adjustment,
-            BigDecimal resultingValue,
-            String currency) {
+            String ruleName, String ruleType, BigDecimal adjustment, BigDecimal resultingValue, String currency) {
         PricingBreakdownEntry entry = new PricingBreakdownEntry();
         entry.setRuleName(ruleName);
         entry.setRuleType(ruleType);

@@ -4,15 +4,14 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import java.io.IOException;
-import java.util.Set;
 
 /**
  * Security filter for the Events API that validates requests using a shared
@@ -58,8 +57,7 @@ public class EventsApiSecurityFilter extends OncePerRequestFilter {
     private final String expectedSecret;
     private final boolean securityEnabled;
 
-    public EventsApiSecurityFilter(
-            @Value("${pos.events.api-secret:}") String expectedSecret) {
+    public EventsApiSecurityFilter(@Value("${pos.events.api-secret:}") String expectedSecret) {
         this.expectedSecret = expectedSecret;
         this.securityEnabled = expectedSecret != null && !expectedSecret.isBlank();
 
@@ -72,8 +70,8 @@ public class EventsApiSecurityFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         String path = request.getRequestURI();
         String method = request.getMethod();
@@ -105,8 +103,7 @@ public class EventsApiSecurityFilter extends OncePerRequestFilter {
         // Validate the shared secret
         String providedSecret = request.getHeader(SECRET_HEADER);
         if (providedSecret == null || !expectedSecret.equals(providedSecret)) {
-            log.warn("Unauthorized request to {} {} - invalid or missing {} header",
-                    method, path, SECRET_HEADER);
+            log.warn("Unauthorized request to {} {} - invalid or missing {} header", method, path, SECRET_HEADER);
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"Invalid or missing API secret\"}");

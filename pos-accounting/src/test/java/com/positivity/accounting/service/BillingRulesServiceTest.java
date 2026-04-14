@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.client.CustomerBillingRulesClient;
+import com.positivity.accounting.internal.client.CustomerServiceException;
+import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
+import com.positivity.accounting.internal.service.BillingRulesServiceImpl;
 import java.math.BigDecimal;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,11 +18,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-
-import com.positivity.accounting.internal.client.CustomerBillingRulesClient;
-import com.positivity.accounting.internal.client.CustomerServiceException;
-import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
-import com.positivity.accounting.internal.service.BillingRulesServiceImpl;
 
 /**
  * Unit tests for BillingRulesServiceImpl.

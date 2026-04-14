@@ -2,11 +2,10 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Service contract for reading inventory availability grouped by location.
@@ -50,7 +49,5 @@ public interface InventoryAvailabilityService {
      */
     @NonNull
     AvailabilityView queryAvailability(
-            @NonNull String productSku,
-            @NonNull UUID locationId,
-            @Nullable UUID storageLocationId);
+            @NonNull String productSku, @NonNull UUID locationId, @Nullable UUID storageLocationId);
 }

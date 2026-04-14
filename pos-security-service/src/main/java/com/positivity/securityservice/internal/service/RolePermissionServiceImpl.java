@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.entity.Permission;
@@ -13,6 +11,7 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.service.RolePermissionService;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RolePermissionServiceImpl implements RolePermissionService {
     private final Clock clock;
-
 
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
 
@@ -58,7 +56,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Override
     @Transactional
     public RoleDto grantPermission(@NonNull UUID roleId, @NonNull String permissionKey) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
         Permission permission = permissionRepository.findByName(permissionKey).orElseGet(() -> {
@@ -74,12 +73,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         role.getPermissions().add(permission);
         Role savedRole = roleRepository.save(role);
 
-        applicationEventPublisher.publishEvent(new RolePermissionGrantAuditEvent(
-                this,
-                getCurrentActor(),
-                roleId,
-                permissionKey,
-                Instant.now(clock)));
+        applicationEventPublisher.publishEvent(
+                new RolePermissionGrantAuditEvent(this, getCurrentActor(), roleId, permissionKey, Instant.now(clock)));
 
         return toRoleDto(savedRole);
     }
@@ -87,7 +82,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Override
     @Transactional
     public RoleDto revokePermission(@NonNull UUID roleId, @NonNull String permissionKey) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
         role.getPermissions().removeIf(permission -> permissionKey.equals(permission.getName()));
         return toRoleDto(roleRepository.save(role));
@@ -100,7 +96,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             return;
         }
 
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository
+                .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
         PrincipalRole principalRole = new PrincipalRole();

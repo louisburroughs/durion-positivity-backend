@@ -1,33 +1,32 @@
 package com.positivity.accounting.internal.entity;
 
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * GL Mapping - effective-dated mapping from (PostingCategory, MappingKey) to
  * GLAccount.
- * 
+ *
  * Immutable once created (append-only). Backend rejects overlapping effective
  * date ranges
  * for same (postingCategoryId, mappingKeyId) combination.
- * 
+ *
  * Query pattern: effectiveFrom <= transactionDate < effectiveTo (or effectiveTo
  * is null)
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GL Mapping</a>
@@ -36,16 +35,18 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "postingCategory", "mappingKey", "glAccount" })
+@ToString(exclude = {"postingCategory", "mappingKey", "glAccount"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "gl_mapping", indexes = {
-        @Index(name = "idx_gl_mapping_category_key", columnList = "posting_category_id, mapping_key_id"),
-        @Index(name = "idx_gl_mapping_effective_from", columnList = "effective_start_date"),
-        @Index(name = "idx_gl_mapping_effective_to", columnList = "effective_end_date"),
-        @Index(name = "idx_gl_mapping_gl_account", columnList = "gl_account_id"),
-        @Index(name = "idx_gl_mapping_source_code", columnList = "source_system, external_code")
-})
+@Table(
+        name = "gl_mapping",
+        indexes = {
+            @Index(name = "idx_gl_mapping_category_key", columnList = "posting_category_id, mapping_key_id"),
+            @Index(name = "idx_gl_mapping_effective_from", columnList = "effective_start_date"),
+            @Index(name = "idx_gl_mapping_effective_to", columnList = "effective_end_date"),
+            @Index(name = "idx_gl_mapping_gl_account", columnList = "gl_account_id"),
+            @Index(name = "idx_gl_mapping_source_code", columnList = "source_system, external_code")
+        })
 public class GLMapping {
 
     @EqualsAndHashCode.Include
@@ -54,6 +55,7 @@ public class GLMapping {
     @UUIDv7Id
     @Column(name = "gl_mapping_id", nullable = false, columnDefinition = "UUID")
     private UUID glMappingId;
+
     @Column(name = "source_system", length = 50, nullable = false)
     private String sourceSystem;
 
@@ -105,7 +107,7 @@ public class GLMapping {
 
     /**
      * Check if this mapping is effective for a given transaction date.
-     * 
+     *
      * @param transactionDate The date to check
      * @return true if effectiveStartDate <= transactionDate < effectiveEndDate (or
      *         effectiveEndDate is null)

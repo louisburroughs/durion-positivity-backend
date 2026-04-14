@@ -5,14 +5,12 @@ import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
 import com.positivity.mcp.service.LlmApiConfigService;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class LlmApiConfigServiceImpl implements LlmApiConfigService {
@@ -26,15 +24,14 @@ public class LlmApiConfigServiceImpl implements LlmApiConfigService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<LlmApiConfigResponse> list() {
-        return repository.findAll().stream()
-                .map(LlmApiConfigResponse::from)
-                .toList();
+        return repository.findAll().stream().map(LlmApiConfigResponse::from).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull LlmApiConfigResponse get(@NonNull UUID id) {
-        return repository.findById(id)
+        return repository
+                .findById(id)
                 .map(LlmApiConfigResponse::from)
                 .orElseThrow(() -> new NoSuchElementException("LLM API config not found: " + id));
     }
@@ -53,7 +50,8 @@ public class LlmApiConfigServiceImpl implements LlmApiConfigService {
     @Override
     @Transactional
     public @NonNull LlmApiConfigResponse update(@NonNull UUID id, @NonNull LlmApiConfigRequest request) {
-        var entity = repository.findById(id)
+        var entity = repository
+                .findById(id)
                 .orElseThrow(() -> new NoSuchElementException("LLM API config not found: " + id));
         if (!entity.getApiId().equals(request.apiId()) && repository.existsByApiId(request.apiId())) {
             throw new IllegalArgumentException("LLM API id already exists: " + request.apiId());

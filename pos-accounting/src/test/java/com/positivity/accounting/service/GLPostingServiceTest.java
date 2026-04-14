@@ -5,12 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.service.GLPostingServiceImpl;
+import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,15 +25,9 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.service.GLPostingServiceImpl;
-import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
-
 /**
  * Unit tests for GLPostingService
- * 
+ *
  * Tests GL posting operations for credit memos and payment applications
  * including entry creation, balance validation, and posting.
  */
@@ -141,8 +139,15 @@ class GLPostingServiceTest {
 
         // Act
         service.postCreditMemoReversal(
-                testCreditMemoId, testRevenueAccountId, testTaxAccountId, testArAccountId,
-                creditAmount, taxReversed, "Test", false, null);
+                testCreditMemoId,
+                testRevenueAccountId,
+                testTaxAccountId,
+                testArAccountId,
+                creditAmount,
+                taxReversed,
+                "Test",
+                false,
+                null);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -172,8 +177,15 @@ class GLPostingServiceTest {
 
         // Act
         service.postCreditMemoReversal(
-                testCreditMemoId, testRevenueAccountId, testTaxAccountId, testArAccountId,
-                creditAmount, taxReversed, "Test", false, null);
+                testCreditMemoId,
+                testRevenueAccountId,
+                testTaxAccountId,
+                testArAccountId,
+                creditAmount,
+                taxReversed,
+                "Test",
+                false,
+                null);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -204,8 +216,15 @@ class GLPostingServiceTest {
 
         // Act
         service.postCreditMemoReversal(
-                testCreditMemoId, testRevenueAccountId, testTaxAccountId, testArAccountId,
-                creditAmount, taxReversed, "Test", false, null);
+                testCreditMemoId,
+                testRevenueAccountId,
+                testTaxAccountId,
+                testArAccountId,
+                creditAmount,
+                taxReversed,
+                "Test",
+                false,
+                null);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -232,9 +251,15 @@ class GLPostingServiceTest {
 
         // Act
         service.postCreditMemoReversal(
-                testCreditMemoId, testRevenueAccountId, testTaxAccountId, testArAccountId,
-                new BigDecimal("100.00"), new BigDecimal("10.00"),
-                "Test", true, "2025-12");
+                testCreditMemoId,
+                testRevenueAccountId,
+                testTaxAccountId,
+                testArAccountId,
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                "Test",
+                true,
+                "2025-12");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -255,9 +280,15 @@ class GLPostingServiceTest {
 
         // Act
         service.postCreditMemoReversal(
-                testCreditMemoId, testRevenueAccountId, testTaxAccountId, testArAccountId,
-                new BigDecimal("100.00"), new BigDecimal("10.00"),
-                "Test", false, null);
+                testCreditMemoId,
+                testRevenueAccountId,
+                testTaxAccountId,
+                testArAccountId,
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                "Test",
+                false,
+                null);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -287,11 +318,7 @@ class GLPostingServiceTest {
 
         // Act
         JournalEntry result = service.postPaymentApplication(
-                testPaymentApplicationId,
-                testCashAccountId,
-                testArAccountId,
-                amount,
-                description);
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, description);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
@@ -329,9 +356,7 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId,
-                amount, "Test");
+        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -359,9 +384,7 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId,
-                amount, "Test");
+        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -390,8 +413,7 @@ class GLPostingServiceTest {
 
         // Act
         service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId,
-                new BigDecimal("100.00"), description);
+                testPaymentApplicationId, testCashAccountId, testArAccountId, new BigDecimal("100.00"), description);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();

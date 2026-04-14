@@ -3,10 +3,9 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.service.PermissionCatalogVersionService;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 /**
  * Implementation of PermissionCatalogVersionService.
@@ -26,8 +25,7 @@ public class PermissionCatalogVersionServiceImpl implements PermissionCatalogVer
 
     @Override
     public @NonNull List<String> decodePermissions(@NonNull String permBits, int permVer) {
-        return PermissionBitsetCodec.decodeToPermissions(permBits, permVer)
-                .stream()
+        return PermissionBitsetCodec.decodeToPermissions(permBits, permVer).stream()
                 .map(PermissionCode::code)
                 .sorted()
                 .toList();

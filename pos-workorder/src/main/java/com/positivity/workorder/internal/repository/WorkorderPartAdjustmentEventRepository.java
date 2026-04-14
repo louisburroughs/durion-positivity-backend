@@ -1,11 +1,10 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for querying part adjustment event history.
@@ -15,7 +14,7 @@ public interface WorkorderPartAdjustmentEventRepository extends JpaRepository<Wo
 
     /**
      * Find all adjustment events for a workorder, ordered newest first.
-     * 
+     *
      * @param workorderId the workorder ID
      * @return list of adjustment events (newest first)
      */
@@ -23,7 +22,7 @@ public interface WorkorderPartAdjustmentEventRepository extends JpaRepository<Wo
 
     /**
      * Find all adjustment events for a specific part, ordered newest first.
-     * 
+     *
      * @param partId the part ID
      * @return list of adjustment events (newest first)
      */

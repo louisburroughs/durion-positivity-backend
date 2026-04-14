@@ -37,13 +37,15 @@ class NltiController {
     ResponseEntity<NltiResponseV1> submitRequest(
             @Valid @RequestBody @NonNull NltiRequestDTO request,
             @RequestHeader(value = NltiCorrelationIdSupport.CORRELATION_ID_HEADER, required = false)
-            String correlationIdHeader,
+                    String correlationIdHeader,
             @NonNull HttpServletRequest servletRequest) {
         UUID resolvedCorrelationId = NltiCorrelationIdSupport.resolveFromHeader(correlationIdHeader);
         servletRequest.setAttribute(NltiCorrelationIdSupport.CORRELATION_ID_ATTRIBUTE, resolvedCorrelationId);
         NltiResponseV1 response = nltiRequestService.submit(request, resolvedCorrelationId);
         return ResponseEntity.accepted()
-                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, response.correlationId().toString())
+                .header(
+                        NltiCorrelationIdSupport.CORRELATION_ID_HEADER,
+                        response.correlationId().toString())
                 .body(response);
     }
 }

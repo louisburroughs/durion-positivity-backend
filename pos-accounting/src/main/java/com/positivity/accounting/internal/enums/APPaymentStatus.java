@@ -2,11 +2,11 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * AP Payment Status enum.
- * 
+ *
  * Lifecycle for Bill Payment with Gateway and GL Posting:
  * INITIATED → GATEWAY_PENDING → (GATEWAY_FAILED | GATEWAY_SUCCEEDED)
  * → GL_POST_PENDING → (GL_POSTED | GL_POST_FAILED)
- * 
+ *
  * <p>
  * States:
  * <ul>
@@ -22,7 +22,7 @@ package com.positivity.accounting.internal.enums;
  * <li>GL_POST_FAILED - GL posting failed after retries, requires manual
  * remediation</li>
  * </ul>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>

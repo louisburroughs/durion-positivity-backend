@@ -1,8 +1,7 @@
 package com.positivity.invoice.internal.payment;
 
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Request payload for an explicit gateway capture operation.
@@ -15,5 +14,4 @@ import java.math.BigDecimal;
 public record GatewayCaptureRequest(
         @NonNull String gatewayReference,
         @NonNull BigDecimal captureAmount,
-        @NonNull String idempotencyKey) {
-}
+        @NonNull String idempotencyKey) {}

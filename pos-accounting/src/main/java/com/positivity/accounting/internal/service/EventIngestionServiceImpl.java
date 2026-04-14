@@ -1,25 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
@@ -34,9 +14,25 @@ import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.accounting.service.IdempotencyService;
-
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for accounting event ingestion and processing.
@@ -67,16 +63,17 @@ import lombok.extern.slf4j.Slf4j;
 public class EventIngestionServiceImpl implements EventIngestionService {
     private final Clock clock;
 
-
     private static final String EVENT_SPACE = "Event ";
     private static final String EVENT_TYPE = "eventType";
     private static final String TRANSACTION_DATE = "transactionDate";
     private static final String ORGANIZATION_ID = "organizationId";
     private static final String SOURCE_SYSTEM = "sourceSystem";
     private final AccountingEventRepository accountingEventRepository;
-    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository
+            reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
-    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
+    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository
+            auditTrailEntryRepository;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
 
     /**
@@ -125,8 +122,12 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             mutableEvent.put(TRANSACTION_DATE, transactionDate);
         }
 
-        log.info("Processing event type {} for org {} from {} on {}",
-                eventType, organizationId, sourceSystem, transactionDate);
+        log.info(
+                "Processing event type {} for org {} from {} on {}",
+                eventType,
+                organizationId,
+                sourceSystem,
+                transactionDate);
 
         // Validate event structure
         List<String> errors = validateEvent(mutableEvent);
@@ -176,7 +177,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public Map<String, Object> getEvent(@NonNull UUID eventId) {
-        return accountingEventRepository.findById(eventId)
+        return accountingEventRepository
+                .findById(eventId)
                 .map(AccountingEvent::getPayload)
                 .orElse(Map.of());
     }
@@ -190,7 +192,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public AccountingEventResponse getEventById(@NonNull UUID eventId) {
-        AccountingEvent event = accountingEventRepository.findById(eventId)
+        AccountingEvent event = accountingEventRepository
+                .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
         return AccountingEventMapper.toEventResponse(event);
     }
@@ -201,7 +204,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
-        AccountingEvent accountingEvent = accountingEventRepository.findById(eventId)
+        AccountingEvent accountingEvent = accountingEventRepository
+                .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
         log.info("Retrying event {}", eventId);
 
@@ -223,13 +227,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * Reprocesses a suspended accounting event.
      * Distinct from retry: reprocess is for business-rule mapping failures that
      * require manual intervention.
-     * 
+     *
      * Business Rules (BR-3: Idempotency):
      * - Reprocessing MUST be idempotent
      * - A single suspense entry can produce at most one successful downstream
      * posting
      * - Returns 409 Conflict if entry is already PROCESSED
-     * 
+     *
      * @param eventId the event identifier
      * @param request reprocess request with user context
      * @return updated accounting event response
@@ -242,7 +246,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         log.info("Reprocessing suspended event {} triggered by user {}", eventId, request.getTriggeredByUserId());
 
         // Load the accounting event
-        AccountingEvent event = accountingEventRepository.findById(eventId)
+        AccountingEvent event = accountingEventRepository
+                .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
 
         // BR-3: Idempotency check - reject if already PROCESSED
@@ -253,8 +258,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         // Verify event is SUSPENDED or FAILED (eligible for reprocessing)
-        if (event.getStatus() != AccountingEventStatus.SUSPENDED
-                && event.getStatus() != AccountingEventStatus.FAILED) {
+        if (event.getStatus() != AccountingEventStatus.SUSPENDED && event.getStatus() != AccountingEventStatus.FAILED) {
             String msg = EVENT_SPACE + eventId + " has status " + event.getStatus()
                     + " and cannot be reprocessed. Only SUSPENDED or FAILED events can be reprocessed.";
             log.warn(msg);
@@ -276,7 +280,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
             // Parse mappingVersionToUse from String to UUID if present
             UUID mappingVersion = null;
-            if (request.getMappingVersionToUse() != null && !request.getMappingVersionToUse().isBlank()) {
+            if (request.getMappingVersionToUse() != null
+                    && !request.getMappingVersionToUse().isBlank()) {
                 try {
                     mappingVersion = UUID.fromString(request.getMappingVersionToUse());
                 } catch (IllegalArgumentException e) {
@@ -288,23 +293,22 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
 
             PostingResult postingResult = postingEngineOrchestrator.processEvent(
-                    event,
-                    mappingVersion,
-                    request.getTriggeredByUserId(),
-                    true // autoPost=true for reprocessing flow
-            );
+                    event, mappingVersion, request.getTriggeredByUserId(), true // autoPost=true for reprocessing flow
+                    );
 
             boolean reprocessingSucceeded = postingResult.isSuccess();
 
             if (reprocessingSucceeded) {
                 // Orchestrator already updated event status to PROCESSED,
                 // set finalPostingReferenceId, processedAt, and resolvedByUserId.
-                String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
+                String finalPostingRef =
+                        (String) postingResult.getEvaluationDetails().get("postingReference");
                 log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
             } else {
                 // Orchestrator already updated event status to SUSPENDED/FAILED
                 // with failureReasonCode and failureDetails.
-                log.warn("Reprocessing failed for event {}: {} - {}",
+                log.warn(
+                        "Reprocessing failed for event {}: {} - {}",
                         eventId,
                         postingResult.getFailureReason(),
                         postingResult.getFailureDetails());
@@ -323,17 +327,17 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         // Reload event to get updates from orchestrator
-        event = accountingEventRepository.findById(eventId)
+        event = accountingEventRepository
+                .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
 
         return AccountingEventMapper.toEventResponse(event);
-
     }
 
     /**
      * Retrieves all reprocessing attempt history for an accounting event.
      * Used for audit trail and diagnostics.
-     * 
+     *
      * @param eventId the event identifier
      * @return list of reprocessing attempts, most recent first
      */
@@ -341,8 +345,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public List<ReprocessingAttemptHistoryResponse> getReprocessingHistory(@NonNull UUID eventId) {
         log.debug("Retrieving reprocessing history for event {}", eventId);
 
-        List<ReprocessingAttemptHistory> history = reprocessingAttemptHistoryRepository
-                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
+        List<ReprocessingAttemptHistory> history =
+                reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
 
         return history.stream()
                 .map(ReprocessingAttemptHistoryMapper::toResponse)
@@ -356,8 +360,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     @Override
     public List<String> getEventProcessingLog(@NonNull UUID eventId) {
         // Query audit trail entries linked to this accounting event
-        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries = auditTrailEntryRepository
-                .findBySourceEventId(eventId);
+        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries =
+                auditTrailEntryRepository.findBySourceEventId(eventId);
 
         if (auditEntries.isEmpty()) {
             log.debug("No audit trail entries found for event {}", eventId);
@@ -366,7 +370,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         // Format audit entries as log messages
         return auditEntries.stream()
-                .map(entry -> String.format("[%s] %s - Actor: %s (%s) - Status: %s - %s",
+                .map(entry -> String.format(
+                        "[%s] %s - Actor: %s (%s) - Status: %s - %s",
                         entry.getTimestamp(),
                         entry.getExceptionType(),
                         entry.getActorId(),
@@ -395,20 +400,17 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public Page<AccountingEventResponse> listEvents(
-            @NonNull UUID organizationId,
-            String status,
-            @NonNull Pageable pageable) {
+            @NonNull UUID organizationId, String status, @NonNull Pageable pageable) {
         log.debug("Listing events for organization {} with status filter: {}", organizationId, status);
 
         Page<AccountingEvent> eventPage;
 
         if (status != null && !status.isBlank()) {
             try {
-                AccountingEventStatus eventStatus = AccountingEventStatus.valueOf(status.trim().toUpperCase());
-                eventPage = accountingEventRepository.findByOrganizationIdAndStatus(
-                        organizationId,
-                        eventStatus,
-                        pageable);
+                AccountingEventStatus eventStatus =
+                        AccountingEventStatus.valueOf(status.trim().toUpperCase());
+                eventPage =
+                        accountingEventRepository.findByOrganizationIdAndStatus(organizationId, eventStatus, pageable);
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid status filter '{}', returning all events for organization", status);
                 eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
@@ -429,9 +431,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * @return paginated accounting event responses
      */
     @Override
-    public Page<AccountingEventResponse> findBySourceSystem(
-            @NonNull String sourceSystem,
-            @NonNull Pageable pageable) {
+    public Page<AccountingEventResponse> findBySourceSystem(@NonNull String sourceSystem, @NonNull Pageable pageable) {
         log.debug("Finding events from source system: {}", sourceSystem);
 
         Page<AccountingEvent> eventPage = accountingEventRepository.findBySourceSystem(sourceSystem, pageable);
@@ -452,10 +452,9 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         int processedCount = 0;
 
         // Query all FAILED and SUSPENDED events that haven't exceeded max retries
-        List<AccountingEvent> failedEvents = accountingEventRepository.findAll()
-                .stream()
+        List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
-                        || event.getStatus() == AccountingEventStatus.SUSPENDED)
+                                || event.getStatus() == AccountingEventStatus.SUSPENDED)
                         && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries))
                 .toList();
 
@@ -464,8 +463,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         for (AccountingEvent event : failedEvents) {
             try {
                 int currentAttempt = event.getAttemptCount() != null ? event.getAttemptCount() : 0;
-                log.debug("Retrying event {} (attempt {}/{})",
-                        event.getEventId(), currentAttempt + 1, maxRetries);
+                log.debug("Retrying event {} (attempt {}/{})", event.getEventId(), currentAttempt + 1, maxRetries);
 
                 // Retry processing through reprocessEvent
                 ReprocessEventRequest request = new ReprocessEventRequest();
@@ -481,8 +479,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
         }
 
-        log.info("Completed processing {} failed events out of {} candidates",
-                processedCount, failedEvents.size());
+        log.info("Completed processing {} failed events out of {} candidates", processedCount, failedEvents.size());
 
         return processedCount;
     }

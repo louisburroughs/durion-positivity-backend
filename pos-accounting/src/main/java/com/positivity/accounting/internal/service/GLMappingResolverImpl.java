@@ -3,18 +3,16 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.service.GLMappingResolver;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for GL Mapping resolution.
@@ -44,8 +42,8 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * Dimensional hierarchy from least specific to most specific.
      * During fallback, dimensions are removed from most specific (last) first.
      */
-    private static final List<String> DIMENSION_HIERARCHY = List.of(
-            "businessUnitId", "locationId", "departmentId", "costCenterId");
+    private static final List<String> DIMENSION_HIERARCHY =
+            List.of("businessUnitId", "locationId", "departmentId", "costCenterId");
 
     private final GLMappingRepository mappingRepository;
 
@@ -70,41 +68,52 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * @throws IllegalArgumentException if no valid mapping found
      */
     @Override
-    public UUID resolveGLAccount(UUID postingCategoryId, UUID mappingKeyId,
+    public UUID resolveGLAccount(
+            UUID postingCategoryId,
+            UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
 
         // Attempt resolution in order of specificity
         // 1. Try exact dimensional match
-        Optional<UUID> exactMatch = resolveWithDimensions(
-                postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
+        Optional<UUID> exactMatch =
+                resolveWithDimensions(postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (exactMatch.isPresent()) {
-            log.debug("GL mapping resolved: {}/{} -> {} [exact dimensional match]",
-                    postingCategoryId, mappingKeyId, exactMatch.get());
+            log.debug(
+                    "GL mapping resolved: {}/{} -> {} [exact dimensional match]",
+                    postingCategoryId,
+                    mappingKeyId,
+                    exactMatch.get());
             return exactMatch.get();
         }
 
         // 2. Try progressive dimensional fallback (remove least specific dimensions)
-        Optional<UUID> partialMatch = resolveFallback(
-                postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
+        Optional<UUID> partialMatch =
+                resolveFallback(postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (partialMatch.isPresent()) {
-            log.debug("GL mapping resolved: {}/{} -> {} [partial dimensional match]",
-                    postingCategoryId, mappingKeyId, partialMatch.get());
+            log.debug(
+                    "GL mapping resolved: {}/{} -> {} [partial dimensional match]",
+                    postingCategoryId,
+                    mappingKeyId,
+                    partialMatch.get());
             return partialMatch.get();
         }
 
         // 3. Try category default (no dimensions)
-        Optional<GLMapping> defaultMapping = mappingRepository
-                .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate);
+        Optional<GLMapping> defaultMapping =
+                mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate);
         if (defaultMapping.isPresent()) {
-            log.debug("GL mapping resolved: {}/{} -> {} [category default]",
-                    postingCategoryId, mappingKeyId, defaultMapping.get().getGlAccountId());
+            log.debug(
+                    "GL mapping resolved: {}/{} -> {} [category default]",
+                    postingCategoryId,
+                    mappingKeyId,
+                    defaultMapping.get().getGlAccountId());
             return defaultMapping.get().getGlAccountId();
         }
 
         // No mapping found
-        String msg = String.format(
-                "No GL mapping found for %s:%s on %s", postingCategoryId, mappingKeyId, transactionDate);
+        String msg =
+                String.format("No GL mapping found for %s:%s on %s", postingCategoryId, mappingKeyId, transactionDate);
         log.warn(msg);
         throw new IllegalArgumentException(msg);
     }
@@ -114,25 +123,28 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * All dimensions in the mapping must exactly equal the provided context.
      * Among matches, the mapping with the most dimensions wins (most specific).
      */
-    private Optional<UUID> resolveWithDimensions(UUID postingCategoryId, UUID mappingKeyId,
+    private Optional<UUID> resolveWithDimensions(
+            UUID postingCategoryId,
+            UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
         }
 
-        List<GLMapping> candidates = mappingRepository.findAllEffectiveMappings(
-                postingCategoryId, mappingKeyId, transactionDate);
+        List<GLMapping> candidates =
+                mappingRepository.findAllEffectiveMappings(postingCategoryId, mappingKeyId, transactionDate);
 
         return candidates.stream()
                 .filter(m -> m.getDimensions() != null && !m.getDimensions().isEmpty())
                 .filter(m -> dimensionContext.equals(m.getDimensions()))
                 .max((a, b) -> Integer.compare(
-                        a.getDimensions().size(),
-                        b.getDimensions().size()))
+                        a.getDimensions().size(), b.getDimensions().size()))
                 .map(match -> {
-                    log.debug("Exact dimensional match found: mapping={}, dimensions={}",
-                            match.getGlMappingId(), match.getDimensions());
+                    log.debug(
+                            "Exact dimensional match found: mapping={}, dimensions={}",
+                            match.getGlMappingId(),
+                            match.getDimensions());
                     return match.getGlAccountId();
                 });
     }
@@ -148,15 +160,17 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * Among matches at the same fallback level, the mapping with the most
      * dimensions wins.
      */
-    private Optional<UUID> resolveFallback(UUID postingCategoryId, UUID mappingKeyId,
+    private Optional<UUID> resolveFallback(
+            UUID postingCategoryId,
+            UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
         }
 
-        List<GLMapping> candidates = mappingRepository.findAllEffectiveMappings(
-                postingCategoryId, mappingKeyId, transactionDate);
+        List<GLMapping> candidates =
+                mappingRepository.findAllEffectiveMappings(postingCategoryId, mappingKeyId, transactionDate);
 
         // Only consider mappings that have dimensions (non-null, non-empty)
         List<GLMapping> dimensioned = candidates.stream()
@@ -189,12 +203,14 @@ public class GLMappingResolverImpl implements GLMappingResolver {
             Optional<GLMapping> match = dimensioned.stream()
                     .filter(m -> snapshot.equals(m.getDimensions()))
                     .max((a, b) -> Integer.compare(
-                            a.getDimensions().size(),
-                            b.getDimensions().size()));
+                            a.getDimensions().size(), b.getDimensions().size()));
 
             if (match.isPresent()) {
-                log.debug("Dimensional fallback match found after removing '{}': mapping={}, dimensions={}",
-                        dimensionToRemove, match.get().getGlMappingId(), match.get().getDimensions());
+                log.debug(
+                        "Dimensional fallback match found after removing '{}': mapping={}, dimensions={}",
+                        dimensionToRemove,
+                        match.get().getGlMappingId(),
+                        match.get().getDimensions());
                 return Optional.of(match.get().getGlAccountId());
             }
         }
@@ -231,8 +247,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
         }
         if (mapping.getEffectiveEndDate() != null
                 && mapping.getEffectiveStartDate().isAfter(mapping.getEffectiveEndDate())) {
-            throw new IllegalArgumentException(
-                    "Effective from date must be on or before effective to date");
+            throw new IllegalArgumentException("Effective from date must be on or before effective to date");
         }
 
         // Check for overlaps with existing mappings (same category + key combination)
@@ -282,13 +297,12 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * @return effective GL account ID
      */
     @Override
-    public UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId,
-            LocalDateTime transactionDate) {
-        return mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
+    public UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId, LocalDateTime transactionDate) {
+        return mappingRepository
+                .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No effective mapping for " + postingCategoryId + ":" + mappingKeyId + " on "
-                                + transactionDate));
+                .orElseThrow(() -> new IllegalArgumentException("No effective mapping for " + postingCategoryId + ":"
+                        + mappingKeyId + " on " + transactionDate));
     }
 
     /**
@@ -301,8 +315,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      */
     @Override
     public java.util.List<GLMapping> getMappingHistory(UUID postingCategoryId, UUID mappingKeyId) {
-        return mappingRepository.findByPostingCategory_PostingCategoryId(postingCategoryId)
-                .stream()
+        return mappingRepository.findByPostingCategory_PostingCategoryId(postingCategoryId).stream()
                 .filter(m -> mappingKeyId.equals(m.getMappingKeyId()))
                 .sorted((a, b) -> a.getEffectiveStartDate().compareTo(b.getEffectiveStartDate()))
                 .toList();

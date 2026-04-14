@@ -9,9 +9,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/invoices")
@@ -38,8 +37,7 @@ public class ReceiptController {
     @ResponseStatus(HttpStatus.CREATED)
     @EmitEvent(id = "INVOICE_RECEIPT_GENERATE", apiVersion = "1")
     public ResponseEntity<ReceiptResponse> generateReceipt(
-            @PathVariable @NonNull UUID invoiceId,
-            @Valid @RequestBody @NonNull GenerateReceiptRequest request) {
+            @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull GenerateReceiptRequest request) {
         Receipt receipt = receiptService.generateReceipt(
                 invoiceId,
                 request.paymentIntentId(),
@@ -92,15 +90,12 @@ public class ReceiptController {
             @NotNull UUID paymentIntentId,
             @NotBlank String terminalId,
             @NotBlank String templateId,
-            @NotBlank String templateVersion) {
-    }
+            @NotBlank String templateVersion) {}
 
-    private record PrintDeliveryRequest(@NotNull ReceiptDeliveryStatus status) {
-    }
+    private record PrintDeliveryRequest(@NotNull ReceiptDeliveryStatus status) {}
 
-    private record EmailDeliveryRequest(@NotBlank String emailAddress, @NotNull ReceiptDeliveryStatus status) {
-    }
+    private record EmailDeliveryRequest(
+            @NotBlank String emailAddress, @NotNull ReceiptDeliveryStatus status) {}
 
-    private record ReprintReceiptRequest(@NotBlank String reason) {
-    }
+    private record ReprintReceiptRequest(@NotBlank String reason) {}
 }

@@ -12,8 +12,5 @@ public interface ItemCostAuditRepository extends JpaRepository<ItemCostAuditEnti
     List<ItemCostAuditEntity> findByItemIdOrderByTimestampDesc(UUID itemId);
 
     List<ItemCostAuditEntity> findByItemIdAndCostTypeChangedAndTimestampBetweenOrderByTimestampDesc(
-            UUID itemId,
-            CostType costTypeChanged,
-            Instant start,
-            Instant end);
+            UUID itemId, CostType costTypeChanged, Instant start, Instant end);
 }

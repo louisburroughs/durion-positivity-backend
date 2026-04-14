@@ -1,13 +1,12 @@
 package com.positivity.events;
 
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Support class for registering event types with the Event Receiver service at
@@ -100,14 +99,20 @@ public class EventTypeInitializerSupport {
                 log.debug("[{}] Successfully registered event type: {}", serviceName, registration.getTypeCode());
             } catch (Exception e) {
                 failCount.incrementAndGet();
-                log.warn("[{}] Failed to register event type '{}': {}",
-                        serviceName, registration.getTypeCode(), e.getMessage());
+                log.warn(
+                        "[{}] Failed to register event type '{}': {}",
+                        serviceName,
+                        registration.getTypeCode(),
+                        e.getMessage());
             }
         }
 
         if (failCount.get() > 0) {
-            log.warn("[{}] Event type registration completed: {} succeeded, {} failed",
-                    serviceName, successCount.get(), failCount.get());
+            log.warn(
+                    "[{}] Event type registration completed: {} succeeded, {} failed",
+                    serviceName,
+                    successCount.get(),
+                    failCount.get());
         } else {
             log.info("[{}] Successfully registered all {} event types", serviceName, successCount.get());
         }

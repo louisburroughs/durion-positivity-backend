@@ -1,12 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Mapper for converting between JournalEntry entities and DTOs.

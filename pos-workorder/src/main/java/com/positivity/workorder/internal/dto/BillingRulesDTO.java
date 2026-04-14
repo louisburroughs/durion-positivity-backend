@@ -5,11 +5,10 @@ import com.positivity.shared.enums.InvoiceGroupingStrategy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * DTO for billing rules responses.
@@ -66,10 +65,12 @@ public class BillingRulesDTO {
 
     // Constructors
 
-    public BillingRulesDTO() {
-    }
+    public BillingRulesDTO() {}
 
-    public BillingRulesDTO(@NonNull String partyId, boolean purchaseOrderRequired, @NonNull String paymentTermsCode,
+    public BillingRulesDTO(
+            @NonNull String partyId,
+            boolean purchaseOrderRequired,
+            @NonNull String paymentTermsCode,
             @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
             @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
         this.partyId = partyId;

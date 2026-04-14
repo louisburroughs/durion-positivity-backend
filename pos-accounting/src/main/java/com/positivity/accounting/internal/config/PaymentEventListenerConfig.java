@@ -2,7 +2,6 @@ package com.positivity.accounting.internal.config;
 
 import com.positivity.accounting.internal.dto.PaymentClearedEvent;
 import com.positivity.accounting.service.PaymentApplicationService;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -79,10 +78,12 @@ public class PaymentEventListenerConfig {
                     event.getAmount(),
                     event.getClearedAt(),
                     event.getEventId() // sourceEventId for idempotency
-            );
+                    );
 
-            log.info("Successfully processed PaymentCleared event {} for payment {}",
-                    event.getEventId(), event.getPaymentId());
+            log.info(
+                    "Successfully processed PaymentCleared event {} for payment {}",
+                    event.getEventId(),
+                    event.getPaymentId());
 
         } catch (JacksonException e) {
             log.error("Failed to deserialize PaymentCleared Kafka message: {}", message, e);

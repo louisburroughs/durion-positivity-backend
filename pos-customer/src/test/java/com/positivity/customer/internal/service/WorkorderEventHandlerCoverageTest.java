@@ -6,20 +6,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.ProcessingLog;
 import com.positivity.customer.internal.enums.ProcessingStatus;
@@ -29,7 +15,18 @@ import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import com.positivity.customer.internal.repository.VehicleProjectionRepository;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -47,362 +44,368 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 class WorkorderEventHandlerCoverageTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        @Mock
-        private ProcessingLogRepository processingLogRepository;
+    @Mock
+    private ProcessingLogRepository processingLogRepository;
 
-        @Mock
-        private CommunicationPreferenceRepository communicationPreferenceRepository;
+    @Mock
+    private CommunicationPreferenceRepository communicationPreferenceRepository;
 
-        @Mock
-        private PersonPartyRepository personPartyRepository;
+    @Mock
+    private PersonPartyRepository personPartyRepository;
 
-        @Mock
-        private PartyNoteRepository partyNoteRepository;
+    @Mock
+    private PartyNoteRepository partyNoteRepository;
 
-        @Mock
-        private VehicleProjectionRepository vehicleProjectionRepository;
+    @Mock
+    private VehicleProjectionRepository vehicleProjectionRepository;
 
-        @Mock
-        private PersonParty personParty;
+    @Mock
+    private PersonParty personParty;
 
-        private WorkorderEventHandler handler;
+    private WorkorderEventHandler handler;
 
-        @BeforeEach
-        void setUp() {
-                handler = new WorkorderEventHandler(
-                                TEST_CLOCK,
-                                processingLogRepository,
-                                communicationPreferenceRepository,
-                                personPartyRepository,
-                                partyNoteRepository,
-                                vehicleProjectionRepository,
-                                new ObjectMapper());
-        }
+    @BeforeEach
+    void setUp() {
+        handler = new WorkorderEventHandler(
+                TEST_CLOCK,
+                processingLogRepository,
+                communicationPreferenceRepository,
+                personPartyRepository,
+                partyNoteRepository,
+                vehicleProjectionRepository,
+                new ObjectMapper());
+    }
 
-        // -----------------------------------------------------------------------
-        // handleWorkorderEvent — ContactPreferenceUpdated dispatch
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleWorkorderEvent — ContactPreferenceUpdated dispatch
+    // -----------------------------------------------------------------------
 
-        /**
-         * The top-level listener dispatches a {@code ContactPreferenceUpdated} JSON
-         * message to the typed handler, which upserts the preference and saves a
-         * {@link ProcessingStatus#SUCCESS} log.
-         */
-        @Test
-        void handleWorkorderEvent_contactPreferenceUpdatedJson_dispatchesAndSavesSuccessLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                String json = "{\"eventId\":\"" + eventId + "\","
-                                + "\"eventType\":\"ContactPreferenceUpdated\","
-                                + "\"eventVersion\":\"1.0\","
-                                + "\"sourceSystem\":\"WorkorderExecution\","
-                                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                                + "\","
-                                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
-                                + "\"payload\":{"
-                                + "\"partyId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001") + "\","
-                                + "\"emailPreference\":\"OPT_IN\","
-                                + "\"smsPreference\":\"OPT_OUT\","
-                                + "\"phonePreference\":\"OPT_IN\","
-                                + "\"marketingPreference\":\"OPT_OUT\""
-                                + "}}";
+    /**
+     * The top-level listener dispatches a {@code ContactPreferenceUpdated} JSON
+     * message to the typed handler, which upserts the preference and saves a
+     * {@link ProcessingStatus#SUCCESS} log.
+     */
+    @Test
+    void handleWorkorderEvent_contactPreferenceUpdatedJson_dispatchesAndSavesSuccessLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String json = "{\"eventId\":\"" + eventId + "\","
+                + "\"eventType\":\"ContactPreferenceUpdated\","
+                + "\"eventVersion\":\"1.0\","
+                + "\"sourceSystem\":\"WorkorderExecution\","
+                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                + "\","
+                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
+                + "\"payload\":{"
+                + "\"partyId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001") + "\","
+                + "\"emailPreference\":\"OPT_IN\","
+                + "\"smsPreference\":\"OPT_OUT\","
+                + "\"phonePreference\":\"OPT_IN\","
+                + "\"marketingPreference\":\"OPT_OUT\""
+                + "}}";
 
-                handler.handleWorkorderEvent(json);
+        handler.handleWorkorderEvent(json);
 
-                verify(communicationPreferenceRepository).save(any());
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
-                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-        }
+        verify(communicationPreferenceRepository).save(any());
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleWorkorderEvent — PartyNoteAdded dispatch
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleWorkorderEvent — PartyNoteAdded dispatch
+    // -----------------------------------------------------------------------
 
-        /**
-         * The top-level listener dispatches a {@code PartyNoteAdded} JSON message
-         * to the typed handler for an existing party and saves a
-         * {@link ProcessingStatus#SUCCESS} log.
-         */
-        @Test
-        void handleWorkorderEvent_partyNoteAddedJson_dispatchesAndSavesSuccessLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                String partyId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                when(personPartyRepository.findByPersonId(UUID.fromString(partyId)))
-                                .thenReturn(Optional.of(personParty));
-                String json = "{\"eventId\":\"" + eventId + "\","
-                                + "\"eventType\":\"PartyNoteAdded\","
-                                + "\"eventVersion\":\"1.0\","
-                                + "\"sourceSystem\":\"WorkorderExecution\","
-                                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                                + "\","
-                                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
-                                + "\"payload\":{"
-                                + "\"partyId\":\"" + partyId + "\","
-                                + "\"noteText\":\"Service note\","
-                                + "\"noteType\":\"SERVICE\","
-                                + "\"sourceWorkorderId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                                + "\""
-                                + "}}";
+    /**
+     * The top-level listener dispatches a {@code PartyNoteAdded} JSON message
+     * to the typed handler for an existing party and saves a
+     * {@link ProcessingStatus#SUCCESS} log.
+     */
+    @Test
+    void handleWorkorderEvent_partyNoteAddedJson_dispatchesAndSavesSuccessLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String partyId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        when(personPartyRepository.findByPersonId(UUID.fromString(partyId))).thenReturn(Optional.of(personParty));
+        String json = "{\"eventId\":\"" + eventId + "\","
+                + "\"eventType\":\"PartyNoteAdded\","
+                + "\"eventVersion\":\"1.0\","
+                + "\"sourceSystem\":\"WorkorderExecution\","
+                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                + "\","
+                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
+                + "\"payload\":{"
+                + "\"partyId\":\"" + partyId + "\","
+                + "\"noteText\":\"Service note\","
+                + "\"noteType\":\"SERVICE\","
+                + "\"sourceWorkorderId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                + "\""
+                + "}}";
 
-                handler.handleWorkorderEvent(json);
+        handler.handleWorkorderEvent(json);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
-                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleWorkorderEvent — unknown event type → SCHEMA_VALIDATION_FAILED
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleWorkorderEvent — unknown event type → SCHEMA_VALIDATION_FAILED
+    // -----------------------------------------------------------------------
 
-        /**
-         * An envelope carrying an unsupported {@code eventType} triggers the
-         * warn-and-fail path, saving a
-         * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}
-         * log with the "Unsupported event type" failure reason.
-         */
-        @Test
-        void handleWorkorderEvent_unknownEventType_savesSchemaValidationFailedLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                String json = "{\"eventId\":\"" + eventId + "\","
-                                + "\"eventType\":\"UnrecognisedEvent\","
-                                + "\"eventVersion\":\"1.0\","
-                                + "\"sourceSystem\":\"WorkorderExecution\","
-                                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                                + "\","
-                                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
-                                + "\"payload\":{}}";
+    /**
+     * An envelope carrying an unsupported {@code eventType} triggers the
+     * warn-and-fail path, saving a
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}
+     * log with the "Unsupported event type" failure reason.
+     */
+    @Test
+    void handleWorkorderEvent_unknownEventType_savesSchemaValidationFailedLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String json = "{\"eventId\":\"" + eventId + "\","
+                + "\"eventType\":\"UnrecognisedEvent\","
+                + "\"eventVersion\":\"1.0\","
+                + "\"sourceSystem\":\"WorkorderExecution\","
+                + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                + "\","
+                + "\"timestamp\":\"2026-03-04T10:00:00Z\","
+                + "\"payload\":{}}";
 
-                handler.handleWorkorderEvent(json);
+        handler.handleWorkorderEvent(json);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-                assertThat(captor.getValue().getFailureReason()).contains("Unsupported event type");
-                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getFailureReason()).contains("Unsupported event type");
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleWorkorderEvent — malformed JSON → JacksonException path
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleWorkorderEvent — malformed JSON → JacksonException path
+    // -----------------------------------------------------------------------
 
-        /**
-         * A message that cannot be deserialized triggers the
-         * {@link tools.jackson.core.JacksonException} catch path, saving a
-         * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log with a generated
-         * UUID {@code eventId} and a {@code failureReason} prefixed with
-         * {@code "SCHEMA validation failed: "}.
-         */
-        @Test
-        void handleWorkorderEvent_malformedJson_savesSchemaValidationFailedLogWithGeneratedId() {
-                String malformedJson = "{ this is not valid json : at all }";
+    /**
+     * A message that cannot be deserialized triggers the
+     * {@link tools.jackson.core.JacksonException} catch path, saving a
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log with a generated
+     * UUID {@code eventId} and a {@code failureReason} prefixed with
+     * {@code "SCHEMA validation failed: "}.
+     */
+    @Test
+    void handleWorkorderEvent_malformedJson_savesSchemaValidationFailedLogWithGeneratedId() {
+        String malformedJson = "{ this is not valid json : at all }";
 
-                handler.handleWorkorderEvent(malformedJson);
+        handler.handleWorkorderEvent(malformedJson);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-                assertThat(captor.getValue().getEventId())
-                                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
-                assertThat(captor.getValue().getFailureReason()).startsWith("SCHEMA validation failed: ");
-                assertThat(captor.getValue().getEventType()).isEqualTo("UNKNOWN");
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getEventId())
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+        assertThat(captor.getValue().getFailureReason()).startsWith("SCHEMA validation failed: ");
+        assertThat(captor.getValue().getEventType()).isEqualTo("UNKNOWN");
+    }
 
-        // -----------------------------------------------------------------------
-        // handleContactPreferenceUpdated — catch Exception branch via bad partyId
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleContactPreferenceUpdated — catch Exception branch via bad partyId
+    // -----------------------------------------------------------------------
 
-        /**
-         * An envelope with a malformed (non-UUID) {@code partyId} in the
-         * {@code ContactPreferenceUpdated} payload causes {@code UUID.fromString} to
-         * throw, exercising the {@code catch(Exception)} path and saving a
-         * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log.
-         */
-        @Test
-        void handleContactPreferenceUpdated_invalidPartyIdFormat_savesSchemaValidationFailedLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("ContactPreferenceUpdated")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(Map.of(
-                                                "partyId", "not-a-valid-uuid",
-                                                "emailPreference", "OPT_IN"))
-                                .build();
+    /**
+     * An envelope with a malformed (non-UUID) {@code partyId} in the
+     * {@code ContactPreferenceUpdated} payload causes {@code UUID.fromString} to
+     * throw, exercising the {@code catch(Exception)} path and saving a
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log.
+     */
+    @Test
+    void handleContactPreferenceUpdated_invalidPartyIdFormat_savesSchemaValidationFailedLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("ContactPreferenceUpdated")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(Map.of(
+                        "partyId", "not-a-valid-uuid",
+                        "emailPreference", "OPT_IN"))
+                .build();
 
-                handler.handleContactPreferenceUpdated(envelope);
+        handler.handleContactPreferenceUpdated(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handlePartyNoteAdded — catch Exception branch via bad partyId
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handlePartyNoteAdded — catch Exception branch via bad partyId
+    // -----------------------------------------------------------------------
 
-        /**
-         * An envelope with a malformed (non-UUID) {@code partyId} in the
-         * {@code PartyNoteAdded} payload causes {@code UUID.fromString} to throw,
-         * exercising the {@code catch(Exception)} path and saving a
-         * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log.
-         */
-        @Test
-        void handlePartyNoteAdded_invalidPartyIdFormat_savesSchemaValidationFailedLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("PartyNoteAdded")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(Map.of(
-                                                "partyId", "not-a-valid-uuid",
-                                                "noteText", "some note",
-                                                "noteType", "SERVICE"))
-                                .build();
+    /**
+     * An envelope with a malformed (non-UUID) {@code partyId} in the
+     * {@code PartyNoteAdded} payload causes {@code UUID.fromString} to throw,
+     * exercising the {@code catch(Exception)} path and saving a
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log.
+     */
+    @Test
+    void handlePartyNoteAdded_invalidPartyIdFormat_savesSchemaValidationFailedLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("PartyNoteAdded")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(Map.of(
+                        "partyId", "not-a-valid-uuid",
+                        "noteText", "some note",
+                        "noteType", "SERVICE"))
+                .build();
 
-                handler.handlePartyNoteAdded(envelope);
+        handler.handlePartyNoteAdded(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleVehicleUpdated — catch Exception branch via save failure
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleVehicleUpdated — catch Exception branch via save failure
+    // -----------------------------------------------------------------------
 
-        /**
-         * A {@link RuntimeException} thrown by the first
-         * {@link ProcessingLogRepository#save} call in
-         * {@link WorkorderEventHandler#handleVehicleUpdated}
-         * exercises the {@code catch(Exception)} path and triggers a second save with
-         * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}.
-         */
-        @Test
-        void handleVehicleUpdated_saveFails_savesSchemaValidationFailedLogOnRetry() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                when(processingLogRepository.save(any()))
-                                .thenThrow(new RuntimeException("simulated DB failure"))
-                                .thenReturn(ProcessingLog.builder().build());
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("VehicleUpdated")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(Map.of("vehicleId",
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
-                                                "vin", "1HGBH41JXMN109186"))
-                                .build();
+    /**
+     * A {@link RuntimeException} thrown by the first
+     * {@link ProcessingLogRepository#save} call in
+     * {@link WorkorderEventHandler#handleVehicleUpdated}
+     * exercises the {@code catch(Exception)} path and triggers a second save with
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}.
+     */
+    @Test
+    void handleVehicleUpdated_saveFails_savesSchemaValidationFailedLogOnRetry() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        when(processingLogRepository.save(any()))
+                .thenThrow(new RuntimeException("simulated DB failure"))
+                .thenReturn(ProcessingLog.builder().build());
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("VehicleUpdated")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(Map.of(
+                        "vehicleId",
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
+                        "vin",
+                        "1HGBH41JXMN109186"))
+                .build();
 
-                handler.handleVehicleUpdated(envelope);
+        handler.handleVehicleUpdated(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository, times(2)).save(captor.capture());
-                assertThat(captor.getAllValues().get(1).getStatus())
-                                .isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-                assertThat(captor.getAllValues().get(1).getEventId()).isEqualTo(eventId);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(1).getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getAllValues().get(1).getEventId()).isEqualTo(eventId);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleVehicleUpdated — null payload path
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleVehicleUpdated — null payload path
+    // -----------------------------------------------------------------------
 
-        /**
-         * A {@code VehicleUpdated} envelope with a {@code null} payload map is
-         * handled gracefully: the null-check falls back to {@link Map#of()} and
-         * a {@link ProcessingStatus#SUCCESS} log is saved.
-         */
-        @Test
-        void handleVehicleUpdated_nullPayload_treatsAsEmptyMapAndSavesSuccessLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("VehicleUpdated")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(null)
-                                .build();
+    /**
+     * A {@code VehicleUpdated} envelope with a {@code null} payload map is
+     * handled gracefully: the null-check falls back to {@link Map#of()} and
+     * a {@link ProcessingStatus#SUCCESS} log is saved.
+     */
+    @Test
+    void handleVehicleUpdated_nullPayload_treatsAsEmptyMapAndSavesSuccessLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("VehicleUpdated")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(null)
+                .build();
 
-                handler.handleVehicleUpdated(envelope);
+        handler.handleVehicleUpdated(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+    }
 
-        // -----------------------------------------------------------------------
-        // handleContactPreferenceUpdated — null payload path
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handleContactPreferenceUpdated — null payload path
+    // -----------------------------------------------------------------------
 
-        /**
-         * A {@code ContactPreferenceUpdated} envelope with a {@code null} payload
-         * falls back to an empty map. With no {@code partyId} key the partyId
-         * resolves to an empty string, causing {@code UUID.fromString("")} to throw,
-         * so SCHEMA_VALIDATION_FAILED is saved.
-         */
-        @Test
-        void handleContactPreferenceUpdated_nullPayload_savesSchemaValidationFailedLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("ContactPreferenceUpdated")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(null)
-                                .build();
+    /**
+     * A {@code ContactPreferenceUpdated} envelope with a {@code null} payload
+     * falls back to an empty map. With no {@code partyId} key the partyId
+     * resolves to an empty string, causing {@code UUID.fromString("")} to throw,
+     * so SCHEMA_VALIDATION_FAILED is saved.
+     */
+    @Test
+    void handleContactPreferenceUpdated_nullPayload_savesSchemaValidationFailedLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("ContactPreferenceUpdated")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(null)
+                .build();
 
-                handler.handleContactPreferenceUpdated(envelope);
+        handler.handleContactPreferenceUpdated(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+    }
 
-        // -----------------------------------------------------------------------
-        // handlePartyNoteAdded — null payload path
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // handlePartyNoteAdded — null payload path
+    // -----------------------------------------------------------------------
 
-        /**
-         * A {@code PartyNoteAdded} envelope with a {@code null} payload falls back
-         * to an empty map. With no {@code partyId} key the partyId resolves to an
-         * empty string, causing {@code UUID.fromString("")} to throw,
-         * so SCHEMA_VALIDATION_FAILED is saved.
-         */
-        @Test
-        void handlePartyNoteAdded_nullPayload_savesSchemaValidationFailedLog() {
-                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-                EventEnvelope envelope = EventEnvelope.builder()
-                                .eventId(eventId)
-                                .eventType("PartyNoteAdded")
-                                .eventVersion("1.0")
-                                .sourceSystem("WorkorderExecution")
-                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                                .timestamp("2026-03-04T10:00:00Z")
-                                .payload(null)
-                                .build();
+    /**
+     * A {@code PartyNoteAdded} envelope with a {@code null} payload falls back
+     * to an empty map. With no {@code partyId} key the partyId resolves to an
+     * empty string, causing {@code UUID.fromString("")} to throw,
+     * so SCHEMA_VALIDATION_FAILED is saved.
+     */
+    @Test
+    void handlePartyNoteAdded_nullPayload_savesSchemaValidationFailedLog() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        EventEnvelope envelope = EventEnvelope.builder()
+                .eventId(eventId)
+                .eventType("PartyNoteAdded")
+                .eventVersion("1.0")
+                .sourceSystem("WorkorderExecution")
+                .correlationId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .timestamp("2026-03-04T10:00:00Z")
+                .payload(null)
+                .build();
 
-                handler.handlePartyNoteAdded(envelope);
+        handler.handlePartyNoteAdded(envelope);
 
-                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-                verify(processingLogRepository).save(captor.capture());
-                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-        }
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+    }
 }

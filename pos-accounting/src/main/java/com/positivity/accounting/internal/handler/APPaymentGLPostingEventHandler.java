@@ -1,21 +1,18 @@
 package com.positivity.accounting.internal.handler;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 import com.positivity.accounting.service.EventIngestionService;
-
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Event handler for AP payment GL posting events.
@@ -67,20 +64,31 @@ public class APPaymentGLPostingEventHandler {
     @EventListener
     @Transactional
     public void onAPPaymentGLPosting(@NonNull APPaymentGLPostingEvent event) {
-        log.info("Received APPaymentGLPostingEvent | eventId={} | paymentId={} | paymentRef={} | amount={}",
-                event.getEventId(), event.getPaymentId(), event.getPaymentRef(), event.getGrossAmount());
+        log.info(
+                "Received APPaymentGLPostingEvent | eventId={} | paymentId={} | paymentRef={} | amount={}",
+                event.getEventId(),
+                event.getPaymentId(),
+                event.getPaymentRef(),
+                event.getGrossAmount());
 
         try {
             Map<String, Object> accountingEventPayload = createAccountingEventPayload(event);
 
             AccountingEventResponse response = eventIngestionService.submitEvent(accountingEventPayload);
 
-            log.info("AP payment GL posting event submitted | paymentId={} | accountingEventId={} | status={}",
-                    event.getPaymentId(), response.getEventId(), response.getStatus());
+            log.info(
+                    "AP payment GL posting event submitted | paymentId={} | accountingEventId={} | status={}",
+                    event.getPaymentId(),
+                    response.getEventId(),
+                    response.getStatus());
 
         } catch (Exception e) {
-            log.error("Failed to process APPaymentGLPostingEvent | paymentId={} | eventId={} | error={}",
-                    event.getPaymentId(), event.getEventId(), e.getMessage(), e);
+            log.error(
+                    "Failed to process APPaymentGLPostingEvent | paymentId={} | eventId={} | error={}",
+                    event.getPaymentId(),
+                    event.getEventId(),
+                    e.getMessage(),
+                    e);
             throw new RuntimeException("GL posting failed for AP payment: " + event.getPaymentId(), e);
         }
     }

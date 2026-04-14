@@ -4,11 +4,10 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -31,8 +30,7 @@ public class CreateReplenishmentPolicyRequest {
 
     @AssertTrue(message = "minimumQuantity must be less than maximumQuantity")
     public boolean isMinimumLessThanMaximum() {
-        if (minimumQuantity == null || maximumQuantity == null)
-            return true;
+        if (minimumQuantity == null || maximumQuantity == null) return true;
         return minimumQuantity < maximumQuantity;
     }
 }

@@ -28,10 +28,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "child_id", "parent_type" }),
-        @UniqueConstraint(columnNames = { "child_id", "parent_id" })
-})
+@Table(
+        uniqueConstraints = {
+            @UniqueConstraint(columnNames = {"child_id", "parent_type"}),
+            @UniqueConstraint(columnNames = {"child_id", "parent_id"})
+        })
 @EntityListeners(AuditingEntityListener.class)
 public class LocationParent {
     @Id

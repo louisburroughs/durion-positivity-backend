@@ -32,6 +32,6 @@ public interface MobileUnitCoverageRuleRepository extends JpaRepository<MobileUn
               and upper(pc.countryCode) = upper(:countryCode)
             order by r.priority asc
             """)
-    List<MobileUnitCoverageRuleEntity> findEligibleCoverageRules(String postalCode, String countryCode,
-            LocalDate atDate);
+    List<MobileUnitCoverageRuleEntity> findEligibleCoverageRules(
+            String postalCode, String countryCode, LocalDate atDate);
 }

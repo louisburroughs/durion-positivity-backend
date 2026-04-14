@@ -1,13 +1,11 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
-
-import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Result of promotion precondition validation.
@@ -29,7 +27,9 @@ public class PromotionValidationResult {
      * Error message if validation failed.
      */
     @Nullable
-    @Schema(description = "Validation failure message when valid=false", example = "Estimate has unresolved required approvals")
+    @Schema(
+            description = "Validation failure message when valid=false",
+            example = "Estimate has unresolved required approvals")
     String errorMessage;
 
     /**
@@ -43,7 +43,9 @@ public class PromotionValidationResult {
      * If promotion was already performed, reference to existing workorder.
      */
     @Nullable
-    @Schema(description = "Existing workorder identifier when promotion already occurred", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Existing workorder identifier when promotion already occurred",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     UUID existingWorkorderId;
 
     /**
@@ -51,18 +53,14 @@ public class PromotionValidationResult {
      */
     @NonNull
     public static PromotionValidationResult success() {
-        return PromotionValidationResult.builder()
-                .valid(true)
-                .build();
+        return PromotionValidationResult.builder().valid(true).build();
     }
 
     /**
      * Create a failed validation result with error code and message.
      */
     @NonNull
-    public static PromotionValidationResult failure(
-            @NonNull String errorCode,
-            @NonNull String errorMessage) {
+    public static PromotionValidationResult failure(@NonNull String errorCode, @NonNull String errorMessage) {
         return PromotionValidationResult.builder()
                 .valid(false)
                 .errorCode(errorCode)
@@ -74,9 +72,7 @@ public class PromotionValidationResult {
      * Create a failed validation result for duplicate promotion.
      */
     @NonNull
-    public static PromotionValidationResult duplicate(
-            @NonNull UUID existingWorkorderId,
-            @NonNull String errorMessage) {
+    public static PromotionValidationResult duplicate(@NonNull UUID existingWorkorderId, @NonNull String errorMessage) {
         return PromotionValidationResult.builder()
                 .valid(false)
                 .errorCode("ALREADY_PROMOTED")

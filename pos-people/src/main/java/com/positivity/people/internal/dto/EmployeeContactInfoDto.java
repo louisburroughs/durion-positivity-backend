@@ -16,5 +16,4 @@ public class EmployeeContactInfoDto {
     private EmployeeAddressDto address;
 
     private EmployeeEmergencyContactDto emergencyContact;
-
 }

@@ -1,9 +1,6 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -17,6 +14,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Travel buffer policy definition for mobile unit dispatch.
@@ -56,5 +56,4 @@ public class TravelBufferPolicyEntity {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
-
 }

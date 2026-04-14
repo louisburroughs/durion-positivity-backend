@@ -15,23 +15,18 @@ public class EventsFacadeTool {
     public EventsFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.event-receiver.base-url:http://pos-event-receiver/v1/events}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(baseUrl)
-                .build();
+        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
     }
 
     @Tool("Get all registered event types and metadata")
     public String getEventTypes() {
-        return restClient.get()
-                .uri("/eventTypes")
-                .retrieve()
-                .body(String.class);
+        return restClient.get().uri("/eventTypes").retrieve().body(String.class);
     }
 
     @Tool("Search events by query text, event type, or other criteria")
-    public String searchEvents(
-            @P("Search query for events") @NonNull String query) {
-        return restClient.get()
+    public String searchEvents(@P("Search query for events") @NonNull String query) {
+        return restClient
+                .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/events/summary")
                         .queryParam("q", query)
@@ -41,9 +36,9 @@ public class EventsFacadeTool {
     }
 
     @Tool("Get historical event activity for a specific entity")
-    public String getEventHistory(
-            @P("The entity ID") @NonNull String entityId) {
-        return restClient.get()
+    public String getEventHistory(@P("The entity ID") @NonNull String entityId) {
+        return restClient
+                .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/events/summary")
                         .queryParam("entityId", entityId)

@@ -25,7 +25,8 @@ public class CrmVehicleClient {
 
     public @NonNull Map<String, Object> getVehicleById(@NonNull UUID vehicleId) {
         try {
-            Map<?, ?> payload = crmRestClient.get()
+            Map<?, ?> payload = crmRestClient
+                    .get()
                     .uri(vehicleBaseUrl + "/{vehicleId}", vehicleId)
                     .retrieve()
                     .body(Map.class);

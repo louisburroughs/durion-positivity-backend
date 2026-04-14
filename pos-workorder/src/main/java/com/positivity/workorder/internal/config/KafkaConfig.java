@@ -12,5 +12,4 @@ import org.springframework.kafka.annotation.EnableKafka;
 @Configuration
 @EnableKafka
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
-public class KafkaConfig {
-}
+public class KafkaConfig {}

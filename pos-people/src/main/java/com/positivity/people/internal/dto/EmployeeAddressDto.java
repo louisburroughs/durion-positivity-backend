@@ -16,5 +16,4 @@ public class EmployeeAddressDto {
     private String postalCode;
 
     private String country;
-
 }

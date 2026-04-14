@@ -1,12 +1,22 @@
 package com.positivity.tax.service;
 
-import com.positivity.tax.internal.config.TaxProperties;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
+import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.ExternalTaxServiceClient;
 import com.positivity.tax.internal.service.TaxCalculationServiceImpl;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,23 +24,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TaxCalculationService Tests")
 class TaxCalculationServiceTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
     private static final String TEST_POSTAL_CODE = "12345";
     private static final String SUBTOTAL_150 = "150.00";
     private static final String TAX_RATE_10 = "10.00";
@@ -209,18 +208,13 @@ class TaxCalculationServiceTest {
 
     private TaxCalculationRequest createSampleRequest() {
         return TaxCalculationRequest.builder()
-                .lineItems(List.of(
-                        createLineItem("1", "Part A", "2", "50"),
-                        createLineItem("2", "Part B", "1", "50")))
+                .lineItems(List.of(createLineItem("1", "Part A", "2", "50"), createLineItem("2", "Part B", "1", "50")))
                 .destinationAddress(createDestinationAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
                 .build();
     }
 
     private TaxCalculationRequest.TaxAddress createDestinationAddress(
-            String postalCode,
-            String regionCode,
-            String city,
-            String countryCode) {
+            String postalCode, String regionCode, String city, String countryCode) {
         return TaxCalculationRequest.TaxAddress.builder()
                 .postalCode(postalCode)
                 .regionCode(regionCode)

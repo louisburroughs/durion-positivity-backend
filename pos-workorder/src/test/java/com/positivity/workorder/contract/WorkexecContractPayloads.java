@@ -9,14 +9,10 @@ import java.util.UUID;
  */
 final class WorkexecContractPayloads {
 
-    private WorkexecContractPayloads() {
-    }
+    private WorkexecContractPayloads() {}
 
     static Map<String, Object> laborPerformedPayload(
-            UUID workorderId,
-            UUID technicianId,
-            BigDecimal quantity,
-            String sourceReferenceId) {
+            UUID workorderId, UUID technicianId, BigDecimal quantity, String sourceReferenceId) {
         return Map.of(
                 "workorderId", workorderId.toString(),
                 "technicianId", technicianId.toString(),
@@ -30,8 +26,6 @@ final class WorkexecContractPayloads {
     }
 
     static Map<String, Object> timerStartPayload(UUID workorderId, String laborCode) {
-        return Map.of(
-                "workorderId", workorderId.toString(),
-                "laborCode", laborCode);
+        return Map.of("workorderId", workorderId.toString(), "laborCode", laborCode);
     }
 }

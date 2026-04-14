@@ -8,12 +8,12 @@ public enum ExceptionType {
      * Price override on an order line item.
      */
     PRICE_OVERRIDE,
-    
+
     /**
      * Refund or payment reversal.
      */
     REFUND,
-    
+
     /**
      * Order or invoice cancellation.
      */

@@ -6,10 +6,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.JwtService.TokenPair;
+import com.positivity.securityservice.service.LockoutService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,14 +29,6 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.User;
-
-import com.positivity.securityservice.internal.dto.LoginRequest;
-import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.JwtService.TokenPair;
-import com.positivity.securityservice.service.LockoutService;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * Unit tests asserting that {@link AuthenticationServiceImpl} emits Micrometer
@@ -112,10 +109,9 @@ class AuthMetricsTest {
     private Authentication successAuth(UUID userId) {
         Authentication auth = mock(Authentication.class);
         when(auth.getName()).thenReturn("alice");
-        when(auth.getPrincipal()).thenReturn(
-                new CustomUserDetailsService.SecurityUserPrincipal(
-                        userId, null,
-                        new User("alice", "pass", List.of())));
+        when(auth.getPrincipal())
+                .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                        userId, null, new User("alice", "pass", List.of())));
         return auth;
     }
 
@@ -162,14 +158,14 @@ class AuthMetricsTest {
             UUID userId = UUID.randomUUID();
             when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userEntity(userId)));
             when(lockoutService.isLockedOut(userId)).thenReturn(false);
-            when(authenticationManager.authenticate(any()))
-                    .thenThrow(new BadCredentialsException("Bad credentials"));
+            when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
             assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "wrong")))
                     .isInstanceOf(BadCredentialsException.class);
 
             // Issue AUTH-008: RED — counter stays at 0 until auth failure instrumentation is added
-            double count = registry.counter("auth.login.failure", "reason", "bad_credentials").count();
+            double count = registry.counter("auth.login.failure", "reason", "bad_credentials")
+                    .count();
             assertThat(count)
                     .as("auth.login.failure[reason=bad_credentials] must be incremented to 1 after bad credentials")
                     .isEqualTo(1.0);
@@ -196,9 +192,11 @@ class AuthMetricsTest {
                     .isInstanceOf(LockedException.class);
 
             // Issue AUTH-008: RED — counter stays at 0 until lockout denial instrumentation is added
-            double count = registry.counter("auth.login.failure", "reason", "account_locked").count();
+            double count = registry.counter("auth.login.failure", "reason", "account_locked")
+                    .count();
             assertThat(count)
-                    .as("auth.login.failure[reason=account_locked] must be incremented to 1 when lockout pre-check fires")
+                    .as(
+                            "auth.login.failure[reason=account_locked] must be incremented to 1 when lockout pre-check fires")
                     .isEqualTo(1.0);
         }
     }
@@ -217,14 +215,14 @@ class AuthMetricsTest {
             UUID userId = UUID.randomUUID();
             when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userEntity(userId)));
             when(lockoutService.isLockedOut(userId)).thenReturn(false);
-            when(authenticationManager.authenticate(any()))
-                    .thenThrow(new DisabledException("Account is disabled"));
+            when(authenticationManager.authenticate(any())).thenThrow(new DisabledException("Account is disabled"));
 
             assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
                     .isInstanceOf(DisabledException.class);
 
             // Issue AUTH-008: RED — counter stays at 0 until disabled-account instrumentation is added
-            double count = registry.counter("auth.login.failure", "reason", "account_disabled").count();
+            double count = registry.counter("auth.login.failure", "reason", "account_disabled")
+                    .count();
             assertThat(count)
                     .as("auth.login.failure[reason=account_disabled] must be incremented to 1 when account is disabled")
                     .isEqualTo(1.0);

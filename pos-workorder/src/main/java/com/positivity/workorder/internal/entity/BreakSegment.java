@@ -14,6 +14,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,17 +25,14 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Represents a break segment within a work session.
  * Implements CAP-139 Story #68.
  */
 @Entity
-@Table(name = "break_segment", indexes = {
-    @Index(name = "idx_break_segment_work_session_id", columnList = "work_session_id")
-})
+@Table(
+        name = "break_segment",
+        indexes = {@Index(name = "idx_break_segment_work_session_id", columnList = "work_session_id")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

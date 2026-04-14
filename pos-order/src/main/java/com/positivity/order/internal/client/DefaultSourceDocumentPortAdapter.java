@@ -1,10 +1,9 @@
 package com.positivity.order.internal.client;
 
 import com.positivity.order.internal.entity.SourceType;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * Default (stub) implementation of SourceDocumentPort.

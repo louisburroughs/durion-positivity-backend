@@ -15,6 +15,13 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderInvoiceService;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -24,14 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Service for generating invoice drafts from completed workorders.
@@ -50,14 +49,12 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
     private final InvoiceClient invoiceClient;
 
     // Statuses excluded from billable totals (aligned with WorkorderStateMachine)
-    private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES = Set.of(
-            WorkorderItemStatus.CANCELLED);
+    private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES =
+            Set.of(WorkorderItemStatus.CANCELLED);
 
     @Transactional
     @NonNull
-    public InvoiceGenerationResponse generateInvoice(
-            @NonNull UUID workorderId,
-            @Nullable String idempotencyKey) {
+    public InvoiceGenerationResponse generateInvoice(@NonNull UUID workorderId, @Nullable String idempotencyKey) {
         Workorder workorder = loadCompletedWorkorder(workorderId);
 
         if (workorder.getInvoiceId() != null) {
@@ -73,10 +70,8 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         UUID invoiceId = requireInvoiceId(response, workorderId);
         backfillTraceability(response, workorder);
 
-        Optional<InvoiceGenerationResponse> raceConditionResponse = registerIdempotencyKeyHandlingRace(
-                workorder,
-                idempotencyKey,
-                invoiceId);
+        Optional<InvoiceGenerationResponse> raceConditionResponse =
+                registerIdempotencyKeyHandlingRace(workorder, idempotencyKey, invoiceId);
         if (raceConditionResponse.isPresent()) {
             return raceConditionResponse.get();
         }
@@ -88,33 +83,32 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
     @NonNull
     private Workorder loadCompletedWorkorder(@NonNull UUID workorderId) {
-        Workorder workorder = workorderRepository.findById(workorderId)
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
         if (workorder.getStatus() != WorkorderStatus.COMPLETED) {
-            throw new InvalidWorkorderStateException(workorderId, workorder.getStatus().name(), "COMPLETED");
+            throw new InvalidWorkorderStateException(
+                    workorderId, workorder.getStatus().name(), "COMPLETED");
         }
         return workorder;
     }
 
     @NonNull
     private InvoiceGenerationResponse buildExistingLinkedInvoiceResponse(
-            @NonNull UUID workorderId,
-            @NonNull Workorder workorder) {
+            @NonNull UUID workorderId, @NonNull Workorder workorder) {
         log.info("Invoice already generated for workorder {} as invoice {}", workorderId, workorder.getInvoiceId());
         return buildExistingResponse(workorder, workorder.getInvoiceId());
     }
 
     @NonNull
     private Optional<InvoiceGenerationResponse> findIdempotentReplayResponse(
-            @NonNull Workorder workorder,
-            @Nullable String idempotencyKey) {
+            @NonNull Workorder workorder, @Nullable String idempotencyKey) {
         if (!hasIdempotencyKey(idempotencyKey)) {
             return Optional.empty();
         }
 
         Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                idempotencyKey);
+                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey);
         if (existingInvoiceId.isEmpty()) {
             return Optional.empty();
         }
@@ -125,15 +119,17 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
             workorderRepository.save(workorder);
         }
 
-        log.info("Idempotent invoice generation replay for key {} and workorder {}, returning invoice {}",
-                idempotencyKey, workorder.getId(), invoiceId);
+        log.info(
+                "Idempotent invoice generation replay for key {} and workorder {}, returning invoice {}",
+                idempotencyKey,
+                workorder.getId(),
+                invoiceId);
         return Optional.of(buildExistingResponse(workorder, invoiceId));
     }
 
     @NonNull
     private InvoiceGenerationResponse createInvoiceForWorkorder(
-            @NonNull Workorder workorder,
-            @Nullable String idempotencyKey) {
+            @NonNull Workorder workorder, @Nullable String idempotencyKey) {
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()
                 .workorderId(workorder.getId())
                 .estimateId(workorder.getEstimateId())
@@ -147,15 +143,13 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
     @NonNull
     private UUID requireInvoiceId(@NonNull InvoiceGenerationResponse response, @NonNull UUID workorderId) {
         if (response.getInvoiceId() == null) {
-            throw new IllegalStateException("Invoice service returned response without invoiceId for workorder "
-                    + workorderId);
+            throw new IllegalStateException(
+                    "Invoice service returned response without invoiceId for workorder " + workorderId);
         }
         return response.getInvoiceId();
     }
 
-    private void backfillTraceability(
-            @NonNull InvoiceGenerationResponse response,
-            @NonNull Workorder workorder) {
+    private void backfillTraceability(@NonNull InvoiceGenerationResponse response, @NonNull Workorder workorder) {
         if (response.getWorkorderId() == null) {
             response.setWorkorderId(workorder.getId());
         }
@@ -169,18 +163,14 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
     @NonNull
     private Optional<InvoiceGenerationResponse> registerIdempotencyKeyHandlingRace(
-            @NonNull Workorder workorder,
-            @Nullable String idempotencyKey,
-            @NonNull UUID invoiceId) {
+            @NonNull Workorder workorder, @Nullable String idempotencyKey, @NonNull UUID invoiceId) {
         if (!hasIdempotencyKey(idempotencyKey)) {
             return Optional.empty();
         }
 
         try {
             idempotencyService.registerInvoiceKey(
-                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                    idempotencyKey,
-                    invoiceId);
+                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey, invoiceId);
             flushCurrentTransaction();
             return Optional.empty();
         } catch (DataIntegrityViolationException e) {
@@ -191,23 +181,20 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
     @NonNull
     private InvoiceGenerationResponse handleIdempotencyRace(
-            @NonNull Workorder workorder,
-            @NonNull String idempotencyKey,
-            @NonNull DataIntegrityViolationException e) {
+            @NonNull Workorder workorder, @NonNull String idempotencyKey, @NonNull DataIntegrityViolationException e) {
         Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                idempotencyKey);
+                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey);
         if (existingInvoiceId.isPresent()) {
             log.warn(
                     "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",
-                    idempotencyKey, existingInvoiceId.get());
+                    idempotencyKey,
+                    existingInvoiceId.get());
             return buildExistingResponse(workorder, existingInvoiceId.get());
         }
 
         log.error("Race condition detected but no existing invoice found for idempotency key {}", idempotencyKey);
         throw new IllegalStateException(
-                "Idempotency key collision but no existing invoice found: " + idempotencyKey,
-                e);
+                "Idempotency key collision but no existing invoice found: " + idempotencyKey, e);
     }
 
     private void flushCurrentTransaction() {
@@ -260,9 +247,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                         .quantity(service.getQuantity() == null ? BigDecimal.ONE : service.getQuantity())
                         .unitPrice(service.getUnitPrice() == null ? BigDecimal.ZERO : service.getUnitPrice())
                         .amount(resolveLineAmount(
-                                service.getLineTotal(),
-                                service.getQuantity(),
-                                service.getUnitPrice()))
+                                service.getLineTotal(), service.getQuantity(), service.getUnitPrice()))
                         .build()));
 
         // CAP:007 - Load parts avoiding duplicates
@@ -304,10 +289,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                         .description(part.getDescription() == null ? "Part item" : part.getDescription())
                         .quantity(part.getQuantity() == null ? BigDecimal.ONE : part.getQuantity())
                         .unitPrice(part.getUnitPrice() == null ? BigDecimal.ZERO : part.getUnitPrice())
-                        .amount(resolveLineAmount(
-                                part.getLineTotal(),
-                                part.getQuantity(),
-                                part.getUnitPrice()))
+                        .amount(resolveLineAmount(part.getLineTotal(), part.getQuantity(), part.getUnitPrice()))
                         .build()));
 
         return lineItems;
@@ -315,9 +297,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
     @NonNull
     private BigDecimal resolveLineAmount(
-            @Nullable BigDecimal lineTotal,
-            @Nullable BigDecimal quantity,
-            @Nullable BigDecimal unitPrice) {
+            @Nullable BigDecimal lineTotal, @Nullable BigDecimal quantity, @Nullable BigDecimal unitPrice) {
         if (lineTotal != null) {
             return lineTotal;
         }

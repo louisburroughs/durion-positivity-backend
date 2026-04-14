@@ -2,7 +2,6 @@ package com.positivity.poseventreceiver.internal.controller;
 
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.service.EmitEventService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -72,7 +71,14 @@ public class EmitEventController {
     @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event payload to persist", required = true, content = @Content(schema = @Schema(implementation = EmitEventRequest.class))) @Valid @NotNull @RequestBody EmitEventRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Event payload to persist",
+                            required = true,
+                            content = @Content(schema = @Schema(implementation = EmitEventRequest.class)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EmitEventRequest request) {
         try {
             if (!emitEventService.receiveEvent(request)) {
                 return ResponseEntity.badRequest().body("ID not preregistered");

@@ -1,15 +1,8 @@
 package com.positivity.customer.internal.entity;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.shared.id.UUIDv7Id;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -24,10 +17,14 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * PersonParty entity representing an individual in the CRM system.
@@ -125,5 +122,4 @@ public class PersonParty extends AbstractParty {
     public Class<?> uuidv7Dependency() {
         return UUIDv7Id.class;
     }
-
 }

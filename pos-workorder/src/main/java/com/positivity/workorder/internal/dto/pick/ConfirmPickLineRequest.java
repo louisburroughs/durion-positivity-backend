@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConfirmPickLineRequest {
-  @NotNull
-  @Positive
-  private Integer quantityPicked;
+    @NotNull
+    @Positive
+    private Integer quantityPicked;
 }

@@ -1,7 +1,6 @@
 package com.positivity.vehicle.internal.dto;
 
 import java.util.UUID;
-
 import lombok.Data;
 
 @Data

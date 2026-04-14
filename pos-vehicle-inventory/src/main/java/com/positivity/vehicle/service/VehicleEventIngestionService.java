@@ -1,10 +1,9 @@
 package com.positivity.vehicle.service;
 
-import java.util.List;
-import java.util.Optional;
-
 import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
 import com.positivity.vehicle.internal.entity.EventProcessingLog;
+import java.util.List;
+import java.util.Optional;
 
 public interface VehicleEventIngestionService {
 
@@ -24,5 +23,4 @@ public interface VehicleEventIngestionService {
      * Get processing log by event ID.
      */
     Optional<EventProcessingLog> getProcessingLog(String eventId);
-
 }

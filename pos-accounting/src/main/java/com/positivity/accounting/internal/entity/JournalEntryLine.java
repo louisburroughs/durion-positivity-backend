@@ -1,15 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.util.Map;
-import java.util.UUID;
-
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,17 +12,23 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
+import java.util.Map;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Journal Entry Line - individual GL account posting within a JournalEntry.
- * 
+ *
  * Each line posts either a debit or credit (not both) to a specific GL account.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Journal Entry</a>
@@ -40,13 +37,15 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "journalEntry", "glAccount" })
+@ToString(exclude = {"journalEntry", "glAccount"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "journal_entry_line", indexes = {
-        @Index(name = "idx_journal_entry_line_je", columnList = "journal_entry_id"),
-        @Index(name = "idx_journal_entry_line_gl_account", columnList = "gl_account_id")
-})
+@Table(
+        name = "journal_entry_line",
+        indexes = {
+            @Index(name = "idx_journal_entry_line_je", columnList = "journal_entry_id"),
+            @Index(name = "idx_journal_entry_line_gl_account", columnList = "gl_account_id")
+        })
 public class JournalEntryLine {
 
     @EqualsAndHashCode.Include
@@ -111,5 +110,4 @@ public class JournalEntryLine {
     public void setGlAccountId(UUID glAccountId) {
         this.glAccount = glAccountId != null ? new GLAccount(glAccountId) : null;
     }
-
 }

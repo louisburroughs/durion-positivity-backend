@@ -1,7 +1,8 @@
 package com.positivity.vehicle.internal.util;
 
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for VIN validation and normalization utility.

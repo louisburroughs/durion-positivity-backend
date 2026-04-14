@@ -2,12 +2,11 @@ package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.enums.ContactPointType;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Repository for ContactPoint entity operations.
@@ -30,8 +29,7 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
      * @param contactType the contact type
      * @return list of matching contact points
      */
-    List<ContactPoint> findByPersonPartyIdAndContactType(@NonNull UUID personId,
-            @NonNull ContactPointType contactType);
+    List<ContactPoint> findByPersonPartyIdAndContactType(@NonNull UUID personId, @NonNull ContactPointType contactType);
 
     /**
      * Find primary contact point of a specific type for a person.
@@ -40,8 +38,8 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
      * @param contactType the contact type
      * @return the primary contact point, if exists
      */
-    ContactPoint findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(@NonNull UUID personId,
-            @NonNull ContactPointType contactType);
+    ContactPoint findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
+            @NonNull UUID personId, @NonNull ContactPointType contactType);
 
     /**
      * Check if a contact value exists for any person.

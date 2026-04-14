@@ -1,9 +1,8 @@
 package com.positivity.people.internal.dto;
 
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class CreateUserLinkRequest {
@@ -13,5 +12,4 @@ public class CreateUserLinkRequest {
 
     @NotNull(message = "personId is required")
     private UUID personId;
-
 }

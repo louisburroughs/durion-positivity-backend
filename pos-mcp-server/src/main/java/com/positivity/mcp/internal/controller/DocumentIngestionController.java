@@ -21,29 +21,34 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/mcp")
 public class DocumentIngestionController {
 
-  private final DocumentIngestionService documentIngestionService;
+    private final DocumentIngestionService documentIngestionService;
 
-  public DocumentIngestionController(@NonNull DocumentIngestionService documentIngestionService) {
-    this.documentIngestionService = documentIngestionService;
-  }
-
-  @PostMapping("/documents")
-  @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
-  @EmitEvent(id = "MCP_DOCUMENT_INGEST", apiVersion = "1")
-  @Operation(summary = "Ingest a document into the RAG vector store")
-  public ResponseEntity<Void> ingestDocument(@RequestBody @Valid @NonNull DocumentIngestionRequest request) {
-    documentIngestionService.ingestDocument(request.content(), request.metadata());
-    return ResponseEntity.created(URI.create("/v1/mcp/documents")).build();
-  }
-
-  @Schema(name = "DocumentIngestionRequest", description = "Document ingestion payload", example = "{\"content\":\"sample\",\"metadata\":{\"source\":\"manual\"}}")
-  public record DocumentIngestionRequest(
-      @NotBlank @NonNull String content,
-      @Schema(description = "Optional key-value metadata for the document") Map<String, Object> metadata) {
-    public DocumentIngestionRequest {
-      if (metadata == null) {
-        metadata = Map.of();
-      }
+    public DocumentIngestionController(@NonNull DocumentIngestionService documentIngestionService) {
+        this.documentIngestionService = documentIngestionService;
     }
-  }
+
+    @PostMapping("/documents")
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
+    @EmitEvent(id = "MCP_DOCUMENT_INGEST", apiVersion = "1")
+    @Operation(summary = "Ingest a document into the RAG vector store")
+    public ResponseEntity<Void> ingestDocument(@RequestBody @Valid @NonNull DocumentIngestionRequest request) {
+        documentIngestionService.ingestDocument(request.content(), request.metadata());
+        return ResponseEntity.created(URI.create("/v1/mcp/documents")).build();
+    }
+
+    @Schema(
+            name = "DocumentIngestionRequest",
+            description = "Document ingestion payload",
+            example = "{\"content\":\"sample\",\"metadata\":{\"source\":\"manual\"}}")
+    public record DocumentIngestionRequest(
+            @NotBlank @NonNull String content,
+
+            @Schema(description = "Optional key-value metadata for the document")
+            Map<String, Object> metadata) {
+        public DocumentIngestionRequest {
+            if (metadata == null) {
+                metadata = Map.of();
+            }
+        }
+    }
 }

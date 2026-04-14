@@ -3,8 +3,8 @@ package com.positivity.image.internal.entity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import java.util.List;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "image")
@@ -30,14 +30,43 @@ public class ImageEntity {
     private Classification classification;
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getFilename() { return filename; }
-    public void setFilename(String filename) { this.filename = filename; }
-    public String getUrl() { return url; }
-    public void setUrl(String url) { this.url = url; }
-    public List<String> getContext() { return context; }
-    public void setContext(List<String> context) { this.context = context; }
-    public Classification getClassification() { return classification; }
-    public void setClassification(Classification classification) { this.classification = classification; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public void setFilename(String filename) {
+        this.filename = filename;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public List<String> getContext() {
+        return context;
+    }
+
+    public void setContext(List<String> context) {
+        this.context = context;
+    }
+
+    public Classification getClassification() {
+        return classification;
+    }
+
+    public void setClassification(Classification classification) {
+        this.classification = classification;
+    }
 }

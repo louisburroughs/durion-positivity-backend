@@ -1,7 +1,5 @@
 package com.positivity.catalog.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.catalog.internal.client.InventoryClient;
 import com.positivity.catalog.internal.client.PricingClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
@@ -11,7 +9,12 @@ import com.positivity.catalog.internal.entity.ProductReplacementEntity;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductDetailService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,12 +22,6 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service for aggregating product details with pricing and availability
@@ -36,7 +33,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductDetailServiceImpl implements ProductDetailService {
     private final Clock clock;
-
 
     private final ProductRepository productRepository;
     private final ProductReplacementRepository productReplacementRepository;
@@ -51,7 +47,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      * Retrieves a consolidated product detail view with pricing and availability.
      * Implements graceful degradation: returns partial data if non-critical
      * services are unavailable.
-     * 
+     *
      * @param productId  The unique product identifier
      * @param locationId The location/store identifier for location-specific data
      * @return ProductDetailView with status indicators for each data component
@@ -106,8 +102,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private PricingInfo fetchPricingInfo(UUID productId, UUID locationId, Instant requestTime) {
         try {
             log.debug("Fetching pricing for productId={}, locationId={}", productId, locationId);
-            Optional<PricingClient.PriceQuoteClientResponse> quote = pricingClient.fetchPrice(productId, locationId,
-                    defaultCustomerTierId);
+            Optional<PricingClient.PriceQuoteClientResponse> quote =
+                    pricingClient.fetchPrice(productId, locationId, defaultCustomerTierId);
 
             if (quote.isEmpty()) {
                 log.warn("Price service returned no data for productId={}", productId);
@@ -121,7 +117,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             PricingClient.PriceQuoteClientResponse q = quote.get();
             return PricingInfo.builder()
                     .msrp(q.msrpAmount() != null ? q.msrpAmount().doubleValue() : null)
-                    .storePrice(q.unitPriceAmount() != null ? q.unitPriceAmount().doubleValue() : null)
+                    .storePrice(
+                            q.unitPriceAmount() != null ? q.unitPriceAmount().doubleValue() : null)
                     .currency(q.msrpCurrency())
                     .status(DataStatus.OK)
                     .asOf(requestTime)
@@ -143,12 +140,12 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      * Returns status=UNAVAILABLE if inventory service is down.
      * Implements two-tier lead time model: catalog static + dynamic override.
      */
-    private AvailabilityInfo fetchAvailabilityInfo(UUID productId, UUID locationId, Instant requestTime,
-            ProductEntity product) {
+    private AvailabilityInfo fetchAvailabilityInfo(
+            UUID productId, UUID locationId, Instant requestTime, ProductEntity product) {
         try {
             log.debug("Fetching availability for productId={}, locationId={}", productId, locationId);
-            Optional<InventoryClient.AvailabilityClientResponse> avail = inventoryClient
-                    .fetchAvailability(product.getSku(), locationId);
+            Optional<InventoryClient.AvailabilityClientResponse> avail =
+                    inventoryClient.fetchAvailability(product.getSku(), locationId);
 
             if (avail.isEmpty()) {
                 log.warn("Inventory service returned no data for productId={}", productId);
@@ -192,8 +189,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private LeadTimeInfo getLeadTimeInfo(UUID productId, UUID locationId, Instant requestTime, ProductEntity product) {
         try {
             log.debug("Attempting to fetch dynamic lead time for productId={}", productId);
-            Optional<InventoryClient.LeadTimeClientResponse> leadTimeOpt = inventoryClient.fetchLeadTime(productId,
-                    locationId);
+            Optional<InventoryClient.LeadTimeClientResponse> leadTimeOpt =
+                    inventoryClient.fetchLeadTime(productId, locationId);
             if (leadTimeOpt.isEmpty()) {
                 return getCatalogLeadTime(product, requestTime);
             }
@@ -369,7 +366,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     }
 
     private boolean isEffectiveReplacement(ProductReplacementEntity replacement, Instant now) {
-        return replacement.getEffectiveAt() == null || !replacement.getEffectiveAt().isAfter(now);
+        return replacement.getEffectiveAt() == null
+                || !replacement.getEffectiveAt().isAfter(now);
     }
 
     private SubstitutionHint toSubstitutionHint(ProductReplacementEntity replacement) {
@@ -378,49 +376,36 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             reason = "Replacement option";
         }
         return SubstitutionHint.builder()
-            .productId(replacement.getReplacementProduct() != null
-                && replacement.getReplacementProduct().getId() != null
-                    ? replacement.getReplacementProduct().getId().toString()
-                        : null)
+                .productId(
+                        replacement.getReplacementProduct() != null
+                                        && replacement.getReplacementProduct().getId() != null
+                                ? replacement.getReplacementProduct().getId().toString()
+                                : null)
                 .reason(reason)
                 .build();
     }
 
     private CatalogLeadTimeHint extractCatalogLeadTimeHint(ProductEntity product) {
-        if (product == null || product.getAttributes() == null || product.getAttributes().isBlank()) {
+        if (product == null
+                || product.getAttributes() == null
+                || product.getAttributes().isBlank()) {
             return CatalogLeadTimeHint.empty();
         }
         try {
             JsonNode attributes = objectMapper.readTree(product.getAttributes());
             Integer exactDays = readInteger(
-                    attributes,
-                    "leadTimeDays",
-                    "lead_time_days",
-                    "leadTimeHintDays",
-                    "lead_time_hint_days");
+                    attributes, "leadTimeDays", "lead_time_days", "leadTimeHintDays", "lead_time_hint_days");
             Integer minDays = readInteger(
-                    attributes,
-                    "leadTimeMinDays",
-                    "lead_time_min_days",
-                    "leadTimeDaysMin",
-                    "lead_time_days_min");
+                    attributes, "leadTimeMinDays", "lead_time_min_days", "leadTimeDaysMin", "lead_time_days_min");
             Integer maxDays = readInteger(
-                    attributes,
-                    "leadTimeMaxDays",
-                    "lead_time_max_days",
-                    "leadTimeDaysMax",
-                    "lead_time_days_max");
+                    attributes, "leadTimeMaxDays", "lead_time_max_days", "leadTimeDaysMax", "lead_time_days_max");
             if (exactDays != null) {
                 minDays = minDays == null ? exactDays : minDays;
                 maxDays = maxDays == null ? exactDays : maxDays;
             }
 
             String displayText = readString(
-                    attributes,
-                    "leadTimeDisplayText",
-                    "lead_time_display_text",
-                    "leadTimeText",
-                    "lead_time_text");
+                    attributes, "leadTimeDisplayText", "lead_time_display_text", "leadTimeText", "lead_time_text");
             boolean hasHint = minDays != null || maxDays != null || displayText != null;
             return new CatalogLeadTimeHint(minDays, maxDays, displayText, hasHint);
         } catch (Exception ex) {
@@ -454,6 +439,5 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         }
     }
 
-    private record LeadTimeRange(int minDays, int maxDays) {
-    }
+    private record LeadTimeRange(int minDays, int maxDays) {}
 }

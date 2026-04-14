@@ -30,5 +30,4 @@ public class ResolvePersonRequest {
 
     @Schema(description = "Optional score threshold override", example = "30")
     private Integer threshold;
-
 }

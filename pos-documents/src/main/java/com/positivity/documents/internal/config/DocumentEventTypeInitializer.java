@@ -25,7 +25,9 @@ public class DocumentEventTypeInitializer implements ApplicationRunner {
             RestClient.Builder restClientBuilder,
             @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret) {
-        this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
+        this.restClient = restClientBuilder
+                .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
+                .build();
         this.initializerSupport = new EventTypeInitializerSupport("pos-documents");
         this.apiSecret = apiSecret;
     }
@@ -38,7 +40,8 @@ public class DocumentEventTypeInitializer implements ApplicationRunner {
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

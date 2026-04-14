@@ -7,5 +7,5 @@ import org.jspecify.annotations.NonNull;
  * Eligibility evaluation result returned by EligibilityEvaluationService.
  * Issue: #96
  */
-public record EligibilityDecision(boolean isEligible, @NonNull EligibilityReasonCode reasonCode) {
-}
+public record EligibilityDecision(
+        boolean isEligible, @NonNull EligibilityReasonCode reasonCode) {}

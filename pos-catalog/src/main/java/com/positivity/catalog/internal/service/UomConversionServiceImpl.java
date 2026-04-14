@@ -79,8 +79,8 @@ public class UomConversionServiceImpl implements UomConversionService {
     public BigDecimal getInverseConversionFactor(@NonNull String fromUomCode, @NonNull String toUomCode) {
         UomConversionEntity entity = repository
                 .findByFromUomCodeAndToUomCodeAndIsActiveTrue(normalize(fromUomCode), normalize(toUomCode))
-                .orElseThrow(() -> new CatalogNotFoundException(
-                        "Conversion not found: " + fromUomCode + " -> " + toUomCode));
+                .orElseThrow(() ->
+                        new CatalogNotFoundException("Conversion not found: " + fromUomCode + " -> " + toUomCode));
         return BigDecimal.ONE.divide(entity.getConversionFactor(), 6, RoundingMode.HALF_UP);
     }
 
@@ -94,7 +94,8 @@ public class UomConversionServiceImpl implements UomConversionService {
     }
 
     private UomConversionEntity findById(UUID id) {
-        return repository.findById(id)
+        return repository
+                .findById(id)
                 .orElseThrow(() -> new CatalogNotFoundException("UOM conversion not found: " + id));
     }
 

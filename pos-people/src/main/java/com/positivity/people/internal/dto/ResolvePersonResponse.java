@@ -44,5 +44,4 @@ public class ResolvePersonResponse {
 
     @Schema(description = "Resolved phone numbers")
     private List<String> phoneNumbers;
-
 }

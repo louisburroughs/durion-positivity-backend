@@ -2,14 +2,13 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,7 +16,9 @@ import java.util.UUID;
 @Builder
 @Schema(description = "Work order state transition history entry")
 public class WorkorderStateTransitionResponse {
-    @Schema(description = "Unique identifier for this transition record", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Unique identifier for this transition record",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID id;
 
     @Schema(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
@@ -32,7 +33,9 @@ public class WorkorderStateTransitionResponse {
     @Schema(description = "Timestamp when the transition occurred")
     private Instant transitionedAt;
 
-    @Schema(description = "Stable actor identifier who performed the transition", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Stable actor identifier who performed the transition",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     private String transitionedBy;
 
     @Schema(description = "Reason for the transition", example = "Customer approved the estimate")
@@ -45,7 +48,8 @@ public class WorkorderStateTransitionResponse {
         return WorkorderStateTransitionResponse.builder()
                 .id(entity.getId())
                 .workorderId(entity.getWorkorderId())
-                .fromStatus(entity.getFromStatus() != null ? entity.getFromStatus().name() : null)
+                .fromStatus(
+                        entity.getFromStatus() != null ? entity.getFromStatus().name() : null)
                 .toStatus(entity.getToStatus() != null ? entity.getToStatus().name() : null)
                 .transitionedAt(entity.getTransitionedAt())
                 .transitionedBy(entity.getTransitionedBy())

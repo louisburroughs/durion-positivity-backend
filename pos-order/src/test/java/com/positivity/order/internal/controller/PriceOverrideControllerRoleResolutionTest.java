@@ -39,21 +39,24 @@ class PriceOverrideControllerRoleResolutionTest {
         ApprovePriceOverrideRequest request = new ApprovePriceOverrideRequest();
         request.setComments("approved");
 
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "reviewer",
-                "n/a",
-                List.of(
-                        new SimpleGrantedAuthority(PriceOverridePermissions.PRICE_OVERRIDE_APPROVE),
-                        new SimpleGrantedAuthority("ROLE_MANAGER"))));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "reviewer",
+                        "n/a",
+                        List.of(
+                                new SimpleGrantedAuthority(PriceOverridePermissions.PRICE_OVERRIDE_APPROVE),
+                                new SimpleGrantedAuthority("ROLE_MANAGER"))));
 
         when(priceOverrideService.approveOverride(any(), any())).thenReturn(sampleDetail("APPROVED"));
 
         ResponseEntity<PriceOverrideDetail> response = controller.approvePriceOverride(overrideId, request);
 
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-        verify(priceOverrideService).approveOverride(any(), argThat(command ->
-                "MANAGER".equals(command.approverRole())
-                        && "approved".equals(command.comments())));
+        verify(priceOverrideService)
+                .approveOverride(
+                        any(),
+                        argThat(command ->
+                                "MANAGER".equals(command.approverRole()) && "approved".equals(command.comments())));
     }
 
     @Test
@@ -63,20 +66,23 @@ class PriceOverrideControllerRoleResolutionTest {
         request.setReason("policy");
         request.setComments("no role");
 
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "reviewer",
-                "n/a",
-                List.of(new SimpleGrantedAuthority(PriceOverridePermissions.PRICE_OVERRIDE_REJECT))));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "reviewer",
+                        "n/a",
+                        List.of(new SimpleGrantedAuthority(PriceOverridePermissions.PRICE_OVERRIDE_REJECT))));
 
         when(priceOverrideService.rejectOverride(any(), any())).thenReturn(sampleDetail("REJECTED"));
 
         ResponseEntity<PriceOverrideDetail> response = controller.rejectPriceOverride(overrideId, request);
 
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-        verify(priceOverrideService).rejectOverride(any(), argThat(command ->
-                "UNKNOWN".equals(command.reviewerRole())
-                        && "policy".equals(command.reason())
-                        && "no role".equals(command.comments())));
+        verify(priceOverrideService)
+                .rejectOverride(
+                        any(),
+                        argThat(command -> "UNKNOWN".equals(command.reviewerRole())
+                                && "policy".equals(command.reason())
+                                && "no role".equals(command.comments())));
     }
 
     private PriceOverrideDetail sampleDetail(String status) {

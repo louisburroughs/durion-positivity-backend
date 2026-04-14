@@ -28,9 +28,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "supplier_item_cost", uniqueConstraints = @UniqueConstraint(name = "uk_supplier_item_cost_supplier_item", columnNames = {
-        "supplier_id", "item_id"
-}))
+@Table(
+        name = "supplier_item_cost",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_supplier_item_cost_supplier_item",
+                        columnNames = {"supplier_id", "item_id"}))
 public class SupplierItemCostEntity {
 
     @Id

@@ -135,6 +135,16 @@ durion-positivity-backend/
     ./mvnw test
     ```
 
+4. **Format Java sources**:
+
+    ```bash
+    ./mvnw com.diffplug.spotless:spotless-maven-plugin:2.43.0:check
+    ./mvnw com.diffplug.spotless:spotless-maven-plugin:2.43.0:apply
+    ```
+
+    Spotless is configured with Palantir Java Format for repo-wide Java whitespace, indentation, and brace normalization.
+    If you prefer the shorter `spotless:check` / `spotless:apply` form, add `com.diffplug.spotless` to your Maven `pluginGroups`.
+
 ### Frontend SSR Host Allowlist (Docker Compose)
 
 When running `pos-frontend` via `docker-compose.yml`, set `NG_ALLOWED_HOSTS` in your `.env` file.

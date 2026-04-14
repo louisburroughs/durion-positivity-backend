@@ -1,26 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
@@ -39,8 +18,26 @@ import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -65,8 +62,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public @NonNull PurchaseOrderResponse createPurchaseOrder(@NonNull CreatePurchaseOrderRequest request,
-            @NonNull String actorId) {
+    public @NonNull PurchaseOrderResponse createPurchaseOrder(
+            @NonNull CreatePurchaseOrderRequest request, @NonNull String actorId) {
         TotalsAndLines totalsAndLines = buildLineEntities(request.getLines());
         long subtotalMinor = totalsAndLines.subtotalMinor();
         long taxMinor = totalsAndLines.taxMinor();
@@ -96,11 +93,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(purchaseOrder);
         eventPublisher.publishEvent(Map.of(
-                EVENT_TYPE, "PurchaseOrderCreated",
-                "poId", saved.getPurchaseOrderId().toString(),
-                "vendorId", saved.getVendorId().toString(),
-                ACTOR_ID, actorId,
-                OCCURRED_AT, Instant.now(clock).toString()));
+                EVENT_TYPE,
+                "PurchaseOrderCreated",
+                "poId",
+                saved.getPurchaseOrderId().toString(),
+                "vendorId",
+                saved.getVendorId().toString(),
+                ACTOR_ID,
+                actorId,
+                OCCURRED_AT,
+                Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
@@ -113,14 +115,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull Page<PurchaseOrderResponse> listPurchaseOrders(@NonNull ListPurchaseOrdersRequest filter,
-            @NonNull Pageable pageable) {
+    public @NonNull Page<PurchaseOrderResponse> listPurchaseOrders(
+            @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable) {
         Page<PurchaseOrderEntity> page;
         if (filter.getVendorId() != null && filter.getStatus() != null) {
             page = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus(), pageable);
             if (page == null) {
-                List<PurchaseOrderEntity> legacy = purchaseOrderRepository
-                        .findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus());
+                List<PurchaseOrderEntity> legacy =
+                        purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus());
                 page = new PageImpl<>(legacy, pageable, legacy.size());
             }
         } else if (filter.getVendorId() != null) {
@@ -138,9 +140,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         List<PurchaseOrderResponse> content = page.getContent().stream()
-                .filter(po -> filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
-                .filter(po -> filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
-                .filter(po -> filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
+                .filter(po ->
+                        filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
+                .filter(po ->
+                        filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
+                .filter(po ->
+                        filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
                 .map(this::toResponse)
                 .toList();
 
@@ -149,9 +154,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public @NonNull PurchaseOrderResponse approvePurchaseOrder(@NonNull UUID poId,
-            @NonNull ApprovePurchaseOrderRequest request,
-            @NonNull String actorId) {
+    public @NonNull PurchaseOrderResponse approvePurchaseOrder(
+            @NonNull UUID poId, @NonNull ApprovePurchaseOrderRequest request, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new IllegalStateException("Only DRAFT purchase orders can be approved");
@@ -163,21 +167,31 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setApprovalTimestamp(now);
         po.setApprovalNotes(request.getApprovalNotes());
         if (encumbranceEnabled) {
-            po.setEncumbranceRef("ENC-" + po.getPurchaseOrderId().toString().substring(0, 8).toUpperCase());
+            po.setEncumbranceRef(
+                    "ENC-" + po.getPurchaseOrderId().toString().substring(0, 8).toUpperCase());
         }
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
 
         eventPublisher.publishEvent(Map.of(
-                EVENT_TYPE, "PurchaseOrderApproved",
-                "poId", saved.getPurchaseOrderId().toString(),
-                "vendorId", saved.getVendorId().toString(),
-                "totalAmountMinor", saved.getGrandTotalMinor(),
-                "currency", saved.getCurrency(),
-                "lineItems", toApprovedLineItems(saved),
-                "approvalStatus", saved.getStatus().name(),
-                ACTOR_ID, actorId,
-                OCCURRED_AT, now.toString()));
+                EVENT_TYPE,
+                "PurchaseOrderApproved",
+                "poId",
+                saved.getPurchaseOrderId().toString(),
+                "vendorId",
+                saved.getVendorId().toString(),
+                "totalAmountMinor",
+                saved.getGrandTotalMinor(),
+                "currency",
+                saved.getCurrency(),
+                "lineItems",
+                toApprovedLineItems(saved),
+                "approvalStatus",
+                saved.getStatus().name(),
+                ACTOR_ID,
+                actorId,
+                OCCURRED_AT,
+                now.toString()));
 
         if (encumbranceEnabled) {
             EncumbranceEventPublisher publisher = encumbranceEventPublisher;
@@ -196,9 +210,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public @NonNull PurchaseOrderResponse revisePurchaseOrder(@NonNull UUID poId,
-            @NonNull RevisePurchaseOrderRequest request,
-            @NonNull String actorId) {
+    public @NonNull PurchaseOrderResponse revisePurchaseOrder(
+            @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         Integer priorVersion = po.getVersionNumber() == null ? 1 : po.getVersionNumber();
         long priorSubtotalMinor = safeLong(po.getSubtotalMinor());
@@ -226,7 +239,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setGrandTotalMinor(totalsAndLines.subtotalMinor() + totalsAndLines.taxMinor());
         addDelta(delta, "subtotalMinor", priorSubtotalMinor, totalsAndLines.subtotalMinor());
         addDelta(delta, "taxMinor", priorTaxMinor, totalsAndLines.taxMinor());
-        addDelta(delta, "grandTotalMinor", priorGrandTotalMinor,
+        addDelta(
+                delta,
+                "grandTotalMinor",
+                priorGrandTotalMinor,
                 totalsAndLines.subtotalMinor() + totalsAndLines.taxMinor());
 
         long revisedOpenBalance = totalsAndLines.lines().stream()
@@ -242,14 +258,22 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
         eventPublisher.publishEvent(Map.of(
-                EVENT_TYPE, "PurchaseOrderRevised",
-                "poId", saved.getPurchaseOrderId().toString(),
-                "priorVersion", priorVersion,
-                "newVersion", saved.getVersionNumber(),
-                "revisionReason", request.getRevisionReason(),
-                "delta", delta,
-                ACTOR_ID, actorId,
-                OCCURRED_AT, Instant.now(clock).toString()));
+                EVENT_TYPE,
+                "PurchaseOrderRevised",
+                "poId",
+                saved.getPurchaseOrderId().toString(),
+                "priorVersion",
+                priorVersion,
+                "newVersion",
+                saved.getVersionNumber(),
+                "revisionReason",
+                request.getRevisionReason(),
+                "delta",
+                delta,
+                ACTOR_ID,
+                actorId,
+                OCCURRED_AT,
+                Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
@@ -263,18 +287,21 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
         eventPublisher.publishEvent(Map.of(
-                EVENT_TYPE, "PurchaseOrderCancelled",
-                "poId", saved.getPurchaseOrderId().toString(),
-                ACTOR_ID, actorId,
-                OCCURRED_AT, Instant.now(clock).toString()));
+                EVENT_TYPE,
+                "PurchaseOrderCancelled",
+                "poId",
+                saved.getPurchaseOrderId().toString(),
+                ACTOR_ID,
+                actorId,
+                OCCURRED_AT,
+                Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
     @Override
     @Transactional
-    public @NonNull ReceivePurchaseOrderResponse receivePurchaseOrder(@NonNull UUID poId,
-            @NonNull ReceivePurchaseOrderRequest request,
-            @NonNull String actorId) {
+    public @NonNull ReceivePurchaseOrderResponse receivePurchaseOrder(
+            @NonNull UUID poId, @NonNull ReceivePurchaseOrderRequest request, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         validateReceivableStatus(po);
         Map<UUID, PurchaseOrderLineEntity> poLinesById = mapPoLinesById(po.getLines());
@@ -323,30 +350,31 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return updatedOpenBalanceMinor;
     }
 
-    private PurchaseOrderLineEntity resolvePurchaseOrderLine(UUID lineId,
-            Map<UUID, PurchaseOrderLineEntity> poLinesById) {
+    private PurchaseOrderLineEntity resolvePurchaseOrderLine(
+            UUID lineId, Map<UUID, PurchaseOrderLineEntity> poLinesById) {
         PurchaseOrderLineEntity line = poLinesById.get(lineId);
         if (line != null) {
             return line;
         }
-        return purchaseOrderLineRepository.findById(lineId)
+        return purchaseOrderLineRepository
+                .findById(lineId)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrderLine", lineId.toString()));
     }
 
     private void updateOpenQuantity(PurchaseOrderLineEntity line, BigDecimal quantityReceived) {
-        BigDecimal currentOpenQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
-                : line.getOpenQuantityDecimal();
+        BigDecimal currentOpenQty =
+                line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal();
         BigDecimal nextOpenQty = currentOpenQty.subtract(quantityReceived);
         line.setOpenQuantityDecimal(nextOpenQty.signum() < 0 ? BigDecimal.ZERO : nextOpenQty);
     }
 
     private long calculateReceivedValueMinor(
-            PurchaseOrderLineEntity line,
-            ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest) {
+            PurchaseOrderLineEntity line, ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest) {
         long effectiveUnitCost = lineRequest.getUnitCostMinor() == null
                 ? safeLong(line.getUnitCostMinor())
                 : lineRequest.getUnitCostMinor();
-        return lineRequest.getQuantityReceived()
+        return lineRequest
+                .getQuantityReceived()
                 .multiply(BigDecimal.valueOf(effectiveUnitCost))
                 .setScale(0, RoundingMode.HALF_EVEN)
                 .longValue();
@@ -370,12 +398,18 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private void publishReceiptEvent(PurchaseOrderEntity po, String actorId) {
         eventPublisher.publishEvent(Map.of(
-                EVENT_TYPE, "PurchaseOrderReceiptEvent",
-                "poId", po.getPurchaseOrderId().toString(),
-                "status", po.getStatus().name(),
-                "openBalanceMinor", safeLong(po.getOpenBalanceMinor()),
-                ACTOR_ID, actorId,
-                OCCURRED_AT, Instant.now(clock).toString()));
+                EVENT_TYPE,
+                "PurchaseOrderReceiptEvent",
+                "poId",
+                po.getPurchaseOrderId().toString(),
+                "status",
+                po.getStatus().name(),
+                "openBalanceMinor",
+                safeLong(po.getOpenBalanceMinor()),
+                ACTOR_ID,
+                actorId,
+                OCCURRED_AT,
+                Instant.now(clock).toString()));
     }
 
     private List<ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail> buildReceiveLineDetails(
@@ -389,7 +423,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {
-        return purchaseOrderRepository.findById(poId)
+        return purchaseOrderRepository
+                .findById(poId)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId.toString()));
     }
 
@@ -399,14 +434,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         long totalTaxMinor = 0L;
 
         for (PurchaseOrderLineRequest lineRequest : lineRequests) {
-            long lineTotalMinor = lineRequest.getQuantity()
+            long lineTotalMinor = lineRequest
+                    .getQuantity()
                     .multiply(BigDecimal.valueOf(lineRequest.getUnitCostMinor()))
                     .setScale(0, RoundingMode.HALF_EVEN)
                     .longValue();
 
-            long lineTaxMinor = lineRequest.getTaxCodeId() == null
-                    ? 0L
-                    : Math.round(lineTotalMinor * defaultTaxRate);
+            long lineTaxMinor = lineRequest.getTaxCodeId() == null ? 0L : Math.round(lineTotalMinor * defaultTaxRate);
 
             PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
                     .lineNumber(lineRequest.getLineNumber())
@@ -469,8 +503,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .sorted(Comparator.comparing(PurchaseOrderLineEntity::getLineNumber))
                 .map(line -> {
                     Map<String, Object> item = new HashMap<>();
-                    item.put("lineId", line.getLineId() == null ? "" : line.getLineId().toString());
-                    item.put("skuId", line.getSkuId() == null ? "" : line.getSkuId().toString());
+                    item.put(
+                            "lineId",
+                            line.getLineId() == null ? "" : line.getLineId().toString());
+                    item.put(
+                            "skuId",
+                            line.getSkuId() == null ? "" : line.getSkuId().toString());
                     item.put("quantityDecimal", line.getQuantityDecimal());
                     item.put("unitCostMinor", safeLong(line.getUnitCostMinor()));
                     item.put("lineTotalMinor", safeLong(line.getLineTotalMinor()));
@@ -510,6 +548,5 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return "PO-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase();
     }
 
-    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {
-    }
+    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {}
 }

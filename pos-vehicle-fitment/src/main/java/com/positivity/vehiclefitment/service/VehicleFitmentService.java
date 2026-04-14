@@ -1,14 +1,13 @@
 package com.positivity.vehiclefitment.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
 import com.positivity.vehiclefitment.internal.entity.VehicleType;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
+import java.util.List;
+import java.util.UUID;
 
 public interface VehicleFitmentService {
 
@@ -26,5 +25,4 @@ public interface VehicleFitmentService {
     List<Model> getModelsByMake(UUID makeId);
 
     List<VehicleType> getVehicleTypesForMake(UUID makeId);
-
 }

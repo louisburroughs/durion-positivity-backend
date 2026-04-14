@@ -1,17 +1,6 @@
 package com.positivity.location.internal.entity;
 
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,10 +14,18 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Version;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Location aggregate representing physical sites, warehouses, or other
@@ -74,31 +71,41 @@ public class Location {
     }
 
     private String name;
+
     @Column(name = "normalized_name")
     private String normalizedName;
     /** Unique immutable business code for this location (e.g. "MAIN-WS-001"). */
     @Column(unique = true)
     private String code;
+
     private String status;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
+
     @Column(name = "hr_location_id")
     private String hrLocationId;
+
     private String timezone;
+
     @Column(name = "operating_hours", columnDefinition = "TEXT")
     private String operatingHours;
+
     @Column(name = "holiday_closures", columnDefinition = "TEXT")
     private String holidayClosures;
+
     private Integer checkInBufferMinutes;
     private Integer cleanupBufferMinutes;
     // Issue CAP-214 #38: Persist default storage role assignments at site level.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "default_staging_location_id")
     private StorageLocationEntity defaultStagingLocation;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "default_quarantine_location_id")
     private StorageLocationEntity defaultQuarantineLocation;
@@ -129,6 +136,7 @@ public class Location {
     private String postalCode;
     private String country;
     private String mailingAddress;
+
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;

@@ -15,12 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.service.LlmApiConfigService;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,8 +70,14 @@ class LlmApiConfigControllerTest {
 
     private LlmApiConfigResponse stubResponse() {
         return new LlmApiConfigResponse(
-                CONFIG_ID, "test-api", "gpt-4", "http://localhost:9999", "secret-key",
-                Map.of(), FIXED_TIME, FIXED_TIME);
+                CONFIG_ID,
+                "test-api",
+                "gpt-4",
+                "http://localhost:9999",
+                "secret-key",
+                Map.of(),
+                FIXED_TIME,
+                FIXED_TIME);
     }
 
     // ─── AC: GET /v1/llm-apis → 200 with list ────────────────────────────────
@@ -123,12 +127,12 @@ class LlmApiConfigControllerTest {
     void create_withValidRequest_returns201() throws Exception {
         when(llmApiConfigService.create(any())).thenReturn(stubResponse());
 
-        LlmApiConfigRequest request = new LlmApiConfigRequest(
-                "test-api", "gpt-4", "http://localhost:9999", "secret-key", null);
+        LlmApiConfigRequest request =
+                new LlmApiConfigRequest("test-api", "gpt-4", "http://localhost:9999", "secret-key", null);
 
         mockMvc.perform(post("/v1/llm-apis")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(CONFIG_ID.toString()));
     }
@@ -144,8 +148,8 @@ class LlmApiConfigControllerTest {
     @DisplayName("POST /v1/llm-apis with blank fields → 400 Bad Request")
     void create_withBlankFields_returns400() throws Exception {
         mockMvc.perform(post("/v1/llm-apis")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -161,12 +165,12 @@ class LlmApiConfigControllerTest {
     void update_withValidRequest_returns200() throws Exception {
         when(llmApiConfigService.update(eq(CONFIG_ID), any())).thenReturn(stubResponse());
 
-        LlmApiConfigRequest request = new LlmApiConfigRequest(
-                "test-api", "gpt-4", "http://localhost:9999", "new-key", null);
+        LlmApiConfigRequest request =
+                new LlmApiConfigRequest("test-api", "gpt-4", "http://localhost:9999", "new-key", null);
 
         mockMvc.perform(put("/v1/llm-apis/{id}", CONFIG_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(CONFIG_ID.toString()));
     }
@@ -181,8 +185,7 @@ class LlmApiConfigControllerTest {
     @WithMockUser(authorities = "mcp:llm_api:delete")
     @DisplayName("DELETE /v1/llm-apis/{id} with delete authority → 204 No Content")
     void delete_withDeleteAuthority_returns204() throws Exception {
-        mockMvc.perform(delete("/v1/llm-apis/{id}", CONFIG_ID))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/v1/llm-apis/{id}", CONFIG_ID)).andExpect(status().isNoContent());
 
         verify(llmApiConfigService).delete(CONFIG_ID);
     }
@@ -197,8 +200,7 @@ class LlmApiConfigControllerTest {
     @WithMockUser(authorities = "other:authority")
     @DisplayName("GET /v1/llm-apis without view authority → 403 Forbidden")
     void list_withoutViewAuthority_returns403() throws Exception {
-        mockMvc.perform(get("/v1/llm-apis"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/llm-apis")).andExpect(status().isForbidden());
     }
 
     // ─── ADR-0017: no authentication → 401 ──────────────────────────────────
@@ -209,8 +211,7 @@ class LlmApiConfigControllerTest {
     @Test
     @DisplayName("GET /v1/llm-apis unauthenticated → 401 Unauthorized")
     void list_unauthenticated_returns401() throws Exception {
-        mockMvc.perform(get("/v1/llm-apis"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/llm-apis")).andExpect(status().isUnauthorized());
     }
 
     // ─── Test slice configuration ────────────────────────────────────────────

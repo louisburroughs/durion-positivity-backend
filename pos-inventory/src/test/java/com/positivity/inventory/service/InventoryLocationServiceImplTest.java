@@ -1,5 +1,7 @@
 package com.positivity.inventory.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.positivity.inventory.internal.client.StorageLocationValidationClient;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
@@ -8,23 +10,20 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.service.InventoryLocationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.client.RestClient;
-
-import java.time.ZoneOffset;
-import java.time.Instant;
+import java.lang.reflect.Proxy;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.lang.reflect.Proxy;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.client.RestClient;
 
 /**
  * Verifies current deactivation response contract for inventory locations.
@@ -89,8 +88,10 @@ class InventoryLocationServiceImplTest {
 
             assertThat(response.getTransfer()).isNotNull();
             assertThat(response.getTransfer().getMovedItems()).hasSize(1);
-            assertThat(response.getTransfer().getMovedItems().get(0).getItemId()).isEqualTo("SKU-001");
-            assertThat(response.getTransfer().getMovedItems().get(0).getQuantity()).isEqualTo(5);
+            assertThat(response.getTransfer().getMovedItems().get(0).getItemId())
+                    .isEqualTo("SKU-001");
+            assertThat(response.getTransfer().getMovedItems().get(0).getQuantity())
+                    .isEqualTo(5);
             assertThat(persistedEntries).hasSize(2);
             assertThat(persistedEntries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
             assertThat(persistedEntries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
@@ -105,11 +106,11 @@ class InventoryLocationServiceImplTest {
             List<InventoryLedgerEntry> persistedEntries) {
         return (InventoryLedgerEntryRepository) Proxy.newProxyInstance(
                 InventoryLedgerEntryRepository.class.getClassLoader(),
-                new Class[] { InventoryLedgerEntryRepository.class },
+                new Class[] {InventoryLedgerEntryRepository.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "findPositiveOnHandByLocation" -> sourceRows;
-                    case "calculateOnHandQuantityAtLocation" -> destinationOnHand.getOrDefault(
-                            stockKey((String) args[0], (UUID) args[1]), 0);
+                    case "calculateOnHandQuantityAtLocation" ->
+                        destinationOnHand.getOrDefault(stockKey((String) args[0], (UUID) args[1]), 0);
                     case "saveAll" -> {
                         for (Object entry : (Iterable<?>) args[0]) {
                             persistedEntries.add((InventoryLedgerEntry) entry);
@@ -175,11 +176,9 @@ class InventoryLocationServiceImplTest {
     }
 
     private StorageLocationValidationClient.StorageLocationValidation validation(
-            UUID locationId,
-            UUID siteId,
-            boolean exists,
-            boolean active) {
-        StorageLocationValidationClient.StorageLocationValidation validation = new StorageLocationValidationClient.StorageLocationValidation();
+            UUID locationId, UUID siteId, boolean exists, boolean active) {
+        StorageLocationValidationClient.StorageLocationValidation validation =
+                new StorageLocationValidationClient.StorageLocationValidation();
         validation.setStorageLocationId(locationId);
         validation.setSiteId(siteId);
         validation.setExists(exists);

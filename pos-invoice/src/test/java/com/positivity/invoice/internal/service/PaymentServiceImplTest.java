@@ -8,6 +8,22 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
+import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.enums.PaymentFlow;
+import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
+import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
+import com.positivity.invoice.internal.payment.GatewayCaptureRequest;
+import com.positivity.invoice.internal.payment.GatewayPaymentResult;
+import com.positivity.invoice.internal.payment.GatewayVoidRequest;
+import com.positivity.invoice.internal.payment.PaymentGatewayPort;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,7 +31,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,23 +43,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-
-import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
-import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
-import com.positivity.invoice.internal.entity.PaymentIntent;
-import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
-import com.positivity.invoice.internal.exception.PaymentDeclinedException;
-import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
-import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
-import com.positivity.invoice.internal.enums.PaymentFlow;
-import com.positivity.invoice.internal.enums.PaymentIntentStatus;
-import com.positivity.invoice.internal.payment.GatewayCaptureRequest;
-import com.positivity.invoice.internal.payment.GatewayPaymentResult;
-import com.positivity.invoice.internal.entity.Invoice;
-import com.positivity.invoice.internal.payment.GatewayVoidRequest;
-import com.positivity.invoice.internal.payment.PaymentGatewayPort;
-import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 
 /**
  * Unit tests for {@link PaymentServiceImpl} covering Story #9:
@@ -91,6 +89,7 @@ class PaymentServiceImplTest {
 
     @Mock
     private InvoiceRepository invoiceRepository;
+
     @Mock
     private PaymentIntentRepository paymentIntentRepository;
 
@@ -106,11 +105,10 @@ class PaymentServiceImplTest {
      * Sets up the security context with the provided authority strings.
      */
     private void withAuthorities(String... authorities) {
-        var grants = List.of(authorities).stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("cashier1", null, grants));
+        var grants =
+                List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList();
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("cashier1", null, grants));
     }
 
     // -------------------------------------------------------------------------
@@ -194,12 +192,11 @@ class PaymentServiceImplTest {
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var existing = capturedPaymentIntent();
         existing.setInvoice(invoice(OTHER_INVOICE_ID));
-        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
-                .thenReturn(Optional.of(existing));
+        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
-            .isInstanceOf(PaymentIdempotencyConflictException.class)
-            .hasMessageContaining("already used with a different payment request");
+                .isInstanceOf(PaymentIdempotencyConflictException.class)
+                .hasMessageContaining("already used with a different payment request");
 
         verify(gatewayPort, never()).saleCapture(any());
         verify(gatewayPort, never()).authorize(any());
@@ -211,11 +208,11 @@ class PaymentServiceImplTest {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, BigDecimal.valueOf(210_00, 2), IDEMPOTENCY_KEY);
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
-            .thenReturn(Optional.of(capturedPaymentIntent()));
+                .thenReturn(Optional.of(capturedPaymentIntent()));
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
-            .isInstanceOf(PaymentIdempotencyConflictException.class)
-            .hasMessageContaining("already used with a different payment request");
+                .isInstanceOf(PaymentIdempotencyConflictException.class)
+                .hasMessageContaining("already used with a different payment request");
 
         verify(gatewayPort, never()).saleCapture(any());
         verify(gatewayPort, never()).authorize(any());
@@ -350,15 +347,15 @@ class PaymentServiceImplTest {
         when(gatewayPort.voidRemainder(any())).thenReturn(voidedResult());
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        InitiatePaymentResponse response = paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, partialAmount,
-                CAPTURE_IDEMPOTENCY_KEY);
+        InitiatePaymentResponse response =
+                paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, partialAmount, CAPTURE_IDEMPOTENCY_KEY);
 
         assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
         assertThat(response.getCapturedAmount()).isEqualByComparingTo(partialAmount);
         assertThat(response.getVoidedRemainderAmount()).isEqualByComparingTo(expectedVoided);
 
-        ArgumentCaptor<GatewayCaptureRequest> captureRequestCaptor = ArgumentCaptor
-                .forClass(GatewayCaptureRequest.class);
+        ArgumentCaptor<GatewayCaptureRequest> captureRequestCaptor =
+                ArgumentCaptor.forClass(GatewayCaptureRequest.class);
         verify(gatewayPort).capture(captureRequestCaptor.capture());
         assertThat(captureRequestCaptor.getValue().gatewayReference()).isEqualTo("gw-auth-ref-001");
 
@@ -376,9 +373,8 @@ class PaymentServiceImplTest {
         withAuthorities("PROCESS_PAYMENT"); // MANUAL_CAPTURE intentionally absent
         var captureAmount = BigDecimal.valueOf(200);
 
-        assertThatThrownBy(
-                () -> paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, captureAmount,
-                        CAPTURE_IDEMPOTENCY_KEY))
+        assertThatThrownBy(() -> paymentService.capturePayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, captureAmount, CAPTURE_IDEMPOTENCY_KEY))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -395,8 +391,8 @@ class PaymentServiceImplTest {
         when(gatewayPort.capture(any())).thenReturn(capturedResult(authorizedAmount));
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        InitiatePaymentResponse response = paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID,
-                authorizedAmount, CAPTURE_IDEMPOTENCY_KEY);
+        InitiatePaymentResponse response =
+                paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, authorizedAmount, CAPTURE_IDEMPOTENCY_KEY);
 
         assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
         assertThat(response.getCapturedAmount()).isEqualByComparingTo(authorizedAmount);
@@ -414,11 +410,8 @@ class PaymentServiceImplTest {
         when(gatewayPort.inquireStatus("gw-auth-ref-001")).thenReturn(successResult);
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        InitiatePaymentResponse response = paymentService.capturePayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                captureAmount,
-                CAPTURE_IDEMPOTENCY_KEY);
+        InitiatePaymentResponse response =
+                paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, captureAmount, CAPTURE_IDEMPOTENCY_KEY);
 
         verify(gatewayPort, times(1)).inquireStatus("gw-auth-ref-001");
         assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
@@ -434,9 +427,8 @@ class PaymentServiceImplTest {
         paymentIntent.setStatus(PaymentIntentStatus.CAPTURED);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(paymentIntent));
 
-        assertThatThrownBy(
-                () -> paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, captureAmount,
-                        CAPTURE_IDEMPOTENCY_KEY))
+        assertThatThrownBy(() -> paymentService.capturePayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, captureAmount, CAPTURE_IDEMPOTENCY_KEY))
                 .isInstanceOf(InvalidPaymentStateException.class)
                 .hasMessageContaining("AUTHORIZED status");
     }
@@ -447,9 +439,8 @@ class PaymentServiceImplTest {
         var captureAmount = BigDecimal.valueOf(200, 2);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(
-                () -> paymentService.capturePayment(INVOICE_ID, PAYMENT_INTENT_ID, captureAmount,
-                        CAPTURE_IDEMPOTENCY_KEY))
+        assertThatThrownBy(() -> paymentService.capturePayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, captureAmount, CAPTURE_IDEMPOTENCY_KEY))
                 .isInstanceOf(PaymentIntentNotFoundException.class)
                 .hasMessageContaining("Payment intent not found");
     }

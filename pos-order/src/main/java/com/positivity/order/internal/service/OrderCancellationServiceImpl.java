@@ -38,8 +38,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
     @Override
     @Transactional
     public @NonNull CancellationResult cancelOrder(@NonNull UUID orderId, @NonNull CancelOrderCommand command) {
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
 
         if (order.getStatus() == SalesOrderStatus.CANCELLED
                 && command.idempotencyKey() != null
@@ -90,11 +90,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
 
             WorkorderCancelResult cancelResult = workexecPort.cancelWorkorder(
                     command.workOrderId(),
-                    new CancelWorkorderCommand(
-                            orderId,
-                            actor,
-                            command.cancellationReason(),
-                            idempotencyKey));
+                    new CancelWorkorderCommand(orderId, actor, command.cancellationReason(), idempotencyKey));
 
             if (!cancelResult.success()) {
                 order.setStatus(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
@@ -111,12 +107,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         if (command.paymentId() != null) {
             PaymentReversalResult reversalResult = billingPort.reversePayment(
                     command.paymentId(),
-                    new ReversePaymentCommand(
-                            "VOID",
-                            null,
-                            command.cancellationReason(),
-                            orderId,
-                            idempotencyKey));
+                    new ReversePaymentCommand("VOID", null, command.cancellationReason(), orderId, idempotencyKey));
 
             if (!reversalResult.success()) {
                 order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
@@ -140,8 +131,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
     @Override
     @Transactional
     public @NonNull CancellationResult retryCancellation(@NonNull UUID orderId, @NonNull String idempotencyKey) {
-        SalesOrder order = salesOrderRepository.findById(orderId)
-                .orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
         if (order.getStatus() != SalesOrderStatus.CANCEL_FAILED_BILLING) {
@@ -150,8 +141,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         }
 
         PaymentReversalResult reversalResult = billingPort.reversePayment(
-                order.getPaymentId(),
-                new ReversePaymentCommand("VOID", null, null, orderId, idempotencyKey));
+                order.getPaymentId(), new ReversePaymentCommand("VOID", null, null, orderId, idempotencyKey));
 
         if (!reversalResult.success()) {
             order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
@@ -168,7 +158,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         order.setUpdatedBy(actor);
         salesOrderRepository.save(order);
 
-        return new CancellationResult(orderId, STATUS_CANCELLED, "Order cancellation completed on retry",
-                idempotencyKey);
+        return new CancellationResult(
+                orderId, STATUS_CANCELLED, "Order cancellation completed on retry", idempotencyKey);
     }
 }

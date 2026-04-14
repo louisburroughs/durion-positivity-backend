@@ -1,12 +1,10 @@
 package com.positivity.shopmanager.log;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
-
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 
 /**

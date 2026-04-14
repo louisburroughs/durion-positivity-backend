@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStoppedEvent;
 import com.positivity.workorder.internal.dto.AddBreakSegmentRequest;
@@ -13,7 +12,6 @@ import com.positivity.workorder.internal.entity.BreakSegment;
 import com.positivity.workorder.internal.entity.WorkSession;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
@@ -24,17 +22,17 @@ import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkSessionService;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Full implementation of {@link WorkSessionService}.
@@ -60,8 +58,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     @Override
     public @NonNull WorkSessionResponse startSession(@NonNull StartWorkSessionRequest request) {
         // 1. Check overlap
-        List<WorkSession> active = workSessionRepository.findByMechanicIdAndStatus(
-                request.getMechanicId(), WorkSessionStatus.IN_PROGRESS);
+        List<WorkSession> active =
+                workSessionRepository.findByMechanicIdAndStatus(request.getMechanicId(), WorkSessionStatus.IN_PROGRESS);
         String actorId = SecurityContextHelper.getCurrentUsername().orElse("system");
         boolean overrideUsed = false;
         String overrideReason = null;
@@ -81,7 +79,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         }
 
         // 3. Build and save session
-        Workorder workorder = workorderRepository.findById(request.getWorkOrderId())
+        Workorder workorder = workorderRepository
+                .findById(request.getWorkOrderId())
                 .orElseThrow(() -> new WorkorderNotFoundException(request.getWorkOrderId()));
 
         WorkSession session = WorkSession.builder()
@@ -104,16 +103,17 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         // 4. Publish event; downstream @TransactionalEventListener(AFTER_COMMIT)
         // receivers process after commit.
-        eventPublisher.publishEvent(new WorkSessionStartedEvent(
-                session.getWorkSessionId(), session.getMechanicId(), session.getStartAt()));
+        eventPublisher.publishEvent(
+                new WorkSessionStartedEvent(session.getWorkSessionId(), session.getMechanicId(), session.getStartAt()));
 
         return toResponse(session);
     }
 
     @Override
-    public @NonNull WorkSessionResponse stopSession(@NonNull UUID workSessionId,
-            @NonNull StopWorkSessionRequest request) {
-        WorkSession session = workSessionRepository.findById(workSessionId)
+    public @NonNull WorkSessionResponse stopSession(
+            @NonNull UUID workSessionId, @NonNull StopWorkSessionRequest request) {
+        WorkSession session = workSessionRepository
+                .findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
         if (session.getStatus() != WorkSessionStatus.IN_PROGRESS) {
@@ -132,7 +132,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         List<BreakSegment> breaks = breakSegmentRepository.findByWorkSession_WorkSessionId(session.getWorkSessionId());
         long breakSeconds = breaks.stream()
                 .filter(b -> b.getBreakEndAt() != null)
-                .mapToLong(b -> Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).toSeconds())
+                .mapToLong(b ->
+                        Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).toSeconds())
                 .sum();
         session.setTotalDurationSeconds(Math.toIntExact(Math.max(0L, totalSeconds - breakSeconds)));
 
@@ -146,9 +147,10 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public @NonNull BreakSegmentResponse addBreakSegment(@NonNull UUID workSessionId,
-            @NonNull AddBreakSegmentRequest request) {
-        WorkSession session = workSessionRepository.findById(workSessionId)
+    public @NonNull BreakSegmentResponse addBreakSegment(
+            @NonNull UUID workSessionId, @NonNull AddBreakSegmentRequest request) {
+        WorkSession session = workSessionRepository
+                .findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
         if (session.getStatus() != WorkSessionStatus.IN_PROGRESS) {
@@ -159,7 +161,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         }
 
         // Guard: reject if an open break already exists
-        breakSegmentRepository.findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(workSessionId)
+        breakSegmentRepository
+                .findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(workSessionId)
                 .ifPresent(existing -> {
                     throw new WorkSessionStateException(
                             "A break segment is already open for this work session. Stop it before starting another.");
@@ -177,16 +180,17 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public @NonNull BreakSegmentResponse stopBreakSegment(@NonNull UUID workSessionId,
-            @NonNull UUID breakSegmentId) {
-        WorkSession session = workSessionRepository.findById(workSessionId)
+    public @NonNull BreakSegmentResponse stopBreakSegment(@NonNull UUID workSessionId, @NonNull UUID breakSegmentId) {
+        WorkSession session = workSessionRepository
+                .findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
         if (session.isLocked()) {
             throw new WorkSessionLockedException(workSessionId);
         }
 
-        BreakSegment seg = breakSegmentRepository.findById(breakSegmentId)
+        BreakSegment seg = breakSegmentRepository
+                .findById(breakSegmentId)
                 .orElseThrow(() -> new BreakSegmentNotFoundException(breakSegmentId));
 
         if (!seg.getWorkSession().getWorkSessionId().equals(workSessionId)) {

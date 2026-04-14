@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -55,20 +54,20 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
         }
 
         StorageLocationValidationClient.StorageLocationValidation sourceValidation = validateSourceLocation(locationId);
-        List<InventoryLedgerEntryRepository.LocationOnHand> onHandRows = inventoryLedgerEntryRepository
-                .findPositiveOnHandByLocation(locationId, InventoryLedgerEventType.onHandAffectingTypes());
+        List<InventoryLedgerEntryRepository.LocationOnHand> onHandRows =
+                inventoryLedgerEntryRepository.findPositiveOnHandByLocation(
+                        locationId, InventoryLedgerEventType.onHandAffectingTypes());
         boolean hasStock = !onHandRows.isEmpty();
 
         UUID resolvedDestinationLocationId = destinationLocationId;
         if (hasStock) {
-            StorageLocationValidationClient.StorageLocationValidation destinationValidation = validateDestinationLocation(
-                    locationId, sourceValidation, destinationLocationId);
+            StorageLocationValidationClient.StorageLocationValidation destinationValidation =
+                    validateDestinationLocation(locationId, sourceValidation, destinationLocationId);
             resolvedDestinationLocationId = destinationValidation.getStorageLocationId();
         }
 
-        List<DeactivateLocationResponse.MovedItem> movedItems = hasStock
-                ? transferAllStock(locationId, resolvedDestinationLocationId, onHandRows)
-                : List.of();
+        List<DeactivateLocationResponse.MovedItem> movedItems =
+                hasStock ? transferAllStock(locationId, resolvedDestinationLocationId, onHandRows) : List.of();
 
         DeactivateLocationResponse response = new DeactivateLocationResponse();
         response.setSourceLocationId(locationId);
@@ -88,8 +87,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     }
 
     private StorageLocationValidationClient.StorageLocationValidation validateSourceLocation(UUID locationId) {
-        StorageLocationValidationClient.StorageLocationValidation sourceValidation = storageLocationValidationClient
-                .getStorageLocationValidation(locationId.toString());
+        StorageLocationValidationClient.StorageLocationValidation sourceValidation =
+                storageLocationValidationClient.getStorageLocationValidation(locationId.toString());
         if (!sourceValidation.isExists()) {
             throw new LocationNotFoundException(locationId);
         }
@@ -110,8 +109,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             throw new IllegalArgumentException("destinationLocationId must be different from locationId");
         }
 
-        StorageLocationValidationClient.StorageLocationValidation destinationValidation = storageLocationValidationClient
-                .getStorageLocationValidation(destinationLocationId.toString());
+        StorageLocationValidationClient.StorageLocationValidation destinationValidation =
+                storageLocationValidationClient.getStorageLocationValidation(destinationLocationId.toString());
         if (!destinationValidation.isExists()) {
             throw new LocationNotFoundException(destinationLocationId);
         }
@@ -145,9 +144,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             }
 
             String stockItemId = row.getStockItemId();
-            int destinationOnHand = safeQuantity(
-                    inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId,
-                            destinationLocationId));
+            int destinationOnHand = safeQuantity(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                    stockItemId, destinationLocationId));
 
             transferEntries.add(InventoryLedgerEntry.builder()
                     .stockItemId(stockItemId)
@@ -190,9 +188,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     }
 
     private void publishAuditEvent(
-            UUID sourceLocationId,
-            UUID destinationLocationId,
-            List<DeactivateLocationResponse.MovedItem> movedItems) {
+            UUID sourceLocationId, UUID destinationLocationId, List<DeactivateLocationResponse.MovedItem> movedItems) {
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", "InventoryLocationDeactivated");
         event.put("sourceLocationId", sourceLocationId.toString());
@@ -205,10 +201,14 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     private void publishMetrics(boolean hasStock, int movedItemCount) {
         meterRegistry.counter("inventory.location.deactivate.total").increment();
         if (hasStock) {
-            meterRegistry.counter("inventory.location.deactivate.transferred.total").increment();
+            meterRegistry
+                    .counter("inventory.location.deactivate.transferred.total")
+                    .increment();
         }
         if (movedItemCount > 0) {
-            meterRegistry.counter("inventory.location.deactivate.items_moved.total").increment(movedItemCount);
+            meterRegistry
+                    .counter("inventory.location.deactivate.items_moved.total")
+                    .increment(movedItemCount);
         }
     }
 

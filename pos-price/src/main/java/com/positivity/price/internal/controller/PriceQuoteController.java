@@ -42,7 +42,8 @@ public class PriceQuoteController {
     @PreAuthorize("isAuthenticated()")
     @Operation(
             summary = "Calculate contextual price quote",
-            description = "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
+            description =
+                    "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
     @ApiResponse(responseCode = "200", description = "Price quote calculated successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid quote request.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")

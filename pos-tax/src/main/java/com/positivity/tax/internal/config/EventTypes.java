@@ -1,7 +1,6 @@
 package com.positivity.tax.internal.config;
 
 import com.positivity.events.EventTypeRegistration;
-
 import java.util.List;
 
 /**
@@ -22,10 +21,9 @@ public final class EventTypes {
      * @return list of event type registrations
      */
     public static List<EventTypeRegistration> all() {
-        return List.of(
-                EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
-                        .description(
-                                "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
-                        .build());
+        return List.of(EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
+                .description(
+                        "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
+                .build());
     }
 }

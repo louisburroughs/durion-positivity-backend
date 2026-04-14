@@ -2,13 +2,12 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
-
-import java.time.Instant;
 
 /**
  * A single entry in the workorder status change history.

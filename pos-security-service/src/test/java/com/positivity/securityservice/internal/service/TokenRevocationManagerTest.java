@@ -11,10 +11,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.resilience4j.retry.Retry;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
-import io.github.resilience4j.retry.Retry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -128,7 +127,8 @@ class TokenRevocationManagerTest {
     void revokeToken_redisThrows_returnsFalse() {
         TokenRevocationManager mgr = managerWithRedis();
         doThrow(new RuntimeException("Connection refused"))
-                .when(valueOps).set(any(), any(), anyLong(), any(TimeUnit.class));
+                .when(valueOps)
+                .set(any(), any(), anyLong(), any(TimeUnit.class));
 
         boolean result = mgr.revokeToken("jti-abc", 3600);
 
@@ -280,13 +280,11 @@ class TokenRevocationManagerTest {
     @Test
     @DisplayName("revokeToken: retry decorator path returns false when all attempts fail")
     void revokeToken_withRetryDecorator_allAttemptsFail_returnsFalse() {
-        Retry retry = io.github.resilience4j.retry.Retry.of("fast-fail",
-                io.github.resilience4j.retry.RetryConfig.custom()
-                        .maxAttempts(1)
-                        .build());
+        Retry retry = io.github.resilience4j.retry.Retry.of(
+                "fast-fail",
+                io.github.resilience4j.retry.RetryConfig.custom().maxAttempts(1).build());
         TokenRevocationManager mgr = new TokenRevocationManager(redisProvider(), retryProvider(retry), true);
-        doThrow(new RuntimeException("Redis down"))
-                .when(valueOps).set(any(), any(), anyLong(), any(TimeUnit.class));
+        doThrow(new RuntimeException("Redis down")).when(valueOps).set(any(), any(), anyLong(), any(TimeUnit.class));
 
         boolean result = mgr.revokeToken("jti-retry-fail", 3600);
 

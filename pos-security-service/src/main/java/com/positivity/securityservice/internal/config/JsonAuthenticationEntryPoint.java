@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.CredentialsExpiredException;
@@ -12,11 +16,6 @@ import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Writes a JSON {@link ErrorResponse} body when Spring Security's
@@ -36,9 +35,8 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     @Override
     public void commence(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            AuthenticationException authException) throws IOException {
+            HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
+            throws IOException {
 
         String code;
         String message;
@@ -66,7 +64,15 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
         }
 
         ApiError body = new ApiError(
-                code, message, HttpServletResponse.SC_UNAUTHORIZED, Instant.now(clock).toString(), correlationId, null, null, null, null);
+                code,
+                message,
+                HttpServletResponse.SC_UNAUTHORIZED,
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                null,
+                null,
+                null);
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");

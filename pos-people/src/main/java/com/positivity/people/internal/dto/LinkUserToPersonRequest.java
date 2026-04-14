@@ -1,11 +1,10 @@
 package com.positivity.people.internal.dto;
 
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -26,5 +25,4 @@ public class LinkUserToPersonRequest {
         this.userId = userId;
         this.personId = personId;
     }
-
 }

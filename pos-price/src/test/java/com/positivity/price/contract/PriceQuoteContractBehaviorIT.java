@@ -1,7 +1,5 @@
 package com.positivity.price.contract;
 
-import com.positivity.price.BaseContractIntegrationTest;
-
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,8 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.price.BaseContractIntegrationTest;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -52,8 +49,8 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
         ObjectNode request = baseValidRequest();
 
         mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.unitPrice").exists())
@@ -64,13 +61,19 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("givenNoMatchingRules_whenPriceQuoteRequested_thenReturnsMsrpFallback")
     void givenNoMatchingRules_whenPriceQuoteRequested_thenReturnsMsrpFallback() throws Exception {
         ObjectNode request = baseValidRequest();
-        request.put("productId", UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").toString());
-        request.put("locationId", UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").toString());
-        request.put("customerTierId", UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc").toString());
+        request.put(
+                "productId",
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").toString());
+        request.put(
+                "locationId",
+                UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").toString());
+        request.put(
+                "customerTierId",
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc").toString());
 
         mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.priceSource").value("MSRP_FALLBACK"));
@@ -80,11 +83,13 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404")
     void givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404() throws Exception {
         ObjectNode request = baseValidRequest();
-        request.put("productId", UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd").toString());
+        request.put(
+                "productId",
+                UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd").toString());
 
         mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
@@ -96,8 +101,8 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
         request.put("quantity", 0);
 
         mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -109,18 +114,24 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
         request.remove("productId");
 
         mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     private ObjectNode baseValidRequest() {
         ObjectNode request = objectMapper.createObjectNode();
-        request.put("productId", UUID.fromString("11111111-1111-1111-1111-111111111111").toString());
+        request.put(
+                "productId",
+                UUID.fromString("11111111-1111-1111-1111-111111111111").toString());
         request.put("quantity", 1);
-        request.put("locationId", UUID.fromString("22222222-2222-2222-2222-222222222222").toString());
-        request.put("customerTierId", UUID.fromString("33333333-3333-3333-3333-333333333333").toString());
+        request.put(
+                "locationId",
+                UUID.fromString("22222222-2222-2222-2222-222222222222").toString());
+        request.put(
+                "customerTierId",
+                UUID.fromString("33333333-3333-3333-3333-333333333333").toString());
         return request;
     }
 

@@ -1,7 +1,5 @@
 package com.positivity.catalog.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
 import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto;
@@ -20,10 +18,10 @@ import com.positivity.catalog.internal.repository.GuardrailPolicyRepository;
 import com.positivity.catalog.internal.repository.LocationPriceOverrideRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.LocationPriceOverrideService;
-
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -34,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideService {
     private final Clock clock;
-
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
@@ -140,9 +137,9 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
     @Override
     @Transactional(readOnly = true)
     public EffectiveLocationPriceResponseDto getEffectivePrice(@NonNull UUID locationId, @NonNull UUID productId) {
-        var activeOverride = locationPriceOverrideRepository
-                .findTopByLocationIdAndProductIdAndStatusOrderByCreatedAtDesc(locationId, productId,
-                        PriceOverrideStatus.ACTIVE);
+        var activeOverride =
+                locationPriceOverrideRepository.findTopByLocationIdAndProductIdAndStatusOrderByCreatedAtDesc(
+                        locationId, productId, PriceOverrideStatus.ACTIVE);
 
         EffectiveLocationPriceResponseDto dto = new EffectiveLocationPriceResponseDto();
         dto.setLocationId(locationId);
@@ -155,9 +152,9 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
             return dto;
         }
 
-        var pendingOverride = locationPriceOverrideRepository
-                .findTopByLocationIdAndProductIdAndStatusOrderByCreatedAtDesc(locationId, productId,
-                        PriceOverrideStatus.PENDING_APPROVAL);
+        var pendingOverride =
+                locationPriceOverrideRepository.findTopByLocationIdAndProductIdAndStatusOrderByCreatedAtDesc(
+                        locationId, productId, PriceOverrideStatus.PENDING_APPROVAL);
 
         if (pendingOverride.isPresent()) {
             dto.setBasePrice(pendingOverride.get().getBasePrice());
@@ -173,11 +170,12 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
     @Override
     @Transactional
-    public LocationPriceOverrideResponseDto approveOverride(@NonNull UUID overrideId,
-            @NonNull LocationPriceOverrideDecisionRequestDto request) {
+    public LocationPriceOverrideResponseDto approveOverride(
+            @NonNull UUID overrideId, @NonNull LocationPriceOverrideDecisionRequestDto request) {
         validateDecisionRequest(request, false);
 
-        LocationPriceOverrideEntity override = locationPriceOverrideRepository.findById(overrideId)
+        LocationPriceOverrideEntity override = locationPriceOverrideRepository
+                .findById(overrideId)
                 .orElseThrow(() -> new CatalogNotFoundException("OVERRIDE_NOT_FOUND: overrideId=" + overrideId));
 
         validateVersion(request.getVersion(), override.getVersion());
@@ -193,9 +191,10 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         LocationPriceOverrideEntity saved = locationPriceOverrideRepository.save(override);
 
-        ApprovalRequestEntity approvalRequest = approvalRequestRepository.findByOverrideId(overrideId)
-                .orElseThrow(() -> new CatalogNotFoundException(
-                        "APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
+        ApprovalRequestEntity approvalRequest = approvalRequestRepository
+                .findByOverrideId(overrideId)
+                .orElseThrow(
+                        () -> new CatalogNotFoundException("APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
         approvalRequest.setStatus(ApprovalRequestStatus.APPROVED);
         approvalRequest.setResolvedAt(Instant.now(clock));
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
@@ -207,11 +206,12 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
     @Override
     @Transactional
-    public LocationPriceOverrideResponseDto rejectOverride(@NonNull UUID overrideId,
-            @NonNull LocationPriceOverrideDecisionRequestDto request) {
+    public LocationPriceOverrideResponseDto rejectOverride(
+            @NonNull UUID overrideId, @NonNull LocationPriceOverrideDecisionRequestDto request) {
         validateDecisionRequest(request, true);
 
-        LocationPriceOverrideEntity override = locationPriceOverrideRepository.findById(overrideId)
+        LocationPriceOverrideEntity override = locationPriceOverrideRepository
+                .findById(overrideId)
                 .orElseThrow(() -> new CatalogNotFoundException("OVERRIDE_NOT_FOUND: overrideId=" + overrideId));
 
         validateVersion(request.getVersion(), override.getVersion());
@@ -229,9 +229,10 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         LocationPriceOverrideEntity saved = locationPriceOverrideRepository.save(override);
 
-        ApprovalRequestEntity approvalRequest = approvalRequestRepository.findByOverrideId(overrideId)
-                .orElseThrow(() -> new CatalogNotFoundException(
-                        "APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
+        ApprovalRequestEntity approvalRequest = approvalRequestRepository
+                .findByOverrideId(overrideId)
+                .orElseThrow(
+                        () -> new CatalogNotFoundException("APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
         approvalRequest.setStatus(ApprovalRequestStatus.REJECTED);
         approvalRequest.setResolvedAt(Instant.now(clock));
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
@@ -242,8 +243,9 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
     }
 
     private void deactivateExistingActiveOverride(UUID locationId, UUID productId) {
-        List<LocationPriceOverrideEntity> existingActive = locationPriceOverrideRepository
-                .findByLocationIdAndProductIdAndStatus(locationId, productId, PriceOverrideStatus.ACTIVE);
+        List<LocationPriceOverrideEntity> existingActive =
+                locationPriceOverrideRepository.findByLocationIdAndProductIdAndStatus(
+                        locationId, productId, PriceOverrideStatus.ACTIVE);
 
         for (LocationPriceOverrideEntity active : existingActive) {
             active.setStatus(PriceOverrideStatus.INACTIVE);
@@ -270,7 +272,8 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
     }
 
     private BigDecimal calculateDiscountPercent(BigDecimal basePrice, BigDecimal overridePrice) {
-        return basePrice.subtract(overridePrice)
+        return basePrice
+                .subtract(overridePrice)
                 .divide(basePrice, 6, RoundingMode.HALF_UP)
                 .multiply(HUNDRED)
                 .setScale(4, RoundingMode.HALF_UP);
@@ -281,14 +284,15 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
             return null;
         }
 
-        return overridePrice.subtract(cost)
+        return overridePrice
+                .subtract(cost)
                 .divide(overridePrice, 6, RoundingMode.HALF_UP)
                 .multiply(HUNDRED)
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
-    private LocationPriceOverrideResponseDto toResponse(LocationPriceOverrideEntity override,
-            ApprovalRequestEntity approvalRequest) {
+    private LocationPriceOverrideResponseDto toResponse(
+            LocationPriceOverrideEntity override, ApprovalRequestEntity approvalRequest) {
         LocationPriceOverrideResponseDto dto = new LocationPriceOverrideResponseDto();
         dto.setOverrideId(override.getId());
         dto.setVersion(override.getVersion());
@@ -364,10 +368,12 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
             throw new CatalogValidationException("INVALID_DATA: actorUserId is required.");
         }
         if (rejectFlow) {
-            if (request.getRejectionReasonCode() == null || request.getRejectionReasonCode().isBlank()) {
+            if (request.getRejectionReasonCode() == null
+                    || request.getRejectionReasonCode().isBlank()) {
                 throw new CatalogValidationException("INVALID_DATA: rejectionReasonCode is required.");
             }
-            if (request.getRejectionNotes() == null || request.getRejectionNotes().isBlank()) {
+            if (request.getRejectionNotes() == null
+                    || request.getRejectionNotes().isBlank()) {
                 throw new CatalogValidationException("INVALID_DATA: rejectionNotes are required.");
             }
         }

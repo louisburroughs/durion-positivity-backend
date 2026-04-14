@@ -11,6 +11,6 @@ import lombok.Data;
 @Data
 public class RolePermissionGrantRequest {
 
-    @JsonAlias({ "permissionKey" })
+    @JsonAlias({"permissionKey"})
     private String permission;
 }

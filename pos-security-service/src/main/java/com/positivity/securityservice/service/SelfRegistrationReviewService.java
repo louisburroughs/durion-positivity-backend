@@ -17,15 +17,12 @@ public interface SelfRegistrationReviewService {
 
     @NonNull
     List<SelfRegistrationReviewCaseResponse> listCases(
-            @Nullable SelfRegistrationCaseStatus status,
-            @Nullable SelfRegistrationCaseType caseType);
+            @Nullable SelfRegistrationCaseStatus status, @Nullable SelfRegistrationCaseType caseType);
 
     @NonNull
     SelfRegistrationReviewCaseResponse getCase(@NonNull UUID caseId);
 
     @NonNull
     SelfRegistrationReviewCaseResponse resolveCase(
-            @NonNull UUID caseId,
-            @NonNull ResolveSelfRegistrationReviewCaseRequest request,
-            @NonNull String actorId);
+            @NonNull UUID caseId, @NonNull ResolveSelfRegistrationReviewCaseRequest request, @NonNull String actorId);
 }

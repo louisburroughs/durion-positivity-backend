@@ -2,11 +2,10 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import lombok.Data;
-
 import java.util.UUID;
-
+import lombok.Data;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 @Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)

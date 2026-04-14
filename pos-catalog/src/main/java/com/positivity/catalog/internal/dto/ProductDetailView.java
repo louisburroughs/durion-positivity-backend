@@ -1,13 +1,12 @@
 package com.positivity.catalog.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.Instant;
-import java.util.List;
 
 /**
  * Aggregated product detail view combining catalog, pricing, and inventory data.

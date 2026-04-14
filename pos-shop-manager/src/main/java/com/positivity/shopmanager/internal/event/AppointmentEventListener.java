@@ -11,8 +11,11 @@ public class AppointmentEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAppointmentCreated(AppointmentCreatedEvent event) {
-        log.info("AppointmentCreated committed: appointmentId={} customerId={} vehicleId={}",
-                event.appointmentId(), event.crmCustomerId(), event.crmVehicleId());
+        log.info(
+                "AppointmentCreated committed: appointmentId={} customerId={} vehicleId={}",
+                event.appointmentId(),
+                event.crmCustomerId(),
+                event.crmVehicleId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

@@ -9,31 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
@@ -52,6 +27,29 @@ import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryR
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * Additional unit tests for EventIngestionServiceImpl.
@@ -308,8 +306,7 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("getReprocessingHistory should return empty list when no history found")
     void getReprocessingHistory_Empty() {
-        when(reprocessingAttemptHistoryRepository
-                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(testEventId))
+        when(reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(testEventId))
                 .thenReturn(List.of());
 
         List<ReprocessingAttemptHistoryResponse> result = service.getReprocessingHistory(testEventId);
@@ -326,8 +323,7 @@ class EventIngestionServiceAdditionalTest {
         history.setAttemptedAt(Instant.now(TEST_CLOCK));
         history.setTriggeredByUserId("operator-1");
 
-        when(reprocessingAttemptHistoryRepository
-                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(testEventId))
+        when(reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(testEventId))
                 .thenReturn(List.of(history));
 
         List<ReprocessingAttemptHistoryResponse> result = service.getReprocessingHistory(testEventId);
@@ -412,7 +408,8 @@ class EventIngestionServiceAdditionalTest {
     void findBySourceSystem_ReturnsPaginatedPage() {
         AccountingEvent event = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
         Page<AccountingEvent> page = new PageImpl<>(List.of(event), PageRequest.of(0, 10), 1);
-        when(accountingEventRepository.findBySourceSystem("MYOB", PageRequest.of(0, 10))).thenReturn(page);
+        when(accountingEventRepository.findBySourceSystem("MYOB", PageRequest.of(0, 10)))
+                .thenReturn(page);
 
         Page<AccountingEventResponse> result = service.findBySourceSystem("MYOB", PageRequest.of(0, 10));
 
@@ -444,8 +441,7 @@ class EventIngestionServiceAdditionalTest {
 
         when(accountingEventRepository.findAll()).thenReturn(List.of(failedEvent));
         // reprocessEvent will call findById → throw RuntimeException to simulate failure
-        when(accountingEventRepository.findById(failedEventId))
-                .thenThrow(new RuntimeException("DB unavailable"));
+        when(accountingEventRepository.findById(failedEventId)).thenThrow(new RuntimeException("DB unavailable"));
 
         int result = service.processFailed(3);
 
@@ -528,8 +524,8 @@ class EventIngestionServiceAdditionalTest {
     @DisplayName("submitEvent should apply default sourceSystem when blank")
     void submitEvent_BlankSourceSystem_UsesDefault() {
         AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED",
-                "  ", LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap =
+                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ", LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
@@ -558,8 +554,8 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("submitEvent should throw DuplicateEventException when duplicate event detected")
     void submitEvent_DuplicateEvent() {
-        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED",
-                "MYOB", LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap =
+                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(true);
 
@@ -572,8 +568,7 @@ class EventIngestionServiceAdditionalTest {
     @DisplayName("submitEvent should accept String transactionDate in ISO-8601 format")
     void submitEvent_StringTransactionDate_Parsed() {
         AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED",
-                "MYOB", null);
+        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", null);
         eventMap.put("transactionDate", "2024-01-15T10:30:00"); // String form
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
@@ -620,8 +615,8 @@ class EventIngestionServiceAdditionalTest {
         return request;
     }
 
-    private Map<String, Object> buildEventMap(UUID orgId, String eventType,
-            String sourceSystem, LocalDateTime transactionDate) {
+    private Map<String, Object> buildEventMap(
+            UUID orgId, String eventType, String sourceSystem, LocalDateTime transactionDate) {
         Map<String, Object> map = new HashMap<>();
         map.put("organizationId", orgId);
         map.put("eventType", eventType);

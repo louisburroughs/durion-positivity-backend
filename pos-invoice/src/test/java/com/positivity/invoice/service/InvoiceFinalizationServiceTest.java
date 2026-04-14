@@ -1,7 +1,9 @@
 package com.positivity.invoice.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
@@ -13,6 +15,13 @@ import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,17 +34,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link InvoiceFinalizationService} covering Story #13
@@ -90,8 +88,7 @@ class InvoiceFinalizationServiceTest {
      */
     private void withServiceAdvisorContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "advisor-001", null,
-                List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
+                "advisor-001", null, List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "advisor-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -101,8 +98,7 @@ class InvoiceFinalizationServiceTest {
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "manager-001", null,
-                List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+                "manager-001", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -232,8 +228,7 @@ class InvoiceFinalizationServiceTest {
                 .thenReturn(Optional.of(finalizedInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"))));
         FinalizationRequest request = shopManagerRequest();
 
-        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request)).isInstanceOf(IllegalStateException.class);
     }
 
     // -------------------------------------------------------------------------
@@ -251,8 +246,8 @@ class InvoiceFinalizationServiceTest {
         // M5: stub invoice with total > $500 so the permission check exercises
         // SERVICE_ADVISOR path
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("500.01"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("500.01"))));
         // No approval code, no SHOP_MANAGER role in context → rejected
         FinalizationRequest request = serviceAdvisorRequest(null);
 
@@ -270,8 +265,8 @@ class InvoiceFinalizationServiceTest {
         // C1: SHOP_MANAGER role derived from SecurityContext
         withShopManagerContext();
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("1000.00"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("1000.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
 
@@ -290,8 +285,8 @@ class InvoiceFinalizationServiceTest {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // M5: stub invoice with > $500 total; SERVICE_ADVISOR + approval code → allowed
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new BigDecimal("750.00"))));
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = serviceAdvisorRequest("MGR-APPROVAL-001");
 

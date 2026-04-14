@@ -1,13 +1,6 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -15,10 +8,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Local projection of party notes received from workorder events.
@@ -29,10 +26,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "party_note", indexes = {
-        @Index(name = "idx_party_note_party_id", columnList = "party_id"),
-        @Index(name = "idx_party_note_source_event", columnList = "source_event_id")
-})
+@Table(
+        name = "party_note",
+        indexes = {
+            @Index(name = "idx_party_note_party_id", columnList = "party_id"),
+            @Index(name = "idx_party_note_source_event", columnList = "source_event_id")
+        })
 public class PartyNote {
 
     @Id

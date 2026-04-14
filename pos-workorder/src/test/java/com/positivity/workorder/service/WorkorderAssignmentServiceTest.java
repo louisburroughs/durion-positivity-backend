@@ -1,8 +1,5 @@
 package com.positivity.workorder.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,20 +8,6 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -39,6 +22,20 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
 
 /**
  * Unit tests for CAP-140 Story #64: Propagate Assignment Context to Workorder.
@@ -113,10 +110,7 @@ class WorkorderAssignmentServiceTest {
     }
 
     private Workorder workorderWithStatus(WorkorderStatus status) {
-        return Workorder.builder()
-                .id(WORKORDER_ID)
-                .status(status)
-                .build();
+        return Workorder.builder().id(WORKORDER_ID).status(status).build();
     }
 
     // Issue CAP-140: AC1 — DRAFT workorder receives full assignment context update
@@ -135,7 +129,8 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        assertThat(workorder.getMechanicIds()).isNotNull()
+        assertThat(workorder.getMechanicIds())
+                .isNotNull()
                 .contains(MECHANIC_ID_1.toString())
                 .contains(MECHANIC_ID_2.toString());
         verify(workorderRepository).save(workorder);
@@ -190,8 +185,7 @@ class WorkorderAssignmentServiceTest {
         Workorder workorder = workorderWithStatus(WorkorderStatus.WORK_IN_PROGRESS);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(
-                () -> workorderService.handleAssignmentUpdated(validEvent()));
+        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
 
         verify(workorderRepository, never()).save(any());
     }
@@ -204,8 +198,7 @@ class WorkorderAssignmentServiceTest {
         Workorder workorder = workorderWithStatus(WorkorderStatus.AWAITING_PARTS);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(
-                () -> workorderService.handleAssignmentUpdated(validEvent()));
+        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
 
         verify(workorderRepository, never()).save(any());
     }
@@ -218,8 +211,7 @@ class WorkorderAssignmentServiceTest {
         Workorder workorder = workorderWithStatus(WorkorderStatus.COMPLETED);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(
-                () -> workorderService.handleAssignmentUpdated(validEvent()));
+        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
 
         verify(workorderRepository, never()).save(any());
     }
@@ -232,8 +224,7 @@ class WorkorderAssignmentServiceTest {
         Workorder workorder = workorderWithStatus(WorkorderStatus.CANCELLED);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(
-                () -> workorderService.handleAssignmentUpdated(validEvent()));
+        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
 
         verify(workorderRepository, never()).save(any());
     }
@@ -296,9 +287,7 @@ class WorkorderAssignmentServiceTest {
 
         workorderService.handleAssignmentUpdated(validEvent());
 
-        assertThat(workorder.getLocationId())
-                .isEqualTo(LOCATION_ID)
-                .isNotEqualTo(oldLocationId);
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID).isNotEqualTo(oldLocationId);
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
         assertThat(workorder.getMechanicIds()).contains(MECHANIC_ID_1.toString());
     }
@@ -346,10 +335,11 @@ class WorkorderAssignmentServiceTest {
 
         workorderService.handleAssignmentUpdated(validEvent());
 
-        verify(auditEventRepository).save(argThat(ae -> "Workorder".equals(ae.getEntityType())
-                && "AssignmentContextUpdated".equals(ae.getEventType())
-                && WORKORDER_ID.equals(ae.getEntityId())
-                && "System:ShopManagementService".equals(ae.getUserId())
-                && ae.getDetails() != null));
+        verify(auditEventRepository)
+                .save(argThat(ae -> "Workorder".equals(ae.getEntityType())
+                        && "AssignmentContextUpdated".equals(ae.getEventType())
+                        && WORKORDER_ID.equals(ae.getEntityId())
+                        && "System:ShopManagementService".equals(ae.getUserId())
+                        && ae.getDetails() != null));
     }
 }

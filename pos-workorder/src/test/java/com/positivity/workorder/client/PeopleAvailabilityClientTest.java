@@ -1,8 +1,5 @@
 package com.positivity.workorder.client;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -14,20 +11,21 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Answers;
-import org.springframework.web.client.RestClient;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
+import org.springframework.web.client.RestClient;
 
 /**
  * Unit tests for {@link PeopleAvailabilityClient}.
@@ -55,20 +53,21 @@ class PeopleAvailabilityClientTest {
         PeopleAvailabilityResponse expected = PeopleAvailabilityResponse.builder()
                 .asOf(Instant.now(TEST_CLOCK))
                 .location(LOCATION_ID)
-                .people(List.of(
-                        PeopleAvailabilityResponse.PersonAvailability.builder()
-                                .personId("MECH-001")
-                                .firstName("Alice")
-                                .lastName("Smith")
-                                .currentStatus("AVAILABLE")
-                                .build()))
+                .people(List.of(PeopleAvailabilityResponse.PersonAvailability.builder()
+                        .personId("MECH-001")
+                        .firstName("Alice")
+                        .lastName("Smith")
+                        .currentStatus("AVAILABLE")
+                        .build()))
                 .build();
 
         RestClient mockRestClient = mock(RestClient.class, Answers.RETURNS_DEEP_STUBS);
-        when(mockRestClient.get()
-                .uri(org.mockito.ArgumentMatchers.<Function<org.springframework.web.util.UriBuilder, java.net.URI>>any())
-                .retrieve()
-                .body(PeopleAvailabilityResponse.class))
+        when(mockRestClient
+                        .get()
+                        .uri(org.mockito.ArgumentMatchers
+                                .<Function<org.springframework.web.util.UriBuilder, java.net.URI>>any())
+                        .retrieve()
+                        .body(PeopleAvailabilityResponse.class))
                 .thenReturn(expected);
 
         PeopleAvailabilityClient client = new PeopleAvailabilityClient(TEST_CLOCK, mockRestClient);
@@ -152,7 +151,8 @@ class PeopleAvailabilityClientTest {
                   ]
                 }
                 """;
-        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule())
+        ObjectMapper mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         PeopleAvailabilityResponse response = mapper.readValue(json, PeopleAvailabilityResponse.class);
 
@@ -174,8 +174,7 @@ class PeopleAvailabilityClientTest {
         return new PeopleAvailabilityClient(TEST_CLOCK, restClient);
     }
 
-    private HttpServer startServer(int statusCode, String body, AtomicInteger callCount)
-            throws IOException {
+    private HttpServer startServer(int statusCode, String body, AtomicInteger callCount) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/", exchange -> {
             callCount.incrementAndGet();

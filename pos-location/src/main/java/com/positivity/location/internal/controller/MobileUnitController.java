@@ -5,9 +5,15 @@ import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.service.MobileUnitService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,13 +28,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Mobile Unit API", description = "Operations for managing mobile units within locations")
@@ -46,8 +45,7 @@ public class MobileUnitController {
     @PostMapping
     public ResponseEntity<MobileUnitResponse> createMobileUnit(
             @Parameter(description = "Mobile unit creation request body") @RequestBody MobileUnitRequest request) {
-        log.info("Creating mobile unit with name(mask)={}",
-                maskForLog(request != null ? request.getName() : null));
+        log.info("Creating mobile unit with name(mask)={}", maskForLog(request != null ? request.getName() : null));
         return ResponseEntity.status(HttpStatus.CREATED).body(mobileUnitService.createMobileUnit(request));
     }
 
@@ -56,8 +54,7 @@ public class MobileUnitController {
     @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping
     public ResponseEntity<Page<MobileUnitResponse>> listMobileUnits(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(mobileUnitService.list(page, size));
     }
 
@@ -68,7 +65,8 @@ public class MobileUnitController {
     @GetMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> getMobileUnitById(
             @Parameter(description = "Mobile unit ID") @PathVariable UUID id) {
-        return mobileUnitService.getById(id)
+        return mobileUnitService
+                .getById(id)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mobile unit not found"));
     }
@@ -79,8 +77,7 @@ public class MobileUnitController {
     @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
     @PatchMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> patchMobileUnit(
-            @PathVariable UUID id,
-            @RequestBody Map<String, Object> patch) {
+            @PathVariable UUID id, @RequestBody Map<String, Object> patch) {
         return ResponseEntity.ok(mobileUnitService.patch(id, patch));
     }
 
@@ -91,8 +88,7 @@ public class MobileUnitController {
     @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
     @PutMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> replaceCoverageRules(
-            @PathVariable UUID id,
-            @RequestBody Map<String, Object> payload) {
+            @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rawRules = (List<Map<String, Object>>) payload.getOrDefault("rules", List.of());
         return ResponseEntity.ok(mobileUnitService.replaceCoverageRules(id.toString(), rawRules));
@@ -110,15 +106,12 @@ public class MobileUnitController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";
         }
         return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
-
 }

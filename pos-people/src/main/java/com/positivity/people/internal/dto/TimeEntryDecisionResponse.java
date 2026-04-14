@@ -6,8 +6,7 @@ public class TimeEntryDecisionResponse {
 
     private List<TimeEntryDecisionResult> results;
 
-    public TimeEntryDecisionResponse() {
-    }
+    public TimeEntryDecisionResponse() {}
 
     public TimeEntryDecisionResponse(List<TimeEntryDecisionResult> results) {
         this.results = results;
@@ -20,5 +19,4 @@ public class TimeEntryDecisionResponse {
     public void setResults(List<TimeEntryDecisionResult> results) {
         this.results = results;
     }
-
 }

@@ -9,27 +9,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -41,7 +20,25 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,13 +78,13 @@ class WorkorderStateMachineTest {
 
     @BeforeEach
     void setUp() {
-        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
-                "test-user",
-                "password",
-                "ROLE_USER");
+        TestingAuthenticationToken authentication =
+                new TestingAuthenticationToken("test-user", "password", "ROLE_USER");
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USER_ID, AUTH_USER_ID,
-                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                AUTH_USER_ID,
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "test-user"));
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -114,8 +111,8 @@ class WorkorderStateMachineTest {
     @Test
     void testStartWorkorder_Success() throws Exception {
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
-        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
-                ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(
+                        testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
                 .thenReturn(Collections.emptyList());
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
@@ -146,8 +143,8 @@ class WorkorderStateMachineTest {
                 .workorder(testWorkorder)
                 .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                 .build();
-        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
-                ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(
+                        testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
                 .thenReturn(List.of(pendingRequest));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
@@ -177,8 +174,8 @@ class WorkorderStateMachineTest {
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            stateMachine.transitionWorkorder(testWorkorderId, WorkorderStatus.WORK_IN_PROGRESS, userId,
-                    "Invalid transition");
+            stateMachine.transitionWorkorder(
+                    testWorkorderId, WorkorderStatus.WORK_IN_PROGRESS, userId, "Invalid transition");
         });
 
         assertTrue(exception.getMessage().contains("Invalid state transition"));

@@ -14,6 +14,7 @@ public class ConsumeItemsRequest {
 
     @NotNull
     private UUID workorderId;
+
     private UUID pickListId;
     private List<ConsumeItemLine> items;
 }

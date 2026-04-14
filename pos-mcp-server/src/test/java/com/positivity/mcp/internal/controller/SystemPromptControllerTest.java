@@ -15,11 +15,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.service.SystemPromptService;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -123,8 +121,8 @@ class SystemPromptControllerTest {
         SystemPromptRequest request = new SystemPromptRequest("default", "You are a helpful assistant.");
 
         mockMvc.perform(post("/v1/prompts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(PROMPT_ID.toString()));
     }
@@ -140,8 +138,8 @@ class SystemPromptControllerTest {
     @DisplayName("POST /v1/prompts with blank fields → 400 Bad Request")
     void create_withBlankFields_returns400() throws Exception {
         mockMvc.perform(post("/v1/prompts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -160,8 +158,8 @@ class SystemPromptControllerTest {
         SystemPromptRequest request = new SystemPromptRequest("default", "Updated system prompt.");
 
         mockMvc.perform(put("/v1/prompts/{id}", PROMPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(PROMPT_ID.toString()));
     }
@@ -176,8 +174,7 @@ class SystemPromptControllerTest {
     @WithMockUser(authorities = "mcp:system_prompt:delete")
     @DisplayName("DELETE /v1/prompts/{id} with delete authority → 204 No Content")
     void delete_withDeleteAuthority_returns204() throws Exception {
-        mockMvc.perform(delete("/v1/prompts/{id}", PROMPT_ID))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/v1/prompts/{id}", PROMPT_ID)).andExpect(status().isNoContent());
 
         verify(systemPromptService).delete(PROMPT_ID);
     }
@@ -192,8 +189,7 @@ class SystemPromptControllerTest {
     @WithMockUser(authorities = "other:authority")
     @DisplayName("GET /v1/prompts without view authority → 403 Forbidden")
     void list_withoutViewAuthority_returns403() throws Exception {
-        mockMvc.perform(get("/v1/prompts"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/prompts")).andExpect(status().isForbidden());
     }
 
     // ─── ADR-0017: no authentication → 401 ──────────────────────────────────
@@ -204,8 +200,7 @@ class SystemPromptControllerTest {
     @Test
     @DisplayName("GET /v1/prompts unauthenticated → 401 Unauthorized")
     void list_unauthenticated_returns401() throws Exception {
-        mockMvc.perform(get("/v1/prompts"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/prompts")).andExpect(status().isUnauthorized());
     }
 
     // ─── Test slice configuration ────────────────────────────────────────────

@@ -11,6 +11,10 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,11 +26,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 /**
  * Represents a labor entry tracking work performed on a workorder service item.
  * Immutable once created, except for endTime and hoursWorked when stopping a
@@ -36,11 +35,13 @@ import java.util.UUID;
  * Implements CAP-005 Story #159 - Record Labor Performed
  */
 @Entity
-@Table(name = "workorder_labor_entry", indexes = {
-        @Index(name = "idx_labor_workorder_id", columnList = "workorder_id"),
-        @Index(name = "idx_labor_service_id", columnList = "workorder_service_id"),
-        @Index(name = "idx_labor_start_time", columnList = "startTime")
-})
+@Table(
+        name = "workorder_labor_entry",
+        indexes = {
+            @Index(name = "idx_labor_workorder_id", columnList = "workorder_id"),
+            @Index(name = "idx_labor_service_id", columnList = "workorder_service_id"),
+            @Index(name = "idx_labor_start_time", columnList = "startTime")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -154,5 +155,4 @@ public class WorkorderLaborEntry {
         long minutes = java.time.Duration.between(start, end).toMinutes();
         return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
     }
-
 }

@@ -4,23 +4,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-
-import jakarta.servlet.FilterChain;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.UUID;
 
 import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.service.AdminAccountStateService;
+import jakarta.servlet.FilterChain;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -30,8 +29,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -69,6 +68,7 @@ class AdminAccountStateControllerTest {
     // Security infrastructure beans required by SecurityConfig
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
     @MockitoBean
     private CustomUserDetailsService customUserDetailsService;
 
@@ -79,9 +79,11 @@ class AdminAccountStateControllerTest {
     @BeforeEach
     void configureJwtFilterPassthrough() throws Exception {
         doAnswer(inv -> {
-            ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
-            return null;
-        }).when(jwtAuthenticationFilter).doFilter(any(), any(), any());
+                    ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
+                    return null;
+                })
+                .when(jwtAuthenticationFilter)
+                .doFilter(any(), any(), any());
     }
 
     // ── Unlock ────────────────────────────────────────────────────────────────
@@ -99,21 +101,21 @@ class AdminAccountStateControllerTest {
             doNothing().when(adminAccountStateService).unlock(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
         @Test
         @DisplayName("unauthenticated POST /v1/users/{id}/unlock → 401 Unauthorized")
         void unlock_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID)).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/unlock → 403 Forbidden")
         void unlock_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -133,21 +135,21 @@ class AdminAccountStateControllerTest {
             doNothing().when(adminAccountStateService).enable(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/enable", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
         @Test
         @DisplayName("unauthenticated POST /v1/users/{id}/enable → 401 Unauthorized")
         void enable_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID)).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/enable → 403 Forbidden")
         void enable_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -168,21 +170,21 @@ class AdminAccountStateControllerTest {
             doNothing().when(adminAccountStateService).disable(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/disable", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
         @Test
         @DisplayName("unauthenticated POST /v1/users/{id}/disable → 401 Unauthorized")
         void disable_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID)).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/disable → 403 Forbidden")
         void disable_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -202,21 +204,21 @@ class AdminAccountStateControllerTest {
             doNothing().when(adminAccountStateService).expireAccount(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
         @Test
         @DisplayName("unauthenticated POST /v1/users/{id}/expire-account → 401 Unauthorized")
         void expireAccount_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID)).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/expire-account → 403 Forbidden")
         void expireAccount_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -236,22 +238,21 @@ class AdminAccountStateControllerTest {
             doNothing().when(adminAccountStateService).expireCredentials(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
         @Test
         @DisplayName("unauthenticated POST /v1/users/{id}/expire-credentials → 401 Unauthorized")
         void expireCredentials_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID)).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/expire-credentials → 403 Forbidden")
         void expireCredentials_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(
-                    post("/v1/users/{id}/expire-credentials", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -279,7 +280,7 @@ class AdminAccountStateControllerTest {
             when(adminAccountStateService.getAccountState(USER_ID)).thenReturn(response);
 
             mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(USER_ID.toString()));
         }
@@ -294,7 +295,7 @@ class AdminAccountStateControllerTest {
                     .thenThrow(new UserNotFoundException("User not found: " + USER_ID));
 
             mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
-                    .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isNotFound());
         }
 
@@ -304,7 +305,8 @@ class AdminAccountStateControllerTest {
         @Test
         @DisplayName("VIEWER GET /v1/users/{id}/account-state → 403 Forbidden")
         void getAccountState_viewerRole_returns403() throws Exception {
-            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
+                            .with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
 
@@ -314,8 +316,7 @@ class AdminAccountStateControllerTest {
         @Test
         @DisplayName("unauthenticated GET /v1/users/{id}/account-state → 401 Unauthorized")
         void getAccountState_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID))
-                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)).andExpect(status().isUnauthorized());
         }
     }
 
@@ -337,12 +338,10 @@ class AdminAccountStateControllerTest {
 
         @Bean
         SecurityFilterChain securityFilterChain(HttpSecurity http) {
-            http
-                    .csrf(csrf -> csrf.disable())
+            http.csrf(csrf -> csrf.disable())
                     .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
                     .httpBasic(Customizer.withDefaults());
             return http.build();
         }
-
     }
 }

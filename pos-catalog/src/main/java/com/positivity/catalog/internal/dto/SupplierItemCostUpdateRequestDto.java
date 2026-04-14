@@ -1,12 +1,12 @@
 package com.positivity.catalog.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import lombok.Data;
 
 @Data

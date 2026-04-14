@@ -7,6 +7,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillResponse;
+import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillLine;
+import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,7 +26,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,18 +39,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 
-import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
-import com.positivity.accounting.internal.dto.VendorBillResponse;
-import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
-import com.positivity.accounting.internal.entity.VendorBill;
-import com.positivity.accounting.internal.entity.VendorBillLine;
-import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
-import com.positivity.accounting.internal.enums.VendorBillStatus;
-import com.positivity.accounting.internal.repository.VendorBillLineRepository;
-import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
-import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.service.VendorBillServiceImpl;
-
 /**
  * Unit tests for VendorBillServiceImpl.
  * Covers invoice matching, match exception resolution, and bill retrieval.
@@ -50,8 +48,7 @@ import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 @DisplayName("VendorBillService Unit Tests")
 class VendorBillServiceTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(
-            Instant.parse("2026-01-15T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-01-15T12:00:00Z"), ZoneOffset.UTC);
 
     @Spy
     Clock clock = FIXED_CLOCK;
@@ -99,8 +96,8 @@ class VendorBillServiceTest {
     @DisplayName("handleGoodsReceivedEvent should return existing bill for duplicate event")
     void handleGoodsReceivedEvent_DuplicateEvent_ReturnsExisting() {
         UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000031");
-        VendorBill existingBill = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+        VendorBill existingBill = buildBill(
+                testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
         existingBill.setOriginEventId(eventId);
 
         when(billRepository.findByOriginEventId(eventId)).thenReturn(Optional.of(existingBill));
@@ -139,8 +136,8 @@ class VendorBillServiceTest {
         @DisplayName("HIGH_CONFIDENCE match should auto-approve bill to APPROVED status")
         void highConfidenceMatch_AutoApproves() {
             // Score = amount(40) + lines(30) + date(20) + po(5) = 95 → HIGH_CONFIDENCE
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
             bill.setPurchaseOrderId(UUID.randomUUID()); // +5 pts
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
@@ -149,8 +146,10 @@ class VendorBillServiceTest {
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Scoring: return matching bill lines (for Jaccard=1.0 → 30 pts)
-            VendorBillLine line1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
-            VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
+            VendorBillLine line1 =
+                    buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
+            VendorBillLine line2 =
+                    buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // Both scoring and validation calls return matching lines
             when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(line1, line2));
@@ -168,9 +167,10 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("HIGH_CONFIDENCE match with discrepancy should set MATCH_EXCEPTION")
         void highConfidenceMatch_WithDiscrepancy_SetsMatchException() {
-            // Score = amount(40) + lines(30, from matching productIds in scoring) + date(20) + po(5) = 95 → HIGH_CONFIDENCE
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            // Score = amount(40) + lines(30, from matching productIds in scoring) + date(20) + po(5) = 95 →
+            // HIGH_CONFIDENCE
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
             bill.setPurchaseOrderId(UUID.randomUUID());
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
@@ -178,13 +178,15 @@ class VendorBillServiceTest {
             when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            VendorBillLine line1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
-            VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
+            VendorBillLine line1 =
+                    buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
+            VendorBillLine line2 =
+                    buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // First call (scoring): return 2 lines → Jaccard = 1.0 → 30 pts
             // Second call (validation): return only 1 line → count mismatch → discrepancy
             when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(line1, line2)) // scoring call
-                    .thenReturn(List.of(line1));        // validation call: count mismatch (2 vs 1)
+                    .thenReturn(List.of(line1)); // validation call: count mismatch (2 vs 1)
 
             VendorInvoiceReceivedEvent event = buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"));
 
@@ -199,8 +201,8 @@ class VendorBillServiceTest {
         void mediumConfidenceMatch_SetsMatchException() {
             // Score = amount(40) + date within 30 days(10) + no lines(0) + no PO(0) = 50 → MEDIUM_CONFIDENCE
             // Bill date is 10 days before invoice → 10 pts
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    new BigDecimal("1300.00"), BILL_DATE_MEDIUM);
+            VendorBill bill = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_MEDIUM);
             // No PO set → 0 pts
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
@@ -208,8 +210,10 @@ class VendorBillServiceTest {
             when(billRepository.getNextBillSequence()).thenReturn(1L);
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            VendorBillLine line1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
-            VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
+            VendorBillLine line1 =
+                    buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
+            VendorBillLine line2 =
+                    buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // Scoring: return empty (0 pts line items)
             // Validation: return matching lines to avoid discrepancy → reach confidence branch
             when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
@@ -229,12 +233,12 @@ class VendorBillServiceTest {
         void ambiguousMatch_PersistsCandidates() {
             UUID billId2 = UUID.fromString("00000000-0000-0000-0000-000000000005");
             // Two bills both scoring ≥50 → AMBIGUOUS
-            VendorBill bill1 = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            VendorBill bill1 = buildBill(
+                    testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
             bill1.setPurchaseOrderId(UUID.randomUUID());
 
-            VendorBill bill2 = buildBill(billId2, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+            VendorBill bill2 = buildBill(
+                    billId2, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
             bill2.setPurchaseOrderId(UUID.randomUUID());
 
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
@@ -245,11 +249,14 @@ class VendorBillServiceTest {
                     .thenAnswer(inv -> inv.getArgument(0));
 
             // Both bills: scoring calls return matching lines for each
-            VendorBillLine l1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
-            VendorBillLine l2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
+            VendorBillLine l1 =
+                    buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
+            VendorBillLine l2 =
+                    buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(l1, l2));
-            VendorBillLine l3 = buildBillLine(billId2, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
+            VendorBillLine l3 =
+                    buildBillLine(billId2, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
             VendorBillLine l4 = buildBillLine(billId2, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(billId2))
                     .thenReturn(List.of(l3, l4));
@@ -278,8 +285,8 @@ class VendorBillServiceTest {
         void billNotFound_Throws() {
             when(billRepository.findById(testBillId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> vendorBillService.resolveMatchException(
-                    testBillId, "ACCEPT", "Valid reason", "operator-1"))
+            assertThatThrownBy(() ->
+                            vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Vendor bill not found");
         }
@@ -287,12 +294,12 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("should throw IllegalArgumentException when bill is not in MATCH_EXCEPTION status")
         void billNotInMatchException_Throws() {
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.APPROVED,
-                    new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.APPROVED, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
             when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
 
-            assertThatThrownBy(() -> vendorBillService.resolveMatchException(
-                    testBillId, "ACCEPT", "Valid reason", "operator-1"))
+            assertThatThrownBy(() ->
+                            vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("not in MATCH_EXCEPTION status");
         }
@@ -300,13 +307,13 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("ACCEPT action should approve the bill")
         void acceptAction_ApprovesEBill() {
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION,
-                    new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
             when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            VendorBillResponse result = vendorBillService.resolveMatchException(
-                    testBillId, "ACCEPT", "Discrepancy accepted", "operator-1");
+            VendorBillResponse result =
+                    vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Discrepancy accepted", "operator-1");
 
             assertThat(result.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             verify(billRepository).save(any(VendorBill.class));
@@ -315,13 +322,13 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("VOID action should void the bill")
         void voidAction_VoidsBill() {
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION,
-                    new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
             when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            VendorBillResponse result = vendorBillService.resolveMatchException(
-                    testBillId, "VOID", "Bill is incorrect", "operator-1");
+            VendorBillResponse result =
+                    vendorBillService.resolveMatchException(testBillId, "VOID", "Bill is incorrect", "operator-1");
 
             assertThat(result.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
         }
@@ -329,8 +336,8 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("CORRECT action should return bill to PENDING_RECEIPT_MATCH for re-matching")
         void correctAction_ReturnsToReceiptMatch() {
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION,
-                    new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
             when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
             when(billRepository.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -343,12 +350,12 @@ class VendorBillServiceTest {
         @Test
         @DisplayName("invalid action should throw IllegalArgumentException")
         void invalidAction_Throws() {
-            VendorBill bill = buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION,
-                    new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
             when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
 
             assertThatThrownBy(() -> vendorBillService.resolveMatchException(
-                    testBillId, "UNKNOWN_ACTION", "Reason", "operator-1"))
+                            testBillId, "UNKNOWN_ACTION", "Reason", "operator-1"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Invalid resolution action");
         }
@@ -361,8 +368,7 @@ class VendorBillServiceTest {
     @Test
     @DisplayName("getBillById should return bill response when bill exists")
     void getBillById_Found() {
-        VendorBill bill = buildBill(testBillId, VendorBillStatus.APPROVED,
-                new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+        VendorBill bill = buildBill(testBillId, VendorBillStatus.APPROVED, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
         when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
 
         Optional<VendorBillResponse> result = vendorBillService.getBillById(testBillId);
@@ -386,8 +392,8 @@ class VendorBillServiceTest {
     @DisplayName("getBillByOriginEventId should return bill response when original event found")
     void getBillByOriginEventId_Found() {
         UUID originEventId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        VendorBill bill = buildBill(testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH,
-                new BigDecimal("1300.00"), BILL_DATE_CLOSE);
+        VendorBill bill = buildBill(
+                testBillId, VendorBillStatus.PENDING_RECEIPT_MATCH, new BigDecimal("1300.00"), BILL_DATE_CLOSE);
         bill.setOriginEventId(originEventId);
         when(billRepository.findByOriginEventId(originEventId)).thenReturn(Optional.of(bill));
 
@@ -412,8 +418,7 @@ class VendorBillServiceTest {
     // Helper Methods
     // ========================================
 
-    private VendorBill buildBill(UUID billId, VendorBillStatus status,
-            BigDecimal totalAmount, LocalDateTime billDate) {
+    private VendorBill buildBill(UUID billId, VendorBillStatus status, BigDecimal totalAmount, LocalDateTime billDate) {
         VendorBill bill = new VendorBill();
         bill.setVendorBillId(billId);
         bill.setVendorId(testVendorId);
@@ -425,8 +430,7 @@ class VendorBillServiceTest {
         return bill;
     }
 
-    private VendorBillLine buildBillLine(UUID vendorBillId, UUID productId,
-            BigDecimal quantity, BigDecimal unitPrice) {
+    private VendorBillLine buildBillLine(UUID vendorBillId, UUID productId, BigDecimal quantity, BigDecimal unitPrice) {
         VendorBillLine line = new VendorBillLine();
         line.setVendorBillId(vendorBillId);
         line.setProductId(productId);

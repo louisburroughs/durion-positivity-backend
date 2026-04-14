@@ -1,8 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Mapper for converting WorkorderLaborEntry entities to DTOs.

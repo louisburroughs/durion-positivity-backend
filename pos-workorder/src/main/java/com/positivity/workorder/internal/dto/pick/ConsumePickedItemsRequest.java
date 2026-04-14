@@ -15,20 +15,20 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConsumePickedItemsRequest {
-  @NotNull
-  @NotEmpty
-  private List<ConsumeItem> items;
-
-  @Data
-  @Builder
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class ConsumeItem {
     @NotNull
-    private UUID pickTaskId;
+    @NotEmpty
+    private List<ConsumeItem> items;
 
-    @NotNull
-    @Positive
-    private Integer quantityToConsume;
-  }
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ConsumeItem {
+        @NotNull
+        private UUID pickTaskId;
+
+        @NotNull
+        @Positive
+        private Integer quantityToConsume;
+    }
 }

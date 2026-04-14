@@ -5,22 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -33,6 +17,20 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceServiceImplTest {
@@ -86,8 +84,7 @@ class InvoiceServiceImplTest {
     void getInvoice_shouldThrow_whenNotFound() {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId))
-                .isInstanceOf(InvoiceNotFoundException.class);
+        assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId)).isInstanceOf(InvoiceNotFoundException.class);
     }
 
     // ---- createInvoice(InvoiceGenerationRequest) ----
@@ -123,8 +120,7 @@ class InvoiceServiceImplTest {
         InvoiceGenerationRequest request = new InvoiceGenerationRequest();
         request.setWorkorderId(null);
 
-        assertThatThrownBy(() -> invoiceService.createInvoice(request))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> invoiceService.createInvoice(request)).isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- createInvoice(InvoiceCreationRequest) ----
@@ -167,12 +163,10 @@ class InvoiceServiceImplTest {
 
     @Test
     void createInvoice_creationRequest_shouldThrow_whenWorkorderIdNull() {
-        InvoiceCreationRequest request = InvoiceCreationRequest.builder()
-                .workorderId(null)
-                .build();
+        InvoiceCreationRequest request =
+                InvoiceCreationRequest.builder().workorderId(null).build();
 
-        assertThatThrownBy(() -> invoiceService.createInvoice(request))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> invoiceService.createInvoice(request)).isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- applyAdjustment ----

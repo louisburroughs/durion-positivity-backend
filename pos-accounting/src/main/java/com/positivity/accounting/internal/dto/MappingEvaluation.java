@@ -4,14 +4,13 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
  * Internal DTO to hold mapping evaluation results.
  * Used by PostingRuleEvaluator to track the outcome of mapping key evaluation.
- * 
+ *
  * This tracks:
  * - Whether a mapping was successfully found
  * - The type of mapping matched (exact, fallback, category_default)
@@ -75,7 +74,7 @@ public class MappingEvaluation {
      * {@code getKeysEvaluated().add(...)},
      * as the getter returns an immutable list that will throw
      * {@code UnsupportedOperationException}.
-     * 
+     *
      * @param key the evaluated key to add
      */
     public void addEvaluatedKey(String key) {
@@ -91,7 +90,7 @@ public class MappingEvaluation {
      * {@code UnsupportedOperationException} at runtime.
      * <p>
      * To add keys, use {@link #addEvaluatedKey(String)} instead.
-     * 
+     *
      * @return an immutable copy of the evaluated keys list (never null)
      */
     public List<String> getKeysEvaluated() {

@@ -3,10 +3,14 @@ package com.positivity.accounting.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
+import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
+import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.Optional;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,15 +20,9 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
-import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
-import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
-import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl;
-import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
-
 /**
  * Unit tests for PriceOverrideAuthorizationService
- * 
+ *
  * Tests price override authorization validation including
  * threshold checks and forbidden category detection.
  */
@@ -32,8 +30,9 @@ import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServ
 @DisplayName("PriceOverrideAuthorizationService Unit Tests")
 class PriceOverrideAuthorizationServiceTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
+
     @Mock
     private OverridePolicyThresholdRepository policyRepository;
 
@@ -153,7 +152,8 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_noPolicyFound_rejected() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("90.00");
-        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant())).thenReturn(Optional.empty());
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.empty());
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);

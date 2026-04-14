@@ -9,6 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface GuardrailPolicyRepository extends JpaRepository<GuardrailPolicyEntity, UUID> {
 
     Optional<GuardrailPolicyEntity> findTopByScopeAndScopeIdOrderByCreatedAtDesc(
-            GuardrailPolicyScope scope,
-            UUID scopeId);
+            GuardrailPolicyScope scope, UUID scopeId);
 }

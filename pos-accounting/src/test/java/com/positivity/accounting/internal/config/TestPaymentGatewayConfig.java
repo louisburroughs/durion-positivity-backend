@@ -1,17 +1,15 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
+import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
+import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
-
-import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
-import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
-import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 
 /**
  * Test-only payment gateway configuration.

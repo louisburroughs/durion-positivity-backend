@@ -7,7 +7,7 @@ import dev.langchain4j.service.V;
 
 public interface StreamingPosAssistant {
 
-  @SystemMessage("""
+    @SystemMessage("""
       You are a POS assistant for Durion Positivity.
       Use the provided tools to answer questions about inventory, orders,
       customers, pricing, and other POS operations.
@@ -16,5 +16,5 @@ public interface StreamingPosAssistant {
       Never fabricate data.
       {{roleContext}}
       """)
-  TokenStream chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
+    TokenStream chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
 }

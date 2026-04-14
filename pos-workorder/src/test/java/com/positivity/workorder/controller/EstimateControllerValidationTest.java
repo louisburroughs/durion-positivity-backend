@@ -4,9 +4,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.workorder.config.TestSecurityConfig;
+import com.positivity.workorder.contract.ContractTestConfiguration;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.service.IdempotencyService;
+import com.positivity.workorder.service.WorkorderService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,19 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.config.TestSecurityConfig;
-import com.positivity.workorder.contract.ContractTestConfiguration;
-import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.service.EstimateService;
-import com.positivity.workorder.service.IdempotencyService;
-import com.positivity.workorder.service.WorkorderService;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
 /**
  * Controller-layer validation tests for {@link CreateEstimateRequest}.
  *
@@ -46,7 +43,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * Issue: #588
  */
 @SpringBootTest
-@Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
+@Import({TestSecurityConfig.class, ContractTestConfiguration.class})
 @ActiveProfiles("test")
 class EstimateControllerValidationTest {
 
@@ -74,11 +71,12 @@ class EstimateControllerValidationTest {
         mockMvc = webAppContextSetup(webApplicationContext)
                 .addFilters(new OncePerRequestFilter() {
                     @Override
-                    protected void doFilterInternal(HttpServletRequest request,
-                            HttpServletResponse response, FilterChain filterChain)
+                    protected void doFilterInternal(
+                            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
                             throws ServletException, IOException {
                         var authentication = new UsernamePasswordAuthenticationToken(
-                                "workorder-test-user", null,
+                                "workorder-test-user",
+                                null,
                                 java.util.List.of(
                                         new org.springframework.security.core.authority.SimpleGrantedAuthority(
                                                 "workorder:estimate:create"),
@@ -110,8 +108,8 @@ class EstimateControllerValidationTest {
                 .build();
 
         mockMvc.perform(post(ENDPOINT)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -134,8 +132,8 @@ class EstimateControllerValidationTest {
                 .build();
 
         mockMvc.perform(post(ENDPOINT)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 }

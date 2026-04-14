@@ -8,19 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
@@ -34,6 +21,17 @@ import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class StockMovementServiceImplTest {
@@ -122,7 +120,8 @@ class StockMovementServiceImplTest {
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
-        assertThat(exception).isInstanceOf(IllegalArgumentException.class)
+        assertThat(exception)
+                .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ADJUST must use adjustment workflow");
         verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
     }
@@ -140,10 +139,8 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
         assertThat(result.getChangeInQuantity()).isEqualTo(-5);
-        verify(ledgerRepository, times(2))
-                .calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2);
-        verify(ledgerRepository, never())
-                .calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1);
+        verify(ledgerRepository, times(2)).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2);
+        verify(ledgerRepository, never()).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1);
         verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
     }
 
@@ -153,8 +150,10 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.TRANSFER, 6);
         request.setToLocationId(LOC_2);
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2)).thenReturn(20);
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1)).thenReturn(20);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2))
+                .thenReturn(20);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
+                .thenReturn(20);
 
         service.recordMovement(request, "actor-1");
 
@@ -186,7 +185,8 @@ class StockMovementServiceImplTest {
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
-        assertThat(exception).isInstanceOf(IllegalArgumentException.class)
+        assertThat(exception)
+                .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("toLocationId is required for TRANSFER movements");
         verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
     }
@@ -317,8 +317,8 @@ class StockMovementServiceImplTest {
         request.setStatus(AdjustmentRequestStatus.APPROVED);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
 
-        Throwable exception = catchThrowable(
-                () -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1"));
+        Throwable exception =
+                catchThrowable(() -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1"));
 
         assertThat(exception).isInstanceOf(IllegalStateException.class);
         verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
@@ -336,8 +336,8 @@ class StockMovementServiceImplTest {
 
         service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-xyz");
 
-        ArgumentCaptor<InventoryAdjustmentRequest> adjustmentCaptor = ArgumentCaptor
-                .forClass(InventoryAdjustmentRequest.class);
+        ArgumentCaptor<InventoryAdjustmentRequest> adjustmentCaptor =
+                ArgumentCaptor.forClass(InventoryAdjustmentRequest.class);
         verify(adjustmentRepository).save(adjustmentCaptor.capture());
 
         InventoryAdjustmentRequest savedRequest = adjustmentCaptor.getValue();

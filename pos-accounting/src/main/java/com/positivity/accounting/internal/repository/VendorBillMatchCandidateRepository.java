@@ -1,12 +1,10 @@
 package com.positivity.accounting.internal.repository;
 
+import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 
 /**
  * Repository for vendor bill match candidates.

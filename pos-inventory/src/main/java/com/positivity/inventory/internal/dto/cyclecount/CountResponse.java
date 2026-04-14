@@ -1,10 +1,8 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
+import com.positivity.inventory.internal.enums.TaskStatus;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.positivity.inventory.internal.enums.TaskStatus;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

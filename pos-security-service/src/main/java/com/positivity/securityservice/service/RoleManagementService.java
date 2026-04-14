@@ -1,18 +1,17 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
-import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
+import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
+import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Service for managing roles, role assignments, and role-permission mappings.

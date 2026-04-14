@@ -12,7 +12,15 @@ import jakarta.validation.constraints.NotBlank;
  */
 @Schema(description = "Request to authenticate a user with username and password")
 public record LoginRequest(
-        @JsonProperty("username") @NotBlank @Schema(description = "The user's login username", example = "jane.doe", requiredMode = Schema.RequiredMode.REQUIRED) String username,
+        @JsonProperty("username")
+        @NotBlank
+        @Schema(
+                description = "The user's login username",
+                example = "jane.doe",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        String username,
 
-        @JsonProperty("password") @NotBlank @Schema(description = "The user's login password", requiredMode = Schema.RequiredMode.REQUIRED) String password) {
-}
+        @JsonProperty("password")
+        @NotBlank
+        @Schema(description = "The user's login password", requiredMode = Schema.RequiredMode.REQUIRED)
+        String password) {}

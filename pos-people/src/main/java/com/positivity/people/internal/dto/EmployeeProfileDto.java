@@ -1,13 +1,12 @@
 package com.positivity.people.internal.dto;
 
 import com.positivity.people.internal.enums.EmployeeStatus;
-import lombok.Builder;
-import lombok.Data;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder
@@ -32,5 +31,4 @@ public class EmployeeProfileDto {
     private Instant statusEffectiveAt;
 
     private List<String> warnings;
-
 }

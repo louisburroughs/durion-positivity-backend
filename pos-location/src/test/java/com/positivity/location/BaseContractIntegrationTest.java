@@ -14,9 +14,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 public abstract class BaseContractIntegrationTest {
 
     protected MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder
-                .header("X-User", "location-test-user")
-                .header("X-Authorities", defaultAuthorities());
+        return requestBuilder.header("X-User", "location-test-user").header("X-Authorities", defaultAuthorities());
     }
 
     protected String defaultAuthorities() {

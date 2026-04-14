@@ -5,13 +5,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.entity.IdempotencyKey;
+import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,13 +23,9 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.positivity.accounting.internal.entity.IdempotencyKey;
-import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
-import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
-
 /**
  * Unit tests for IdempotencyService
- * 
+ *
  * Tests idempotency key management including registration,
  * validation, and cleanup of expired keys.
  */
@@ -127,9 +125,8 @@ class IdempotencyServiceTest {
             Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
 
             // Allow 1 second tolerance for test execution time
-            assertThat(saved.getExpiresAt()).isBetween(
-                    expectedExpiry.minus(1, ChronoUnit.SECONDS),
-                    expectedExpiry.plus(1, ChronoUnit.SECONDS));
+            assertThat(saved.getExpiresAt())
+                    .isBetween(expectedExpiry.minus(1, ChronoUnit.SECONDS), expectedExpiry.plus(1, ChronoUnit.SECONDS));
             assertThat(saved.getKeyValue()).isEqualTo(testKeyValue);
             assertThat(saved.getInvoiceId()).isEqualTo(testInvoiceId);
             return saved;
@@ -181,9 +178,10 @@ class IdempotencyServiceTest {
         when(repository.deleteExpiredKeys(any(Instant.class))).thenAnswer(invocation -> {
             Instant passedTime = invocation.getArgument(0);
             // Allow 1 second tolerance
-            assertThat(passedTime).isBetween(
-                    beforeCall.minus(1, ChronoUnit.SECONDS),
-                    Instant.now(TEST_CLOCK).plus(1, ChronoUnit.SECONDS));
+            assertThat(passedTime)
+                    .isBetween(
+                            beforeCall.minus(1, ChronoUnit.SECONDS),
+                            Instant.now(TEST_CLOCK).plus(1, ChronoUnit.SECONDS));
             return 0;
         });
 

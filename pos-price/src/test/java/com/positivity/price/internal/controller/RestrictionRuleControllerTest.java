@@ -44,10 +44,10 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
         when(restrictionRuleService.createRule(any())).thenReturn(activeRuleResponse());
 
         mockMvc.perform(post("/v1/price/restrictions/rules")
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", "pricing:restriction:manage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validCreateRuleBody()))
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateRuleBody()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ruleId").isNotEmpty());
     }
@@ -56,8 +56,8 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
     @DisplayName("createRule_withoutManageAuthority_returns403")
     void createRule_withoutManageAuthority_returns403() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/price/restrictions/rules")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validCreateRuleBody())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateRuleBody())))
                 .andExpect(status().isForbidden());
     }
 
@@ -65,10 +65,10 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
     @DisplayName("createRule_missingProductId_returns400")
     void createRule_missingProductId_returns400() throws Exception {
         mockMvc.perform(post("/v1/price/restrictions/rules")
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", "pricing:restriction:manage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(missingProductIdBody()))
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(missingProductIdBody()))
                 .andExpect(status().isBadRequest());
     }
 
@@ -111,8 +111,8 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
         when(restrictionRuleService.deactivateRule(any())).thenReturn(inactiveRuleResponse(ruleId));
 
         mockMvc.perform(delete("/v1/price/restrictions/rules/{ruleId}", ruleId)
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", "pricing:restriction:manage"))
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(false));
     }
@@ -125,8 +125,8 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
                 .thenThrow(new RestrictionRuleNotFoundException("Rule not found: " + ruleId));
 
         mockMvc.perform(delete("/v1/price/restrictions/rules/{ruleId}", ruleId)
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", "pricing:restriction:manage"))
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage"))
                 .andExpect(status().isNotFound());
     }
 

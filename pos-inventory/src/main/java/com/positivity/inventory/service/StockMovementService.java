@@ -1,13 +1,12 @@
 package com.positivity.inventory.service;
 
-import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
-import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
+import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import org.jspecify.annotations.NonNull;
-
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for recording stock movements in the inventory ledger.
@@ -54,8 +53,8 @@ public interface StockMovementService {
      * @return the created adjustment request response payload
      */
     @NonNull
-    AdjustmentRequestResponse createAdjustmentRequest(@NonNull CreateAdjustmentRequestDto request,
-            @NonNull String actorUserId);
+    AdjustmentRequestResponse createAdjustmentRequest(
+            @NonNull CreateAdjustmentRequestDto request, @NonNull String actorUserId);
 
     /**
      * Approves and posts an adjustment request to the ledger.

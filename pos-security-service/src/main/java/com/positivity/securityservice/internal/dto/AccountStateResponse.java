@@ -15,10 +15,22 @@ public class AccountStateResponse {
     boolean accountNonExpired;
     boolean credentialsNonExpired;
     int failedLoginAttempts;
-    @Nullable Instant lockedAt;
-    @Nullable Instant lockedUntil;
-    @Nullable Instant disabledAt;
-    @Nullable String disabledBy;
-    @Nullable Instant accountExpiresAt;
-    @Nullable Instant credentialsExpireAt;
+
+    @Nullable
+    Instant lockedAt;
+
+    @Nullable
+    Instant lockedUntil;
+
+    @Nullable
+    Instant disabledAt;
+
+    @Nullable
+    String disabledBy;
+
+    @Nullable
+    Instant accountExpiresAt;
+
+    @Nullable
+    Instant credentialsExpireAt;
 }

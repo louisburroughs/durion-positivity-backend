@@ -13,6 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,9 +28,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * REST controller for managing EventTypes used by preregistered events.
@@ -45,7 +44,10 @@ public class EventTypeController {
 
     @GetMapping
     @Operation(summary = "Get all event types", description = "Retrieve all available event types")
-    @ApiResponse(responseCode = "200", description = "List of event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "List of event types returned successfully",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     public ResponseEntity<List<EventTypeResponse>> getAllEventTypes() {
         log.info("Fetching all event types");
         return ResponseEntity.ok(eventTypeService.getAllEventTypes());
@@ -53,7 +55,10 @@ public class EventTypeController {
 
     @GetMapping("/active")
     @Operation(summary = "Get active event types", description = "Retrieve only active event types")
-    @ApiResponse(responseCode = "200", description = "List of active event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "List of active event types returned successfully",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     public ResponseEntity<List<EventTypeResponse>> getActiveEventTypes() {
         log.info("Fetching active event types");
         return ResponseEntity.ok(eventTypeService.getActiveEventTypes());
@@ -61,25 +66,41 @@ public class EventTypeController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get event type by ID", description = "Retrieve a specific event type by its unique ID")
-    @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Event type found and returned",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeById(
-            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id) {
+            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    @NotNull
+                    UUID id) {
         log.info("Fetching event type with id(mask): {}", maskForLog(id));
-        return eventTypeService.getEventTypeById(id)
+        return eventTypeService
+                .getEventTypeById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/code/{typeCode}")
-    @Operation(summary = "Get event type by code", description = "Retrieve a specific event type by its unique type code")
-    @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @Operation(
+            summary = "Get event type by code",
+            description = "Retrieve a specific event type by its unique type code")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Event type found and returned",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeByCode(
-            @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED") @PathVariable @NotBlank String typeCode) {
+            @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED")
+                    @PathVariable
+                    @NotBlank
+                    String typeCode) {
         log.info("Fetching event type with code(mask): {}", maskForLog(typeCode));
         try {
-            return eventTypeService.getEventTypeByCode(typeCode)
+            return eventTypeService
+                    .getEventTypeByCode(typeCode)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
@@ -91,10 +112,20 @@ public class EventTypeController {
     @PostMapping
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_CREATE", apiVersion = "1")
     @Operation(summary = "Create event type", description = "Create a new event type for preregistered events")
-    @ApiResponse(responseCode = "201", description = "Event type created successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "201",
+            description = "Event type created successfully",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<EventTypeResponse> createEventType(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Event type details",
+                            required = true,
+                            content = @Content(schema = @Schema(implementation = EventTypeRequest.class)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EventTypeRequest request) {
         log.info("Creating new event type: typeCode(mask)={}", maskForLog(request.getTypeCode()));
         try {
             var created = eventTypeService.createEventType(request);
@@ -103,9 +134,13 @@ public class EventTypeController {
                 return ResponseEntity.badRequest().build();
             }
             var response = created.get();
-            log.info("Event type created successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                    response.id(), response.apiVersion(), response.p50Micros(),
-                    response.p95Micros(), response.p99Micros());
+            log.info(
+                    "Event type created successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                    response.id(),
+                    response.apiVersion(),
+                    response.p50Micros(),
+                    response.p95Micros(),
+                    response.p99Micros());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid create event type request: {}", e.getMessage());
@@ -116,17 +151,34 @@ public class EventTypeController {
     @PutMapping("/code/{typeCode}")
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPSERT", apiVersion = "1")
     @Operation(summary = "Upsert event type", description = "Create or update an event type by type code")
-    @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Event type created or updated successfully",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<EventTypeResponse> upsertEventType(
-            @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE") @PathVariable @NotBlank String typeCode,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
+            @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE")
+                    @PathVariable
+                    @NotBlank
+                    String typeCode,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Event type details",
+                            required = true,
+                            content = @Content(schema = @Schema(implementation = EventTypeRequest.class)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EventTypeRequest request) {
         log.info("Upserting event type: typeCode(mask)={}", maskForLog(typeCode));
         try {
             var response = eventTypeService.upsertEventType(typeCode, request);
-            log.info("Event type upserted successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                    response.id(), response.apiVersion(), response.p50Micros(),
-                    response.p95Micros(), response.p99Micros());
+            log.info(
+                    "Event type upserted successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                    response.id(),
+                    response.apiVersion(),
+                    response.p50Micros(),
+                    response.p95Micros(),
+                    response.p99Micros());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid upsert event type request for code(mask) {}: {}", maskForLog(typeCode), e.getMessage());
@@ -137,18 +189,36 @@ public class EventTypeController {
     @PutMapping("/{id}")
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPDATE", apiVersion = "1")
     @Operation(summary = "Update event type", description = "Update an existing event type")
-    @ApiResponse(responseCode = "200", description = "Event type updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Event type updated successfully",
+            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> updateEventType(
-            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
+            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    @NotNull
+                    UUID id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Updated event type details",
+                            required = true,
+                            content = @Content(schema = @Schema(implementation = EventTypeRequest.class)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EventTypeRequest request) {
         log.info("Updating event type: id(mask)={}", maskForLog(id));
         try {
-            return eventTypeService.updateEventType(id, request)
+            return eventTypeService
+                    .updateEventType(id, request)
                     .map(response -> {
-                        log.info("Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                id, response.apiVersion(), response.p50Micros(),
-                                response.p95Micros(), response.p99Micros());
+                        log.info(
+                                "Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                                id,
+                                response.apiVersion(),
+                                response.p50Micros(),
+                                response.p95Micros(),
+                                response.p99Micros());
                         return ResponseEntity.ok(response);
                     })
                     .orElseGet(() -> ResponseEntity.notFound().build());
@@ -164,7 +234,13 @@ public class EventTypeController {
     @ApiResponse(responseCode = "204", description = "Event type deleted successfully")
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<Void> deleteEventType(
-            @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id) {
+            @Parameter(
+                            description = "EventType ID to delete",
+                            required = true,
+                            example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    @NotNull
+                    UUID id) {
         log.info("Deleting event type: id(mask)={}", maskForLog(id));
         try {
             if (!eventTypeService.deleteEventType(id)) {
@@ -183,10 +259,8 @@ public class EventTypeController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

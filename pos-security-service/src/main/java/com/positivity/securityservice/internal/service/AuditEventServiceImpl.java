@@ -50,7 +50,8 @@ public class AuditEventServiceImpl implements AuditEventService {
     @Override
     @Transactional(readOnly = true)
     public AuditLogEventDto getEvent(@NonNull UUID eventId) {
-        AuditLogEvent event = auditLogEventRepository.findById(eventId)
+        AuditLogEvent event = auditLogEventRepository
+                .findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Audit event not found: " + eventId));
         return toDto(event);
     }
@@ -65,10 +66,7 @@ public class AuditEventServiceImpl implements AuditEventService {
         List<AuditLogEvent> events;
         if (from != null && to != null) {
             events = auditLogEventRepository.findByEntityIdAndEntityTypeAndTimestampBetweenOrderByTimestampDesc(
-                    entityId,
-                    entityType,
-                    from,
-                    to);
+                    entityId, entityType, from, to);
         } else {
             events = auditLogEventRepository.findByEntityIdAndEntityTypeOrderByTimestampDesc(entityId, entityType);
         }
@@ -83,8 +81,7 @@ public class AuditEventServiceImpl implements AuditEventService {
             throw new IllegalArgumentException("eventType is required");
         }
 
-        return auditLogEventRepository.findByEventTypeOrderByTimestampDesc(eventType)
-                .stream()
+        return auditLogEventRepository.findByEventTypeOrderByTimestampDesc(eventType).stream()
                 .map(this::toDto)
                 .toList();
     }

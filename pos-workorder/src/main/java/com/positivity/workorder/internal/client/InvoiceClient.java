@@ -2,17 +2,16 @@ package com.positivity.workorder.internal.client;
 
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * REST client for communication with pos-invoice service.
@@ -26,7 +25,8 @@ public class InvoiceClient {
 
     @NonNull
     public InvoiceGenerationResponse createInvoice(@NonNull InvoiceCreationRequest request) {
-        InvoiceGenerationResponse response = invoiceServiceRestClient.post()
+        InvoiceGenerationResponse response = invoiceServiceRestClient
+                .post()
                 .uri("/v1/invoices")
                 .body(request)
                 .retrieve()
@@ -43,11 +43,11 @@ public class InvoiceClient {
     public InvoiceGenerationResponse getInvoice(@NonNull UUID invoiceId) {
         log.debug("Fetching invoice details from pos-invoice service for invoice {}", invoiceId);
 
-        Map<String, Object> invoiceData = invoiceServiceRestClient.get()
+        Map<String, Object> invoiceData = invoiceServiceRestClient
+                .get()
                 .uri("/v1/invoices/{invoiceId}", invoiceId)
                 .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {
-                });
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
 
         if (invoiceData == null) {
             throw new IllegalStateException("Invoice service returned an empty response for invoice " + invoiceId);

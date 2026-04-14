@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.ReplenishmentDecisionReason;
-import com.positivity.inventory.internal.enums.ReplenishmentStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentSourcingReason;
+import com.positivity.inventory.internal.enums.ReplenishmentStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentTriggerType;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;

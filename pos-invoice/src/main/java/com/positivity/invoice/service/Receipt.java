@@ -1,9 +1,8 @@
 package com.positivity.invoice.service;
 
 import com.positivity.invoice.internal.enums.ReceiptStatus;
-import lombok.Data;
-
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class Receipt {

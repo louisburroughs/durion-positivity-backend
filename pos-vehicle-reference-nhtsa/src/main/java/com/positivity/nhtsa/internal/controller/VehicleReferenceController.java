@@ -6,9 +6,9 @@ import com.positivity.nhtsa.internal.dto.ModelResponse;
 import com.positivity.nhtsa.internal.dto.VehicleReferenceMapper;
 import com.positivity.nhtsa.internal.dto.VehicleTypeResponse;
 import com.positivity.nhtsa.internal.service.VehicleReferenceService;
-import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/v1/vehicle-fitment")

@@ -3,16 +3,15 @@ package com.positivity.workorder.internal.dto;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Response DTO for estimate line items.
@@ -51,11 +50,15 @@ public class EstimateItemResponse {
     private String taxCode;
 
     @Nullable
-    @Schema(description = "Referenced product identifier when itemType=PART", example = "550e8400-e29b-41d4-a716-446655440021")
+    @Schema(
+            description = "Referenced product identifier when itemType=PART",
+            example = "550e8400-e29b-41d4-a716-446655440021")
     private UUID productId;
 
     @Nullable
-    @Schema(description = "Referenced service identifier when itemType=LABOR", example = "550e8400-e29b-41d4-a716-446655440022")
+    @Schema(
+            description = "Referenced service identifier when itemType=LABOR",
+            example = "550e8400-e29b-41d4-a716-446655440022")
     private UUID serviceId;
 
     @Schema(description = "Record creation timestamp")

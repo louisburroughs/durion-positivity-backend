@@ -1,11 +1,10 @@
 package com.positivity.customer.config;
 
+import com.positivity.security.common.GatewayAuthoritiesFilter;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
-
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 
 /**
  * Test-only security configuration for pos-customer contract integration tests.

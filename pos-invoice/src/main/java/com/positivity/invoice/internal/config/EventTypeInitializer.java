@@ -1,8 +1,8 @@
 package com.positivity.invoice.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -25,7 +25,9 @@ public class EventTypeInitializer implements ApplicationRunner {
             RestClient.Builder restClientBuilder,
             @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret) {
-        this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
+        this.restClient = restClientBuilder
+                .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
+                .build();
         this.initializerSupport = new EventTypeInitializerSupport("pos-invoice");
         this.apiSecret = apiSecret;
     }
@@ -37,8 +39,11 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put().uri("/{typeCode}", registration.getTypeCode())
-                    .contentType(MediaType.APPLICATION_JSON).body(registration);
+            var request = restClient
+                    .put()
+                    .uri("/{typeCode}", registration.getTypeCode())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(registration);
 
             // Add shared secret header for authentication (avoids JWT circular dependency)
             if (EventsApiConstants.hasSecret(apiSecret)) {

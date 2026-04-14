@@ -1,8 +1,5 @@
 package com.positivity.securityservice;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -13,16 +10,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.dto.InternalTokenRequest;
+import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
+import com.positivity.securityservice.internal.dto.TokenPairRequest;
+import com.positivity.securityservice.internal.dto.TokenPairResponse;
+import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.TokenRevocationManager;
+import com.positivity.securityservice.service.JwtService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,22 +44,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
-
-import com.positivity.securityservice.internal.dto.InternalTokenRequest;
-import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
-import com.positivity.securityservice.internal.dto.TokenPairRequest;
-import com.positivity.securityservice.internal.dto.TokenPairResponse;
-import com.positivity.securityservice.internal.dto.TokenResponse;
-import com.positivity.securityservice.internal.enums.PermissionCode;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.RoleRepository;
-import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.service.TokenRevocationManager;
-import com.positivity.securityservice.service.JwtService;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 /**
  * Consolidated Contract Behavior Integration Tests for Security Service.
@@ -92,541 +87,534 @@ import io.jsonwebtoken.Jwts;
 @ActiveProfiles("test")
 @DisplayName("Security Service Contract Behavior Integration Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-        private static final String PERMISSION_REGISTRATION_SECRET_HEADER = "X-Permissions-Api-Secret";
-        private static final String PERMISSION_REGISTRATION_SECRET = "test-permission-secret";
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final String PERMISSION_REGISTRATION_SECRET_HEADER = "X-Permissions-Api-Secret";
+    private static final String PERMISSION_REGISTRATION_SECRET = "test-permission-secret";
 
-        private static final String TEST_SUBJECT = "john.doe";
-        private static final UUID TEST_USER_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-        private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");
+    private static final String TEST_SUBJECT = "john.doe";
+    private static final UUID TEST_USER_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+    private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");
 
-        @Autowired
-        private JwtService jwtService;
+    @Autowired
+    private JwtService jwtService;
 
-        @Autowired
-        private TokenRevocationManager tokenRevocationManager;
+    @Autowired
+    private TokenRevocationManager tokenRevocationManager;
 
-        @Autowired
-        private RoleRepository roleRepository;
-        @Autowired
-        private UserRepository userRepository;
-        @Autowired
-        private PasswordEncoder passwordEncoder;
+    @Autowired
+    private RoleRepository roleRepository;
 
-        @Value("${security.jwt.secret}")
-        private String jwtSecret;
+    @Autowired
+    private UserRepository userRepository;
 
-        @BeforeEach
-        void setup() {
-                // Clear all revoked tokens before each test
-                tokenRevocationManager.clearAllRevoked();
-                ensureRoleExists("SHOP_MGR");
-                ensureRoleExists("INVENTORY_MGR");
-                ensureRoleExists("ROLE1");
-                ensureRoleExists("ROLE2");
-                ensureRoleExists("ROLE3");
-                ensureUserExists(TEST_USER_ID, TEST_SUBJECT, TEST_ROLES);
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Value("${security.jwt.secret}")
+    private String jwtSecret;
+
+    @BeforeEach
+    void setup() {
+        // Clear all revoked tokens before each test
+        tokenRevocationManager.clearAllRevoked();
+        ensureRoleExists("SHOP_MGR");
+        ensureRoleExists("INVENTORY_MGR");
+        ensureRoleExists("ROLE1");
+        ensureRoleExists("ROLE2");
+        ensureRoleExists("ROLE3");
+        ensureUserExists(TEST_USER_ID, TEST_SUBJECT, TEST_ROLES);
+    }
+
+    // ========== JWT AUTHENTICATION & TOKEN MANAGEMENT TESTS ==========
+
+    /**
+     * Test 1: Happy Path - POST /v1/auth/internal/token
+     *
+     * **Scenario:** Valid internal token request issues access token
+     * **Expected:** 200 OK with TokenResponse containing valid JWT
+     * **Contract:** BACKEND_CONTRACT_GUIDE.md §Login Endpoint
+     */
+    @Test
+    @DisplayName("T1: Internal token endpoint issues valid access token")
+    void testLoginIssuesValidAccessToken() throws Exception {
+        // Arrange
+        InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, TEST_ROLES);
+
+        // Act
+        MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn();
+
+        // Assert
+        TokenResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), TokenResponse.class);
+
+        assertThat(response.token()).as("Token should not be blank").isNotBlank();
+
+        // Verify token structure
+        SecretKeySpec key = new SecretKeySpec(
+                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                0,
+                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                "HmacSHA256");
+
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(response.token())
+                .getPayload();
+
+        assertThat(claims.getSubject()).isEqualTo(TEST_SUBJECT);
+        assertThat(claims.getId()).as("JTI should be present for revocation").isNotBlank();
+        assertThat(claims.getExpiration().toInstant())
+                .as("Token expiration should be in the future")
+                .isAfter(Instant.now(TEST_CLOCK));
+    }
+
+    /**
+     * Test 2: Happy Path - POST /v1/auth/token-pair
+     *
+     * **Scenario:** Token pair request issues both access and refresh tokens
+     * **Expected:** 200 OK with TokenPairResponse
+     * **Validation:** Both tokens are valid, separate JTIs, correct expiration
+     * times
+     */
+    @Test
+    @DisplayName("T2: Token pair endpoint issues both access and refresh tokens")
+    void testTokenPairIssuesBothTokens() throws Exception {
+        // Arrange
+        TokenPairRequest request = new TokenPairRequest(TEST_SUBJECT, TEST_ROLES);
+
+        // Act
+        MvcResult result = mockMvc.perform(post("/v1/auth/token-pair")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn();
+
+        // Assert
+        TokenPairResponse response =
+                objectMapper.readValue(result.getResponse().getContentAsString(), TokenPairResponse.class);
+
+        assertThat(response.accessToken()).isNotBlank();
+        assertThat(response.refreshToken()).isNotBlank();
+        assertThat(response.accessToken()).isNotEqualTo(response.refreshToken());
+
+        // Verify token contents
+        SecretKeySpec key = new SecretKeySpec(
+                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                0,
+                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                "HmacSHA256");
+
+        Claims accessClaims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(response.accessToken())
+                .getPayload();
+        Claims refreshClaims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(response.refreshToken())
+                .getPayload();
+
+        // Verify separate JTIs
+        assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
+
+        // Verify compact PERM-004 access token claims.
+        assertThat(accessClaims)
+                .containsKey(JwtService.PERM_BITS)
+                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
+                .containsEntry(JwtService.UID, TEST_USER_ID.toString())
+                .containsEntry(JwtService.USERNAME, TEST_SUBJECT)
+                .containsKey(JwtService.ROLES)
+                .doesNotContainKey(JwtService.AUTHORITIES);
+
+        // Verify refresh token type claim
+        assertThat(refreshClaims)
+                .containsEntry("type", "refresh")
+                .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES, JwtService.PERM_BITS);
+    }
+
+    /**
+     * Test 3: Refresh Token Flow - POST /v1/auth/refresh
+     *
+     * **Scenario:** Exchange refresh token for new token pair
+     * **Expected:** 200 OK with new TokenPairResponse
+     * **Validation:** Old tokens are revoked, new tokens are valid
+     */
+    @Test
+    @DisplayName("T3: Refresh endpoint exchanges refresh token for new pair")
+    void testRefreshTokenExchangeFlow() throws Exception {
+        // Arrange: Issue initial token pair
+        JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_USER_ID, null, TEST_ROLES);
+
+        RefreshTokenRequest request = new RefreshTokenRequest(initialPair.refreshToken());
+
+        // Act
+        MvcResult result = mockMvc.perform(post("/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        // Assert
+        TokenPairResponse response =
+                objectMapper.readValue(result.getResponse().getContentAsString(), TokenPairResponse.class);
+
+        assertThat(response.accessToken()).isNotNull();
+        assertThat(response.refreshToken()).isNotNull();
+        assertThat(response.accessToken()).isNotEqualTo(initialPair.accessToken());
+
+        SecretKeySpec key = new SecretKeySpec(
+                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                0,
+                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                "HmacSHA256");
+
+        Claims refreshedClaims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(response.accessToken())
+                .getPayload();
+        assertThat(refreshedClaims)
+                .containsKey(JwtService.PERM_BITS)
+                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
+                .containsKey(JwtService.UID)
+                .containsKey(JwtService.ROLES)
+                .doesNotContainKey(JwtService.AUTHORITIES);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<String> refreshedRoles = refreshedClaims.get(JwtService.ROLES, java.util.List.class);
+        assertThat(refreshedRoles).containsExactlyInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR");
+    }
+
+    /**
+     * Test 4: Token Validation - GET /v1/auth/validate
+     *
+     * **Scenario:** Validate both valid and invalid tokens
+     * **Expected:** { valid: true } for valid tokens, { valid: false } for invalid
+     */
+    @Test
+    @DisplayName("T4: Validate endpoint returns correct validity status")
+    void testTokenValidation() throws Exception {
+        // Arrange
+        String validToken = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+        String invalidToken = "invalid.jwt.token";
+
+        // Act & Assert - Valid token
+        mockMvc.perform(get("/v1/auth/validate").param("token", validToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
+
+        // Act & Assert - Invalid token
+        mockMvc.perform(get("/v1/auth/validate").param("token", invalidToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false));
+    }
+
+    /**
+     * Test 5: Token Revocation - DELETE /v1/auth/revoke
+     *
+     * **Scenario:** Revoke token and verify validation fails
+     * **Expected:** 204 No Content, subsequent validation returns false
+     */
+    @Test
+    @DisplayName("T5: Revoke endpoint invalidates token for future validation")
+    void testTokenRevocation() throws Exception {
+        // Arrange
+        String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+
+        // Act - Revoke token
+        mockMvc.perform(delete("/v1/auth/revoke").param("token", token)).andExpect(status().isNoContent());
+
+        // Assert - Token should no longer be valid
+        mockMvc.perform(get("/v1/auth/validate").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false));
+    }
+
+    /**
+     * Test 6: Input Validation - Blank Username
+     *
+     * **Scenario:** Login with blank username
+     * **Expected:** 400 Bad Request with error response
+     */
+    @Test
+    @DisplayName("T6: Login rejects blank username with 400 error")
+    void testLoginRejectsBlankUsername() throws Exception {
+        // Arrange
+        InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
+
+        // Act & Assert
+        mockMvc.perform(post("/v1/auth/internal/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    /**
+     * Test 7: Input Validation - Empty Roles
+     *
+     * **Scenario:** Token pair with empty roles set
+     * **Expected:** 400 Bad Request with error response
+     */
+    @Test
+    @DisplayName("T7: Token pair rejects empty roles with 400 error")
+    void testTokenPairRejectsEmptyRoles() throws Exception {
+        // Arrange
+        TokenPairRequest request = new TokenPairRequest(TEST_SUBJECT, Set.of());
+
+        // Act & Assert
+        mockMvc.perform(post("/v1/auth/token-pair")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").isNotEmpty());
+    }
+
+    /**
+     * Test 8: Invalid Refresh Token
+     *
+     * **Scenario:** Attempt to refresh with invalid token
+     * **Expected:** 400 Bad Request with error response
+     */
+    @Test
+    @DisplayName("T8: Refresh rejects invalid refresh token with 400 error")
+    void testRefreshRejectsInvalidToken() throws Exception {
+        // Arrange
+        RefreshTokenRequest request = new RefreshTokenRequest("invalid.token.here");
+
+        // Act & Assert
+        mockMvc.perform(post("/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    /**
+     * Test 9: Extract Claims - Roles
+     *
+     * **Scenario:** Extract roles from valid token
+     * **Expected:** 200 OK with roles array
+     */
+    @Test
+    @DisplayName("T9: Extract roles from valid token")
+    void testExtractRoles() throws Exception {
+        // Arrange
+        String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+
+        // Act & Assert
+        mockMvc.perform(get("/v1/auth/roles").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$", containsInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR")));
+    }
+
+    /**
+     * Test 10: Extract Claims - Subject
+     *
+     * **Scenario:** Extract subject from valid token
+     * **Expected:** 200 OK with subject string
+     */
+    @Test
+    @DisplayName("T10: Extract subject from valid token")
+    void testExtractSubject() throws Exception {
+        // Arrange
+        String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+
+        // Act & Assert
+        mockMvc.perform(get("/v1/auth/subject").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(content().string(TEST_SUBJECT));
+    }
+
+    /**
+     * Test 11: Unauthorized Access - Invalid Token for Claims Extraction
+     *
+     * **Scenario:** Attempt to extract roles with invalid token
+     * **Expected:** 401 Unauthorized
+     */
+    @Test
+    @DisplayName("T11: Extract roles rejects invalid token with 401 error")
+    void testExtractRolesRejectsInvalidToken() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get("/v1/auth/roles").param("token", "invalid.token")).andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Test 12: Correlation ID Propagation
+     *
+     * **Scenario:** Error response includes correlation ID
+     * **Expected:** Error response contains X-Correlation-Id value
+     */
+    @Test
+    @DisplayName("T12: Error responses include correlation ID")
+    void testCorrelationIdInErrorResponse() throws Exception {
+        // Arrange
+        InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
+
+        // Act & Assert
+        mockMvc.perform(post("/v1/auth/internal/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Correlation-Id", "test-correlation-123")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.correlationId").value("test-correlation-123"));
+    }
+
+    /**
+     * Test 13: Multiple Role Support
+     *
+     * **Scenario:** Token issued with multiple roles
+     * **Expected:** All roles present in token
+     */
+    @Test
+    @DisplayName("T13: Support multiple roles in token")
+    void testMultipleRoleSupport() throws Exception {
+        // Arrange
+        Set<String> multipleRoles = Set.of("ROLE1", "ROLE2", "ROLE3");
+        InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, multipleRoles);
+
+        // Act
+        MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        // Assert
+        TokenResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), TokenResponse.class);
+
+        Set<String> extractedRoles = jwtService.getRolesFromToken(response.token());
+        assertThat(extractedRoles).containsExactlyInAnyOrder("ROLE1", "ROLE2", "ROLE3");
+
+        SecretKeySpec key = new SecretKeySpec(
+                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                0,
+                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                "HmacSHA256");
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(response.token())
+                .getPayload();
+        assertThat(claims)
+                .containsKey(JwtService.PERM_BITS)
+                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
+                .containsKey(JwtService.ROLES)
+                .doesNotContainKey(JwtService.AUTHORITIES);
+    }
+
+    /**
+     * Test 14: Token Lifetime Validation - Access Token
+     *
+     * **Scenario:** Verify access token lifetime is 1 hour
+     * **Expected:** Token expiration is approximately 1 hour from issuance
+     */
+    @Test
+    @DisplayName("T14: Access token has 1-hour lifetime")
+    void testAccessTokenLifetime() throws Exception {
+        // Arrange
+        String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+        Instant afterCreation = Instant.now();
+
+        // Act
+        SecretKeySpec key = new SecretKeySpec(
+                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                0,
+                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                "HmacSHA256");
+
+        Claims claims =
+                Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+
+        Instant expirationTime = claims.getExpiration().toInstant();
+        long secondsUntilExpiry = java.time.temporal.ChronoUnit.SECONDS.between(afterCreation, expirationTime);
+
+        // Assert: Within 1 second of 1 hour (3600 seconds)
+        assertThat(secondsUntilExpiry)
+                .as("Access token should expire in approximately 1 hour")
+                .isBetween(3590L, 3601L);
+    }
+
+    /**
+     * Test 15: Concurrency Handling - Concurrent Token Revocation
+     *
+     * **Scenario:** Multiple threads attempt to revoke same token simultaneously
+     * **Expected:** All requests succeed, token is revoked (idempotent)
+     * **Concurrency:** Uses CountDownLatch to ensure threads start simultaneously
+     */
+    @Test
+    @DisplayName("T15: Concurrent token revocation is handled safely")
+    void testConcurrentTokenRevocation() throws Exception {
+        // Arrange
+        String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+        int threadCount = 5;
+        CountDownLatch startLatch = new CountDownLatch(1); // Barrier to start all threads simultaneously
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        // Act: Create threads that wait at the barrier
+        for (int i = 0; i < threadCount; i++) {
+            new Thread(() -> {
+                        try {
+                            startLatch.await(); // Wait for signal to start
+                            mockMvc.perform(delete("/v1/auth/revoke").param("token", token))
+                                    .andExpect(status().isNoContent());
+                            successCount.incrementAndGet();
+                        } catch (Throwable e) {
+                            failureCount.incrementAndGet();
+                        } finally {
+                            doneLatch.countDown();
+                        }
+                    })
+                    .start();
         }
 
-        // ========== JWT AUTHENTICATION & TOKEN MANAGEMENT TESTS ==========
+        // Release all threads simultaneously
+        startLatch.countDown();
 
-        /**
-         * Test 1: Happy Path - POST /v1/auth/internal/token
-         *
-         * **Scenario:** Valid internal token request issues access token
-         * **Expected:** 200 OK with TokenResponse containing valid JWT
-         * **Contract:** BACKEND_CONTRACT_GUIDE.md §Login Endpoint
-         */
-        @Test
-        @DisplayName("T1: Internal token endpoint issues valid access token")
-        void testLoginIssuesValidAccessToken() throws Exception {
-                // Arrange
-                InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, TEST_ROLES);
+        // Wait for all threads to complete (with timeout to prevent hanging)
+        assertThat(doneLatch.await(10, TimeUnit.SECONDS))
+                .as("All threads should complete within timeout")
+                .isTrue();
 
-                // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andReturn();
+        // Assert: All revocations should succeed (idempotent operation)
+        assertThat(successCount.get())
+                .as("At least one concurrent revocation request should succeed")
+                .isGreaterThan(0);
+        assertThat(successCount.get() + failureCount.get())
+                .as("All revocation attempts should complete")
+                .isEqualTo(threadCount);
 
-                // Assert
-                TokenResponse response = objectMapper.readValue(
-                                result.getResponse().getContentAsString(),
-                                TokenResponse.class);
+        // Assert: Token is revoked
+        mockMvc.perform(get("/v1/auth/validate").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false));
+    }
 
-                assertThat(response.token())
-                                .as("Token should not be blank")
-                                .isNotBlank();
+    // ========== USER MANAGEMENT TESTS ==========
 
-                // Verify token structure
-                SecretKeySpec key = new SecretKeySpec(
-                                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                                0,
-                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
-                                "HmacSHA256");
-
-                Claims claims = Jwts.parser()
-                                .verifyWith(key)
-                                .build()
-                                .parseSignedClaims(response.token())
-                                .getPayload();
-
-                assertThat(claims.getSubject()).isEqualTo(TEST_SUBJECT);
-                assertThat(claims.getId())
-                                .as("JTI should be present for revocation")
-                                .isNotBlank();
-                assertThat(claims.getExpiration().toInstant())
-                                .as("Token expiration should be in the future")
-                                .isAfter(Instant.now(TEST_CLOCK));
-        }
-
-        /**
-         * Test 2: Happy Path - POST /v1/auth/token-pair
-         *
-         * **Scenario:** Token pair request issues both access and refresh tokens
-         * **Expected:** 200 OK with TokenPairResponse
-         * **Validation:** Both tokens are valid, separate JTIs, correct expiration
-         * times
-         */
-        @Test
-        @DisplayName("T2: Token pair endpoint issues both access and refresh tokens")
-        void testTokenPairIssuesBothTokens() throws Exception {
-                // Arrange
-                TokenPairRequest request = new TokenPairRequest(TEST_SUBJECT, TEST_ROLES);
-
-                // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/token-pair")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andReturn();
-
-                // Assert
-                TokenPairResponse response = objectMapper.readValue(
-                                result.getResponse().getContentAsString(),
-                                TokenPairResponse.class);
-
-                assertThat(response.accessToken()).isNotBlank();
-                assertThat(response.refreshToken()).isNotBlank();
-                assertThat(response.accessToken()).isNotEqualTo(response.refreshToken());
-
-                // Verify token contents
-                SecretKeySpec key = new SecretKeySpec(
-                                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                                0,
-                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
-                                "HmacSHA256");
-
-                Claims accessClaims = Jwts.parser().verifyWith(key).build()
-                                .parseSignedClaims(response.accessToken()).getPayload();
-                Claims refreshClaims = Jwts.parser().verifyWith(key).build()
-                                .parseSignedClaims(response.refreshToken()).getPayload();
-
-                // Verify separate JTIs
-                assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
-
-                // Verify compact PERM-004 access token claims.
-                assertThat(accessClaims)
-                                .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
-                                .containsEntry(JwtService.UID, TEST_USER_ID.toString())
-                                .containsEntry(JwtService.USERNAME, TEST_SUBJECT)
-                                .containsKey(JwtService.ROLES)
-                                .doesNotContainKey(JwtService.AUTHORITIES);
-
-                // Verify refresh token type claim
-                assertThat(refreshClaims)
-                                .containsEntry("type", "refresh")
-                                .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES, JwtService.PERM_BITS);
-        }
-
-        /**
-         * Test 3: Refresh Token Flow - POST /v1/auth/refresh
-         *
-         * **Scenario:** Exchange refresh token for new token pair
-         * **Expected:** 200 OK with new TokenPairResponse
-         * **Validation:** Old tokens are revoked, new tokens are valid
-         */
-        @Test
-        @DisplayName("T3: Refresh endpoint exchanges refresh token for new pair")
-        void testRefreshTokenExchangeFlow() throws Exception {
-                // Arrange: Issue initial token pair
-                JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_USER_ID, null, TEST_ROLES);
-
-                RefreshTokenRequest request = new RefreshTokenRequest(initialPair.refreshToken());
-
-                // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/refresh")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                // Assert
-                TokenPairResponse response = objectMapper.readValue(
-                                result.getResponse().getContentAsString(),
-                                TokenPairResponse.class);
-
-                assertThat(response.accessToken()).isNotNull();
-                assertThat(response.refreshToken()).isNotNull();
-                assertThat(response.accessToken()).isNotEqualTo(initialPair.accessToken());
-
-                SecretKeySpec key = new SecretKeySpec(
-                                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                                0,
-                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
-                                "HmacSHA256");
-
-                Claims refreshedClaims = Jwts.parser().verifyWith(key).build()
-                                .parseSignedClaims(response.accessToken()).getPayload();
-                assertThat(refreshedClaims)
-                                .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
-                                .containsKey(JwtService.UID)
-                                .containsKey(JwtService.ROLES)
-                                .doesNotContainKey(JwtService.AUTHORITIES);
-
-                @SuppressWarnings("unchecked")
-                java.util.List<String> refreshedRoles = refreshedClaims.get(JwtService.ROLES, java.util.List.class);
-                assertThat(refreshedRoles).containsExactlyInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR");
-        }
-
-        /**
-         * Test 4: Token Validation - GET /v1/auth/validate
-         *
-         * **Scenario:** Validate both valid and invalid tokens
-         * **Expected:** { valid: true } for valid tokens, { valid: false } for invalid
-         */
-        @Test
-        @DisplayName("T4: Validate endpoint returns correct validity status")
-        void testTokenValidation() throws Exception {
-                // Arrange
-                String validToken = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-                String invalidToken = "invalid.jwt.token";
-
-                // Act & Assert - Valid token
-                mockMvc.perform(get("/v1/auth/validate")
-                                .param("token", validToken))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.valid").value(true));
-
-                // Act & Assert - Invalid token
-                mockMvc.perform(get("/v1/auth/validate")
-                                .param("token", invalidToken))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.valid").value(false));
-        }
-
-        /**
-         * Test 5: Token Revocation - DELETE /v1/auth/revoke
-         *
-         * **Scenario:** Revoke token and verify validation fails
-         * **Expected:** 204 No Content, subsequent validation returns false
-         */
-        @Test
-        @DisplayName("T5: Revoke endpoint invalidates token for future validation")
-        void testTokenRevocation() throws Exception {
-                // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-
-                // Act - Revoke token
-                mockMvc.perform(delete("/v1/auth/revoke")
-                                .param("token", token))
-                                .andExpect(status().isNoContent());
-
-                // Assert - Token should no longer be valid
-                mockMvc.perform(get("/v1/auth/validate")
-                                .param("token", token))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.valid").value(false));
-        }
-
-        /**
-         * Test 6: Input Validation - Blank Username
-         *
-         * **Scenario:** Login with blank username
-         * **Expected:** 400 Bad Request with error response
-         */
-        @Test
-        @DisplayName("T6: Login rejects blank username with 400 error")
-        void testLoginRejectsBlankUsername() throws Exception {
-                // Arrange
-                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
-
-                // Act & Assert
-                mockMvc.perform(post("/v1/auth/internal/token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                                .andExpect(jsonPath("$.message").isNotEmpty())
-                                .andExpect(jsonPath("$.correlationId").isNotEmpty());
-        }
-
-        /**
-         * Test 7: Input Validation - Empty Roles
-         *
-         * **Scenario:** Token pair with empty roles set
-         * **Expected:** 400 Bad Request with error response
-         */
-        @Test
-        @DisplayName("T7: Token pair rejects empty roles with 400 error")
-        void testTokenPairRejectsEmptyRoles() throws Exception {
-                // Arrange
-                TokenPairRequest request = new TokenPairRequest(TEST_SUBJECT, Set.of());
-
-                // Act & Assert
-                mockMvc.perform(post("/v1/auth/token-pair")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").isNotEmpty());
-        }
-
-        /**
-         * Test 8: Invalid Refresh Token
-         *
-         * **Scenario:** Attempt to refresh with invalid token
-         * **Expected:** 400 Bad Request with error response
-         */
-        @Test
-        @DisplayName("T8: Refresh rejects invalid refresh token with 400 error")
-        void testRefreshRejectsInvalidToken() throws Exception {
-                // Arrange
-                RefreshTokenRequest request = new RefreshTokenRequest("invalid.token.here");
-
-                // Act & Assert
-                mockMvc.perform(post("/v1/auth/refresh")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        }
-
-        /**
-         * Test 9: Extract Claims - Roles
-         *
-         * **Scenario:** Extract roles from valid token
-         * **Expected:** 200 OK with roles array
-         */
-        @Test
-        @DisplayName("T9: Extract roles from valid token")
-        void testExtractRoles() throws Exception {
-                // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-
-                // Act & Assert
-                mockMvc.perform(get("/v1/auth/roles")
-                                .param("token", token))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$").isArray())
-                                .andExpect(jsonPath("$", containsInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR")));
-        }
-
-        /**
-         * Test 10: Extract Claims - Subject
-         *
-         * **Scenario:** Extract subject from valid token
-         * **Expected:** 200 OK with subject string
-         */
-        @Test
-        @DisplayName("T10: Extract subject from valid token")
-        void testExtractSubject() throws Exception {
-                // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-
-                // Act & Assert
-                mockMvc.perform(get("/v1/auth/subject")
-                                .param("token", token))
-                                .andExpect(status().isOk())
-                                .andExpect(content().string(TEST_SUBJECT));
-        }
-
-        /**
-         * Test 11: Unauthorized Access - Invalid Token for Claims Extraction
-         *
-         * **Scenario:** Attempt to extract roles with invalid token
-         * **Expected:** 401 Unauthorized
-         */
-        @Test
-        @DisplayName("T11: Extract roles rejects invalid token with 401 error")
-        void testExtractRolesRejectsInvalidToken() throws Exception {
-                // Act & Assert
-                mockMvc.perform(get("/v1/auth/roles")
-                                .param("token", "invalid.token"))
-                                .andExpect(status().isUnauthorized());
-        }
-
-        /**
-         * Test 12: Correlation ID Propagation
-         *
-         * **Scenario:** Error response includes correlation ID
-         * **Expected:** Error response contains X-Correlation-Id value
-         */
-        @Test
-        @DisplayName("T12: Error responses include correlation ID")
-        void testCorrelationIdInErrorResponse() throws Exception {
-                // Arrange
-                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
-
-                // Act & Assert
-                mockMvc.perform(post("/v1/auth/internal/token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-Correlation-Id", "test-correlation-123")
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.correlationId").value("test-correlation-123"));
-        }
-
-        /**
-         * Test 13: Multiple Role Support
-         *
-         * **Scenario:** Token issued with multiple roles
-         * **Expected:** All roles present in token
-         */
-        @Test
-        @DisplayName("T13: Support multiple roles in token")
-        void testMultipleRoleSupport() throws Exception {
-                // Arrange
-                Set<String> multipleRoles = Set.of("ROLE1", "ROLE2", "ROLE3");
-                InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, multipleRoles);
-
-                // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                // Assert
-                TokenResponse response = objectMapper.readValue(
-                                result.getResponse().getContentAsString(),
-                                TokenResponse.class);
-
-                Set<String> extractedRoles = jwtService.getRolesFromToken(response.token());
-                assertThat(extractedRoles).containsExactlyInAnyOrder("ROLE1", "ROLE2", "ROLE3");
-
-                SecretKeySpec key = new SecretKeySpec(
-                                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                                0,
-                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
-                                "HmacSHA256");
-                Claims claims = Jwts.parser().verifyWith(key).build()
-                                .parseSignedClaims(response.token()).getPayload();
-                assertThat(claims)
-                                .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
-                                .containsKey(JwtService.ROLES)
-                                .doesNotContainKey(JwtService.AUTHORITIES);
-        }
-
-        /**
-         * Test 14: Token Lifetime Validation - Access Token
-         *
-         * **Scenario:** Verify access token lifetime is 1 hour
-         * **Expected:** Token expiration is approximately 1 hour from issuance
-         */
-        @Test
-        @DisplayName("T14: Access token has 1-hour lifetime")
-        void testAccessTokenLifetime() throws Exception {
-                // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-                Instant afterCreation = Instant.now();
-
-                // Act
-                SecretKeySpec key = new SecretKeySpec(
-                                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                                0,
-                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
-                                "HmacSHA256");
-
-                Claims claims = Jwts.parser()
-                                .verifyWith(key)
-                                .build()
-                                .parseSignedClaims(token)
-                                .getPayload();
-
-                Instant expirationTime = claims.getExpiration().toInstant();
-                long secondsUntilExpiry = java.time.temporal.ChronoUnit.SECONDS.between(afterCreation, expirationTime);
-
-                // Assert: Within 1 second of 1 hour (3600 seconds)
-                assertThat(secondsUntilExpiry)
-                                .as("Access token should expire in approximately 1 hour")
-                                .isBetween(3590L, 3601L);
-        }
-
-        /**
-         * Test 15: Concurrency Handling - Concurrent Token Revocation
-         *
-         * **Scenario:** Multiple threads attempt to revoke same token simultaneously
-         * **Expected:** All requests succeed, token is revoked (idempotent)
-         * **Concurrency:** Uses CountDownLatch to ensure threads start simultaneously
-         */
-        @Test
-        @DisplayName("T15: Concurrent token revocation is handled safely")
-        void testConcurrentTokenRevocation() throws Exception {
-                // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
-                int threadCount = 5;
-                CountDownLatch startLatch = new CountDownLatch(1); // Barrier to start all threads simultaneously
-                CountDownLatch doneLatch = new CountDownLatch(threadCount);
-                AtomicInteger successCount = new AtomicInteger(0);
-                AtomicInteger failureCount = new AtomicInteger(0);
-
-                // Act: Create threads that wait at the barrier
-                for (int i = 0; i < threadCount; i++) {
-                        new Thread(() -> {
-                                try {
-                                        startLatch.await(); // Wait for signal to start
-                                        mockMvc.perform(delete("/v1/auth/revoke").param("token", token))
-                                                        .andExpect(status().isNoContent());
-                                        successCount.incrementAndGet();
-                                } catch (Throwable e) {
-                                        failureCount.incrementAndGet();
-                                } finally {
-                                        doneLatch.countDown();
-                                }
-                        }).start();
-                }
-
-                // Release all threads simultaneously
-                startLatch.countDown();
-
-                // Wait for all threads to complete (with timeout to prevent hanging)
-                assertThat(doneLatch.await(10, TimeUnit.SECONDS))
-                                .as("All threads should complete within timeout")
-                                .isTrue();
-
-                // Assert: All revocations should succeed (idempotent operation)
-                assertThat(successCount.get())
-                                .as("At least one concurrent revocation request should succeed")
-                                .isGreaterThan(0);
-                assertThat(successCount.get() + failureCount.get())
-                                .as("All revocation attempts should complete")
-                                .isEqualTo(threadCount);
-
-                // Assert: Token is revoked
-                mockMvc.perform(get("/v1/auth/validate").param("token", token))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.valid").value(false));
-        }
-
-        // ========== USER MANAGEMENT TESTS ==========
-
-        /**
-         * Test U1: Create User Endpoint
-         *
-         * **Scenario:** Create new user with username, password, and roles
-         * **Expected:** 200 OK with User object
-         */
-        @Test
-        @DisplayName("U1: Create user with valid credentials")
-        void testCreateUser() throws Exception {
-                // Arrange
-                String payload = """
+    /**
+     * Test U1: Create User Endpoint
+     *
+     * **Scenario:** Create new user with username, password, and roles
+     * **Expected:** 200 OK with User object
+     */
+    @Test
+    @DisplayName("U1: Create user with valid credentials")
+    void testCreateUser() throws Exception {
+        // Arrange
+        String payload = """
                                 {
                                     "username": "testuser",
                                     "password": "SecurePass123!",
@@ -634,196 +622,197 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 }
                                 """;
 
-                // Act & Assert
-                mockMvc.perform(post("/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.username").value("testuser"))
-                                .andExpect(jsonPath("$.id").exists());
-        }
+        // Act & Assert
+        mockMvc.perform(post("/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value("testuser"))
+                .andExpect(jsonPath("$.id").exists());
+    }
 
-        /**
-         * Test U2: User Login Endpoint
-         *
-         * **Scenario:** Login with valid credentials returns JWT token
-         * **Expected:** 200 OK with token
-         */
-        @Test
-        @DisplayName("U2: User login returns JWT token")
-        void testUserLogin() throws Exception {
-                // Arrange: Create user first
-                String createPayload = """
+    /**
+     * Test U2: User Login Endpoint
+     *
+     * **Scenario:** Login with valid credentials returns JWT token
+     * **Expected:** 200 OK with token
+     */
+    @Test
+    @DisplayName("U2: User login returns JWT token")
+    void testUserLogin() throws Exception {
+        // Arrange: Create user first
+        String createPayload = """
                                 {
                                     "username": "loginuser",
                                     "password": "LoginPass123!",
                                     "roles": ["SHOP_MGR"]
                                 }
                                 """;
-                mockMvc.perform(post("/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload))
-                                .andExpect(status().isCreated());
+        mockMvc.perform(post("/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated());
 
-                // Act: Login
-                String loginPayload = """
+        // Act: Login
+        String loginPayload = """
                                 {
                                     "username": "loginuser",
                                     "password": "LoginPass123!"
                                 }
                                 """;
 
-                mockMvc.perform(post("/v1/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(loginPayload))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.accessToken").isNotEmpty());
-        }
+        mockMvc.perform(post("/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
 
-        /**
-         * Test U3: User Login with Invalid Credentials
-         *
-         * **Scenario:** Login with wrong password
-         * **Expected:** 401 Unauthorized with error response
-         */
-        @Test
-        @DisplayName("U3: User login rejects invalid credentials")
-        void testUserLoginInvalidCredentials() throws Exception {
-                // Arrange
-                String loginPayload = """
+    /**
+     * Test U3: User Login with Invalid Credentials
+     *
+     * **Scenario:** Login with wrong password
+     * **Expected:** 401 Unauthorized with error response
+     */
+    @Test
+    @DisplayName("U3: User login rejects invalid credentials")
+    void testUserLoginInvalidCredentials() throws Exception {
+        // Arrange
+        String loginPayload = """
                                 {
                                     "username": "nonexistent",
                                     "password": "WrongPassword"
                                 }
                                 """;
 
-                // Act & Assert
-                mockMvc.perform(post("/v1/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(loginPayload))
-                                .andExpect(status().isUnauthorized())
-                                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
-        }
+        // Act & Assert
+        mockMvc.perform(post("/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginPayload))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    }
 
-        /**
-         * Test U4: Assign Roles to User
-         *
-         * **Scenario:** Update user's role assignments
-         * **Expected:** 200 OK with updated User object
-         */
-        @Test
-        @DisplayName("U4: Assign roles to existing user")
-        void testAssignRolesToUser() throws Exception {
-                // Arrange: Create user first
-                String createPayload = """
+    /**
+     * Test U4: Assign Roles to User
+     *
+     * **Scenario:** Update user's role assignments
+     * **Expected:** 200 OK with updated User object
+     */
+    @Test
+    @DisplayName("U4: Assign roles to existing user")
+    void testAssignRolesToUser() throws Exception {
+        // Arrange: Create user first
+        String createPayload = """
                                 {
                                     "username": "roleuser",
                                     "password": "RolePass123!",
                                     "roles": ["SHOP_MGR"]
                                 }
                                 """;
-                mockMvc.perform(post("/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload))
-                                .andExpect(status().isCreated());
+        mockMvc.perform(post("/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated());
 
-                // Act: Assign new roles
-                String assignPayload = """
+        // Act: Assign new roles
+        String assignPayload = """
                                 {
                                     "roles": ["SHOP_MGR", "INVENTORY_MGR"]
                                 }
                                 """;
 
-                mockMvc.perform(put("/v1/users/roleuser/roles")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(assignPayload))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.username").value("roleuser"));
-        }
+        mockMvc.perform(put("/v1/users/roleuser/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(assignPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("roleuser"));
+    }
 
-        // ========== ROLE MANAGEMENT TESTS ==========
+    // ========== ROLE MANAGEMENT TESTS ==========
 
-        /**
-         * Test R1: Create Role
-         *
-         * **Scenario:** Create new role with name and description
-         * **Expected:** 201 Created with Role object
-         * **Note:** Requires ADMIN role - test will be skipped in non-mocked scenarios
-         */
-        @Test
-        @DisplayName("R1: Create role with valid name")
-        void testCreateRole() throws Exception {
-                // Arrange
-                String payload = """
+    /**
+     * Test R1: Create Role
+     *
+     * **Scenario:** Create new role with name and description
+     * **Expected:** 201 Created with Role object
+     * **Note:** Requires ADMIN role - test will be skipped in non-mocked scenarios
+     */
+    @Test
+    @DisplayName("R1: Create role with valid name")
+    void testCreateRole() throws Exception {
+        // Arrange
+        String payload = """
                                 {
                                     "name": "TEST_ROLE",
                                     "description": "Test role for contract tests"
                                 }
                                 """;
 
-                // Act & Assert
-                // Note: This requires ADMIN role, so test may fail without proper auth setup
-                // In real scenario, would need to mock SecurityContext with ADMIN authority
-                try {
-                        mockMvc.perform(post("/v1/roles")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .content(payload))
-                                        .andExpect(status().isCreated())
-                                        .andExpect(jsonPath("$.name").value("TEST_ROLE"));
-                } catch (AssertionError e) {
-                        // Expected if not running with proper authentication setup
-                        // Test will be skipped in non-mocked scenarios
-                }
+        // Act & Assert
+        // Note: This requires ADMIN role, so test may fail without proper auth setup
+        // In real scenario, would need to mock SecurityContext with ADMIN authority
+        try {
+            mockMvc.perform(post("/v1/roles")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.name").value("TEST_ROLE"));
+        } catch (AssertionError e) {
+            // Expected if not running with proper authentication setup
+            // Test will be skipped in non-mocked scenarios
         }
+    }
 
-        /**
-         * Test R2: Check User Permission
-         *
-         * **Scenario:** Verify if user has specific permission
-         * **Expected:** 200 OK with boolean result
-         */
-        @Test
-        @DisplayName("R2: Check user permission returns boolean")
-        void testCheckUserPermission() throws Exception {
-                String createPayload = """
+    /**
+     * Test R2: Check User Permission
+     *
+     * **Scenario:** Verify if user has specific permission
+     * **Expected:** 200 OK with boolean result
+     */
+    @Test
+    @DisplayName("R2: Check user permission returns boolean")
+    void testCheckUserPermission() throws Exception {
+        String createPayload = """
                                 {
                                     "username": "checkuser",
                                     "password": "CheckPass123!",
                                     "roles": ["SHOP_MGR"]
                                 }
                                 """;
-                MvcResult createUserResult = mockMvc.perform(post("/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-                String userId = objectMapper.readTree(createUserResult.getResponse().getContentAsString())
-                                .get("id")
-                                .asString();
+        MvcResult createUserResult = mockMvc.perform(post("/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String userId = objectMapper
+                .readTree(createUserResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
-                // Act & Assert
-                mockMvc.perform(get("/v1/roles/check-permission")
-                                .param("userId", userId)
-                                .param("permission", "order:create")
-                                .param("locationId", "GLOBAL"))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
-                // Result is boolean, exact value depends on test data setup
-        }
+        // Act & Assert
+        mockMvc.perform(get("/v1/roles/check-permission")
+                        .param("userId", userId)
+                        .param("permission", "order:create")
+                        .param("locationId", "GLOBAL"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+        // Result is boolean, exact value depends on test data setup
+    }
 
-        // ========== PERMISSION REGISTRY TESTS ==========
+    // ========== PERMISSION REGISTRY TESTS ==========
 
-        /**
-         * Test P1: Register Permissions
-         *
-         * **Scenario:** Service registers its available permissions
-         * **Expected:** 200 OK with PermissionRegistrationResponse
-         */
-        @Test
-        @DisplayName("P1: Register permissions from service")
-        void testRegisterPermissions() throws Exception {
-                // Arrange
-                String payload = """
+    /**
+     * Test P1: Register Permissions
+     *
+     * **Scenario:** Service registers its available permissions
+     * **Expected:** 200 OK with PermissionRegistrationResponse
+     */
+    @Test
+    @DisplayName("P1: Register permissions from service")
+    void testRegisterPermissions() throws Exception {
+        // Arrange
+        String payload = """
                                 {
                                     "serviceName": "pos-test",
                                     "permissions": [
@@ -841,46 +830,46 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 }
                                 """;
 
-                // Act & Assert
-                mockMvc.perform(post("/v1/permissions/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
-                                .content(payload))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.success").isBoolean());
-        }
+        // Act & Assert
+        mockMvc.perform(post("/v1/permissions/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").isBoolean());
+    }
 
-        /**
-         * Test P2: Validate Permission Name Format
-         *
-         * **Scenario:** Check if permission name follows domain:resource:action format
-         * **Expected:** 200 OK with boolean result
-         */
-        @Test
-        @DisplayName("P2: Validate permission name format")
-        void testValidatePermissionName() throws Exception {
-                // Act & Assert - Valid format
-                mockMvc.perform(get("/v1/permissions/validate/order:create:full"))
-                                .andExpect(status().isOk())
-                                .andExpect(content().string("true"));
+    /**
+     * Test P2: Validate Permission Name Format
+     *
+     * **Scenario:** Check if permission name follows domain:resource:action format
+     * **Expected:** 200 OK with boolean result
+     */
+    @Test
+    @DisplayName("P2: Validate permission name format")
+    void testValidatePermissionName() throws Exception {
+        // Act & Assert - Valid format
+        mockMvc.perform(get("/v1/permissions/validate/order:create:full"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("true"));
 
-                // Act & Assert - Invalid format
-                mockMvc.perform(get("/v1/permissions/validate/invalid-permission"))
-                                .andExpect(status().isOk())
-                                .andExpect(content().string("false"));
-        }
+        // Act & Assert - Invalid format
+        mockMvc.perform(get("/v1/permissions/validate/invalid-permission"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("false"));
+    }
 
-        /**
-         * Test P3: Check Permission Exists
-         *
-         * **Scenario:** Verify if permission is registered in the system
-         * **Expected:** 200 OK with boolean result
-         */
-        @Test
-        @DisplayName("P3: Check if permission exists in registry")
-        void testPermissionExists() throws Exception {
-                // Arrange - Register a permission first
-                String registerPayload = """
+    /**
+     * Test P3: Check Permission Exists
+     *
+     * **Scenario:** Verify if permission is registered in the system
+     * **Expected:** 200 OK with boolean result
+     */
+    @Test
+    @DisplayName("P3: Check if permission exists in registry")
+    void testPermissionExists() throws Exception {
+        // Arrange - Register a permission first
+        String registerPayload = """
                                 {
                                     "serviceName": "pos-test",
                                     "permissions": [
@@ -892,123 +881,125 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                     ]
                                 }
                                 """;
-                mockMvc.perform(post("/v1/permissions/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
-                                .content(registerPayload))
-                                .andExpect(status().isOk());
+        mockMvc.perform(post("/v1/permissions/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
+                        .content(registerPayload))
+                .andExpect(status().isOk());
 
-                // Act & Assert - Check existence
-                mockMvc.perform(get("/v1/permissions/exists/test:exist:check"))
-                                .andExpect(status().isOk())
-                                .andExpect(content().string("true"));
+        // Act & Assert - Check existence
+        mockMvc.perform(get("/v1/permissions/exists/test:exist:check"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("true"));
 
-                // Act & Assert - Check non-existent
-                mockMvc.perform(get("/v1/permissions/exists/nonexistent:perm:action"))
-                                .andExpect(status().isOk())
-                                .andExpect(content().string("false"));
-        }
+        // Act & Assert - Check non-existent
+        mockMvc.perform(get("/v1/permissions/exists/nonexistent:perm:action"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("false"));
+    }
 
-        /**
-         * Test P4: Permissions Have Proper Error Responses
-         *
-         * **Scenario:** Invalid permission registration returns proper error format
-         * **Expected:** 400 Bad Request with error envelope
-         */
-        @Test
-        @DisplayName("P4: Permission registration validates input")
-        void testPermissionRegistrationValidation() throws Exception {
-                // Arrange - Invalid payload (missing required fields)
-                String invalidPayload = """
+    /**
+     * Test P4: Permissions Have Proper Error Responses
+     *
+     * **Scenario:** Invalid permission registration returns proper error format
+     * **Expected:** 400 Bad Request with error envelope
+     */
+    @Test
+    @DisplayName("P4: Permission registration validates input")
+    void testPermissionRegistrationValidation() throws Exception {
+        // Arrange - Invalid payload (missing required fields)
+        String invalidPayload = """
                                 {
                                     "serviceName": ""
                                 }
                                 """;
 
-                // Act & Assert
-                mockMvc.perform(post("/v1/permissions/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
-                                .content(invalidPayload))
-                                .andExpect(status().isBadRequest());
-                // Note: May return 400 or 200 with success:false depending on implementation
+        // Act & Assert
+        mockMvc.perform(post("/v1/permissions/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
+                        .content(invalidPayload))
+                .andExpect(status().isBadRequest());
+        // Note: May return 400 or 200 with success:false depending on implementation
+    }
+
+    // ========== CORRELATION ID & ERROR FORMAT TESTS ==========
+
+    /**
+     * Test E1: Correlation ID Propagation Across Endpoints
+     *
+     * **Scenario:** All endpoints echo correlation ID in responses
+     * **Expected:** Response contains X-Correlation-Id header
+     */
+    @Test
+    @DisplayName("E1: Correlation ID propagated in all responses")
+    void testCorrelationIdPropagation() throws Exception {
+        String correlationId = "test-correlation-" + System.currentTimeMillis();
+
+        // Test with permission validate endpoint
+        mockMvc.perform(get("/v1/permissions/validate/test:perm:action").header("X-Correlation-Id", correlationId))
+                .andExpect(status().isOk());
+        // Note: Correlation ID should be in response headers if implemented
+    }
+
+    /**
+     * Test E2: Error Response Contract Compliance
+     *
+     * **Scenario:** Errors follow {code, message, timestamp, correlationId} format
+     * **Expected:** Error response contains all required fields
+     */
+    @Test
+    @DisplayName("E2: Error responses follow contract format")
+    void testErrorResponseFormat() throws Exception {
+        // Arrange - Invalid login to trigger error
+        InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
+
+        // Act & Assert
+        MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Correlation-Id", "error-format-test")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").exists())
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.correlationId").exists())
+                .andReturn();
+
+        // Verify timestamp is ISO 8601 format
+        String timestamp = objectMapper
+                .readTree(result.getResponse().getContentAsString())
+                .get("timestamp")
+                .asString();
+        assertThat(timestamp).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*");
+    }
+
+    private void ensureRoleExists(String roleName) {
+        if (roleRepository.existsByName(roleName)) {
+            return;
+        }
+        Role role = new Role();
+        role.setName(roleName);
+        role.setDescription("Contract test role");
+        role.setCreatedBy("contract-test");
+        roleRepository.save(role);
+    }
+
+    private void ensureUserExists(UUID userId, String username, Set<String> roleNames) {
+        if (userRepository.findByUsername(username).isPresent()) {
+            return;
         }
 
-        // ========== CORRELATION ID & ERROR FORMAT TESTS ==========
-
-        /**
-         * Test E1: Correlation ID Propagation Across Endpoints
-         *
-         * **Scenario:** All endpoints echo correlation ID in responses
-         * **Expected:** Response contains X-Correlation-Id header
-         */
-        @Test
-        @DisplayName("E1: Correlation ID propagated in all responses")
-        void testCorrelationIdPropagation() throws Exception {
-                String correlationId = "test-correlation-" + System.currentTimeMillis();
-
-                // Test with permission validate endpoint
-                mockMvc.perform(get("/v1/permissions/validate/test:perm:action")
-                                .header("X-Correlation-Id", correlationId))
-                                .andExpect(status().isOk());
-                // Note: Correlation ID should be in response headers if implemented
-        }
-
-        /**
-         * Test E2: Error Response Contract Compliance
-         *
-         * **Scenario:** Errors follow {code, message, timestamp, correlationId} format
-         * **Expected:** Error response contains all required fields
-         */
-        @Test
-        @DisplayName("E2: Error responses follow contract format")
-        void testErrorResponseFormat() throws Exception {
-                // Arrange - Invalid login to trigger error
-                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
-
-                // Act & Assert
-                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-Correlation-Id", "error-format-test")
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").exists())
-                                .andExpect(jsonPath("$.message").exists())
-                                .andExpect(jsonPath("$.timestamp").exists())
-                                .andExpect(jsonPath("$.correlationId").exists())
-                                .andReturn();
-
-                // Verify timestamp is ISO 8601 format
-                String timestamp = objectMapper.readTree(result.getResponse().getContentAsString())
-                                .get("timestamp").asString();
-                assertThat(timestamp).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*");
-        }
-
-        private void ensureRoleExists(String roleName) {
-                if (roleRepository.existsByName(roleName)) {
-                        return;
-                }
-                Role role = new Role();
-                role.setName(roleName);
-                role.setDescription("Contract test role");
-                role.setCreatedBy("contract-test");
-                roleRepository.save(role);
-        }
-
-        private void ensureUserExists(UUID userId, String username, Set<String> roleNames) {
-                if (userRepository.findByUsername(username).isPresent()) {
-                        return;
-                }
-
-                User user = new User();
-                user.setId(userId);
-                user.setUsername(username);
-                user.setPassword(passwordEncoder.encode("ContractPass123!"));
-                user.setRoles(roleNames.stream()
-                                .map(roleName -> roleRepository.findByName(roleName)
-                                                .orElseThrow(() -> new IllegalStateException(
-                                                                "Missing role for contract test setup: " + roleName)))
-                                .collect(java.util.stream.Collectors.toSet()));
-                userRepository.save(user);
-        }
+        User user = new User();
+        user.setId(userId);
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode("ContractPass123!"));
+        user.setRoles(roleNames.stream()
+                .map(roleName -> roleRepository
+                        .findByName(roleName)
+                        .orElseThrow(
+                                () -> new IllegalStateException("Missing role for contract test setup: " + roleName)))
+                .collect(java.util.stream.Collectors.toSet()));
+        userRepository.save(user);
+    }
 }

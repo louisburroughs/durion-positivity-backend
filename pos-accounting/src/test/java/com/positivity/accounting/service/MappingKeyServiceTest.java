@@ -6,10 +6,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
+import com.positivity.accounting.internal.dto.MappingKeyListResponse;
+import com.positivity.accounting.internal.dto.MappingKeyResponse;
+import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
+import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import com.positivity.accounting.internal.service.MappingKeyServiceImpl;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,20 +33,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
-import com.positivity.accounting.internal.dto.MappingKeyListResponse;
-import com.positivity.accounting.internal.dto.MappingKeyResponse;
-import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
-import com.positivity.accounting.internal.entity.MappingKey;
-import com.positivity.accounting.internal.entity.PostingCategory;
-import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.accounting.internal.repository.MappingKeyRepository;
-import com.positivity.accounting.internal.repository.PostingCategoryRepository;
-import com.positivity.accounting.internal.service.MappingKeyServiceImpl;
-
 /**
  * Unit tests for MappingKeyService
- * 
+ *
  * Tests CRUD operations, uniqueness validation, and deactivation
  * with active mapping checks.
  */
@@ -93,7 +91,8 @@ class MappingKeyServiceTest {
         request.setCreatedBy("test-user");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "NEW_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "NEW_KEY"))
+                .thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> {
             MappingKey key = inv.getArgument(0);
             key.setMappingKeyId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -121,7 +120,8 @@ class MappingKeyServiceTest {
         request.setCreatedBy("test-user");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY"))
+                .thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
@@ -157,7 +157,8 @@ class MappingKeyServiceTest {
         request.setKeyName("EXISTING_KEY");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "EXISTING_KEY")).thenReturn(true);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "EXISTING_KEY"))
+                .thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> service.createMappingKey(request))
@@ -210,7 +211,8 @@ class MappingKeyServiceTest {
 
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "UPDATED_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "UPDATED_KEY"))
+                .thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
@@ -252,7 +254,8 @@ class MappingKeyServiceTest {
 
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "OTHER_KEY")).thenReturn(true);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "OTHER_KEY"))
+                .thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> service.updateMappingKey(testMappingKeyId, request))
@@ -271,11 +274,11 @@ class MappingKeyServiceTest {
         Page<MappingKey> page = new PageImpl<>(keys);
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        when(mappingKeyRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
 
         // Act
-        MappingKeyListResponse response = service.listMappingKeysByCategory(
-                testCategoryId, 0, 10, "keyName", null);
+        MappingKeyListResponse response = service.listMappingKeysByCategory(testCategoryId, 0, 10, "keyName", null);
 
         // Assert
         assertThat(response.getResults()).hasSize(1);
@@ -292,8 +295,7 @@ class MappingKeyServiceTest {
                 .thenReturn(new PageImpl<>(List.of(testMappingKey)));
 
         // Act
-        MappingKeyListResponse response = service.listMappingKeysByCategory(
-                testCategoryId, 0, 10, "keyName", true);
+        MappingKeyListResponse response = service.listMappingKeysByCategory(testCategoryId, 0, 10, "keyName", true);
 
         // Assert
         assertThat(response.getResults()).hasSize(1);
@@ -307,7 +309,8 @@ class MappingKeyServiceTest {
         // Arrange
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(testMappingKeyId)).thenReturn(0L);
+        when(glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(testMappingKeyId))
+                .thenReturn(0L);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
@@ -324,7 +327,8 @@ class MappingKeyServiceTest {
         // Arrange
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(testMappingKeyId)).thenReturn(5L);
+        when(glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(testMappingKeyId))
+                .thenReturn(5L);
 
         // Act & Assert
         assertThatThrownBy(() -> service.deactivateMappingKey(testMappingKeyId))

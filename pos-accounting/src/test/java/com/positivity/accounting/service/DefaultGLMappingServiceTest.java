@@ -1,9 +1,5 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
-import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,13 +10,24 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
+import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
+import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
+import com.positivity.accounting.internal.entity.DefaultGLMapping;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
+import com.positivity.accounting.internal.service.GLAccountServiceImpl;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,16 +42,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-
-import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
-import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
-import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
-import com.positivity.accounting.internal.entity.DefaultGLMapping;
-import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.enums.AccountType;
-import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 
 /**
  * Unit tests for DefaultGLMappingServiceImpl.
@@ -147,10 +144,12 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should create mapping when GL accounts are valid")
         void shouldCreateMappingWhenAccountsAreValid() {
             // Arrange
-            doNothing().when(glAccountService).validateAccountForPosting(eq(DEBIT_ACCOUNT_ID),
-                    any(LocalDateTime.class));
-            doNothing().when(glAccountService).validateAccountForPosting(eq(CREDIT_ACCOUNT_ID),
-                    any(LocalDateTime.class));
+            doNothing()
+                    .when(glAccountService)
+                    .validateAccountForPosting(eq(DEBIT_ACCOUNT_ID), any(LocalDateTime.class));
+            doNothing()
+                    .when(glAccountService)
+                    .validateAccountForPosting(eq(CREDIT_ACCOUNT_ID), any(LocalDateTime.class));
             when(repository.save(any(DefaultGLMapping.class))).thenReturn(savedMapping);
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
@@ -209,7 +208,8 @@ class DefaultGLMappingServiceTest {
         void shouldThrowWhenDebitAccountValidationFails() {
             // Arrange
             doThrow(new IllegalArgumentException("Account 1200 is not yet active on 2026-02-11T00:00"))
-                    .when(glAccountService).validateAccountForPosting(eq(DEBIT_ACCOUNT_ID), any(LocalDateTime.class));
+                    .when(glAccountService)
+                    .validateAccountForPosting(eq(DEBIT_ACCOUNT_ID), any(LocalDateTime.class));
 
             // Act & Assert
             assertThatThrownBy(() -> service.createDefaultMapping(validRequest))
@@ -223,10 +223,12 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should throw when credit account validation fails")
         void shouldThrowWhenCreditAccountValidationFails() {
             // Arrange
-            doNothing().when(glAccountService).validateAccountForPosting(eq(DEBIT_ACCOUNT_ID),
-                    any(LocalDateTime.class));
+            doNothing()
+                    .when(glAccountService)
+                    .validateAccountForPosting(eq(DEBIT_ACCOUNT_ID), any(LocalDateTime.class));
             doThrow(new IllegalArgumentException("Account 4000 is inactive"))
-                    .when(glAccountService).validateAccountForPosting(eq(CREDIT_ACCOUNT_ID), any(LocalDateTime.class));
+                    .when(glAccountService)
+                    .validateAccountForPosting(eq(CREDIT_ACCOUNT_ID), any(LocalDateTime.class));
 
             // Act & Assert
             assertThatThrownBy(() -> service.createDefaultMapping(validRequest))
@@ -346,7 +348,8 @@ class DefaultGLMappingServiceTest {
             // Arrange
             when(repository.findById(MAPPING_ID)).thenReturn(Optional.of(savedMapping));
             doThrow(new IllegalArgumentException("GL account not found"))
-                    .when(glAccountService).validateAccountForPosting(any(), any());
+                    .when(glAccountService)
+                    .validateAccountForPosting(any(), any());
 
             // Act & Assert
             assertThatThrownBy(() -> service.updateDefaultMapping(MAPPING_ID, validRequest))
@@ -497,8 +500,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return mapping when found for event type and org")
         void shouldReturnMappingWhenFoundForEventTypeAndOrg() {
             // Arrange
-            when(repository.findActiveDefaultForEvent(EVENT_TYPE, ORG_ID))
-                    .thenReturn(Optional.of(savedMapping));
+            when(repository.findActiveDefaultForEvent(EVENT_TYPE, ORG_ID)).thenReturn(Optional.of(savedMapping));
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
 
@@ -515,8 +517,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return null when no mapping found")
         void shouldReturnNullWhenNoMappingFound() {
             // Arrange
-            when(repository.findActiveDefaultForEvent("UNKNOWN_EVENT", ORG_ID))
-                    .thenReturn(Optional.empty());
+            when(repository.findActiveDefaultForEvent("UNKNOWN_EVENT", ORG_ID)).thenReturn(Optional.empty());
 
             // Act
             DefaultGLMappingResponse response = service.findActiveDefaultForEvent("UNKNOWN_EVENT", ORG_ID);
@@ -541,8 +542,7 @@ class DefaultGLMappingServiceTest {
             globalMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setModifiedBy("system");
 
-            when(repository.findActiveDefaultForEvent(EVENT_TYPE, null))
-                    .thenReturn(Optional.of(globalMapping));
+            when(repository.findActiveDefaultForEvent(EVENT_TYPE, null)).thenReturn(Optional.of(globalMapping));
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
 
@@ -563,8 +563,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return list of active mappings for event type")
         void shouldReturnActiveMappingsForEventType() {
             // Arrange
-            when(repository.findByEventTypeAndActiveTrue(EVENT_TYPE))
-                    .thenReturn(List.of(savedMapping));
+            when(repository.findByEventTypeAndActiveTrue(EVENT_TYPE)).thenReturn(List.of(savedMapping));
             when(glAccountRepository.findAllById(any())).thenReturn(List.of(debitAccount, creditAccount));
 
             // Act
@@ -579,8 +578,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return empty list when no active mappings exist")
         void shouldReturnEmptyListWhenNoActiveMappings() {
             // Arrange
-            when(repository.findByEventTypeAndActiveTrue("NO_SUCH_EVENT"))
-                    .thenReturn(List.of());
+            when(repository.findByEventTypeAndActiveTrue("NO_SUCH_EVENT")).thenReturn(List.of());
 
             // Act
             List<DefaultGLMappingResponse> responses = service.findByEventType("NO_SUCH_EVENT");
@@ -598,8 +596,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return active mappings for organization")
         void shouldReturnActiveMappingsForOrganization() {
             // Arrange
-            when(repository.findByOrganizationIdAndActiveTrue(ORG_ID))
-                    .thenReturn(List.of(savedMapping));
+            when(repository.findByOrganizationIdAndActiveTrue(ORG_ID)).thenReturn(List.of(savedMapping));
             when(glAccountRepository.findAllById(any())).thenReturn(List.of(debitAccount, creditAccount));
 
             // Act
@@ -615,8 +612,7 @@ class DefaultGLMappingServiceTest {
         void shouldReturnEmptyForOrgWithNoMappings() {
             // Arrange
             UUID emptyOrg = nextUuid();
-            when(repository.findByOrganizationIdAndActiveTrue(emptyOrg))
-                    .thenReturn(List.of());
+            when(repository.findByOrganizationIdAndActiveTrue(emptyOrg)).thenReturn(List.of());
 
             // Act
             List<DefaultGLMappingResponse> responses = service.findByOrganization(emptyOrg);
@@ -646,8 +642,7 @@ class DefaultGLMappingServiceTest {
             globalMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setModifiedBy("system");
 
-            when(repository.findAllGlobalDefaults())
-                    .thenReturn(List.of(savedMapping, globalMapping));
+            when(repository.findAllGlobalDefaults()).thenReturn(List.of(savedMapping, globalMapping));
             when(glAccountRepository.findAllById(any())).thenReturn(List.of(debitAccount, creditAccount));
 
             // Act

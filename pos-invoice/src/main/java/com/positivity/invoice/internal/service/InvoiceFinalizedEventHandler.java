@@ -1,19 +1,17 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
+import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-
-import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
-import com.positivity.invoice.internal.entity.Invoice;
-import com.positivity.invoice.internal.enums.InvoiceStatus;
-import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.shared.id.UUIDv7Generator;
 
 /**
  * CAP-248 AC5: GL posting handler — idempotent by invoiceId, retry logic TBD.
@@ -52,13 +50,19 @@ public class InvoiceFinalizedEventHandler {
         UUID invoiceId = event.invoiceId();
 
         if (log.isInfoEnabled()) {
-            log.info("GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
-                    maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
+            log.info(
+                    "GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
+                    maskForLog(invoiceId),
+                    maskForLog(event.workorderId()),
+                    event.grandTotal());
         }
 
-        invoiceRepository.findById(invoiceId).ifPresentOrElse(
-                invoice -> postToGl(invoice, event),
-                () -> log.warn("GL posting skipped — invoice not found: invoiceId(mask)={}", maskForLog(invoiceId)));
+        invoiceRepository
+                .findById(invoiceId)
+                .ifPresentOrElse(
+                        invoice -> postToGl(invoice, event),
+                        () -> log.warn(
+                                "GL posting skipped — invoice not found: invoiceId(mask)={}", maskForLog(invoiceId)));
     }
 
     private void postToGl(@NonNull Invoice invoice, @NonNull InvoiceFinalizedEvent event) {
@@ -77,12 +81,15 @@ public class InvoiceFinalizedEventHandler {
             invoice.setGlEntryId(glEntryId);
             invoiceRepository.save(invoice);
             if (log.isInfoEnabled()) {
-                log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
-                        maskForLog(invoice.getId()), maskForLog(glEntryId), event.grandTotal());
+                log.info(
+                        "GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
+                        maskForLog(invoice.getId()),
+                        maskForLog(glEntryId),
+                        event.grandTotal());
             }
         } catch (Exception e) {
-            log.error("GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(),
-                    e);
+            log.error(
+                    "GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(), e);
 
             invoice.setStatus(InvoiceStatus.ERROR);
             invoiceRepository.save(invoice);
@@ -93,10 +100,8 @@ public class InvoiceFinalizedEventHandler {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

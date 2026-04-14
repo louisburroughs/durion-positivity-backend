@@ -90,5 +90,4 @@ public class SecurityServiceException extends RuntimeException {
     public boolean isServerError() {
         return httpStatus >= 500 && httpStatus < 600;
     }
-
 }

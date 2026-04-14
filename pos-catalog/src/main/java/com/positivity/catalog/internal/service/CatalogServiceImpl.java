@@ -56,7 +56,9 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     public List<ProductDto> getProductsByName(String name) {
-        return productRepository.findByName(name).stream().map(this::toProductDto).toList();
+        return productRepository.findByName(name).stream()
+                .map(this::toProductDto)
+                .toList();
     }
 
     public Optional<ServiceDto> getServiceById(UUID serviceId) {
@@ -64,7 +66,9 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     public List<ServiceDto> getServicesByName(String name) {
-        return serviceRepository.findByName(name).stream().map(this::toServiceDto).toList();
+        return serviceRepository.findByName(name).stream()
+                .map(this::toServiceDto)
+                .toList();
     }
 
     public Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId) {
@@ -72,7 +76,9 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     public List<NonInventoryProductDto> getNonInventoryProductsByName(String name) {
-        return nonInventoryProductRepository.findByName(name).stream().map(this::toNonInventoryProductDto).toList();
+        return nonInventoryProductRepository.findByName(name).stream()
+                .map(this::toNonInventoryProductDto)
+                .toList();
     }
 
     public Optional<CatalogDto> getCatalogById(UUID catalogId) {
@@ -80,7 +86,9 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     public List<CatalogDto> getCatalogsByName(String name) {
-        return catalogRepository.findByNameContainingIgnoreCase(name).stream().map(this::toCatalogDto).toList();
+        return catalogRepository.findByNameContainingIgnoreCase(name).stream()
+                .map(this::toCatalogDto)
+                .toList();
     }
 
     public CatalogItemResponseDto addCatalogItem(String type, CatalogItemRequestDto request) {
@@ -93,8 +101,8 @@ public class CatalogServiceImpl implements CatalogService {
         };
     }
 
-    public Optional<CatalogItemResponseDto> updateCatalogItem(String type, UUID catalogId,
-            CatalogItemRequestDto request) {
+    public Optional<CatalogItemResponseDto> updateCatalogItem(
+            String type, UUID catalogId, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
             case PRODUCT ->
                 productRepository.findById(catalogId).map(existing -> {
@@ -360,12 +368,24 @@ public class CatalogServiceImpl implements CatalogService {
         dto.setId(entity.getId());
         dto.setName(entity.getName());
         dto.setDescription(entity.getDescription());
-        dto.setProductIds(entity.getProducts() == null ? Collections.emptyList()
-                : entity.getProducts().stream().map(ProductEntity::getId).toList());
-        dto.setServiceIds(entity.getServices() == null ? Collections.emptyList()
-                : entity.getServices().stream().map(ServiceEntity::getId).toList());
-        dto.setNonInventoryProductIds(entity.getNonInventoryProducts() == null ? Collections.emptyList()
-                : entity.getNonInventoryProducts().stream().map(NonInventoryProductEntity::getId).toList());
+        dto.setProductIds(
+                entity.getProducts() == null
+                        ? Collections.emptyList()
+                        : entity.getProducts().stream()
+                                .map(ProductEntity::getId)
+                                .toList());
+        dto.setServiceIds(
+                entity.getServices() == null
+                        ? Collections.emptyList()
+                        : entity.getServices().stream()
+                                .map(ServiceEntity::getId)
+                                .toList());
+        dto.setNonInventoryProductIds(
+                entity.getNonInventoryProducts() == null
+                        ? Collections.emptyList()
+                        : entity.getNonInventoryProducts().stream()
+                                .map(NonInventoryProductEntity::getId)
+                                .toList());
         return dto;
     }
 

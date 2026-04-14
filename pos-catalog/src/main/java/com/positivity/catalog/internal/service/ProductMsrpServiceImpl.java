@@ -1,21 +1,5 @@
 package com.positivity.catalog.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
 import com.positivity.catalog.internal.dto.ProductMsrpDto;
 import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
@@ -27,9 +11,22 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductMsrpService;
-
 import jakarta.persistence.OptimisticLockException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 @Service
@@ -47,16 +44,12 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         validateAmountAndCurrency(request.getAmount(), request.getCurrency());
 
         if (request.getEffectiveEndDate() == null
-            && productMsrpRepository.countByProduct_IdAndEffectiveEndDateIsNull(productId) > 0) {
-            throw new CatalogValidationException(
-                    "Only one open-ended MSRP record is allowed per product.");
+                && productMsrpRepository.countByProduct_IdAndEffectiveEndDateIsNull(productId) > 0) {
+            throw new CatalogValidationException("Only one open-ended MSRP record is allowed per product.");
         }
 
         var overlaps = productMsrpRepository.findOverlapping(
-                productId,
-                request.getEffectiveStartDate(),
-                request.getEffectiveEndDate(),
-                null);
+                productId, request.getEffectiveStartDate(), request.getEffectiveEndDate(), null);
         if (!overlaps.isEmpty()) {
             throw new CatalogBusinessRuleException("MSRP dates overlap with existing record.");
         }
@@ -74,15 +67,16 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
 
     @Override
     @Transactional
-    public ProductMsrpDto updateMsrp(@NonNull UUID productId, @NonNull UUID msrpId,
-            @NonNull UpdateMsrpRequestDto request) {
+    public ProductMsrpDto updateMsrp(
+            @NonNull UUID productId, @NonNull UUID msrpId, @NonNull UpdateMsrpRequestDto request) {
         // 1) Validate basic request integrity before touching persistence.
         requireProduct(productId);
         validateDates(request.getEffectiveStartDate(), request.getEffectiveEndDate());
         validateAmountAndCurrency(request.getAmount(), request.getCurrency());
 
         // 2) Load target record and enforce ownership by product.
-        ProductMsrpEntity entity = productMsrpRepository.findById(msrpId)
+        ProductMsrpEntity entity = productMsrpRepository
+                .findById(msrpId)
                 .orElseThrow(() -> new CatalogNotFoundException("MSRP record not found: " + msrpId));
 
         if (entity.getProduct() == null || !entity.getProduct().getId().equals(productId)) {
@@ -107,17 +101,13 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
             boolean entityCurrentlyOpenEnded = entity.getEffectiveEndDate() == null;
             long otherOpenEndedCount = entityCurrentlyOpenEnded ? openEndedCount - 1 : openEndedCount;
             if (otherOpenEndedCount > 0) {
-                throw new CatalogValidationException(
-                        "Only one open-ended MSRP record is allowed per product.");
+                throw new CatalogValidationException("Only one open-ended MSRP record is allowed per product.");
             }
         }
 
         // 6) Reject updates that create an overlapping effective date window.
         var overlaps = productMsrpRepository.findOverlapping(
-                productId,
-                request.getEffectiveStartDate(),
-                request.getEffectiveEndDate(),
-                msrpId);
+                productId, request.getEffectiveStartDate(), request.getEffectiveEndDate(), msrpId);
         if (!overlaps.isEmpty()) {
             throw new CatalogBusinessRuleException("MSRP dates overlap with existing record.");
         }
@@ -143,14 +133,14 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     @Transactional(readOnly = true)
     public List<ProductMsrpDto> getAllMsrp(@NonNull UUID productId) {
         requireProduct(productId);
-        return productMsrpRepository.findByProduct_IdOrderByEffectiveStartDateDesc(productId)
-                .stream()
+        return productMsrpRepository.findByProduct_IdOrderByEffectiveStartDateDesc(productId).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     private ProductEntity requireProduct(UUID productId) {
-        return productRepository.findById(productId)
+        return productRepository
+                .findById(productId)
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 
@@ -179,7 +169,8 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     private ProductMsrpDto toDto(ProductMsrpEntity entity) {
         ProductMsrpDto dto = new ProductMsrpDto();
         dto.setMsrpId(entity.getMsrpId());
-        dto.setProductId(entity.getProduct() == null ? null : entity.getProduct().getId());
+        dto.setProductId(
+                entity.getProduct() == null ? null : entity.getProduct().getId());
         dto.setAmount(entity.getAmount().toPlainString());
         dto.setCurrency(entity.getCurrency());
         dto.setEffectiveStartDate(entity.getEffectiveStartDate());

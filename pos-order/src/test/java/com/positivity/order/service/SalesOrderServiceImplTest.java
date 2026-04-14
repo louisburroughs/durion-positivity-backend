@@ -1,5 +1,11 @@
 package com.positivity.order.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
+
 import com.positivity.order.internal.client.InventoryPort;
 import com.positivity.order.internal.client.InventoryResult;
 import com.positivity.order.internal.client.PricingPort;
@@ -17,26 +23,19 @@ import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.service.SalesOrderServiceImpl;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link SalesOrderServiceImpl} covering all Story #21
@@ -72,11 +71,7 @@ class SalesOrderServiceImplTest {
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
-                salesOrderRepository,
-                salesOrderLineRepository,
-                pricingPort,
-                inventoryPort,
-                sourceDocumentPort);
+                salesOrderRepository, salesOrderLineRepository, pricingPort, inventoryPort, sourceDocumentPort);
     }
 
     // -----------------------------------------------------------------------
@@ -197,8 +192,7 @@ class SalesOrderServiceImplTest {
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
-        when(pricingPort.resolvePrice("ABC-123"))
-                .thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
         when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
 
         // when
@@ -244,8 +238,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
-        when(pricingPort.resolvePrice("ABC-123"))
-                .thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
         when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
 
         // when
@@ -277,8 +270,7 @@ class SalesOrderServiceImplTest {
                 .subtotal(BigDecimal.ZERO)
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
-        when(pricingPort.resolvePrice("INVALID-SKU"))
-                .thenReturn(new PricingResult(BigDecimal.ZERO, false, false));
+        when(pricingPort.resolvePrice("INVALID-SKU")).thenReturn(new PricingResult(BigDecimal.ZERO, false, false));
 
         // when / then
         assertThatThrownBy(() -> salesOrderService.addItem(orderId, "INVALID-SKU", 1, null, null))
@@ -525,8 +517,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"),
-                        "EST-LINE-001")));
+                .thenReturn(List.of(
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), "EST-LINE-001")));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -577,8 +569,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"),
-                        "EST-LINE-002")));
+                .thenReturn(
+                        List.of(new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"), "EST-LINE-002")));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -630,8 +622,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"),
-                        estimateLineId)));
+                .thenReturn(List.of(
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), estimateLineId)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -678,8 +670,7 @@ class SalesOrderServiceImplTest {
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(cachedPriceLine);
-        when(pricingPort.resolvePrice("ABC-123"))
-                .thenReturn(new PricingResult(new BigDecimal("10.5000"), true, true));
+        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), true, true));
         when(inventoryPort.checkAvailability("ABC-123", 1)).thenReturn(new InventoryResult(true, 100));
 
         // when
@@ -730,12 +721,13 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
 
         try (var mockStatic = mockStatic(SecurityContextHelper.class)) {
-            mockStatic.when(() -> SecurityContextHelper.hasAuthority("order:line:enter_manual_price"))
+            mockStatic
+                    .when(() -> SecurityContextHelper.hasAuthority("order:line:enter_manual_price"))
                     .thenReturn(true);
 
             // when
-            SalesOrderLineSummary result = salesOrderService.addItem(
-                    orderId, "ABC-123", 1, "Manual entry", new BigDecimal("15.00"));
+            SalesOrderLineSummary result =
+                    salesOrderService.addItem(orderId, "ABC-123", 1, "Manual entry", new BigDecimal("15.00"));
 
             // then
             assertThat(result.priceSource()).isEqualTo("MANUAL");
@@ -762,12 +754,13 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
         try (var mockStatic = mockStatic(SecurityContextHelper.class)) {
-            mockStatic.when(() -> SecurityContextHelper.hasAuthority("order:line:enter_manual_price"))
+            mockStatic
+                    .when(() -> SecurityContextHelper.hasAuthority("order:line:enter_manual_price"))
                     .thenReturn(false);
 
             // when / then
             assertThatThrownBy(() -> salesOrderService.addItem(
-                    orderId, "ABC-123", 1, "need manual price", new BigDecimal("15.00")))
+                            orderId, "ABC-123", 1, "need manual price", new BigDecimal("15.00")))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         }
     }
@@ -803,8 +796,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(anonymousOrder));
 
         // when / then – must throw with a message about requiring customer assignment
-        assertThatThrownBy(
-                () -> salesOrderService.linkSource(orderId, "WORKORDER", "PROMO-001"))
+        assertThatThrownBy(() -> salesOrderService.linkSource(orderId, "WORKORDER", "PROMO-001"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageMatching("(?i).*customer.*");
     }
@@ -823,8 +815,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         // when / then
-        assertThatThrownBy(() -> salesOrderService.getOrder(unknownId))
-                .isInstanceOf(SalesOrderNotFoundException.class);
+        assertThatThrownBy(() -> salesOrderService.getOrder(unknownId)).isInstanceOf(SalesOrderNotFoundException.class);
     }
 
     // -----------------------------------------------------------------------
@@ -1029,8 +1020,8 @@ class SalesOrderServiceImplTest {
         // source document returns the same line that is already linked → should be
         // deduped
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(new SourceDocumentLine(
-                        "TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));
+                .thenReturn(List.of(
+                        new SourceDocumentLine("TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);

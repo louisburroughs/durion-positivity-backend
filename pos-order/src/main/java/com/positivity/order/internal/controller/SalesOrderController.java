@@ -44,8 +44,8 @@ public class SalesOrderController {
     @PostMapping("/carts")
     @EmitEvent(id = "ORDER_CART_CREATE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> createCart(@Valid @RequestBody CreateCartRequest request) {
-        SalesOrderSummary created = salesOrderService.createCart(request.getClerkId(), request.getTerminalId(),
-                request.getCustomerId(), request.getVehicleId());
+        SalesOrderSummary created = salesOrderService.createCart(
+                request.getClerkId(), request.getTerminalId(), request.getCustomerId(), request.getVehicleId());
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
@@ -53,10 +53,13 @@ public class SalesOrderController {
     @PostMapping("/carts/{orderId}/items")
     @EmitEvent(id = "ORDER_CART_ITEM_ADD", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> addItem(
-            @PathVariable UUID orderId,
-            @Valid @RequestBody AddItemRequest request) {
-        SalesOrderLineSummary line = salesOrderService.addItem(orderId, request.getItemSku(), request.getQuantity(),
-                request.getReasonCode(), request.getManualPrice());
+            @PathVariable UUID orderId, @Valid @RequestBody AddItemRequest request) {
+        SalesOrderLineSummary line = salesOrderService.addItem(
+                orderId,
+                request.getItemSku(),
+                request.getQuantity(),
+                request.getReasonCode(),
+                request.getManualPrice());
         return ResponseEntity.status(HttpStatus.CREATED).body(toLineResponse(line));
     }
 
@@ -64,9 +67,7 @@ public class SalesOrderController {
     @PutMapping("/carts/{orderId}/items/{lineId}")
     @EmitEvent(id = "ORDER_CART_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> updateItemQuantity(
-            @PathVariable UUID orderId,
-            @PathVariable UUID lineId,
-            @Valid @RequestBody UpdateItemRequest request) {
+            @PathVariable UUID orderId, @PathVariable UUID lineId, @Valid @RequestBody UpdateItemRequest request) {
         SalesOrderLineSummary line = salesOrderService.updateItemQuantity(orderId, lineId, request.getQuantity());
         return ResponseEntity.ok(toLineResponse(line));
     }
@@ -89,17 +90,15 @@ public class SalesOrderController {
     @PatchMapping("/carts/{orderId}/source")
     @EmitEvent(id = "ORDER_LINK_SOURCE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> linkSource(
-            @PathVariable UUID orderId,
-            @Valid @RequestBody LinkSourceRequest request) {
-        SalesOrderSummary updated = salesOrderService.linkSource(orderId, request.getSourceType(),
-                request.getSourceId());
+            @PathVariable UUID orderId, @Valid @RequestBody LinkSourceRequest request) {
+        SalesOrderSummary updated =
+                salesOrderService.linkSource(orderId, request.getSourceType(), request.getSourceId());
         return ResponseEntity.ok(toResponse(updated));
     }
 
     private SalesOrderResponse toResponse(SalesOrderSummary summary) {
-        List<SalesOrderLineResponse> lines = summary.lines().stream()
-                .map(this::toLineResponse)
-                .toList();
+        List<SalesOrderLineResponse> lines =
+                summary.lines().stream().map(this::toLineResponse).toList();
         return SalesOrderResponse.builder()
                 .orderId(summary.orderId())
                 .customerId(summary.customerId())

@@ -1,24 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.event.EventListener;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.client.RestClient;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
@@ -49,9 +30,25 @@ import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.service.WorkorderService;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.client.RestClient;
 
 @Service
 @Slf4j
@@ -76,6 +73,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Value("${customer.service.url:http://localhost:8080/v1/customers}")
     private String customerServiceUrl;
+
     @Value("${customer.approval.service.url:http://localhost:8080/v1/approvals}")
     private String customerApprovalServiceUrl;
 
@@ -97,7 +95,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private Workorder doCreateWorkorder(UUID estimateId, UUID customerId) {
         Estimate estimate = estimateId != null
-                ? estimateRepository.findById(estimateId)
+                ? estimateRepository
+                        .findById(estimateId)
                         .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
                 : null;
 
@@ -112,9 +111,10 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
-                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
-                        ? new ArrayList<>(estimate.getCrmContactIds())
-                        : new ArrayList<>())
+                .crmContactIds(
+                        estimate != null && estimate.getCrmContactIds() != null
+                                ? new ArrayList<>(estimate.getCrmContactIds())
+                                : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
     }
@@ -151,12 +151,15 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
-        Optional<UUID> existingWorkorderId = idempotencyService
-                .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
+        Optional<UUID> existingWorkorderId =
+                idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
         if (existingWorkorderId.isPresent()) {
-            log.info("Idempotent request detected for key {}; returning existing workorder {}",
-                    idempotencyKey, existingWorkorderId.get());
-            Workorder workorder = workorderRepository.findById(existingWorkorderId.get())
+            log.info(
+                    "Idempotent request detected for key {}; returning existing workorder {}",
+                    idempotencyKey,
+                    existingWorkorderId.get());
+            Workorder workorder = workorderRepository
+                    .findById(existingWorkorderId.get())
                     .orElseThrow(() -> new IllegalStateException(
                             "Idempotency key points to non-existent workorder: " + existingWorkorderId.get()));
             return Optional.of(workorder);
@@ -176,11 +179,11 @@ public class WorkorderServiceImpl implements WorkorderService {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
 
             return getExistingIdempotentWorkorder(idempotencyKey).orElseThrow(() -> {
-                log.error("Race condition detected but no existing workorder found for idempotency key {}",
+                log.error(
+                        "Race condition detected but no existing workorder found for idempotency key {}",
                         idempotencyKey);
                 return new IllegalStateException(
-                        "DataIntegrityViolationException occurred but no workorder found for key: "
-                                + idempotencyKey);
+                        "DataIntegrityViolationException occurred but no workorder found for key: " + idempotencyKey);
             });
         }
     }
@@ -205,8 +208,7 @@ public class WorkorderServiceImpl implements WorkorderService {
             // #25)
             promotionValidationService.validatePromotionPreconditions(workorder.getEstimateId());
 
-            log.info("Promotion preconditions validated successfully for estimate {}",
-                    workorder.getEstimateId());
+            log.info("Promotion preconditions validated successfully for estimate {}", workorder.getEstimateId());
         }
 
         // Check customer approval from pos-customer-approval (legacy)
@@ -220,8 +222,10 @@ public class WorkorderServiceImpl implements WorkorderService {
         // CAP:004 Story #27 - Copy estimate items to workorder items if promoting from
         // estimate
         if (savedWorkorder.getEstimateId() != null) {
-            log.info("Copying estimate items to workorder items for estimate {} and workorder {}",
-                    savedWorkorder.getEstimateId(), savedWorkorder.getId());
+            log.info(
+                    "Copying estimate items to workorder items for estimate {} and workorder {}",
+                    savedWorkorder.getEstimateId(),
+                    savedWorkorder.getId());
             copyEstimateItemsToWorkorder(savedWorkorder);
         }
 
@@ -247,16 +251,15 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // CAP:004 Story #29: Fetch only APPROVED and non-deleted items to support
         // partial approval
-        List<EstimateItem> estimateItems = estimateItemRepository
-                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
+        List<EstimateItem> estimateItems = estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(
+                estimateId, ApprovalStatus.APPROVED);
 
         if (estimateItems.isEmpty()) {
             log.warn("No approved estimate items found for estimate {}, no workorder items created", estimateId);
             return;
         }
 
-        log.info("Found {} approved estimate items to copy to workorder {}",
-                estimateItems.size(), workorder.getId());
+        log.info("Found {} approved estimate items to copy to workorder {}", estimateItems.size(), workorder.getId());
 
         List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = new ArrayList<>();
         List<WorkorderPart> partItems = new ArrayList<>();
@@ -264,21 +267,21 @@ public class WorkorderServiceImpl implements WorkorderService {
         for (EstimateItem estimateItem : estimateItems) {
             if (estimateItem.getItemType() == EstimateItemType.LABOR) {
                 // Create WorkorderServiceLine for LABOR items
-                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService = com.positivity.workorder.internal.entity.WorkorderServiceLine
-                        .builder()
-                        .workOrder(workorder)
-                        .description(estimateItem.getDescription())
-                        .quantity(estimateItem.getQuantity())
-                        .unitPrice(estimateItem.getUnitPrice())
-                        .lineTotal(estimateItem.getLineTotal())
-                        .taxCode(estimateItem.getTaxCode())
-                        .originEstimateItem(estimateItem)
-                        .serviceEntityId(estimateItem.getServiceId())
-                        .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
-                        .declined(false)
-                        .isEmergencySafety(false)
-                        .photoNotPossible(false)
-                        .build();
+                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService =
+                        com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
+                                .workOrder(workorder)
+                                .description(estimateItem.getDescription())
+                                .quantity(estimateItem.getQuantity())
+                                .unitPrice(estimateItem.getUnitPrice())
+                                .lineTotal(estimateItem.getLineTotal())
+                                .taxCode(estimateItem.getTaxCode())
+                                .originEstimateItem(estimateItem)
+                                .serviceEntityId(estimateItem.getServiceId())
+                                .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
+                                .declined(false)
+                                .isEmergencySafety(false)
+                                .photoNotPossible(false)
+                                .build();
 
                 laborItems.add(workorderService);
 
@@ -303,8 +306,10 @@ public class WorkorderServiceImpl implements WorkorderService {
 
                 partItems.add(workorderPart);
             } else {
-                log.warn("Unsupported EstimateItemType {} for estimate item {}, skipping",
-                        estimateItem.getItemType(), estimateItem.getId());
+                log.warn(
+                        "Unsupported EstimateItemType {} for estimate item {}, skipping",
+                        estimateItem.getItemType(),
+                        estimateItem.getId());
             }
         }
 
@@ -312,20 +317,28 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (!laborItems.isEmpty()) {
             workorderServiceRepository.saveAll(laborItems);
             log.info("Persisted {} labor items for workorder {}", laborItems.size(), workorder.getId());
-            laborItems.forEach(item -> log.debug("Created workorder service item with ID {}: from estimate item {}",
-                    item.getId(), item.getOriginEstimateItemId()));
+            laborItems.forEach(item -> log.debug(
+                    "Created workorder service item with ID {}: from estimate item {}",
+                    item.getId(),
+                    item.getOriginEstimateItemId()));
         }
 
         // Persist all part items
         if (!partItems.isEmpty()) {
             workorderPartRepository.saveAll(partItems);
             log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
-            partItems.forEach(item -> log.debug("Created workorder part item with ID {}: from estimate item {}",
-                    item.getId(), item.getOriginEstimateItemId()));
+            partItems.forEach(item -> log.debug(
+                    "Created workorder part item with ID {}: from estimate item {}",
+                    item.getId(),
+                    item.getOriginEstimateItemId()));
         }
 
-        log.info("Successfully copied {} estimate items to workorder {} ({} labor, {} parts)",
-                estimateItems.size(), workorder.getId(), laborItems.size(), partItems.size());
+        log.info(
+                "Successfully copied {} estimate items to workorder {} ({} labor, {} parts)",
+                estimateItems.size(),
+                workorder.getId(),
+                laborItems.size(),
+                partItems.size());
     }
 
     @Override
@@ -335,7 +348,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private boolean checkCustomerRequirements(UUID customerId) {
         try {
-            Boolean result = restClient.get()
+            Boolean result = restClient
+                    .get()
                     .uri(customerServiceUrl + "/" + customerId + "/requirements-met")
                     .retrieve()
                     .body(Boolean.class);
@@ -348,7 +362,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private boolean checkCustomerApproval(UUID approvalId) {
         try {
-            Boolean result = restClient.get()
+            Boolean result = restClient
+                    .get()
                     .uri(customerApprovalServiceUrl + "/" + approvalId + "/is-approved")
                     .retrieve()
                     .body(Boolean.class);
@@ -367,9 +382,15 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public Workorder approveWorkorder(UUID workorderId, UUID customerId, String signatureData,
-            String signatureMimeType, String signerName, String notes) {
-        Workorder workorder = workorderRepository.findById(workorderId)
+    public Workorder approveWorkorder(
+            UUID workorderId,
+            UUID customerId,
+            String signatureData,
+            String signatureMimeType,
+            String signerName,
+            String notes) {
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
         // Validate customer matches workorder
@@ -421,14 +442,16 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     public String getCurrentWorkorderStatus(UUID workorderId) {
-        return workorderRepository.findById(workorderId)
+        return workorderRepository
+                .findById(workorderId)
                 .map(workorder -> workorder.getStatus().name())
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
     }
 
     @Override
     public Instant getCompletedAt(UUID workorderId) {
-        return workorderRepository.findById(workorderId)
+        return workorderRepository
+                .findById(workorderId)
                 .map(Workorder::getCompletedAt)
                 .orElse(null);
     }
@@ -440,7 +463,8 @@ public class WorkorderServiceImpl implements WorkorderService {
         stateMachine.completeWorkorder(workorderId, actorId, completionNotes);
 
         // Retrieve the updated work order
-        Workorder workorder = workorderRepository.findById(workorderId)
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(
                         () -> new IllegalArgumentException("Workorder not found after completion: " + workorderId));
 
@@ -449,8 +473,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Create and return the event
         String eventId = UUIDv7Generator.generate().toString();
-        String idempotencyKey = String.format("%s:completion_%s", workorderId,
-                workorder.getCompletedAt().toEpochMilli());
+        String idempotencyKey = String.format(
+                "%s:completion_%s", workorderId, workorder.getCompletedAt().toEpochMilli());
 
         WorkCompletedEvent.WorkCompletedPayload payload = WorkCompletedEvent.WorkCompletedPayload.builder()
                 .workorderId(workorderId)
@@ -474,20 +498,19 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public WorkorderService.ReopenResult reopenCompletedWorkorder(UUID workorderId, String actorId,
-            String reopenReason) {
+    public WorkorderService.ReopenResult reopenCompletedWorkorder(
+            UUID workorderId, String actorId, String reopenReason) {
         Workorder reopened = stateMachine.reopenCompletedWorkorder(workorderId, actorId, reopenReason);
         return new WorkorderService.ReopenResult(
-                reopened.getId(),
-                reopened.getStatus().name(),
-                reopened.getIsReopened(),
-                reopened.getReopenedAt());
+                reopened.getId(), reopened.getStatus().name(), reopened.getIsReopened(), reopened.getReopenedAt());
     }
 
     private Map<String, Object> buildFinalBillableScope(Workorder workorder) {
         Map<String, Object> scope = new HashMap<>();
         scope.put("workorderId", workorder.getId());
-        scope.put("services", workorder.getServices() != null ? workorder.getServices().size() : 0);
+        scope.put(
+                "services",
+                workorder.getServices() != null ? workorder.getServices().size() : 0);
         // Additional billable items (parts, labor, fees) can be added here
         scope.put("status", workorder.getStatus().toString());
         scope.put("completedAt", workorder.getCompletedAt());
@@ -505,10 +528,12 @@ public class WorkorderServiceImpl implements WorkorderService {
     @EventListener
     @Transactional
     public void onEstimateRevised(EstimateRevisedEvent event) {
-        log.info("Received EstimateRevisedEvent: estimateId={}, workorderId={}, " +
-                "oldTotal={}, newTotal={}",
-                event.getEstimateId(), event.getWorkorderId(),
-                event.getOldTotal(), event.getNewTotal());
+        log.info(
+                "Received EstimateRevisedEvent: estimateId={}, workorderId={}, " + "oldTotal={}, newTotal={}",
+                event.getEstimateId(),
+                event.getWorkorderId(),
+                event.getOldTotal(),
+                event.getNewTotal());
 
         Optional<Workorder> workorderOpt = workorderRepository.findById(event.getWorkorderId());
 
@@ -521,8 +546,10 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Only invalidate approval if Workorder is currently in APPROVED status
         if (workorder.getStatus() != WorkorderStatus.APPROVED) {
-            log.info("Workorder {} not in APPROVED status (current: {}), skipping invalidation",
-                    workorder.getId(), workorder.getStatus());
+            log.info(
+                    "Workorder {} not in APPROVED status (current: {}), skipping invalidation",
+                    workorder.getId(),
+                    workorder.getStatus());
             return;
         }
 
@@ -536,19 +563,22 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Create audit event for traceability
         createApprovalInvalidationAudit(workorder, oldStatus, event);
 
-        log.info("Workorder {} approval invalidated due to estimate revision. " +
-                "Status changed from {} to {}. Old total: {}, New total: {}",
-                workorder.getId(), oldStatus, WorkorderStatus.AWAITING_APPROVAL,
-                event.getOldTotal(), event.getNewTotal());
+        log.info(
+                "Workorder {} approval invalidated due to estimate revision. "
+                        + "Status changed from {} to {}. Old total: {}, New total: {}",
+                workorder.getId(),
+                oldStatus,
+                WorkorderStatus.AWAITING_APPROVAL,
+                event.getOldTotal(),
+                event.getNewTotal());
     }
 
     /**
      * Create audit event for approval invalidation.
      * This provides traceability for compliance and debugging.
      */
-    private void createApprovalInvalidationAudit(Workorder workorder,
-            WorkorderStatus oldStatus,
-            EstimateRevisedEvent event) {
+    private void createApprovalInvalidationAudit(
+            Workorder workorder, WorkorderStatus oldStatus, EstimateRevisedEvent event) {
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         AuditEvent audit = AuditEvent.builder()
                 .entityType("Workorder")
@@ -557,9 +587,8 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .eventTimestamp(event.getTimestamp())
                 .userId(actorId)
                 .details(String.format(
-                        "Approval invalidated due to estimate revision. " +
-                                "Previous status: %s, New status: %s, " +
-                                "EstimateId: %s, Old total: %s, New total: %s, Change: %s",
+                        "Approval invalidated due to estimate revision. " + "Previous status: %s, New status: %s, "
+                                + "EstimateId: %s, Old total: %s, New total: %s, Change: %s",
                         oldStatus.name(),
                         WorkorderStatus.AWAITING_APPROVAL.name(),
                         event.getEstimateId(),
@@ -570,8 +599,10 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         auditEventRepository.save(audit);
 
-        log.info("Created audit event for approval invalidation: workorderId={}, " +
-                "estimateId={}", workorder.getId(), event.getEstimateId());
+        log.info(
+                "Created audit event for approval invalidation: workorderId={}, " + "estimateId={}",
+                workorder.getId(),
+                event.getEstimateId());
     }
 
     @Override
@@ -581,20 +612,25 @@ public class WorkorderServiceImpl implements WorkorderService {
             throw new IllegalArgumentException("event must not be null");
         }
 
-        Workorder workorder = workorderRepository.findById(event.getWorkorderId())
+        Workorder workorder = workorderRepository
+                .findById(event.getWorkorderId())
                 .orElseThrow(() -> new WorkorderNotFoundException(event.getWorkorderId()));
 
         WorkorderStatus status = workorder.getStatus();
         if (status != WorkorderStatus.DRAFT
                 && status != WorkorderStatus.APPROVED
                 && status != WorkorderStatus.ASSIGNED) {
-            log.warn("Skipping assignment context update for workorder {} in non-updatable status {}",
-                    event.getWorkorderId(), status);
+            log.warn(
+                    "Skipping assignment context update for workorder {} in non-updatable status {}",
+                    event.getWorkorderId(),
+                    status);
             return;
         }
 
-        String oldLocationId = workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
-        String oldResourceId = workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldLocationId =
+                workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
+        String oldResourceId =
+                workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
         String oldMechanicIds = workorder.getMechanicIds();
 
         AssignmentUpdatePayload payload = event.getPayload();
@@ -603,8 +639,13 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
 
-        String details = buildAuditDetails(oldLocationId, oldResourceId, oldMechanicIds,
-                payload.getLocationId(), payload.getResourceId(), payload.getMechanicIds());
+        String details = buildAuditDetails(
+                oldLocationId,
+                oldResourceId,
+                oldMechanicIds,
+                payload.getLocationId(),
+                payload.getResourceId(),
+                payload.getMechanicIds());
 
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
@@ -616,23 +657,28 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .build();
         auditEventRepository.save(auditEvent);
 
-        log.info("Assignment context updated for workorder {}: locationId={}, resourceId={}, mechanicCount={}",
-                workorder.getId(), payload.getLocationId(), payload.getResourceId(),
+        log.info(
+                "Assignment context updated for workorder {}: locationId={}, resourceId={}, mechanicCount={}",
+                workorder.getId(),
+                payload.getLocationId(),
+                payload.getResourceId(),
                 payload.getMechanicIds() != null ? payload.getMechanicIds().size() : 0);
     }
 
     @Override
     public OperationalContextResponse getOperationalContext(@NonNull UUID workorderId) {
-        Workorder workorder = workorderRepository.findById(workorderId)
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
         log.debug("Fetching operational context for existing workorder {}", workorder.getId());
         return shopmgrClient.getOperationalContext(workorderId);
     }
 
     @Override
-    public OperationalContextResponse overrideOperationalContext(@NonNull UUID workorderId,
-            @NonNull OperationalContextOverrideRequest override) {
-        Workorder workorder = workorderRepository.findById(workorderId)
+    public OperationalContextResponse overrideOperationalContext(
+            @NonNull UUID workorderId, @NonNull OperationalContextOverrideRequest override) {
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         if (workorder.getWorkStartedAt() != null) {
@@ -665,7 +711,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     public WorkorderStartResponse startWork(@NonNull UUID workorderId, String requestedUserId, String reason) {
-        Workorder workorder = workorderRepository.findById(workorderId)
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         if (workorder.getWorkStartedAt() != null) {
@@ -718,7 +765,8 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (mechanicIds == null || mechanicIds.isBlank() || "[]".equals(mechanicIds)) {
             return Collections.emptyList();
         }
-        return java.util.Arrays.stream(mechanicIds.replace("[", "").replace("]", "").split(","))
+        return java.util.Arrays.stream(
+                        mechanicIds.replace("[", "").replace("]", "").split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(value -> value.replace("\"", ""))
@@ -727,8 +775,13 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .toList();
     }
 
-    private String buildAuditDetails(String oldLocationId, String oldResourceId, String oldMechanicIds,
-            UUID newLocationId, UUID newResourceId, List<UUID> newMechanicIds) {
+    private String buildAuditDetails(
+            String oldLocationId,
+            String oldResourceId,
+            String oldMechanicIds,
+            UUID newLocationId,
+            UUID newResourceId,
+            List<UUID> newMechanicIds) {
         String oldLocJson = oldLocationId != null ? "\"" + oldLocationId + "\"" : "null";
         String oldResJson = oldResourceId != null ? "\"" + oldResourceId + "\"" : "null";
         String oldMechJson = oldMechanicIds != null ? oldMechanicIds : "[]";

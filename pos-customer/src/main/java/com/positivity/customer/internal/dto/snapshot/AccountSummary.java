@@ -9,18 +9,23 @@ import org.jspecify.annotations.NonNull;
 public class AccountSummary {
     @NonNull
     private String partyId;
+
     @NonNull
     private String accountNumber;
+
     @NonNull
     private String accountName;
+
     @NonNull
     private String accountType;
 
-    public AccountSummary() {
-    }
+    public AccountSummary() {}
 
-    public AccountSummary(@NonNull String partyId, @NonNull String accountNumber,
-                          @NonNull String accountName, @NonNull String accountType) {
+    public AccountSummary(
+            @NonNull String partyId,
+            @NonNull String accountNumber,
+            @NonNull String accountName,
+            @NonNull String accountType) {
         this.partyId = partyId;
         this.accountNumber = accountNumber;
         this.accountName = accountName;

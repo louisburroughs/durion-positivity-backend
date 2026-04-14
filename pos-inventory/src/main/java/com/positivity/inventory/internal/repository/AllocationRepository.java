@@ -11,7 +11,5 @@ public interface AllocationRepository extends JpaRepository<AllocationEntity, UU
 
     List<AllocationEntity> findByReservation(ReservationEntity reservation);
 
-    List<AllocationEntity> findByReservationAndAllocationState(
-            ReservationEntity reservation,
-            AllocationState state);
+    List<AllocationEntity> findByReservationAndAllocationState(ReservationEntity reservation, AllocationState state);
 }

@@ -38,13 +38,15 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Thread.ofVirtual().name("vehicle-event-type-init").start(
-                () -> initializerSupport.registerEventTypes(EventTypes.all(), this::registerViaHttp));
+        Thread.ofVirtual()
+                .name("vehicle-event-type-init")
+                .start(() -> initializerSupport.registerEventTypes(EventTypes.all(), this::registerViaHttp));
     }
 
     private void registerViaHttp(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

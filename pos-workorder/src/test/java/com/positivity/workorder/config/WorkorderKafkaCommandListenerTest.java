@@ -4,25 +4,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.positivity.workorder.internal.config.KafkaCommandListener;
+import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
+import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import java.time.Clock;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
-
-import com.positivity.workorder.internal.config.KafkaCommandListener;
-import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
-import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
-
 import tools.jackson.databind.ObjectMapper;
 
 class WorkorderKafkaCommandListenerTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApplicationEventPublisher eventPublisher = org.mockito.Mockito.mock(ApplicationEventPublisher.class);
 
@@ -62,8 +59,10 @@ class WorkorderKafkaCommandListenerTest {
         AssignmentUpdatedEvent event = (AssignmentUpdatedEvent) captor.getValue();
         org.assertj.core.api.Assertions.assertThat(event.getWorkorderId()).isEqualTo(workorderId);
         org.assertj.core.api.Assertions.assertThat(event.getPayload()).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(event.getPayload().getLocationId()).isEqualTo(locationId);
-        org.assertj.core.api.Assertions.assertThat(event.getPayload().getResourceId()).isEqualTo(resourceId);
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getLocationId())
+                .isEqualTo(locationId);
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getResourceId())
+                .isEqualTo(resourceId);
     }
 
     @Test

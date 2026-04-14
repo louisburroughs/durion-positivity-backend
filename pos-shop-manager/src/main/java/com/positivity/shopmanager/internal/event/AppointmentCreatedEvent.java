@@ -10,5 +10,4 @@ public record AppointmentCreatedEvent(
         Instant startAt,
         Instant endAt,
         String createdBy,
-        String workorderLinkRef) {
-}
+        String workorderLinkRef) {}

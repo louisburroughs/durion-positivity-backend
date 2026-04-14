@@ -6,12 +6,11 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 /**
  * Request body for recording a stock movement in the inventory ledger.
@@ -42,8 +41,9 @@ public class RecordMovementRequest {
 
     @NotNull
     @Schema(
-            description = "Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.",
-            allowableValues = { "RECEIVE", "PUT_AWAY", "PICK", "ISSUE", "RETURN", "TRANSFER" })
+            description =
+                    "Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.",
+            allowableValues = {"RECEIVE", "PUT_AWAY", "PICK", "ISSUE", "RETURN", "TRANSFER"})
     MovementType movementType;
 
     @NotNull

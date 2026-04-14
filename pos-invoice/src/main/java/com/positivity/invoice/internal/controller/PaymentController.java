@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,9 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * REST controller for payment initiation and capture operations.
@@ -56,15 +55,16 @@ public class PaymentController {
     @PostMapping("/{invoiceId}/payments")
     @ResponseStatus(HttpStatus.CREATED)
     @EmitEvent(id = "INVOICE_PAYMENT_INITIATE", apiVersion = "1")
-    @Operation(summary = "Initiate card payment", description = "Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice")
+    @Operation(
+            summary = "Initiate card payment",
+            description = "Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice")
     @ApiResponse(responseCode = "201", description = "Payment intent created")
     @ApiResponse(responseCode = "400", description = "Invalid or missing required fields")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "422", description = "Payment method declined")
     @ApiResponse(responseCode = "503", description = "Payment gateway unavailable")
     public InitiatePaymentResponse initiatePayment(
-            @PathVariable @NonNull UUID invoiceId,
-            @Valid @RequestBody @NonNull InitiatePaymentRequest request) {
+            @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull InitiatePaymentRequest request) {
         return paymentService.initiatePayment(invoiceId, request);
     }
 
@@ -94,7 +94,5 @@ public class PaymentController {
      * Story #9, AC3.
      */
     private record CaptureAmountRequest(
-            @NotNull @Positive BigDecimal amount,
-            @NotBlank String captureIdempotencyKey) {
-    }
+            @NotNull @Positive BigDecimal amount, @NotBlank String captureIdempotencyKey) {}
 }

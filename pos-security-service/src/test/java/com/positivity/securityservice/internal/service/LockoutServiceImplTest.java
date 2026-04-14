@@ -7,13 +7,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.config.LockoutPolicy;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,10 +25,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-
-import com.positivity.securityservice.internal.config.LockoutPolicy;
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.UserRepository;
 
 /**
  * AUTH-003 unit tests for {@link LockoutServiceImpl}.
@@ -118,9 +116,8 @@ class LockoutServiceImplTest {
 
             lockoutService.recordFailedAttempt(userId);
 
-            verify(userRepository).save(argThat(u ->
-                    u.getFailedLoginAttempts() == 1
-                            && u.getLastFailedLoginAt() != null));
+            verify(userRepository)
+                    .save(argThat(u -> u.getFailedLoginAttempts() == 1 && u.getLastFailedLoginAt() != null));
         }
 
         @Test
@@ -136,8 +133,8 @@ class LockoutServiceImplTest {
 
             lockoutService.recordFailedAttempt(userId);
 
-            verify(userRepository).save(argThat(u ->
-                    !u.isAccountNonLocked()
+            verify(userRepository)
+                    .save(argThat(u -> !u.isAccountNonLocked()
                             && u.getLockedAt() != null
                             && u.getLockedUntil() != null
                             && u.getLockedUntil().isAfter(NOW)));
@@ -158,9 +155,10 @@ class LockoutServiceImplTest {
             lockoutService.recordFailedAttempt(userId);
 
             // lockedUntil must be > window (doubled) and <= maxBackoff from now
-            Instant minLockedUntil = NOW.plus(WINDOW.multipliedBy(BACKOFF_MULTIPLIER)).minusSeconds(5);
-            verify(userRepository).save(argThat(u ->
-                    !u.isAccountNonLocked()
+            Instant minLockedUntil =
+                    NOW.plus(WINDOW.multipliedBy(BACKOFF_MULTIPLIER)).minusSeconds(5);
+            verify(userRepository)
+                    .save(argThat(u -> !u.isAccountNonLocked()
                             && u.getLockedUntil() != null
                             && u.getLockedUntil().isAfter(minLockedUntil)));
         }
@@ -184,8 +182,8 @@ class LockoutServiceImplTest {
 
             lockoutService.recordSuccessfulLogin(userId);
 
-            verify(userRepository).save(argThat(u ->
-                    u.getFailedLoginAttempts() == 0
+            verify(userRepository)
+                    .save(argThat(u -> u.getFailedLoginAttempts() == 0
                             && u.isAccountNonLocked()
                             && u.getLockedAt() == null
                             && u.getLockedUntil() == null
@@ -245,8 +243,8 @@ class LockoutServiceImplTest {
             boolean result = lockoutService.unlockIfCooldownExpired(userId);
 
             assertThat(result).isTrue();
-            verify(userRepository).save(argThat(u ->
-                    u.isAccountNonLocked()
+            verify(userRepository)
+                    .save(argThat(u -> u.isAccountNonLocked()
                             && u.getLockedAt() == null
                             && u.getLockedUntil() == null
                             && u.getFailedLoginAttempts() == 0));
@@ -353,10 +351,9 @@ class LockoutServiceImplTest {
 
             lockoutService.recordFailedAttempt(userId);
 
-            verify(userRepository).save(argThat(u ->
-                    u.isAccountNonLocked()
-                            && u.getLockedAt() == null
-                            && u.getLockedUntil() == null));
+            verify(userRepository)
+                    .save(argThat(
+                            u -> u.isAccountNonLocked() && u.getLockedAt() == null && u.getLockedUntil() == null));
         }
     }
 

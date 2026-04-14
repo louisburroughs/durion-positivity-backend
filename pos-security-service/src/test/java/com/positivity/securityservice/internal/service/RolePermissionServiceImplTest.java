@@ -6,13 +6,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.RoleDto;
+import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
+import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
+import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,14 +33,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import com.positivity.securityservice.internal.dto.RoleDto;
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
-import com.positivity.securityservice.internal.repository.RoleRepository;
-
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RolePermissionServiceImpl")
 class RolePermissionServiceImplTest {
@@ -46,10 +44,13 @@ class RolePermissionServiceImplTest {
 
     @Mock
     private RoleRepository roleRepository;
+
     @Mock
     private PermissionRepository permissionRepository;
+
     @Mock
     private PrincipalRoleRepository principalRoleRepository;
+
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
@@ -67,11 +68,9 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("creates role with current authenticated actor")
         void createRole_success_withAuthenticatedActor() {
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(
-                            "agent-user",
-                            "n/a",
-                            java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+            SecurityContextHolder.getContext()
+                    .setAuthentication(new UsernamePasswordAuthenticationToken(
+                            "agent-user", "n/a", java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
             when(roleRepository.existsByName("MANAGER")).thenReturn(false);
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -193,8 +192,8 @@ class RolePermissionServiceImplTest {
             UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
 
-            org.assertj.core.api.Assertions
-                    .assertThatThrownBy(() -> sut.revokePermission(roleId, "security:role:grant"))
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> sut.revokePermission(roleId, "security:role:grant"))
                     .isInstanceOf(RoleNotFoundException.class)
                     .hasMessageContaining("Role not found");
         }
@@ -210,7 +209,8 @@ class RolePermissionServiceImplTest {
             Role role = new Role();
             role.setId(roleId);
 
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId)).thenReturn(false);
+            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
+                    .thenReturn(false);
             when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
 
             sut.assignRoleToPrincipal("principal-1", roleId);
@@ -222,7 +222,8 @@ class RolePermissionServiceImplTest {
         @DisplayName("does nothing when assignment already exists")
         void assignRoleToPrincipal_existingAssignment_noop() {
             UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId)).thenReturn(true);
+            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
+                    .thenReturn(true);
 
             sut.assignRoleToPrincipal("principal-1", roleId);
 
@@ -234,7 +235,8 @@ class RolePermissionServiceImplTest {
         @DisplayName("throws when role does not exist")
         void assignRoleToPrincipal_roleNotFound_throws() {
             UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId)).thenReturn(false);
+            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
+                    .thenReturn(false);
             when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
 
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.assignRoleToPrincipal("principal-1", roleId))

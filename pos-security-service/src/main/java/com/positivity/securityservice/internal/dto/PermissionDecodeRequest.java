@@ -11,5 +11,4 @@ import jakarta.validation.constraints.NotNull;
  */
 public record PermissionDecodeRequest(
         @JsonProperty("perm_bits") @NotNull String permBits,
-        @JsonProperty("perm_ver") int permVer) {
-}
+        @JsonProperty("perm_ver") int permVer) {}

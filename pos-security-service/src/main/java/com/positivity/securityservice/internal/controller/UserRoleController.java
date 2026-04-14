@@ -5,15 +5,14 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * REST controller for user-role assignment endpoints.
@@ -35,10 +34,10 @@ public class UserRoleController {
     @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
     @PutMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Assign a role to a user", description = "Creates an effective role assignment linking the specified user to the specified role.")
-    public ResponseEntity<Void> assignRoleToUser(
-            @PathVariable UUID userId,
-            @PathVariable UUID roleId) {
+    @Operation(
+            summary = "Assign a role to a user",
+            description = "Creates an effective role assignment linking the specified user to the specified role.")
+    public ResponseEntity<Void> assignRoleToUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.assignRoleToUser(userId, roleId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -49,10 +48,10 @@ public class UserRoleController {
     @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
     @DeleteMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Revoke a role from a user", description = "Removes the effective assignment of the specified role from the specified user.")
-    public ResponseEntity<Void> revokeRoleFromUser(
-            @PathVariable UUID userId,
-            @PathVariable UUID roleId) {
+    @Operation(
+            summary = "Revoke a role from a user",
+            description = "Removes the effective assignment of the specified role from the specified user.")
+    public ResponseEntity<Void> revokeRoleFromUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.revokeRoleFromUser(userId, roleId);
         return ResponseEntity.noContent().build();
     }

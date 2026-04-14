@@ -10,13 +10,11 @@ import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +32,7 @@ class SystemPromptServiceImplTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
     private static final UUID EXISTING_ID = UUID.fromString("00000000-0000-7000-8000-000000000200");
-    private static final UUID MISSING_ID  = UUID.fromString("00000000-0000-7000-8000-000000000201");
+    private static final UUID MISSING_ID = UUID.fromString("00000000-0000-7000-8000-000000000201");
 
     @Mock
     private SystemPromptRepository repository;

@@ -71,7 +71,8 @@ class PutawayValidationServiceImplTest {
 
         ValidationResult result = service.validatePutawayExecution(request);
 
-        assertThat(result.getWarnings()).extracting(warning -> warning.getCode())
+        assertThat(result.getWarnings())
+                .extracting(warning -> warning.getCode())
                 .contains("COMPATIBILITY_OVERRIDDEN", "CAPACITY_OVERRIDDEN");
     }
 
@@ -112,7 +113,8 @@ class PutawayValidationServiceImplTest {
 
         ValidationResult result = service.validatePutawayExecution(request);
 
-        assertThat(result.getWarnings()).extracting(warning -> warning.getCode())
+        assertThat(result.getWarnings())
+                .extracting(warning -> warning.getCode())
                 .contains("SOURCE_RECONCILIATION_NEEDED", "COMPATIBILITY_OVERRIDDEN");
     }
 
@@ -159,9 +161,11 @@ class PutawayValidationServiceImplTest {
         ValidationResult result = service.validatePutawayExecution(request);
 
         assertThat(result.isValid()).isFalse();
-        assertThat(result.getErrors()).extracting(error -> error.getErrorCode())
+        assertThat(result.getErrors())
+                .extracting(error -> error.getErrorCode())
                 .contains("INSUFFICIENT_QUANTITY", "INCOMPATIBLE_LOCATION");
-        assertThat(result.getWarnings()).extracting(warning -> warning.getCode())
+        assertThat(result.getWarnings())
+                .extracting(warning -> warning.getCode())
                 .contains("CAPACITY_NEAR_LIMIT");
     }
 
@@ -177,13 +181,11 @@ class PutawayValidationServiceImplTest {
         validation.setExists(true);
         validation.setActive(false);
 
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString())).thenReturn(validation);
+        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
+                .thenReturn(validation);
 
         PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger,
-                putawayRuleRepository,
-                replenishmentPolicyRepository,
-                locationValidationClient);
+                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 1))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -202,15 +204,14 @@ class PutawayValidationServiceImplTest {
         validation.setExists(true);
         validation.setActive(true);
 
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString())).thenReturn(validation);
+        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
+                .thenReturn(validation);
         when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(7);
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1)).thenReturn(10);
+        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
+                .thenReturn(10);
 
         PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger,
-                putawayRuleRepository,
-                replenishmentPolicyRepository,
-                locationValidationClient);
+                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 3))
                 .isInstanceOf(LocationAtCapacityException.class);
@@ -228,20 +229,20 @@ class PutawayValidationServiceImplTest {
         validation.setExists(true);
         validation.setActive(true);
 
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString())).thenReturn(validation);
+        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
+                .thenReturn(validation);
         when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(10);
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1)).thenReturn(12);
+        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
+                .thenReturn(12);
 
         PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger,
-                putawayRuleRepository,
-                replenishmentPolicyRepository,
-                locationValidationClient);
+                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
 
         ValidationResult result = service.validateLocationCapacity(DEST_1, 3);
 
         assertThat(result.isValid()).isTrue();
-        assertThat(result.getWarnings()).extracting(warning -> warning.getCode())
+        assertThat(result.getWarnings())
+                .extracting(warning -> warning.getCode())
                 .contains("CAPACITY_NEAR_LIMIT");
     }
 
@@ -258,15 +259,14 @@ class PutawayValidationServiceImplTest {
         validation.setActive(true);
         validation.setMaxUnitCapacity(10);
 
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString())).thenReturn(validation);
+        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
+                .thenReturn(validation);
         when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(8);
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1)).thenReturn(1000);
+        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
+                .thenReturn(1000);
 
         PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger,
-                putawayRuleRepository,
-                replenishmentPolicyRepository,
-                locationValidationClient);
+                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 2))
                 .isInstanceOf(LocationAtCapacityException.class);

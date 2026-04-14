@@ -1,9 +1,8 @@
 package com.positivity.vehicle.internal.enums;
 
-import java.util.Locale;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import java.util.Locale;
 
 /**
  * Supported odometer distance units.

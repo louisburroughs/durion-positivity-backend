@@ -1,20 +1,18 @@
 package com.positivity.accounting.internal.payment;
 
+import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.stripe.Stripe;
+import com.stripe.exception.StripeException;
+import com.stripe.model.Charge;
+import com.stripe.net.RequestOptions;
 import java.math.RoundingMode;
 import java.util.Optional;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-
-import com.positivity.accounting.internal.exception.PaymentGatewayException;
-import com.stripe.Stripe;
-import com.stripe.exception.StripeException;
-import com.stripe.model.Charge;
-import com.stripe.net.RequestOptions;
 
 /**
  * Stripe payment gateway implementation.
@@ -41,9 +39,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             @Value("${stripe.api-key:}") String apiKey,
             @Value("${stripe.connect-account:}") String connectAccount,
             @Value("${stripe.idempotency-window-hours:24}") long idempotencyWindowHours) {
-        this.connectAccount = connectAccount != null && !connectAccount.isBlank()
-                ? Optional.of(connectAccount)
-                : Optional.empty();
+        this.connectAccount =
+                connectAccount != null && !connectAccount.isBlank() ? Optional.of(connectAccount) : Optional.empty();
 
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
@@ -51,7 +48,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
         }
 
         Stripe.apiKey = apiKey;
-        log.info("Stripe payment gateway initialized. Connect account: {}",
+        log.info(
+                "Stripe payment gateway initialized. Connect account: {}",
                 this.connectAccount.isPresent() ? "yes" : "no");
     }
 
@@ -59,8 +57,11 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     public @NonNull GatewayPaymentResponse executePayment(@NonNull GatewayPaymentRequest request)
             throws PaymentGatewayException {
         try {
-            log.debug("Executing Stripe payment. Idempotency Key: {}, Amount: {} {}, Method: {}",
-                    request.getIdempotencyKey(), request.getAmount(), request.getCurrency(),
+            log.debug(
+                    "Executing Stripe payment. Idempotency Key: {}, Amount: {} {}, Method: {}",
+                    request.getIdempotencyKey(),
+                    request.getAmount(),
+                    request.getCurrency(),
                     request.getPaymentMethod());
 
             // Convert amount to integer cents using explicit rounding (no truncation)
@@ -96,8 +97,12 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
                     failureReason,
                     charge.toJson());
 
-            log.info("Stripe payment succeeded. Charge ID: {}, Amount: {} {}, Status: {}",
-                    charge.getId(), request.getAmount(), request.getCurrency(), status);
+            log.info(
+                    "Stripe payment succeeded. Charge ID: {}, Amount: {} {}, Status: {}",
+                    charge.getId(),
+                    request.getAmount(),
+                    request.getCurrency(),
+                    status);
 
             return response;
 
@@ -107,8 +112,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             return handleIdempotencyConflict(request.getIdempotencyKey());
         } catch (StripeException e) {
             throw new PaymentGatewayException(
-                    "Stripe payment failed for idempotency key: " + request.getIdempotencyKey(),
-                    e);
+                    "Stripe payment failed for idempotency key: " + request.getIdempotencyKey(), e);
         }
     }
 
@@ -125,11 +129,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
 
             GatewayPaymentStatus status = mapChargeStatus(charge);
             var response = new GatewayPaymentResponse(
-                    charge.getId(),
-                    status,
-                    charge.getId(),
-                    charge.getFailureMessage(),
-                    charge.toJson());
+                    charge.getId(), status, charge.getId(), charge.getFailureMessage(), charge.toJson());
 
             return Optional.of(response);
 
@@ -139,8 +139,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             return Optional.empty();
         } catch (StripeException e) {
             throw new PaymentGatewayException(
-                    "Failed to retrieve Stripe charge status for charge ID: " + transactionId,
-                    e);
+                    "Failed to retrieve Stripe charge status for charge ID: " + transactionId, e);
         }
     }
 
@@ -176,10 +175,9 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             throws PaymentGatewayException {
         // Stripe returns a 409 with IdempotencyException. Until we persist and
         // resolve original charge IDs by idempotency key, fail with clear context.
-        throw new PaymentGatewayException(
-                "Idempotency conflict detected for key: " + idempotencyKey
-                        + ". A transaction with this key may already exist. "
-                        + "Use getPaymentStatus() to verify status.");
+        throw new PaymentGatewayException("Idempotency conflict detected for key: " + idempotencyKey
+                + ". A transaction with this key may already exist. "
+                + "Use getPaymentStatus() to verify status.");
     }
 
     /**

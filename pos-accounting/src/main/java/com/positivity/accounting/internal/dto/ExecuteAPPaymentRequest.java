@@ -1,36 +1,33 @@
 package com.positivity.accounting.internal.dto;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.PaymentMethod;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Request to execute an AP vendor payment.
- * 
+ *
  * <p>
  * Idempotency: paymentRef acts as unique idempotency key for duplicate
  * prevention.
- * 
+ *
  * <p>
  * Allocations: Optional explicit allocations; if omitted, automatic allocation
  * applied (oldest due date first).
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>
@@ -44,7 +41,10 @@ public class ExecuteAPPaymentRequest {
 
     @NonNull
     @NotNull(message = "Vendor ID is required")
-    @Schema(description = "Vendor UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Vendor UUID",
+            example = "01936e5c-7890-7a3d-8b6e-2b3456789012",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("vendorId")
     private UUID vendorId;
 
@@ -75,19 +75,28 @@ public class ExecuteAPPaymentRequest {
     @NonNull
     @NotEmpty(message = "Payment reference is required")
     @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters")
-    @Schema(description = "Unique payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Unique payment reference (idempotency key)",
+            example = "01936e5c-7890-7a3d-8b6e-2b3456789012",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("paymentRef")
     private String paymentRef;
 
     @NonNull
     @NotNull(message = "Payment method is required")
-    @Schema(description = "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)", example = "ACH", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)",
+            example = "ACH",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("paymentMethod")
     private PaymentMethod paymentMethod;
 
     @Nullable
     @Size(max = 255, message = "Payment source must not exceed 255 characters")
-    @Schema(description = "Payment source token or identifier from the payment provider (e.g., Stripe token, bank account ID)", example = "tok_visa")
+    @Schema(
+            description =
+                    "Payment source token or identifier from the payment provider (e.g., Stripe token, bank account ID)",
+            example = "tok_visa")
     @JsonProperty("paymentSource")
     private String paymentSource;
 
@@ -114,14 +123,20 @@ public class ExecuteAPPaymentRequest {
 
         @NonNull
         @NotNull(message = "Vendor bill ID is required")
-        @Schema(description = "Vendor bill UUID", example = "01936e5d-1234-7a3d-8b6e-3c4567890123", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Vendor bill UUID",
+                example = "01936e5d-1234-7a3d-8b6e-3c4567890123",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @JsonProperty("vendorBillId")
         private UUID vendorBillId;
 
         @NonNull
         @NotNull(message = "Applied amount is required")
         @DecimalMin(value = "0.00", inclusive = true, message = "Applied amount must be non-negative")
-        @Schema(description = "Amount to apply to this bill", example = "750.00", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Amount to apply to this bill",
+                example = "750.00",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @JsonProperty("appliedAmount")
         private BigDecimal appliedAmount;
     }

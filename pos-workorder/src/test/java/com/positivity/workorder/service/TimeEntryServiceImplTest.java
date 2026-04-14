@@ -1,8 +1,12 @@
 package com.positivity.workorder.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
@@ -13,10 +17,17 @@ import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.repository.TimeEntryRepository;
 import com.positivity.workorder.internal.service.TimeEntryServiceImpl;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -24,21 +35,8 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import com.positivity.security.common.GatewaySecurityConstants;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TimeEntryServiceImpl Unit Tests")
@@ -56,12 +54,12 @@ class TimeEntryServiceImplTest {
     void setUpSecurityContext() {
         var context = SecurityContextHolder.createEmptyContext();
         var authentication = new UsernamePasswordAuthenticationToken(
-                "time-entry-test-user",
-                "N/A",
-                List.of(new SimpleGrantedAuthority("workorder:workorder:approve")));
+                "time-entry-test-user", "N/A", List.of(new SimpleGrantedAuthority("workorder:workorder:approve")));
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USERNAME, "time-entry-test-user",
-                GatewaySecurityConstants.DETAIL_USER_ID, PERSON_ID));
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "time-entry-test-user",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                PERSON_ID));
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
     }
@@ -73,16 +71,22 @@ class TimeEntryServiceImplTest {
 
     @Mock
     private TimeEntryRepository timeEntryRepository;
+
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private TimeEntryServiceImpl timeEntryService;
 
     private TimeEntry submittedEntry() {
         return TimeEntry.builder()
-                .timeEntryId(TIME_ENTRY_ID).personId(PERSON_ID).workOrder(new Workorder(WORK_ORDER_ID))
-                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600)).endAt(Instant.now(TEST_CLOCK))
-                .status(TimeEntryStatus.SUBMITTED).build();
+                .timeEntryId(TIME_ENTRY_ID)
+                .personId(PERSON_ID)
+                .workOrder(new Workorder(WORK_ORDER_ID))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
+                .endAt(Instant.now(TEST_CLOCK))
+                .status(TimeEntryStatus.SUBMITTED)
+                .build();
     }
 
     private TimeEntry approvedEntry() {
@@ -107,8 +111,8 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4: approveEntry non-existent ID throws TimeEntryNotFoundException")
     void approveEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(
-                () -> timeEntryService.approveTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+        assertThatThrownBy(() ->
+                        timeEntryService.approveTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 
@@ -138,8 +142,8 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4 (reject): rejectEntry non-existent ID throws TimeEntryNotFoundException")
     void rejectEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(
-                () -> timeEntryService.rejectTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        assertThatThrownBy(() -> timeEntryService.rejectTimeEntry(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
                         new RejectTimeEntryRequest("some reason")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
@@ -150,8 +154,8 @@ class TimeEntryServiceImplTest {
         TimeEntry rejectedEntry = submittedEntry();
         rejectedEntry.setStatus(TimeEntryStatus.REJECTED);
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(rejectedEntry));
-        assertThatThrownBy(() -> timeEntryService.rejectTimeEntry(TIME_ENTRY_ID,
-                new RejectTimeEntryRequest("duplicate")))
+        assertThatThrownBy(
+                        () -> timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, new RejectTimeEntryRequest("duplicate")))
                 .isInstanceOf(TimeEntryStateException.class)
                 .hasMessageContaining("not in SUBMITTED state");
     }

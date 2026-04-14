@@ -1,21 +1,20 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import lombok.*;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Income Statement (Profit & Loss) report response.
- * 
+ *
  * Structure follows US GAAP:
  * Revenue → Cost of Goods Sold → Gross Profit →
  * Operating Expenses → Operating Income → Net Income
- * 
+ *
  * All amounts from POSTED journal entries only.
  */
 @Data

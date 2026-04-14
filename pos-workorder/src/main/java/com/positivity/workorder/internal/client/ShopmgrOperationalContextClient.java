@@ -1,16 +1,15 @@
 package com.positivity.workorder.internal.client;
 
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Client for retrieving operational context from the Shop Management Service.
@@ -36,7 +35,8 @@ public class ShopmgrOperationalContextClient {
      */
     public OperationalContextResponse getOperationalContext(@NonNull UUID workorderId) {
         try {
-            return restClient.get()
+            return restClient
+                    .get()
                     .uri("/v1/shopmgr/workorders/{workorderId}/operationalContext", workorderId)
                     .retrieve()
                     .body(OperationalContextResponse.class);
@@ -55,11 +55,11 @@ public class ShopmgrOperationalContextClient {
      */
     public List<BayAvailabilityDto> getBayStatusForLocation(@NonNull UUID locationId) {
         try {
-            List<BayAvailabilityDto> result = restClient.get()
+            List<BayAvailabilityDto> result = restClient
+                    .get()
                     .uri("/v1/shopmgr/locations/{locationId}/bays", locationId)
                     .retrieve()
-                    .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {
-                    });
+                    .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {});
             return result != null ? result : List.of();
         } catch (RestClientResponseException e) {
             if (e.getStatusCode().value() == 404) {
@@ -79,6 +79,5 @@ public class ShopmgrOperationalContextClient {
      * @param bayName human-readable bay name
      * @param status  bay status: OPEN, CLOSED, RESERVED, UNDER_MAINTENANCE, etc.
      */
-    public record BayAvailabilityDto(UUID bayId, String bayName, String status) {
-    }
+    public record BayAvailabilityDto(UUID bayId, String bayName, String status) {}
 }

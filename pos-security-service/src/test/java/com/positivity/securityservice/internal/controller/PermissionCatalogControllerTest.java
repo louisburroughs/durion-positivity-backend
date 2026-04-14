@@ -10,12 +10,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
+import com.positivity.securityservice.internal.service.CustomUserDetailsService;
+import com.positivity.securityservice.service.PermissionCatalogVersionService;
+import com.positivity.securityservice.service.PermissionRegistryService;
+import com.positivity.securityservice.service.PermissionService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,12 +41,6 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-
-import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
-import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.service.PermissionCatalogVersionService;
-import com.positivity.securityservice.service.PermissionRegistryService;
-import com.positivity.securityservice.service.PermissionService;
 
 /**
  * Controller slice tests for {@link PermissionController} PERM-005 endpoints.
@@ -97,9 +95,11 @@ class PermissionCatalogControllerTest {
     @BeforeEach
     void configureJwtFilterPassthrough() throws Exception {
         doAnswer(inv -> {
-            ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
-            return null;
-        }).when(jwtAuthenticationFilter).doFilter(any(), any(), any());
+                    ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
+                    return null;
+                })
+                .when(jwtAuthenticationFilter)
+                .doFilter(any(), any(), any());
     }
 
     // ── AC1a: GET /v1/permissions/catalog-version → 200 ─────────────────────
@@ -133,8 +133,7 @@ class PermissionCatalogControllerTest {
         when(permissionCatalogVersionService.getCatalogVersion()).thenReturn(1);
         when(permissionCatalogVersionService.getPermissionCount()).thenReturn(215);
 
-        mockMvc.perform(get("/v1/permissions/catalog-version"))
-                .andExpect(status().isOk());
+        mockMvc.perform(get("/v1/permissions/catalog-version")).andExpect(status().isOk());
     }
 
     // ── AC2a: POST /v1/permissions/decode → 200 ─────────────────────────────
@@ -152,8 +151,8 @@ class PermissionCatalogControllerTest {
                 .thenReturn(List.of("accounting:je:view", "accounting:je:create"));
 
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissions").isArray());
     }
@@ -169,8 +168,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /v1/permissions/decode without security:permission:view authority → 403 Forbidden")
     void decodePermissions_requires_security_permission_view_authority() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -187,8 +186,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /v1/permissions/decode with null perm_bits → 400 Bad Request")
     void decodePermissions_validates_perm_bits_not_null() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":null,\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":null,\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -197,8 +196,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with empty perm_bits returns 400 Bad Request")
     void decodePermissions_emptyPermBits_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -207,8 +206,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with perm_ver <= 0 returns 400 Bad Request")
     void decodePermissions_nonPositivePermVer_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
                 .andExpect(status().isBadRequest());
     }
 

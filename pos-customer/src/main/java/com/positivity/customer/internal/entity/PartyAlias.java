@@ -1,18 +1,17 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Party alias entity for ID redirection after merge operations.
  * Ensures that all historical references to merged parties remain resolvable.

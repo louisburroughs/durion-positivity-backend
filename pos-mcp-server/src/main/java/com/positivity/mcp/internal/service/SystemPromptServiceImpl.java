@@ -5,14 +5,12 @@ import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import com.positivity.mcp.service.SystemPromptService;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SystemPromptServiceImpl implements SystemPromptService {
@@ -44,7 +42,8 @@ public class SystemPromptServiceImpl implements SystemPromptService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull SystemPromptResponse get(@NonNull UUID id) {
-        return repository.findById(id)
+        return repository
+                .findById(id)
                 .map(SystemPromptResponse::from)
                 .orElseThrow(() -> new NoSuchElementException("Prompt not found: " + id));
     }
@@ -52,8 +51,7 @@ public class SystemPromptServiceImpl implements SystemPromptService {
     @Override
     @Transactional
     public @NonNull SystemPromptResponse update(@NonNull UUID id, @NonNull SystemPromptRequest request) {
-        var prompt = repository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Prompt not found: " + id));
+        var prompt = repository.findById(id).orElseThrow(() -> new NoSuchElementException("Prompt not found: " + id));
         if (!prompt.getName().equals(request.name()) && repository.existsByName(request.name())) {
             throw new IllegalArgumentException("Prompt with name already exists: " + request.name());
         }

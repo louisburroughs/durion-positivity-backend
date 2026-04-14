@@ -1,9 +1,9 @@
 package com.positivity.people.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.UUID;
-import jakarta.validation.constraints.NotBlank;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 public class Person {
 
@@ -81,5 +81,4 @@ public class Person {
     public void setUsername(String username) {
         this.username = username;
     }
-
 }

@@ -43,7 +43,8 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     private void registerViaHttp(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

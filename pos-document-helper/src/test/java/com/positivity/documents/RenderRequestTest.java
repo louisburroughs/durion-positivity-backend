@@ -1,10 +1,9 @@
 package com.positivity.documents;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for RenderRequest DTO.
@@ -47,8 +46,8 @@ class RenderRequestTest {
     @Test
     void html_HelperMethod() {
         // Arrange & Act
-        RenderRequest request = RenderRequest.html("REPORT_TEMPLATE", Map.of("rows", 50))
-                .build();
+        RenderRequest request =
+                RenderRequest.html("REPORT_TEMPLATE", Map.of("rows", 50)).build();
 
         // Assert
         assertEquals(DocumentFormat.HTML, request.getFormat());
@@ -60,12 +59,12 @@ class RenderRequestTest {
     @Test
     void builder_NullFormat_ThrowsNPE() {
         // Arrange & Act & Assert
-        assertThrows(NullPointerException.class, () ->
-                RenderRequest.builder()
+        assertThrows(
+                NullPointerException.class,
+                () -> RenderRequest.builder()
                         .format(null)
                         .templateId("TEST")
                         .content(Map.of())
-                        .build()
-        );
+                        .build());
     }
 }

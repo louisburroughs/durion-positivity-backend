@@ -44,15 +44,13 @@ public class EventTypeServiceImpl implements EventTypeService {
     @Override
     public Optional<EventTypeResponse> getEventTypeById(@NonNull UUID id) {
         validateId(id);
-        return eventDao.getEventType(id)
-                .map(EventTypeMapper::toResponse);
+        return eventDao.getEventType(id).map(EventTypeMapper::toResponse);
     }
 
     @Override
     public Optional<EventTypeResponse> getEventTypeByCode(@NonNull String typeCode) {
         String normalizedTypeCode = normalizeTypeCode(typeCode, "typeCode");
-        return eventDao.getEventTypeByCode(normalizedTypeCode)
-                .map(EventTypeMapper::toResponse);
+        return eventDao.getEventTypeByCode(normalizedTypeCode).map(EventTypeMapper::toResponse);
     }
 
     @Override
@@ -99,11 +97,10 @@ public class EventTypeServiceImpl implements EventTypeService {
         validateId(id);
         validateRequest(request, false);
 
-        return eventDao.getEventType(id)
-                .map(eventType -> {
-                    EventTypeMapper.applyRequest(eventType, request);
-                    return EventTypeMapper.toResponse(eventDao.saveEventType(eventType));
-                });
+        return eventDao.getEventType(id).map(eventType -> {
+            EventTypeMapper.applyRequest(eventType, request);
+            return EventTypeMapper.toResponse(eventDao.saveEventType(eventType));
+        });
     }
 
     @Override

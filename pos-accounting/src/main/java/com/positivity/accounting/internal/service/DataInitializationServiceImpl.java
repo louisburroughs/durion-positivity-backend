@@ -1,21 +1,18 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
 import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
 import com.positivity.accounting.service.DataInitializationService;
-
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.time.Instant;
 
 /**
  * Service for initializing default policies on application startup.
@@ -25,7 +22,6 @@ import java.time.Instant;
 @Slf4j
 public class DataInitializationServiceImpl implements CommandLineRunner, DataInitializationService {
     private final Clock clock;
-
 
     private final OverridePolicyThresholdRepository policyRepository;
     private final RefundPolicyConfigRepository refundPolicyRepository;

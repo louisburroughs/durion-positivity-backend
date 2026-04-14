@@ -8,24 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
@@ -35,6 +17,22 @@ import com.positivity.vehiclefitment.internal.entity.FitmentTag;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for VehicleApplicabilityHintService.
@@ -80,8 +78,7 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testCreateHint_Success() {
         // Given
-        when(hintRepository.save(any(VehicleApplicabilityHint.class)))
-                .thenReturn(mockHint);
+        when(hintRepository.save(any(VehicleApplicabilityHint.class))).thenReturn(mockHint);
 
         // When
         HintResponse response = service.createHint(createRequest);
@@ -96,12 +93,11 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testUpdateHint_Success() {
         // Given
-        UpdateHintRequest updateRequest = new UpdateHintRequest(
-                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
+        UpdateHintRequest updateRequest =
+                new UpdateHintRequest(Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.of(mockHint));
-        when(hintRepository.save(any(VehicleApplicabilityHint.class)))
-                .thenReturn(mockHint);
+        when(hintRepository.save(any(VehicleApplicabilityHint.class))).thenReturn(mockHint);
 
         // When
         HintResponse response = service.updateHint(TEST_HINT_ID, updateRequest);
@@ -115,8 +111,8 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testUpdateHint_NotFound() {
         // Given
-        UpdateHintRequest updateRequest = new UpdateHintRequest(
-                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
+        UpdateHintRequest updateRequest =
+                new UpdateHintRequest(Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.empty());
 
@@ -168,8 +164,7 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testGetHintsByProductId() {
         // Given
-        when(hintRepository.findByProductId(TEST_PRODUCT_ID))
-                .thenReturn(Arrays.asList(mockHint));
+        when(hintRepository.findByProductId(TEST_PRODUCT_ID)).thenReturn(Arrays.asList(mockHint));
 
         // When
         List<HintResponse> responses = service.getHintsByProductId(TEST_PRODUCT_ID);

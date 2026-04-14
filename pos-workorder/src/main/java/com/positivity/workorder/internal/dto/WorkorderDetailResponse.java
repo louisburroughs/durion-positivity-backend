@@ -2,23 +2,21 @@ package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
-
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Comprehensive workorder detail response with role-based visibility.
  * Financial fields are conditionally included based on user authorities.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */
@@ -30,7 +28,10 @@ import java.util.UUID;
 public class WorkorderDetailResponse {
 
     // Core fields
-    @Schema(description = "Workorder ID", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Workorder ID",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID workorderId;
 
     @Schema(description = "Workorder number (from sequence)", example = "WO-2024-5001")
@@ -39,22 +40,34 @@ public class WorkorderDetailResponse {
     @Schema(description = "Workorder status", example = "WORK_IN_PROGRESS", requiredMode = Schema.RequiredMode.REQUIRED)
     private WorkorderStatus status;
 
-    @Schema(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440001", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Customer ID",
+            example = "550e8400-e29b-41d4-a716-446655440001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID customerId;
 
     @Schema(description = "Customer name", example = "John Doe")
     private String customerName;
 
-    @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Vehicle ID",
+            example = "550e8400-e29b-41d4-a716-446655440002",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID vehicleId;
 
     @Schema(description = "Vehicle description", example = "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\"")
     private String vehicleDescription;
 
-    @Schema(description = "Creation timestamp", example = "2024-01-27T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Creation timestamp",
+            example = "2024-01-27T10:00:00Z",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Created by user ID", example = "550e8400-e29b-41d4-a716-446655440003", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Created by user ID",
+            example = "550e8400-e29b-41d4-a716-446655440003",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID createdBy;
 
     // Derived status fields

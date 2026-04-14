@@ -1,10 +1,22 @@
 package com.positivity.vehicle.internal.entity;
 
-
+import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
@@ -13,22 +25,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Event processing log for CAP:091 Story #101.
  * Tracks VehicleUpdated event processing with idempotency and conflict
@@ -39,12 +35,14 @@ import com.positivity.shared.id.UUIDv7Id;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "event_processing_log", indexes = {
-        @Index(name = "idx_epl_event_id", columnList = "event_id"),
-        @Index(name = "idx_epl_workorder_id", columnList = "workorder_id"),
-        @Index(name = "idx_epl_vehicle_id", columnList = "vehicle_id"),
-        @Index(name = "idx_epl_status", columnList = "status")
-})
+@Table(
+        name = "event_processing_log",
+        indexes = {
+            @Index(name = "idx_epl_event_id", columnList = "event_id"),
+            @Index(name = "idx_epl_workorder_id", columnList = "workorder_id"),
+            @Index(name = "idx_epl_vehicle_id", columnList = "vehicle_id"),
+            @Index(name = "idx_epl_status", columnList = "status")
+        })
 @EntityListeners(AuditingEntityListener.class)
 public class EventProcessingLog {
 
@@ -53,6 +51,7 @@ public class EventProcessingLog {
     @UUIDv7Id
     @Column(name = "log_id", updatable = false, nullable = false)
     private UUID logId;
+
     @NonNull
     @Column(name = "event_id", nullable = false, unique = true)
     private String eventId;

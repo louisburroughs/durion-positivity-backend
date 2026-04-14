@@ -9,10 +9,9 @@ import org.springframework.retry.annotation.EnableRetry;
 /**
  * Main Spring Boot application for POS Accounting module.
  */
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
 @EnableRetry
-@ComponentScan(basePackages = { "com.positivity.accounting", "com.positivity.events",
-        "com.positivity.security.common" })
+@ComponentScan(basePackages = {"com.positivity.accounting", "com.positivity.events", "com.positivity.security.common"})
 public class PosAccountingApplication {
 
     public static void main(String[] args) {

@@ -10,8 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PriceBookRepository extends JpaRepository<PriceBookEntity, UUID> {
 
-    Optional<PriceBookEntity> findByScopeAndScopeIdAndStatus(PriceBookScope scope, UUID scopeId,
-            PriceBookStatus status);
+    Optional<PriceBookEntity> findByScopeAndScopeIdAndStatus(
+            PriceBookScope scope, UUID scopeId, PriceBookStatus status);
 
     Optional<PriceBookEntity> findByScopeAndIsDefaultTrueAndStatus(PriceBookScope scope, PriceBookStatus status);
 

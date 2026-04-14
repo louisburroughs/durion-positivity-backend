@@ -2,6 +2,7 @@ package com.positivity.customer.internal.dto;
 
 import com.positivity.customer.internal.enums.AccountTier;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,11 +10,9 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.time.Instant;
-
 /**
  * Response DTO for retrieving an account's tier level.
- * 
+ *
  * Contains the current tier, when it was assigned, and optional
  * metadata about tier benefits or requirements.
  */

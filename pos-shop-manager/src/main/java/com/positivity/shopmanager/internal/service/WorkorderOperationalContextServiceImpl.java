@@ -1,19 +1,16 @@
 package com.positivity.shopmanager.internal.service;
 
+import com.positivity.shopmanager.service.SourceEligibilityService;
+import com.positivity.shopmanager.service.WorkorderOperationalContextService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-
-import com.positivity.shopmanager.service.SourceEligibilityService;
-import com.positivity.shopmanager.service.WorkorderOperationalContextService;
-
-import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -28,17 +25,13 @@ public class WorkorderOperationalContextServiceImpl implements WorkorderOperatio
     @Override
     @NonNull
     public Map<String, Object> getOperationalContext(
-            @NonNull Long locationId,
-            @NonNull Long workorderId,
-            @Nullable String filters) {
+            @NonNull Long locationId, @NonNull Long workorderId, @Nullable String filters) {
         Map<String, String> parsedFilters = parseFilters(filters);
         String facilityId = String.valueOf(locationId);
         String workOrderRef = String.valueOf(workorderId);
         String workorderStatus = sourceEligibilityService.getWorkOrderStatus(workOrderRef, facilityId);
-        String appointmentId = sourceEligibilityService.getExistingAppointmentId(
-                SOURCE_TYPE_WORKORDER,
-                workOrderRef,
-                facilityId);
+        String appointmentId =
+                sourceEligibilityService.getExistingAppointmentId(SOURCE_TYPE_WORKORDER, workOrderRef, facilityId);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put(LOCATION_ID, locationId);
@@ -115,4 +108,3 @@ public class WorkorderOperationalContextServiceImpl implements WorkorderOperatio
         return appointmentFilter == null || appointmentFilter.equals(appointmentId);
     }
 }
-

@@ -1,8 +1,7 @@
 package com.positivity.workorder.service;
 
-import java.util.Optional;
-
 import com.positivity.workorder.internal.dto.BillingRulesDTO;
+import java.util.Optional;
 
 public interface BillingRulesClientService {
 
@@ -23,5 +22,4 @@ public interface BillingRulesClientService {
      * @return true if PO is required, false otherwise
      */
     boolean isPurchaseOrderRequired(String partyId);
-
 }

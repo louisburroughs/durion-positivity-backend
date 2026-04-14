@@ -2,7 +2,7 @@ package com.positivity.inventory.internal.enums;
 
 /**
  * Status lifecycle for inventory adjustments from cycle counts.
- * 
+ *
  * <p>
  * State transitions:
  * <ul>

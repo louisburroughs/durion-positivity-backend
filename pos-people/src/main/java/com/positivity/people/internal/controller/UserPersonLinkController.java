@@ -13,15 +13,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
-
-import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 @RestController
@@ -33,11 +31,16 @@ public class UserPersonLinkController {
 
     @PostMapping("/users/link")
     @EmitEvent(id = "PEOPLE_USER_LINK_CREATE", apiVersion = "1")
-    @Operation(summary = "Link user to person",
+    @Operation(
+            summary = "Link user to person",
             description = "Create a link between an authentication user and a person record")
-    @ApiResponse(responseCode = "201", description = "Link created successfully",
+    @ApiResponse(
+            responseCode = "201",
+            description = "Link created successfully",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
-    @ApiResponse(responseCode = "200", description = "Link already exists and is returned",
+    @ApiResponse(
+            responseCode = "200",
+            description = "Link already exists and is returned",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Person not found")
@@ -49,16 +52,23 @@ public class UserPersonLinkController {
         boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
 
         UserPersonLinkResponse response = linkService.linkUserToPerson(request);
-        return alreadyLinked ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return alreadyLinked
+                ? ResponseEntity.ok(response)
+                : ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/user-links")
     @EmitEvent(id = "PEOPLE_USER_LINK_CREATE", apiVersion = "1")
-    @Operation(summary = "Create user-person link (admin)",
+    @Operation(
+            summary = "Create user-person link (admin)",
             description = "Create a link between an authentication user and a person record")
-    @ApiResponse(responseCode = "201", description = "Link created successfully",
+    @ApiResponse(
+            responseCode = "201",
+            description = "Link created successfully",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
-    @ApiResponse(responseCode = "200", description = "Link already exists and is returned",
+    @ApiResponse(
+            responseCode = "200",
+            description = "Link already exists and is returned",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Person not found")
@@ -68,7 +78,9 @@ public class UserPersonLinkController {
             @Valid @RequestBody CreateUserLinkRequest request) {
         boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
         UserPersonLinkResponse response = linkService.createUserLink(request.getUserId(), request.getPersonId());
-        return alreadyLinked ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return alreadyLinked
+                ? ResponseEntity.ok(response)
+                : ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @DeleteMapping("/users/{userId}/link")
@@ -86,7 +98,9 @@ public class UserPersonLinkController {
 
     @GetMapping("/users/{userId}/person")
     @Operation(summary = "Get person by user ID", description = "Retrieve the person record linked to a user")
-    @ApiResponse(responseCode = "200", description = "Person found",
+    @ApiResponse(
+            responseCode = "200",
+            description = "Person found",
             content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "404", description = "Link or person not found")
     @PreAuthorize("hasAuthority('people:userLink:view')")
@@ -112,7 +126,9 @@ public class UserPersonLinkController {
     @GetMapping("/user-links/{personId}")
     @EmitEvent(id = "PEOPLE_USER_LINK_GET", apiVersion = "1")
     @Operation(summary = "Get links by person ID", description = "Retrieve user-person links for person")
-    @ApiResponse(responseCode = "200", description = "Links found",
+    @ApiResponse(
+            responseCode = "200",
+            description = "Links found",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
     @ApiResponse(responseCode = "404", description = "Link or person not found")
     @PreAuthorize("hasAuthority('people:userLink:view')")
@@ -120,5 +136,4 @@ public class UserPersonLinkController {
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
         return ResponseEntity.ok(linkService.getUserLinks(personId));
     }
-
 }

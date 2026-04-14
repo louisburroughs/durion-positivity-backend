@@ -2,6 +2,8 @@ package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.workorder.internal.service.VehicleReferenceService;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -9,12 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.workorder.internal.service.VehicleReferenceService;
-import com.sun.net.httpserver.HttpServer;
 
 class VehicleReferenceServiceHttpTest {
 
@@ -63,8 +61,11 @@ class VehicleReferenceServiceHttpTest {
     void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/vehicles/" + vehicleId, 200,
-                "{\"vehicleInfo\":\"2021 Ford F-150\",\"vehicleVin\":\"VIN-123\"}", callCount);
+        HttpServer server = startServer(
+                "/v1/vehicles/" + vehicleId,
+                200,
+                "{\"vehicleInfo\":\"2021 Ford F-150\",\"vehicleVin\":\"VIN-123\"}",
+                callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
             VehicleReferenceService service = new VehicleReferenceService(RestClient.builder(), baseUrl);

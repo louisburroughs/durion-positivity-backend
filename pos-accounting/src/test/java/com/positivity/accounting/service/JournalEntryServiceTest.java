@@ -1,12 +1,5 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
-import com.positivity.accounting.internal.service.GLAccountServiceImpl;
-import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,13 +9,22 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.GLAccountServiceImpl;
+import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,15 +38,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import com.positivity.accounting.internal.dto.UnbalancedEntryException;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.repository.JournalEntryRepository;
-
 /**
  * Unit tests for JournalEntryService
- * 
+ *
  * Tests journal entry lifecycle (DRAFT → POSTED → REVERSED),
  * balance validation, GL account validation, and immutability constraints.
  */
@@ -154,7 +150,8 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry entry = createBalancedEntry();
         doThrow(new IllegalArgumentException("GL account not active"))
-                .when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
+                .when(glAccountService)
+                .validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
 
         // Act & Assert
         assertThatThrownBy(() -> service.createJournalEntry(entry))
@@ -229,8 +226,7 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(reversalEntry));
         when(journalEntryRepository.findBySourceEvent(testSourceEventId))
                 .thenReturn(List.of(reversalEntry, originalEntry));
-        when(journalEntryRepository.findByReversalReference(testJournalEntryId))
-                .thenReturn(Optional.of(originalEntry));
+        when(journalEntryRepository.findByReversalReference(testJournalEntryId)).thenReturn(Optional.of(originalEntry));
 
         // Act
         var traceability = service.getJournalTraceability(testJournalEntryId);
@@ -395,7 +391,8 @@ class JournalEntryServiceTest {
         Page<JournalEntry> page = new PageImpl<>(entries);
         Pageable pageable = PageRequest.of(0, 10);
 
-        when(journalEntryRepository.findByStatus(JournalEntryStatus.POSTED, pageable)).thenReturn(page);
+        when(journalEntryRepository.findByStatus(JournalEntryStatus.POSTED, pageable))
+                .thenReturn(page);
 
         // Act
         Page<JournalEntry> result = service.listPostedEntries(pageable);

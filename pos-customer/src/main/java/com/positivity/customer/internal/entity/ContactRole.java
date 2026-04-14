@@ -4,13 +4,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Enumeration of contact roles within a customer account.
- * 
+ *
  * <p>
  * Based on issue #108, these roles define different responsibilities and
  * permissions
  * that contacts can have within an organization's account.
  * </p>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/108">Backend
  *      Issue #108</a>
@@ -54,7 +54,7 @@ public enum ContactRole {
 
     /**
      * Get the human-readable label for this role.
-     * 
+     *
      * @return the display label
      */
     public String getLabel() {
@@ -63,7 +63,7 @@ public enum ContactRole {
 
     /**
      * Get the description of this role's responsibilities.
-     * 
+     *
      * @return the role description
      */
     public String getDescription() {

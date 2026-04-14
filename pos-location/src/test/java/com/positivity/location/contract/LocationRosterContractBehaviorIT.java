@@ -1,8 +1,19 @@
 package com.positivity.location.contract;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.LocationRef;
 import com.positivity.location.service.LocationRosterService;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,18 +22,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Contract behavior tests for the Location Roster reconciliation endpoint.
@@ -96,8 +95,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
 
         when(locationRosterService.getRoster(eq("ACTIVE"), isNull(), any())).thenReturn(page);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
-                .param("status", "ACTIVE")))
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster").param("status", "ACTIVE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
@@ -119,10 +117,10 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
         LocationRef recent = buildRef(LOC_ID_1, "Recent Shop", "REC-001", "ACTIVE", "HR-101");
         Page<LocationRef> page = new PageImpl<>(List.of(recent), PageRequest.of(0, 20), 1);
 
-        when(locationRosterService.getRoster(isNull(), any(Instant.class), any())).thenReturn(page);
+        when(locationRosterService.getRoster(isNull(), any(Instant.class), any()))
+                .thenReturn(page);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
-                .param("sinceUpdatedAt", "2026-01-01T00:00:00Z")))
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster").param("sinceUpdatedAt", "2026-01-01T00:00:00Z")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].hrLocationId").value("HR-101"));
@@ -141,8 +139,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("#40 - GET /locations/roster with invalid sinceUpdatedAt returns 400")
     void getRoster_invalidDateFormat_returns400() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
-                .param("sinceUpdatedAt", "not-a-date")))
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster").param("sinceUpdatedAt", "not-a-date")))
                 .andExpect(status().isBadRequest());
     }
 

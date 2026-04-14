@@ -3,7 +3,6 @@ package com.positivity.vehiclereferencecarapi.internal.config;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -24,8 +24,7 @@ public class WorkorderValidationClient {
     private final RestClient restClient;
 
     public WorkorderValidationClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayUrl + "/workorder/v1/workorders")
                 .build();
@@ -33,14 +32,14 @@ public class WorkorderValidationClient {
 
     @NonNull
     public WorkorderLineValidation getWorkorderLineValidation(
-            @NonNull String workorderId,
-            @NonNull String workorderLineId) {
+            @NonNull String workorderId, @NonNull String workorderLineId) {
         if (!StringUtils.hasText(workorderLineId)) {
             throw new IllegalArgumentException("workorderLineId is required");
         }
         UUID workorderUuid = parseUuid(workorderId, "workorderId");
 
-        WorkorderDetailResponse response = restClient.get()
+        WorkorderDetailResponse response = restClient
+                .get()
                 .uri("/{workorderId}/detail", workorderUuid)
                 .headers(this::applySecurityHeaders)
                 .retrieve()
@@ -60,7 +59,8 @@ public class WorkorderValidationClient {
                     "workorderLineId " + workorderLineId + " has no productEntityId on workorder " + workorderId);
         }
 
-        return new WorkorderLineValidation(response.getStatus(), matchedLine.getProductEntityId().toString());
+        return new WorkorderLineValidation(
+                response.getStatus(), matchedLine.getProductEntityId().toString());
     }
 
     private Optional<WorkorderPartResponse> findPartLine(List<WorkorderPartResponse> parts, UUID lineId) {
@@ -68,9 +68,7 @@ public class WorkorderValidationClient {
             log.warn("Workorder detail returned no parts while validating line {}", lineId);
             return Optional.empty();
         }
-        return parts.stream()
-                .filter(part -> lineId.equals(part.getId()))
-                .findFirst();
+        return parts.stream().filter(part -> lineId.equals(part.getId())).findFirst();
     }
 
     private UUID parseUuid(String value, String fieldName) {
@@ -104,8 +102,7 @@ public class WorkorderValidationClient {
         }
     }
 
-    public record WorkorderLineValidation(String status, String demandedProductId) {
-    }
+    public record WorkorderLineValidation(String status, String demandedProductId) {}
 
     public static class WorkorderDetailResponse {
         private String status;

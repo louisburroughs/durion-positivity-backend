@@ -1,14 +1,5 @@
 package com.positivity.vehiclefitment.internal.service;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
@@ -23,9 +14,15 @@ import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
-
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -53,10 +50,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
@@ -81,10 +75,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + FORMAT_JSON;
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
@@ -110,10 +101,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
@@ -135,17 +123,15 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
     @Override
     public List<Make> getMakesByManufacturer(UUID manufacturerId) {
-        Manufacturer manufacturer = manufacturerRepository.findById(manufacturerId)
+        Manufacturer manufacturer = manufacturerRepository
+                .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + FORMAT_JSON;
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
@@ -168,17 +154,15 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
     @Override
     public List<Model> getModelsByMake(UUID makeId) {
-        Make make = makeRepository.findById(makeId)
+        Make make = makeRepository
+                .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + FORMAT_JSON;
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);
@@ -201,17 +185,15 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
     @Override
     public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
-        Make make = makeRepository.findById(makeId)
+        Make make = makeRepository
+                .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + FORMAT_JSON;
-        String response = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
+        String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get(RESULTS);

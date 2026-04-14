@@ -4,16 +4,15 @@ import com.positivity.securityservice.internal.config.LockoutPolicy;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.LockoutService;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Production implementation of {@link LockoutService} for AUTH-003.
@@ -36,7 +35,8 @@ public class LockoutServiceImpl implements LockoutService {
     @Override
     @Transactional
     public void recordFailedAttempt(@NonNull UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         Instant now = Instant.now(clock);
@@ -46,8 +46,8 @@ public class LockoutServiceImpl implements LockoutService {
         user.setLastFailedLoginAt(now);
 
         int attempts = user.getFailedLoginAttempts();
-        boolean withinWindow = priorLastFailedAt != null
-                && priorLastFailedAt.isAfter(now.minus(lockoutPolicy.window()));
+        boolean withinWindow =
+                priorLastFailedAt != null && priorLastFailedAt.isAfter(now.minus(lockoutPolicy.window()));
 
         if (attempts >= lockoutPolicy.maxAttempts() && withinWindow) {
             user.setAccountNonLocked(false);
@@ -73,7 +73,8 @@ public class LockoutServiceImpl implements LockoutService {
     @Override
     @Transactional
     public void recordSuccessfulLogin(@NonNull UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         user.setFailedLoginAttempts(0);
@@ -93,7 +94,8 @@ public class LockoutServiceImpl implements LockoutService {
      */
     @Override
     public boolean isLockedOut(@NonNull UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         return !user.isAccountNonLocked()
@@ -109,7 +111,8 @@ public class LockoutServiceImpl implements LockoutService {
     @Override
     @Transactional
     public boolean unlockIfCooldownExpired(@NonNull UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository
+                .findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         if (user.isAccountNonLocked()) {

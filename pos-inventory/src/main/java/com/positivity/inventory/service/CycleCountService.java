@@ -1,17 +1,16 @@
 package com.positivity.inventory.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Service for cycle count operations.
- * 
+ *
  * <p>Implements requirements from issue #27:
  * <ul>
  *   <li>Submit counts and calculate variance</li>
@@ -21,7 +20,7 @@ import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
  * </ul>
  */
 public interface CycleCountService {
-    
+
     /**
      * Submit a count for a cycle count task.
      * Creates the first CountEntry for the task.
@@ -30,7 +29,7 @@ public interface CycleCountService {
      * @return the count response with variance details
      */
     CountResponse submitCount(SubmitCountRequest request);
-    
+
     /**
      * Submit a recount for a cycle count task.
      * Creates a new CountEntry linked to the previous count.
@@ -40,7 +39,7 @@ public interface CycleCountService {
      * @return the recount response with variance details
      */
     CountResponse submitRecount(SubmitRecountRequest request);
-    
+
     /**
      * Get a cycle count task by ID.
      *
@@ -48,7 +47,7 @@ public interface CycleCountService {
      * @return the task entity
      */
     CycleCountTaskResponse getTask(UUID taskId);
-    
+
     /**
      * Get all count entries for a task, ordered by sequence.
      *
@@ -56,7 +55,7 @@ public interface CycleCountService {
      * @return list of count entries
      */
     List<CountEntryResponse> getCountHistory(UUID taskId);
-    
+
     /**
      * Get tasks assigned to an auditor.
      *

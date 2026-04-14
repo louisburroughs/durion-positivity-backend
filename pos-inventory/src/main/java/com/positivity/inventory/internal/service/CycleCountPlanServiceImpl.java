@@ -1,12 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import java.time.Clock;
-import java.time.LocalDate;
-import java.util.UUID;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
@@ -14,8 +7,12 @@ import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.service.CycleCountPlanService;
-
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +41,8 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     @Override
     @Transactional(readOnly = true)
     public CycleCountPlanResponse getPlan(UUID planId) {
-        return cycleCountPlanRepository.findById(planId)
+        return cycleCountPlanRepository
+                .findById(planId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
     }

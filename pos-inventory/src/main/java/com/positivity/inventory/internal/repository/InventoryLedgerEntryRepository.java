@@ -18,22 +18,19 @@ import org.springframework.stereotype.Repository;
 public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, UUID> {
 
     List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
-            String stockItemId,
-            InventoryLedgerEventType eventType,
-            String notesFragment);
+            String stockItemId, InventoryLedgerEventType eventType, String notesFragment);
 
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
 
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);
 
-    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId,
-            UUID locationId);
+    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId, UUID locationId);
 
     Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
     default Integer calculateOnHandQuantity(UUID stockItemId) {
-        return calculateOnHandQuantityForEventTypes(stockItemId.toString(),
-                InventoryLedgerEventType.onHandAffectingTypes());
+        return calculateOnHandQuantityForEventTypes(
+                stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
     }
 
     @Query("""
@@ -42,30 +39,27 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
             WHERE e.stockItemId = :stockItemId
               AND e.eventType IN :eventTypes
             """)
-    Integer calculateOnHandQuantityForEventTypes(@Param("stockItemId") String stockItemId,
+    Integer calculateOnHandQuantityForEventTypes(
+            @Param("stockItemId") String stockItemId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
     default Integer calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
-        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId,
-                InventoryLedgerEventType.onHandAffectingTypes());
+        return calculateOnHandQuantityAtLocationForEventTypes(
+                stockItemId.toString(), locationId, InventoryLedgerEventType.onHandAffectingTypes());
     }
 
     default Integer calculateOnHandQuantityAtLocation(
-            UUID stockItemId,
-            UUID locationId,
-            Collection<InventoryLedgerEventType> eventTypes) {
+            UUID stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId, eventTypes);
     }
 
     default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
-        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId,
-                InventoryLedgerEventType.onHandAffectingTypes());
+        return calculateOnHandQuantityAtLocationForEventTypes(
+                stockItemId, locationId, InventoryLedgerEventType.onHandAffectingTypes());
     }
 
     default Integer calculateOnHandQuantityAtLocation(
-            String stockItemId,
-            UUID locationId,
-            Collection<InventoryLedgerEventType> eventTypes) {
+            String stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId, eventTypes);
     }
 
@@ -76,7 +70,8 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
               AND e.locationId = :locationId
               AND e.eventType IN :eventTypes
             """)
-    Integer calculateOnHandQuantityAtLocationForEventTypes(@Param("stockItemId") String stockItemId,
+    Integer calculateOnHandQuantityAtLocationForEventTypes(
+            @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
@@ -87,8 +82,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
               AND e.eventType IN :eventTypes
             """)
     Integer calculateOnHandQuantityAtLocation(
-            @Param("locationId") UUID locationId,
-            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+            @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
     @Query("""
             SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
@@ -99,8 +93,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
             HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
             """)
     List<LocationOnHand> findPositiveOnHandByLocation(
-            @Param("locationId") UUID locationId,
-            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+            @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
     interface LocationOnHand {
         String getStockItemId();

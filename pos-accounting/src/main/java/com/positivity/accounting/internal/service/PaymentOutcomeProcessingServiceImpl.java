@@ -88,7 +88,8 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
     }
 
     private @NonNull InvoiceStatusView loadInvoiceStatusView(@NonNull UUID invoiceId) {
-        return statusViewRepository.findByInvoiceId(invoiceId)
+        return statusViewRepository
+                .findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new EntityNotFoundException("Invoice status view not found: " + invoiceId));
     }
 
@@ -96,14 +97,12 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
         return isDuplicateTransactionId(request, view) || isDuplicateIdempotencyKey(request, view);
     }
 
-    private boolean isDuplicateTransactionId(
-            @NonNull PaymentOutcomeRequest request, @NonNull InvoiceStatusView view) {
+    private boolean isDuplicateTransactionId(@NonNull PaymentOutcomeRequest request, @NonNull InvoiceStatusView view) {
         return request.getTransactionId() != null
                 && request.getTransactionId().equals(view.getLatestTransactionReference());
     }
 
-    private boolean isDuplicateIdempotencyKey(
-            @NonNull PaymentOutcomeRequest request, @NonNull InvoiceStatusView view) {
+    private boolean isDuplicateIdempotencyKey(@NonNull PaymentOutcomeRequest request, @NonNull InvoiceStatusView view) {
         return request.getTransactionId() == null
                 && request.getIdempotencyKey() != null
                 && request.getIdempotencyKey().equals(view.getLatestIdempotencyKey());
@@ -137,8 +136,8 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
 
     private void handlePartialPayment(@NonNull PaymentOutcomeRequest request, @NonNull InvoiceStatusView view) {
         long updatedPaidMinor = getOrZero(view.getPaidAmountMinor()) + request.getAmountMinor();
-        long updatedOutstandingMinor = Math.max(0L,
-                getOrZero(view.getOutstandingAmountMinor()) - request.getAmountMinor());
+        long updatedOutstandingMinor =
+                Math.max(0L, getOrZero(view.getOutstandingAmountMinor()) - request.getAmountMinor());
 
         view.setPaidAmountMinor(updatedPaidMinor);
         view.setOutstandingAmountMinor(updatedOutstandingMinor);
@@ -189,8 +188,7 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
     }
 
     private @NonNull InvoicePaymentRecorded createInvoicePaymentRecorded(@NonNull PaymentOutcomeRequest request) {
-        return new InvoicePaymentRecorded(
-                request.getInvoiceId(), request.getTransactionId(), request.getAmountMinor());
+        return new InvoicePaymentRecorded(request.getInvoiceId(), request.getTransactionId(), request.getAmountMinor());
     }
 
     private long getOrZero(Long value) {

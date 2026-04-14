@@ -1,17 +1,14 @@
 package com.positivity.workorder.internal.dto;
 
+import com.positivity.workorder.internal.enums.BreakType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
-
-import org.jspecify.annotations.Nullable;
-
-import com.positivity.workorder.internal.enums.BreakType;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 @Data
 @Builder

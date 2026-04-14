@@ -15,17 +15,16 @@ import org.springframework.stereotype.Repository;
 @Profile("!test")
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
-  private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
-  public ToolMetadataRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
-  }
+    public ToolMetadataRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
-  @Override
-  public @NonNull List<ToolMetadata> findEnabledByRoleAndWorkflow(
-      @NonNull String role,
-      @NonNull String workflowState) {
-    String sql = """
+    @Override
+    public @NonNull List<ToolMetadata> findEnabledByRoleAndWorkflow(
+            @NonNull String role, @NonNull String workflowState) {
+        String sql = """
         SELECT t.id, t.name, t.display_name, t.description,
                t.domain, t.priority, t.cost_level,
                t.avg_latency_ms, t.enabled, t.handler_bean
@@ -39,12 +38,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
           AND ws.name = ?
         """;
 
-    return jdbcTemplate.query(sql, this::mapRow, role, workflowState);
-  }
+        return jdbcTemplate.query(sql, this::mapRow, role, workflowState);
+    }
 
-  @Override
-  public @NonNull List<ToolMetadata> findTopKByEmbedding(float @NonNull [] embedding, int limit) {
-    String sql = """
+    @Override
+    public @NonNull List<ToolMetadata> findTopKByEmbedding(float @NonNull [] embedding, int limit) {
+        String sql = """
         SELECT id, name, display_name, description,
                domain, priority, cost_level,
                avg_latency_ms, enabled, handler_bean
@@ -55,39 +54,39 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         LIMIT ?
         """;
 
-    return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
-  }
-
-  private static PGobject toVectorPGobject(float[] embedding) {
-    StringBuilder sb = new StringBuilder("[");
-    for (int i = 0; i < embedding.length; i++) {
-      if (i > 0) {
-        sb.append(",");
-      }
-      sb.append(embedding[i]);
+        return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
     }
-    sb.append("]");
-    PGobject pgVector = new PGobject();
-    pgVector.setType("vector");
-    try {
-      pgVector.setValue(sb.toString());
-    } catch (SQLException e) {
-      throw new IllegalArgumentException("Failed to create vector PGobject", e);
-    }
-    return pgVector;
-  }
 
-  private ToolMetadata mapRow(ResultSet rs, int rowNum) throws SQLException {
-    return new ToolMetadata(
-        rs.getObject("id", UUID.class),
-        rs.getString("name"),
-        rs.getString("display_name"),
-        rs.getString("description"),
-        rs.getString("domain"),
-        rs.getDouble("priority"),
-        rs.getString("cost_level"),
-        rs.getInt("avg_latency_ms"),
-        rs.getBoolean("enabled"),
-        rs.getString("handler_bean"));
-  }
+    private static PGobject toVectorPGobject(float[] embedding) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < embedding.length; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            sb.append(embedding[i]);
+        }
+        sb.append("]");
+        PGobject pgVector = new PGobject();
+        pgVector.setType("vector");
+        try {
+            pgVector.setValue(sb.toString());
+        } catch (SQLException e) {
+            throw new IllegalArgumentException("Failed to create vector PGobject", e);
+        }
+        return pgVector;
+    }
+
+    private ToolMetadata mapRow(ResultSet rs, int rowNum) throws SQLException {
+        return new ToolMetadata(
+                rs.getObject("id", UUID.class),
+                rs.getString("name"),
+                rs.getString("display_name"),
+                rs.getString("description"),
+                rs.getString("domain"),
+                rs.getDouble("priority"),
+                rs.getString("cost_level"),
+                rs.getInt("avg_latency_ms"),
+                rs.getBoolean("enabled"),
+                rs.getString("handler_bean"));
+    }
 }

@@ -1,10 +1,9 @@
 package com.positivity.shopmanager.internal.client;
 
+import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
 
 @Component
 public class ServiceEntityClient {
@@ -18,9 +17,6 @@ public class ServiceEntityClient {
     }
 
     public ServiceEntityDTO getServiceById(Long id) {
-        return restClient.get()
-                .uri(catalogServiceUrl + "/{id}", id)
-                .retrieve()
-                .body(ServiceEntityDTO.class);
+        return restClient.get().uri(catalogServiceUrl + "/{id}", id).retrieve().body(ServiceEntityDTO.class);
     }
 }

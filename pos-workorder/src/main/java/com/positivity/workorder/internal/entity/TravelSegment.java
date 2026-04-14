@@ -16,6 +16,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,20 +29,21 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Entity representing a single travel leg for a mobile work assignment.
  * Implements Story #67 Mobile Travel Segment Capture.
  */
 @Entity
-@Table(name = "travel_segment", indexes = {
-        @Index(name = "idx_travel_segment_mobile_work_assignment_id", columnList = "mobileWorkAssignmentId"),
-        @Index(name = "idx_travel_segment_technician_id", columnList = "technicianId"),
-        @Index(name = "idx_travel_segment_status", columnList = "status"),
-        @Index(name = "idx_travel_segment_assignment_technician", columnList = "mobileWorkAssignmentId, technicianId")
-})
+@Table(
+        name = "travel_segment",
+        indexes = {
+            @Index(name = "idx_travel_segment_mobile_work_assignment_id", columnList = "mobileWorkAssignmentId"),
+            @Index(name = "idx_travel_segment_technician_id", columnList = "technicianId"),
+            @Index(name = "idx_travel_segment_status", columnList = "status"),
+            @Index(
+                    name = "idx_travel_segment_assignment_technician",
+                    columnList = "mobileWorkAssignmentId, technicianId")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

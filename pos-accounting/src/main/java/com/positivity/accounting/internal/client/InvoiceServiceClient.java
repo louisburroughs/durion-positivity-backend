@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.client;
 
 import com.positivity.accounting.internal.dto.*;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -10,9 +12,6 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.util.UUID;
-import java.util.function.Supplier;
 
 /**
  * REST client for Invoice service integration.
@@ -45,6 +44,7 @@ public class InvoiceServiceClient {
 
     @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
+
     private final CircuitBreaker invoiceServiceCircuitBreaker;
 
     @Value("${pos.invoice.service.url:http://pos-invoice:8085}")
@@ -63,11 +63,14 @@ public class InvoiceServiceClient {
 
         Supplier<InvoiceDetails> invokeRemote = () -> {
             try {
-                InvoiceDetails details = restClient.get()
+                InvoiceDetails details = restClient
+                        .get()
                         .uri(invoiceServiceUrl + "/v1/invoices/{id}", invoiceId)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (request, httpResponse) -> {
-                            log.warn("Invoice service error: {} {}", httpResponse.getStatusCode(),
+                            log.warn(
+                                    "Invoice service error: {} {}",
+                                    httpResponse.getStatusCode(),
                                     httpResponse.getStatusText());
                             throw new InvoiceServiceException(
                                     "Invoice service returned " + httpResponse.getStatusCode(),
@@ -80,8 +83,11 @@ public class InvoiceServiceClient {
                     throw new InvoiceServiceException("No invoice details returned", 500);
                 }
 
-                log.debug("Retrieved invoice {}: status={}, balanceDue={}",
-                        invoiceId, details.getStatus(), details.getBalanceDue());
+                log.debug(
+                        "Retrieved invoice {}: status={}, balanceDue={}",
+                        invoiceId,
+                        details.getStatus(),
+                        details.getBalanceDue());
 
                 return details;
             } catch (RestClientException e) {
@@ -99,9 +105,7 @@ public class InvoiceServiceClient {
             }
             log.error("Circuit breaker open for getInvoiceDetails({}): {}", invoiceId, e.getMessage());
             throw new InvoiceServiceException(
-                    "Invoice service unavailable (circuit breaker open). Please retry later.",
-                    503,
-                    e);
+                    "Invoice service unavailable (circuit breaker open). Please retry later.", 503, e);
         }
     }
 
@@ -115,23 +119,27 @@ public class InvoiceServiceClient {
      * @return invoice state after payment applied
      * @throws InvoiceServiceException if operation fails
      */
-    public ApplyPaymentToInvoiceResponse applyPaymentToInvoice(
-            UUID invoiceId,
-            ApplyPaymentToInvoiceRequest request) {
+    public ApplyPaymentToInvoiceResponse applyPaymentToInvoice(UUID invoiceId, ApplyPaymentToInvoiceRequest request) {
 
-        log.info("Applying payment {} to invoice {}: amount={}, currency={}",
-                request.getPaymentApplicationId(), invoiceId, request.getAmountApplied(),
+        log.info(
+                "Applying payment {} to invoice {}: amount={}, currency={}",
+                request.getPaymentApplicationId(),
+                invoiceId,
+                request.getAmountApplied(),
                 request.getCurrency());
 
         Supplier<ApplyPaymentToInvoiceResponse> invokeRemote = () -> {
             try {
-                ApplyPaymentToInvoiceResponse response = restClient.post()
+                ApplyPaymentToInvoiceResponse response = restClient
+                        .post()
                         .uri(invoiceServiceUrl + "/v1/invoices/{id}/apply-payment", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
-                            log.warn("Invoice service error applying payment: {} {}",
-                                    httpResponse.getStatusCode(), httpResponse.getStatusText());
+                            log.warn(
+                                    "Invoice service error applying payment: {} {}",
+                                    httpResponse.getStatusCode(),
+                                    httpResponse.getStatusText());
                             throw new InvoiceServiceException(
                                     "Invoice service returned " + httpResponse.getStatusCode(),
                                     httpResponse.getStatusCode().value());
@@ -139,19 +147,20 @@ public class InvoiceServiceClient {
                         .body(ApplyPaymentToInvoiceResponse.class);
 
                 if (response == null) {
-                    log.warn("Invoice service returned null response for apply payment on invoice {}",
-                            invoiceId);
+                    log.warn("Invoice service returned null response for apply payment on invoice {}", invoiceId);
                     throw new InvoiceServiceException("No response from invoice service", 500);
                 }
 
-                log.info("Successfully applied payment to invoice {}: new status={}, balanceAfter={}",
-                        invoiceId, response.getStatus(), response.getBalanceAfter());
+                log.info(
+                        "Successfully applied payment to invoice {}: new status={}, balanceAfter={}",
+                        invoiceId,
+                        response.getStatus(),
+                        response.getBalanceAfter());
 
                 return response;
             } catch (RestClientException e) {
                 log.error("Failed to apply payment to invoice {}: {}", invoiceId, e.getMessage(), e);
-                throw new InvoiceServiceException(
-                        "Failed to apply payment to invoice: " + e.getMessage(), e);
+                throw new InvoiceServiceException("Failed to apply payment to invoice: " + e.getMessage(), e);
             }
         };
 
@@ -161,12 +170,9 @@ public class InvoiceServiceClient {
             if (e instanceof InvoiceServiceException invoiceServiceException) {
                 throw invoiceServiceException;
             }
-            log.error("Circuit breaker open for applyPaymentToInvoice({}): {}",
-                    invoiceId, e.getMessage());
+            log.error("Circuit breaker open for applyPaymentToInvoice({}): {}", invoiceId, e.getMessage());
             throw new InvoiceServiceException(
-                    "Invoice service unavailable (circuit breaker open). Payment application cannot proceed.",
-                    503,
-                    e);
+                    "Invoice service unavailable (circuit breaker open). Payment application cannot proceed.", 503, e);
         }
     }
 
@@ -181,22 +187,27 @@ public class InvoiceServiceClient {
      * @throws InvoiceServiceException if operation fails
      */
     public ReversePaymentApplicationResponse reversePaymentApplication(
-            UUID invoiceId,
-            ReversePaymentApplicationRequest request) {
+            UUID invoiceId, ReversePaymentApplicationRequest request) {
 
-        log.info("Reversing payment application {} on invoice {}: amount={}, reason={}",
-                request.getPaymentApplicationId(), invoiceId, request.getAmountToRestore(),
+        log.info(
+                "Reversing payment application {} on invoice {}: amount={}, reason={}",
+                request.getPaymentApplicationId(),
+                invoiceId,
+                request.getAmountToRestore(),
                 request.getReason());
 
         Supplier<ReversePaymentApplicationResponse> invokeRemote = () -> {
             try {
-                ReversePaymentApplicationResponse response = restClient.post()
+                ReversePaymentApplicationResponse response = restClient
+                        .post()
                         .uri(invoiceServiceUrl + "/v1/invoices/{id}/reverse-payment", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
-                            log.warn("Invoice service error reversing payment: {} {}",
-                                    httpResponse.getStatusCode(), httpResponse.getStatusText());
+                            log.warn(
+                                    "Invoice service error reversing payment: {} {}",
+                                    httpResponse.getStatusCode(),
+                                    httpResponse.getStatusText());
                             throw new InvoiceServiceException(
                                     "Invoice service returned " + httpResponse.getStatusCode(),
                                     httpResponse.getStatusCode().value());
@@ -204,19 +215,20 @@ public class InvoiceServiceClient {
                         .body(ReversePaymentApplicationResponse.class);
 
                 if (response == null) {
-                    log.warn("Invoice service returned null response for reverse payment on invoice {}",
-                            invoiceId);
+                    log.warn("Invoice service returned null response for reverse payment on invoice {}", invoiceId);
                     throw new InvoiceServiceException("No response from invoice service", 500);
                 }
 
-                log.info("Successfully reversed payment on invoice {}: new status={}, balanceDue={}",
-                        invoiceId, response.getStatus(), response.getBalanceDue());
+                log.info(
+                        "Successfully reversed payment on invoice {}: new status={}, balanceDue={}",
+                        invoiceId,
+                        response.getStatus(),
+                        response.getBalanceDue());
 
                 return response;
             } catch (RestClientException e) {
                 log.error("Failed to reverse payment on invoice {}: {}", invoiceId, e.getMessage(), e);
-                throw new InvoiceServiceException(
-                        "Failed to reverse payment on invoice: " + e.getMessage(), e);
+                throw new InvoiceServiceException("Failed to reverse payment on invoice: " + e.getMessage(), e);
             }
         };
 
@@ -226,12 +238,9 @@ public class InvoiceServiceClient {
             if (e instanceof InvoiceServiceException invoiceServiceException) {
                 throw invoiceServiceException;
             }
-            log.error("Circuit breaker open for reversePaymentApplication({}): {}",
-                    invoiceId, e.getMessage());
+            log.error("Circuit breaker open for reversePaymentApplication({}): {}", invoiceId, e.getMessage());
             throw new InvoiceServiceException(
-                    "Invoice service unavailable (circuit breaker open). Payment reversal cannot proceed.",
-                    503,
-                    e);
+                    "Invoice service unavailable (circuit breaker open). Payment reversal cannot proceed.", 503, e);
         }
     }
 
@@ -244,22 +253,26 @@ public class InvoiceServiceClient {
      * @return invoice state after credit memo applied
      * @throws InvoiceServiceException if operation fails
      */
-    public ApplyCreditMemoResponse applyCreditMemo(
-            UUID invoiceId,
-            ApplyCreditMemoRequest request) {
+    public ApplyCreditMemoResponse applyCreditMemo(UUID invoiceId, ApplyCreditMemoRequest request) {
 
-        log.info("Applying credit memo {} to invoice {}: amount={}",
-                request.getCreditMemoId(), invoiceId, request.getTotalAmount());
+        log.info(
+                "Applying credit memo {} to invoice {}: amount={}",
+                request.getCreditMemoId(),
+                invoiceId,
+                request.getTotalAmount());
 
         Supplier<ApplyCreditMemoResponse> invokeRemote = () -> {
             try {
-                ApplyCreditMemoResponse response = restClient.post()
+                ApplyCreditMemoResponse response = restClient
+                        .post()
                         .uri(invoiceServiceUrl + "/v1/invoices/{id}/apply-credit-memo", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
-                            log.warn("Invoice service error applying credit memo: {} {}",
-                                    httpResponse.getStatusCode(), httpResponse.getStatusText());
+                            log.warn(
+                                    "Invoice service error applying credit memo: {} {}",
+                                    httpResponse.getStatusCode(),
+                                    httpResponse.getStatusText());
                             throw new InvoiceServiceException(
                                     "Invoice service returned " + httpResponse.getStatusCode(),
                                     httpResponse.getStatusCode().value());
@@ -267,19 +280,20 @@ public class InvoiceServiceClient {
                         .body(ApplyCreditMemoResponse.class);
 
                 if (response == null) {
-                    log.warn("Invoice service returned null response for apply credit memo on invoice {}",
-                            invoiceId);
+                    log.warn("Invoice service returned null response for apply credit memo on invoice {}", invoiceId);
                     throw new InvoiceServiceException("No response from invoice service", 500);
                 }
 
-                log.info("Successfully applied credit memo to invoice {}: new status={}, balanceAfter={}",
-                        invoiceId, response.getStatus(), response.getBalanceAfter());
+                log.info(
+                        "Successfully applied credit memo to invoice {}: new status={}, balanceAfter={}",
+                        invoiceId,
+                        response.getStatus(),
+                        response.getBalanceAfter());
 
                 return response;
             } catch (RestClientException e) {
                 log.error("Failed to apply credit memo to invoice {}: {}", invoiceId, e.getMessage(), e);
-                throw new InvoiceServiceException(
-                        "Failed to apply credit memo to invoice: " + e.getMessage(), e);
+                throw new InvoiceServiceException("Failed to apply credit memo to invoice: " + e.getMessage(), e);
             }
         };
 
@@ -289,8 +303,7 @@ public class InvoiceServiceClient {
             if (e instanceof InvoiceServiceException invoiceServiceException) {
                 throw invoiceServiceException;
             }
-            log.error("Circuit breaker open for applyCreditMemo({}): {}",
-                    invoiceId, e.getMessage());
+            log.error("Circuit breaker open for applyCreditMemo({}): {}", invoiceId, e.getMessage());
             throw new InvoiceServiceException(
                     "Invoice service unavailable (circuit breaker open). Credit memo application cannot proceed.",
                     503,

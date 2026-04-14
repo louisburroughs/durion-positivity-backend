@@ -22,53 +22,51 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 class DocumentIngestionControllerTest {
 
-  @Autowired
-  private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-  @MockitoBean
-  private DocumentIngestionService documentIngestionService;
+    @MockitoBean
+    private DocumentIngestionService documentIngestionService;
 
-  @Test
-  @WithMockUser(authorities = "mcp:document:ingest")
-  @DisplayName("POST /v1/mcp/documents with valid payload returns 201 Created")
-  void ingestDocument_withValidPayload_returns201() throws Exception {
-    var payload = Map.of(
-        "content", "Vehicle inspection checklist",
-        "metadata", Map.of("source", "manual", "type", "checklist"));
+    @Test
+    @WithMockUser(authorities = "mcp:document:ingest")
+    @DisplayName("POST /v1/mcp/documents with valid payload returns 201 Created")
+    void ingestDocument_withValidPayload_returns201() throws Exception {
+        var payload = Map.of(
+                "content", "Vehicle inspection checklist", "metadata", Map.of("source", "manual", "type", "checklist"));
 
-    mockMvc.perform(post("/v1/mcp/documents")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(payload)))
-        .andExpect(status().isCreated())
-        .andExpect(header().string("Location", "/v1/mcp/documents"));
+        mockMvc.perform(post("/v1/mcp/documents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/v1/mcp/documents"));
 
-    verify(documentIngestionService).ingestDocument(
-        "Vehicle inspection checklist",
-        Map.of("source", "manual", "type", "checklist"));
-  }
+        verify(documentIngestionService)
+                .ingestDocument("Vehicle inspection checklist", Map.of("source", "manual", "type", "checklist"));
+    }
 
-  @Test
-  @WithMockUser(authorities = "mcp:document:ingest")
-  @DisplayName("POST /v1/mcp/documents with null metadata delegates empty map")
-  void ingestDocument_withNullMetadata_delegatesEmptyMap() throws Exception {
-    mockMvc.perform(post("/v1/mcp/documents")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"content\":\"Only content provided\",\"metadata\":null}"))
-        .andExpect(status().isCreated());
+    @Test
+    @WithMockUser(authorities = "mcp:document:ingest")
+    @DisplayName("POST /v1/mcp/documents with null metadata delegates empty map")
+    void ingestDocument_withNullMetadata_delegatesEmptyMap() throws Exception {
+        mockMvc.perform(post("/v1/mcp/documents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Only content provided\",\"metadata\":null}"))
+                .andExpect(status().isCreated());
 
-    verify(documentIngestionService).ingestDocument("Only content provided", Map.of());
-  }
+        verify(documentIngestionService).ingestDocument("Only content provided", Map.of());
+    }
 
-  @Test
-  @WithMockUser(authorities = "mcp:document:ingest")
-  @DisplayName("POST /v1/mcp/documents with blank content returns 400")
-  void ingestDocument_withBlankContent_returns400() throws Exception {
-    mockMvc.perform(post("/v1/mcp/documents")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"content\":\"\"}"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @WithMockUser(authorities = "mcp:document:ingest")
+    @DisplayName("POST /v1/mcp/documents with blank content returns 400")
+    void ingestDocument_withBlankContent_returns400() throws Exception {
+        mockMvc.perform(post("/v1/mcp/documents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
 }

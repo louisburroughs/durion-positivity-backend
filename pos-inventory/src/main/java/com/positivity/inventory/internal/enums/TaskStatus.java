@@ -3,7 +3,7 @@ package com.positivity.inventory.internal.enums;
 /**
  * Enumeration of cycle count task statuses following the workflow defined in
  * issue #27.
- * 
+ *
  * <p>
  * Status flow:
  * <ul>

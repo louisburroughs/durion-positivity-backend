@@ -2,15 +2,13 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.BillingRulesDTO;
 import com.positivity.workorder.service.BillingRulesClientService;
-
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-
-import java.util.Optional;
 
 /**
  * Client service for fetching billing rules from pos-invoice service.
@@ -43,8 +41,10 @@ public class BillingRulesClientServiceImpl implements BillingRulesClientService 
                     .body(BillingRulesDTO.class);
 
             if (rules != null) {
-                log.debug("Successfully fetched billing rules for partyId={}, purchaseOrderRequired={}",
-                        partyId, rules.isPurchaseOrderRequired());
+                log.debug(
+                        "Successfully fetched billing rules for partyId={}, purchaseOrderRequired={}",
+                        partyId,
+                        rules.isPurchaseOrderRequired());
                 return Optional.of(rules);
             }
 

@@ -5,8 +5,7 @@ import com.positivity.price.internal.entity.PromotionOffer;
 /** Maps promotion offer domain entities to API response DTOs. Issue: #97 */
 public final class PromotionOfferMapper {
 
-    private PromotionOfferMapper() {
-    }
+    private PromotionOfferMapper() {}
 
     public static PromotionOfferResponse toResponse(PromotionOffer offer) {
         PromotionOfferResponse response = new PromotionOfferResponse();

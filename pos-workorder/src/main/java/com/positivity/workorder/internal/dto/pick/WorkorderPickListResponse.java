@@ -13,17 +13,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkorderPickListResponse {
-  private UUID pickListId;
-  private UUID workorderId;
-  private String status;
-  private int priority;
+    private UUID pickListId;
+    private UUID workorderId;
+    private String status;
+    private int priority;
 
-  @JsonFormat(shape = JsonFormat.Shape.STRING)
-  private Instant dueAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant dueAt;
 
-  @JsonFormat(shape = JsonFormat.Shape.STRING)
-  private Instant createdAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant createdAt;
 
-  @JsonFormat(shape = JsonFormat.Shape.STRING)
-  private Instant updatedAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant updatedAt;
 }

@@ -1,12 +1,11 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 /**
  * DTO for approval configuration responses.
@@ -21,10 +20,14 @@ public class ApprovalConfigurationResponse {
     @Schema(description = "Unique identifier for the configuration", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID id;
 
-    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "00000000-0000-0000-0000-000000000001")
+    @Schema(
+            description = "Location ID for this configuration (null = applies to all locations)",
+            example = "00000000-0000-0000-0000-000000000001")
     private UUID locationId;
 
-    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "00000000-0000-0000-0000-000000000002")
+    @Schema(
+            description = "Customer ID for this configuration (null = applies to all customers)",
+            example = "00000000-0000-0000-0000-000000000002")
     private UUID customerId;
 
     @Schema(description = "Approval method", example = "CLICK_CONFIRM")
@@ -36,6 +39,8 @@ public class ApprovalConfigurationResponse {
     @Schema(description = "Whether signature is required", example = "false")
     private Boolean requireSignature;
 
-    @Schema(description = "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)", example = "0")
+    @Schema(
+            description = "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)",
+            example = "0")
     private Integer priority;
 }

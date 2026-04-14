@@ -1,5 +1,13 @@
 package com.positivity.customer.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.VehicleTransferRequest;
@@ -12,13 +20,6 @@ import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.CrmVehicleServiceImpl;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,14 +27,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CrmVehicleServiceImplTest {
@@ -41,8 +40,10 @@ class CrmVehicleServiceImplTest {
 
     @Mock
     private VehicleInventoryClient vehicleInventoryClient;
+
     @Mock
     private PersonPartyRepository personPartyRepository;
+
     @Mock
     private CommercialPartyRepository commercialPartyRepository;
 
@@ -50,8 +51,8 @@ class CrmVehicleServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CrmVehicleServiceImpl(TEST_CLOCK, vehicleInventoryClient, personPartyRepository,
-                commercialPartyRepository);
+        service = new CrmVehicleServiceImpl(
+                TEST_CLOCK, vehicleInventoryClient, personPartyRepository, commercialPartyRepository);
     }
 
     private CommercialParty commercialParty(UUID id) {
@@ -120,11 +121,12 @@ class CrmVehicleServiceImplTest {
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
         when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class))).thenReturn(null);
+        when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
+                .thenReturn(null);
 
-        VehicleResponse result = service.createVehicle(customerId, CreateVehicleForPartyRequest.builder()
-                .vinNumber("VIN-NULL")
-                .build());
+        VehicleResponse result = service.createVehicle(
+                customerId,
+                CreateVehicleForPartyRequest.builder().vinNumber("VIN-NULL").build());
 
         assertThat(result).isNull();
         verify(commercialPartyRepository, never()).save(any());
@@ -153,9 +155,8 @@ class CrmVehicleServiceImplTest {
         party.getVehicleVins().add("VIN-OLD");
 
         VehicleResponse existing = vehicle(vehicleId, "VIN-OLD");
-        CreateVehicleForPartyRequest request = CreateVehicleForPartyRequest.builder()
-                .vinNumber("VIN-NEW")
-                .build();
+        CreateVehicleForPartyRequest request =
+                CreateVehicleForPartyRequest.builder().vinNumber("VIN-NEW").build();
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
         when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
@@ -177,7 +178,8 @@ class CrmVehicleServiceImplTest {
     void updateVehicle_throws_whenVehicleNotOwned() {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CreateVehicleForPartyRequest request = CreateVehicleForPartyRequest.builder().build();
+        CreateVehicleForPartyRequest request =
+                CreateVehicleForPartyRequest.builder().build();
         CommercialParty party = commercialParty(customerId);
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
@@ -247,9 +249,8 @@ class CrmVehicleServiceImplTest {
     void transferVehicle_throwsOnInvalidTargetId() {
         UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        VehicleTransferRequest badRequest = VehicleTransferRequest.builder()
-                .targetCustomerId("not-a-uuid")
-                .build();
+        VehicleTransferRequest badRequest =
+                VehicleTransferRequest.builder().targetCustomerId("not-a-uuid").build();
 
         assertThatThrownBy(() -> service.transferVehicle(sourceId, vehicleId, badRequest))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -336,7 +337,9 @@ class CrmVehicleServiceImplTest {
         when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
                 .thenReturn(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-PER"));
 
-        service.createVehicle(customerId, CreateVehicleForPartyRequest.builder().vinNumber("VIN-PER").build());
+        service.createVehicle(
+                customerId,
+                CreateVehicleForPartyRequest.builder().vinNumber("VIN-PER").build());
 
         verify(personPartyRepository).save(person);
         verify(commercialPartyRepository, never()).save(any());

@@ -2,12 +2,24 @@ package com.positivity.workorder.contract;
 
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import com.positivity.security.common.GatewaySecurityConstants;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,21 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderServiceLine;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
-import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
-import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
 /**
  * Shared MockMvc setup and persistence cleanup for CAP-121 workexec contract
  * tests.
@@ -44,8 +41,7 @@ abstract class AbstractWorkexecContractBehaviorIT {
     private static final String TEST_USERNAME = "workorder-test-user";
 
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-            new SimpleGrantedAuthority("workorder:labor:view"),
-            new SimpleGrantedAuthority("workorder:labor:add"));
+            new SimpleGrantedAuthority("workorder:labor:view"), new SimpleGrantedAuthority("workorder:labor:add"));
 
     protected MockMvc mockMvc;
 
@@ -79,9 +75,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
                 .addFilters(new OncePerRequestFilter() {
                     @Override
                     protected void doFilterInternal(
-                            HttpServletRequest request,
-                            HttpServletResponse response,
-                            FilterChain filterChain) throws ServletException, IOException {
+                            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                            throws ServletException, IOException {
                         UUID userId = TEST_USER_ID;
                         String userIdHeader = request.getHeader("X-User-Id");
                         if (userIdHeader != null && !userIdHeader.isBlank()) {
@@ -92,8 +87,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
                             }
                         }
 
-                        var authentication = new UsernamePasswordAuthenticationToken(
-                                TEST_USERNAME, null, TEST_AUTHORITIES);
+                        var authentication =
+                                new UsernamePasswordAuthenticationToken(TEST_USERNAME, null, TEST_AUTHORITIES);
                         authentication.setDetails(Map.of(
                                 GatewaySecurityConstants.DETAIL_USER_ID, userId,
                                 GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));

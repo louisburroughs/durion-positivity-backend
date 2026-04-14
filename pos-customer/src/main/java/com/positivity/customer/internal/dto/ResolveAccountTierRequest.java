@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,12 +9,10 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.math.BigDecimal;
-
 /**
  * Request DTO for resolving/computing an account's tier based on business
  * rules.
- * 
+ *
  * This allows the system to calculate the appropriate tier based on various
  * criteria like revenue, contract terms, and account history.
  */

@@ -1,11 +1,10 @@
 package com.positivity.invoice.internal.dto;
 
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public class InvoiceAdjustmentResponse {
 

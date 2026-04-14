@@ -28,9 +28,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "inventory_pick_list", indexes = {
-        @Index(name = "idx_inventory_pick_list_workorder_id", columnList = "workorder_id")
-})
+@Table(
+        name = "inventory_pick_list",
+        indexes = {@Index(name = "idx_inventory_pick_list_workorder_id", columnList = "workorder_id")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -14,16 +14,15 @@ import java.util.UUID;
  * consumers (workexec, notification).
  */
 public record AppointmentRescheduledEvent(
-                UUID appointmentId,
-                String workorderLinkRef,
-                Instant previousStartAt,
-                Instant previousEndAt,
-                Instant newStartAt,
-                Instant newEndAt,
-                RescheduleReasonCode rescheduleReason,
-                String actorId,
-                Instant rescheduledAt,
-                UUID estimateId,
-                UUID workOrderId,
-                String assignmentStatus) {
-}
+        UUID appointmentId,
+        String workorderLinkRef,
+        Instant previousStartAt,
+        Instant previousEndAt,
+        Instant newStartAt,
+        Instant newEndAt,
+        RescheduleReasonCode rescheduleReason,
+        String actorId,
+        Instant rescheduledAt,
+        UUID estimateId,
+        UUID workOrderId,
+        String assignmentStatus) {}

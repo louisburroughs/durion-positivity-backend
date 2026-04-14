@@ -1,10 +1,8 @@
 package com.positivity.accounting.service;
 
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface BillingRulesService {
 

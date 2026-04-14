@@ -1,13 +1,11 @@
 package com.positivity.inventory.internal.dto;
 
-import lombok.Builder;
-import lombok.Value;
-
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import lombok.Builder;
+import lombok.Value;
 
 /**
  * Response DTO representing a recorded inventory ledger entry.

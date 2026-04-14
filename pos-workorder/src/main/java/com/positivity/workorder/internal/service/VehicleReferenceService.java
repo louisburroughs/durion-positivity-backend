@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -34,7 +33,8 @@ public class VehicleReferenceService {
 
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = vehicleRestClient.get()
+            Map<String, Object> body = vehicleRestClient
+                    .get()
                     .uri("/v1/vehicles/{vehicleId}", vehicleId)
                     .retrieve()
                     .body(Map.class);
@@ -51,9 +51,7 @@ public class VehicleReferenceService {
                     extract(payload, "description"),
                     extract(payload, "displayName"),
                     fallbackInfo);
-            String vin = firstNonBlank(
-                    extract(payload, "vin"),
-                    extract(payload, "vehicleVin"));
+            String vin = firstNonBlank(extract(payload, "vin"), extract(payload, "vehicleVin"));
             return new VehicleReference(info, vin);
         } catch (Exception ex) {
             log.debug("Unable to resolve vehicle reference for {}: {}", vehicleId, ex.getMessage());
@@ -98,7 +96,8 @@ public class VehicleReferenceService {
         return null;
     }
 
-    public record VehicleReference(@Nullable String vehicleInfo, @Nullable String vin) {
+    public record VehicleReference(
+            @Nullable String vehicleInfo, @Nullable String vin) {
         public static @NonNull VehicleReference empty() {
             return new VehicleReference("", null);
         }

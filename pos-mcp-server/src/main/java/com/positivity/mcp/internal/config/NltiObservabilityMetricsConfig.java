@@ -1,11 +1,11 @@
 package com.positivity.mcp.internal.config;
 
+import com.positivity.mcp.service.SessionAgentCacheMetrics;
+import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import com.positivity.mcp.service.SessionAgentCacheMetrics;
-import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -15,20 +15,20 @@ public class NltiObservabilityMetricsConfig {
 
     @Bean
     @Profile("alpha")
-    public Gauge agentCacheSizeGauge(MeterRegistry registry,
-            SessionAgentCacheMetrics sessionAgentMetrics) {
-        return Gauge.builder("mcp.agent.cache.size",
-                sessionAgentMetrics, SessionAgentCacheMetrics::getCacheSize)
+    public Gauge agentCacheSizeGauge(MeterRegistry registry, SessionAgentCacheMetrics sessionAgentMetrics) {
+        return Gauge.builder("mcp.agent.cache.size", sessionAgentMetrics, SessionAgentCacheMetrics::getCacheSize)
                 .description("Current number of cached LangChain4j agent sessions")
                 .register(registry);
     }
 
     @Bean
     @Profile("alpha")
-    public Gauge streamingAgentCacheSizeGauge(MeterRegistry registry,
-            StreamingSessionAgentCacheMetrics streamingSessionAgentMetrics) {
-        return Gauge.builder("mcp.streaming.agent.cache.size",
-                streamingSessionAgentMetrics, StreamingSessionAgentCacheMetrics::getCacheSize)
+    public Gauge streamingAgentCacheSizeGauge(
+            MeterRegistry registry, StreamingSessionAgentCacheMetrics streamingSessionAgentMetrics) {
+        return Gauge.builder(
+                        "mcp.streaming.agent.cache.size",
+                        streamingSessionAgentMetrics,
+                        StreamingSessionAgentCacheMetrics::getCacheSize)
                 .description("Current number of cached LangChain4j streaming agent sessions")
                 .register(registry);
     }

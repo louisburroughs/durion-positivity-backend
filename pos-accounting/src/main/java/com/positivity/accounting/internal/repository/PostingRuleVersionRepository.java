@@ -2,12 +2,11 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for Posting Rule Version entity.
@@ -24,8 +23,8 @@ public interface PostingRuleVersionRepository extends JpaRepository<PostingRuleV
     /**
      * Find all versions for a rule set with a specific state.
      */
-    List<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndState(UUID postingRuleSetId,
-            PostingRuleSetState state);
+    List<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndState(
+            UUID postingRuleSetId, PostingRuleSetState state);
 
     /**
      * Find the latest version number for a rule set.
@@ -36,6 +35,6 @@ public interface PostingRuleVersionRepository extends JpaRepository<PostingRuleV
     /**
      * Find a specific version by rule set and version number.
      */
-    Optional<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndVersionNumber(UUID postingRuleSetId,
-            Integer versionNumber);
+    Optional<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndVersionNumber(
+            UUID postingRuleSetId, Integer versionNumber);
 }

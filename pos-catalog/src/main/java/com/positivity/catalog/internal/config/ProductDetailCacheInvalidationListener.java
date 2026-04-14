@@ -48,8 +48,11 @@ public class ProductDetailCacheInvalidationListener {
                     evictedCount++;
                 }
             }
-            log.debug("Evicted {} cache entries for productId={} from cache={}",
-                    evictedCount, event.productId(), PRODUCT_DETAILS_CACHE);
+            log.debug(
+                    "Evicted {} cache entries for productId={} from cache={}",
+                    evictedCount,
+                    event.productId(),
+                    PRODUCT_DETAILS_CACHE);
             return;
         }
 

@@ -11,7 +11,8 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     private static final String INTERNAL_USER = "pos-security-service";
-    private static final String PEOPLE_AUTHORITIES = "people:person:create,people:person:delete,people:userLink:view,people:userLink:write";
+    private static final String PEOPLE_AUTHORITIES =
+            "people:person:create,people:person:delete,people:userLink:view,people:userLink:write";
     private static final String CUSTOMER_AUTHORITIES = "crm:person:read";
 
     @Bean

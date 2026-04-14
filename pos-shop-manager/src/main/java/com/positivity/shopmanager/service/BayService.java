@@ -9,5 +9,4 @@ public interface BayService {
     Object manageBays(Object request);
 
     void deleteBay(Long locationId, Long bayId);
-
 }

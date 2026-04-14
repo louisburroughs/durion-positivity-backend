@@ -15,8 +15,7 @@ public class WorkSessionDto {
 
     private Instant endedAt;
 
-    public WorkSessionDto() {
-    }
+    public WorkSessionDto() {}
 
     public WorkSessionDto(UUID sessionId, UUID personId, String status, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
@@ -65,5 +64,4 @@ public class WorkSessionDto {
     public void setEndedAt(Instant endedAt) {
         this.endedAt = endedAt;
     }
-
 }

@@ -18,40 +18,37 @@ import org.springframework.stereotype.Service;
 @Profile("!test")
 public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(DocumentIngestionServiceImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(DocumentIngestionServiceImpl.class);
 
-  private final PgVectorEmbeddingStore embeddingStore;
-  private final EmbeddingModel embeddingModel;
+    private final PgVectorEmbeddingStore embeddingStore;
+    private final EmbeddingModel embeddingModel;
 
-  public DocumentIngestionServiceImpl(
-      @NonNull PgVectorEmbeddingStore embeddingStore,
-      @NonNull EmbeddingModel embeddingModel) {
-    this.embeddingStore = embeddingStore;
-    this.embeddingModel = embeddingModel;
-  }
-
-  @Override
-  public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
-    Embedding embedding = embeddingModel.embed(content).content();
-    TextSegment segment = TextSegment.from(content, Metadata.from(metadata));
-    embeddingStore.add(embedding, segment);
-  }
-
-  @Override
-  public void ingestDocuments(
-      @NonNull List<String> contents,
-      @NonNull List<Map<String, Object>> metadataList) {
-    if (contents.size() != metadataList.size()) {
-      throw new IllegalArgumentException(
-          "contents and metadataList must have equal size: contents=%d, metadataList=%d"
-              .formatted(contents.size(), metadataList.size()));
+    public DocumentIngestionServiceImpl(
+            @NonNull PgVectorEmbeddingStore embeddingStore, @NonNull EmbeddingModel embeddingModel) {
+        this.embeddingStore = embeddingStore;
+        this.embeddingModel = embeddingModel;
     }
-    for (int index = 0; index < contents.size(); index++) {
-      try {
-        ingestDocument(contents.get(index), metadataList.get(index));
-      } catch (Exception exception) {
-        LOGGER.warn("Failed to ingest document at index {}", index, exception);
-      }
+
+    @Override
+    public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
+        Embedding embedding = embeddingModel.embed(content).content();
+        TextSegment segment = TextSegment.from(content, Metadata.from(metadata));
+        embeddingStore.add(embedding, segment);
     }
-  }
+
+    @Override
+    public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
+        if (contents.size() != metadataList.size()) {
+            throw new IllegalArgumentException(
+                    "contents and metadataList must have equal size: contents=%d, metadataList=%d"
+                            .formatted(contents.size(), metadataList.size()));
+        }
+        for (int index = 0; index < contents.size(); index++) {
+            try {
+                ingestDocument(contents.get(index), metadataList.get(index));
+            } catch (Exception exception) {
+                LOGGER.warn("Failed to ingest document at index {}", index, exception);
+            }
+        }
+    }
 }

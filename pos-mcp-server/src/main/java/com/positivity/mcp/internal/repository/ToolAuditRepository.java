@@ -5,5 +5,5 @@ import org.jspecify.annotations.NonNull;
 
 public interface ToolAuditRepository {
 
-  void logInvocation(@NonNull ToolInvocationLog log);
+    void logInvocation(@NonNull ToolInvocationLog log);
 }

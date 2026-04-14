@@ -9,20 +9,19 @@ import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.internal.entity.SubstituteAudit;
 import com.positivity.workorder.internal.entity.SubstituteLink;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
-import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
+import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.repository.SubstituteAuditRepository;
 import com.positivity.workorder.internal.repository.SubstituteLinkRepository;
 import com.positivity.workorder.service.SubstituteLinkService;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SubstituteLinkServiceImpl implements SubstituteLinkService {
@@ -84,7 +83,8 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
     @Override
     @Transactional
     public SubstituteLinkResponse updateLink(@NonNull UUID linkId, @NonNull UpdateSubstituteLinkRequest request) {
-        SubstituteLink existing = substituteLinkRepository.findById(linkId)
+        SubstituteLink existing = substituteLinkRepository
+                .findById(linkId)
                 .orElseThrow(() -> new SubstituteLinkNotFoundException(linkId));
 
         if (request.getVersion() != existing.getVersion()) {
@@ -156,8 +156,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
     @Override
     @Transactional(readOnly = true)
     public List<SubstituteLinkResponse> listLinks(@NonNull UUID productId) {
-        return substituteLinkRepository.findByProductIdAndIsActiveTrueOrderByPriorityAsc(productId)
-                .stream()
+        return substituteLinkRepository.findByProductIdAndIsActiveTrueOrderByPriorityAsc(productId).stream()
                 .map(this::toResponse)
                 .toList();
     }

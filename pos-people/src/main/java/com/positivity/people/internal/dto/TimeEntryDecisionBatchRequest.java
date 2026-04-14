@@ -1,13 +1,11 @@
 package com.positivity.people.internal.dto;
 
-import java.util.List;
-
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 
 @Schema(description = "Batch request payload for making decisions (approve/reject) on multiple time entries")
 public class TimeEntryDecisionBatchRequest {
@@ -21,17 +19,19 @@ public class TimeEntryDecisionBatchRequest {
     @Schema(description = "An individual decision for a specific time entry")
     public static class Decision {
 
-        @Schema(description = "The unique identifier of the time entry", requiredMode = Schema.RequiredMode.REQUIRED,
+        @Schema(
+                description = "The unique identifier of the time entry",
+                requiredMode = Schema.RequiredMode.REQUIRED,
                 example = "123e4567-e89b-12d3-a456-426614174000")
         @NotBlank(message = "Time entry ID is required")
         private String timeEntryId;
 
-        @Schema(description = "The reason for rejection. Applicable if this is a rejection request.",
+        @Schema(
+                description = "The reason for rejection. Applicable if this is a rejection request.",
                 example = "Incomplete work details")
         private String rejectionReason;
 
-        public Decision() {
-        }
+        public Decision() {}
 
         public Decision(String timeEntryId) {
             this.timeEntryId = timeEntryId;
@@ -52,11 +52,9 @@ public class TimeEntryDecisionBatchRequest {
         public void setRejectionReason(String rejectionReason) {
             this.rejectionReason = rejectionReason;
         }
-
     }
 
-    public TimeEntryDecisionBatchRequest() {
-    }
+    public TimeEntryDecisionBatchRequest() {}
 
     public TimeEntryDecisionBatchRequest(List<Decision> decisions) {
         this.decisions = decisions;
@@ -69,5 +67,4 @@ public class TimeEntryDecisionBatchRequest {
     public void setDecisions(List<Decision> decisions) {
         this.decisions = decisions;
     }
-
 }

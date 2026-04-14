@@ -11,11 +11,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkorderPickedItemResponse {
-  private UUID pickTaskId;
-  private UUID pickListId;
-  private UUID skuId;
-  private int qtyPicked;
-  private int qtyConsumed;
-  private int qtyRemaining;
-  private String status;
+    private UUID pickTaskId;
+    private UUID pickListId;
+    private UUID skuId;
+    private int qtyPicked;
+    private int qtyConsumed;
+    private int qtyRemaining;
+    private String status;
 }

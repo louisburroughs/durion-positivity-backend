@@ -1,23 +1,11 @@
 package com.positivity.workorder.internal.config;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
-import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
+import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -27,8 +15,17 @@ import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
-
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -41,23 +38,18 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(WorkorderNotFoundException.class)
-    public ResponseEntity<ApiError> handleWorkorderNotFound(
-            WorkorderNotFoundException ex,
-            HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleWorkorderNotFound(WorkorderNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleIllegalState(
-            IllegalStateException ex,
-            HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
     }
 
     @ExceptionHandler(WorkSessionNotFoundException.class)
     public ResponseEntity<ApiError> handleWorkSessionNotFound(
-            WorkSessionNotFoundException ex,
-            HttpServletRequest request) {
+            WorkSessionNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "WORK_SESSION_NOT_FOUND", ex.getMessage(), request);
     }
 
@@ -80,14 +72,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(TimeEntryNotFoundException.class)
-    public ResponseEntity<ApiError> handleTimeEntryNotFound(
-            TimeEntryNotFoundException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleTimeEntryNotFound(TimeEntryNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "TIME_ENTRY_NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(TimeEntryStateException.class)
-    public ResponseEntity<ApiError> handleTimeEntryState(
-            TimeEntryStateException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleTimeEntryState(TimeEntryStateException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "TIME_ENTRY_INVALID_STATE", ex.getMessage(), request);
     }
 
@@ -110,43 +100,44 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(
-            IllegalArgumentException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", ex.getMessage(), request);
     }
 
-    @ExceptionHandler({ WorkSessionOverlapException.class, WorkSessionStateException.class,
-            WorkSessionLockedException.class })
-    public ResponseEntity<ApiError> handleWorkSessionConflict(
-            RuntimeException ex,
-            HttpServletRequest request) {
+    @ExceptionHandler({
+        WorkSessionOverlapException.class,
+        WorkSessionStateException.class,
+        WorkSessionLockedException.class
+    })
+    public ResponseEntity<ApiError> handleWorkSessionConflict(RuntimeException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidationErrors(MethodArgumentNotValidException ex,
-            HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleValidationErrors(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
         List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new ApiError.FieldError(fe.getField(),
-                        fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
+                .map(fe -> new ApiError.FieldError(
+                        fe.getField(), fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
         String correlationId = resolveCorrelationId(request);
         ApiError body = ApiError.withFieldErrors(
-                "VALIDATION_FAILED", "Request validation failed",
-                HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(),
-                correlationId, fieldErrors);
+                "VALIDATION_FAILED",
+                "Request validation failed",
+                HttpStatus.BAD_REQUEST.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                fieldErrors);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(body, headers, HttpStatus.BAD_REQUEST);
     }
 
     private ResponseEntity<ApiError> buildErrorResponse(
-            HttpStatus status,
-            String code,
-            String message,
-            HttpServletRequest request) {
+            HttpStatus status, String code, String message, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
-        ApiError body = ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId);
+        ApiError body =
+                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(body, headers, status);
@@ -154,7 +145,8 @@ public class GlobalExceptionHandler {
 
     private String resolveCorrelationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 }
-

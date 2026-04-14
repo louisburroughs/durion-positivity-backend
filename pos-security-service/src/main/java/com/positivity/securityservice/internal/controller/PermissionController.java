@@ -8,11 +8,13 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.service.PermissionCatalogVersionService;
-import com.positivity.securityservice.service.PermissionService;
 import com.positivity.securityservice.service.PermissionRegistryService;
+import com.positivity.securityservice.service.PermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -21,15 +23,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.UUID;
-
 /**
  * REST controller for the central permission registry.
  * Provides endpoints for services to register their permissions.
  */
 @RestController
-@RequestMapping({ "/v1/permissions", "/v1/users/permissions" })
+@RequestMapping({"/v1/permissions", "/v1/users/permissions"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Permission Registry", description = "Central permission registry for all services")
@@ -45,7 +44,9 @@ public class PermissionController {
      */
     @GetMapping("/catalog-version")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Get current permission catalog version", description = "Returns the active catalog version and total permission count. No authentication required.")
+    @Operation(
+            summary = "Get current permission catalog version",
+            description = "Returns the active catalog version and total permission count. No authentication required.")
     public ResponseEntity<CatalogVersionResponse> getCatalogVersion() {
         return ResponseEntity.ok(new CatalogVersionResponse(
                 permissionCatalogVersionService.getCatalogVersion(),
@@ -58,7 +59,9 @@ public class PermissionController {
      */
     @EmitEvent(id = "SECURITY_PERMISSION_DECODE_EXECUTE", apiVersion = "1")
     @PostMapping("/decode")
-    @Operation(summary = "Decode perm_bits for diagnostics", description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
+    @Operation(
+            summary = "Decode perm_bits for diagnostics",
+            description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<PermissionDecodeResponse> decodePermissions(
             @RequestBody @Valid @NonNull PermissionDecodeRequest request) {
@@ -78,7 +81,10 @@ public class PermissionController {
      */
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
     @PostMapping("/registerPermissions")
-    @Operation(summary = "Register permissions (RBAC contract endpoint)", description = "Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.")
+    @Operation(
+            summary = "Register permissions (RBAC contract endpoint)",
+            description =
+                    "Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.")
     @PreAuthorize("hasAuthority('security:permission:register')")
     public ResponseEntity<List<PermissionDto>> registerPermissionsContract(
             @RequestBody @NonNull PermissionRegistrationRequest request) {
@@ -89,7 +95,9 @@ public class PermissionController {
      * Issue #42: Get a permission by UUID identifier.
      */
     @GetMapping("/{id}")
-    @Operation(summary = "Get permission by identifier", description = "Returns a single registered permission by its UUID identifier.")
+    @Operation(
+            summary = "Get permission by identifier",
+            description = "Returns a single registered permission by its UUID identifier.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<PermissionDto> getPermissionById(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(permissionService.getPermission(id));
@@ -99,7 +107,10 @@ public class PermissionController {
      * Issue #42: Query permissions by domain.
      */
     @GetMapping(params = "domain")
-    @Operation(summary = "Query permissions by domain", description = "Returns all registered permissions for the requested domain using the domain query parameter.")
+    @Operation(
+            summary = "Query permissions by domain",
+            description =
+                    "Returns all registered permissions for the requested domain using the domain query parameter.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<List<PermissionDto>> getPermissionsByDomainQuery(@RequestParam @NonNull String domain) {
         return ResponseEntity.ok(permissionService.getByDomain(domain));
@@ -110,7 +121,9 @@ public class PermissionController {
      */
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
     @PostMapping("/register")
-    @Operation(summary = "Register permissions from a service", description = "Services call this endpoint to register their available permissions")
+    @Operation(
+            summary = "Register permissions from a service",
+            description = "Services call this endpoint to register their available permissions")
     @PreAuthorize("hasAuthority('security:permission:register')")
     public ResponseEntity<PermissionRegistrationResponse> registerPermissions(
             @RequestBody PermissionRegistrationRequest request) {
@@ -141,7 +154,9 @@ public class PermissionController {
      */
     @GetMapping("/domain/{domain}")
     @PreAuthorize("hasAuthority('security:permission:view')")
-    @Operation(summary = "Get permissions by domain", description = "Returns all permissions for a specific domain/service")
+    @Operation(
+            summary = "Get permissions by domain",
+            description = "Returns all permissions for a specific domain/service")
     public ResponseEntity<List<PermissionDto>> getPermissionsByDomain(@PathVariable String domain) {
         return ResponseEntity.ok(permissionRegistryService.getPermissionsByDomain(domain));
     }
@@ -150,7 +165,9 @@ public class PermissionController {
      * Validate a permission name format
      */
     @GetMapping("/validate/{permissionName}")
-    @Operation(summary = "Validate permission name format", description = "Checks if a permission name follows the domain:resource:action format")
+    @Operation(
+            summary = "Validate permission name format",
+            description = "Checks if a permission name follows the domain:resource:action format")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<Boolean> validatePermissionName(@PathVariable String permissionName) {
         boolean isValid = permissionRegistryService.isValidPermissionName(permissionName);

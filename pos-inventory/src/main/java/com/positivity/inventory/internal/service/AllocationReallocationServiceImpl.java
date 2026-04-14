@@ -8,8 +8,8 @@ import com.positivity.inventory.internal.enums.AllocationAuditReasonCode;
 import com.positivity.inventory.internal.repository.AllocationAuditRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.inventory.service.AllocationReallocationService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,14 +54,13 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
         // order
         // gives highest-priority-first behaviour), then by the 4 fairness tie-breakers.
         List<ReservationEntity> sorted = reservations.stream()
-                .sorted(Comparator
-                        .comparingInt((ReservationEntity r) -> computeEffectivePriority(r, now))
-                        .thenComparing(r -> Optional.ofNullable(r.getDueDateTime())
-                                .orElse(Instant.MAX))
-                        .thenComparing(r -> Optional.ofNullable(r.getWaitingSince())
-                                .orElse(r.getCreatedAt()))
-                        .thenComparing(r -> Optional.ofNullable(r.getScheduleStartTime())
-                                .orElse(Instant.MAX))
+                .sorted(Comparator.comparingInt((ReservationEntity r) -> computeEffectivePriority(r, now))
+                        .thenComparing(
+                                r -> Optional.ofNullable(r.getDueDateTime()).orElse(Instant.MAX))
+                        .thenComparing(
+                                r -> Optional.ofNullable(r.getWaitingSince()).orElse(r.getCreatedAt()))
+                        .thenComparing(r ->
+                                Optional.ofNullable(r.getScheduleStartTime()).orElse(Instant.MAX))
                         .thenComparing(ReservationEntity::getCreatedAt))
                 .toList();
 
@@ -81,14 +80,12 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
                 totalReallocated++;
                 AllocationAuditReasonCode reasonCode = parseReasonCode(request.getTriggerType());
                 int effective = computeEffectivePriority(reservation, now);
-                AllocationAuditReasonCode auditReason = (effective < reservation.getPriority())
-                        ? AllocationAuditReasonCode.PRIORITY_AGED
-                        : reasonCode;
+                AllocationAuditReasonCode auditReason =
+                        (effective < reservation.getPriority()) ? AllocationAuditReasonCode.PRIORITY_AGED : reasonCode;
                 audits.add(buildAudit(request, auditReason, now, prevAlloc, required));
             } else {
                 reservation.setAllocatedQuantity(0);
-                audits.add(buildAudit(request, AllocationAuditReasonCode.STOCK_SHORTAGE, now,
-                        prevAlloc, 0));
+                audits.add(buildAudit(request, AllocationAuditReasonCode.STOCK_SHORTAGE, now, prevAlloc, 0));
             }
         }
 
@@ -121,9 +118,12 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
         return Math.max(CRITICAL_PRIORITY, (int) (reservation.getPriority() - agingSteps));
     }
 
-    private AllocationAuditEntity buildAudit(ReallocateRequest request,
-            AllocationAuditReasonCode reasonCode, Instant now,
-            int previousAllocatedQty, int newAllocatedQty) {
+    private AllocationAuditEntity buildAudit(
+            ReallocateRequest request,
+            AllocationAuditReasonCode reasonCode,
+            Instant now,
+            int previousAllocatedQty,
+            int newAllocatedQty) {
         return AllocationAuditEntity.builder()
                 .stockItemId(request.getStockItemId())
                 .reasonCode(reasonCode)

@@ -1,17 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.ProcessingLog;
@@ -27,9 +15,18 @@ import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,8 +54,10 @@ public class WorkorderEventHandler {
     private final Clock clock;
 
     private static final String UNKNOWN_EVENT_TYPE = "UNKNOWN";
-    private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event eventId={} eventType={} status=already_processed";
-    private static final String DUPLICATE_SAVE_COLLISION_MESSAGE = "Concurrent duplicate save collision suppressed for eventId={}";
+    private static final String DUPLICATE_EVENT_MESSAGE =
+            "Skipping duplicate event eventId={} eventType={} status=already_processed";
+    private static final String DUPLICATE_SAVE_COLLISION_MESSAGE =
+            "Concurrent duplicate save collision suppressed for eventId={}";
     private static final String DUPLICATE_FAILURE_REASON_PREFIX = "Duplicate of eventId: ";
     private static final int MAX_FAILURE_REASON_LENGTH = 490;
 
@@ -89,9 +88,11 @@ public class WorkorderEventHandler {
             final String safeEventType = normalizeEventType(envelope.getEventType());
             log.warn("Unsupported workorder event type eventId={} eventType={}", envelope.getEventId(), safeEventType);
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId((envelope.getEventId() == null || envelope.getEventId().isBlank())
-                            ? UUIDv7Generator.generate().toString()
-                            : envelope.getEventId())
+                    .eventId(
+                            (envelope.getEventId() == null
+                                            || envelope.getEventId().isBlank())
+                                    ? UUIDv7Generator.generate().toString()
+                                    : envelope.getEventId())
                     .eventType(safeEventType)
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
@@ -113,9 +114,12 @@ public class WorkorderEventHandler {
                     .eventId(UUIDv7Generator.generate().toString())
                     .eventType(UNKNOWN_EVENT_TYPE)
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason("Unhandled exception: " + (ex.getMessage() != null
-                            ? ex.getMessage().substring(0, Math.min(ex.getMessage().length(), 490))
-                            : "null"))
+                    .failureReason("Unhandled exception: "
+                            + (ex.getMessage() != null
+                                    ? ex.getMessage()
+                                            .substring(
+                                                    0, Math.min(ex.getMessage().length(), 490))
+                                    : "null"))
                     .processedAt(Instant.now(clock))
                     .build());
         }
@@ -157,7 +161,8 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now(clock))
                     .build());
         } catch (Exception ex) {
-            log.error("VehicleUpdated payload processing failed eventId={} eventType={}",
+            log.error(
+                    "VehicleUpdated payload processing failed eventId={} eventType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
                     ex);
@@ -179,8 +184,10 @@ public class WorkorderEventHandler {
         }
 
         final UUID vehicleId = UUID.fromString(payload.getVehicleId());
-        final VehicleProjection projection = vehicleProjectionRepository.findById(vehicleId)
-                .orElseGet(() -> VehicleProjection.builder().vehicleId(vehicleId).build());
+        final VehicleProjection projection = vehicleProjectionRepository
+                .findById(vehicleId)
+                .orElseGet(
+                        () -> VehicleProjection.builder().vehicleId(vehicleId).build());
 
         if (payload.getVin() != null) {
             projection.setVin(normalizeOptionalText(payload.getVin()));
@@ -234,9 +241,8 @@ public class WorkorderEventHandler {
 
         try {
             final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
-            final ContactPreferenceUpdatedPayload payload = objectMapper.convertValue(
-                    payloadMap,
-                    ContactPreferenceUpdatedPayload.class);
+            final ContactPreferenceUpdatedPayload payload =
+                    objectMapper.convertValue(payloadMap, ContactPreferenceUpdatedPayload.class);
             final String partyIdValue = payload.getPartyId() == null
                     ? String.valueOf(payloadMap.getOrDefault("partyId", ""))
                     : payload.getPartyId();
@@ -244,7 +250,8 @@ public class WorkorderEventHandler {
 
             final CommunicationPreference preference = communicationPreferenceRepository
                     .findByPartyId(partyId)
-                    .orElseGet(() -> CommunicationPreference.builder().partyId(partyId).build());
+                    .orElseGet(() ->
+                            CommunicationPreference.builder().partyId(partyId).build());
 
             preference.setEmailPreference(payload.getEmailPreference());
             preference.setSmsPreference(payload.getSmsPreference());
@@ -260,7 +267,8 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now(clock))
                     .build());
         } catch (Exception ex) {
-            log.error("ContactPreferenceUpdated processing failed eventId={} eventType={}",
+            log.error(
+                    "ContactPreferenceUpdated processing failed eventId={} eventType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
                     ex);
@@ -327,7 +335,8 @@ public class WorkorderEventHandler {
                     .createdAt(Instant.now(clock))
                     .build());
 
-            log.info("PartyNoteAdded accepted eventId={} eventType={} partyId={} noteType={}",
+            log.info(
+                    "PartyNoteAdded accepted eventId={} eventType={} partyId={} noteType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
                     payload.getPartyId(),
@@ -341,7 +350,8 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now(clock))
                     .build());
         } catch (Exception ex) {
-            log.error("PartyNoteAdded processing failed eventId={} eventType={}",
+            log.error(
+                    "PartyNoteAdded processing failed eventId={} eventType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
                     ex);

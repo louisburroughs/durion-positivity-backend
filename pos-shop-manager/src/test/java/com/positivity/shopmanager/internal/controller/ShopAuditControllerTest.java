@@ -7,13 +7,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
+import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -28,10 +30,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
-
-import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
-import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
-import com.positivity.shopmanager.service.ShopAuditService;
 
 /**
  * Controller slice tests for Story #61 — Audit Trail for Schedule and
@@ -84,8 +82,7 @@ class ShopAuditControllerTest {
 
         when(shopAuditService.search(any())).thenReturn(List.of(entry));
 
-        mockMvc.perform(get("/v1/shop/audit")
-                .param("workorderId", "WO-123"))
+        mockMvc.perform(get("/v1/shop/audit").param("workorderId", "WO-123"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$[0].workorderId").value("WO-123"))
@@ -104,8 +101,7 @@ class ShopAuditControllerTest {
     @WithMockUser(authorities = "shop:schedule:view")
     void searchAudit_withNoFilterParams_returns400() throws Exception {
         when(shopAuditService.search(any()))
-                .thenThrow(new IllegalArgumentException(
-                        "At least one filter criterion is required"));
+                .thenThrow(new IllegalArgumentException("At least one filter criterion is required"));
 
         mockMvc.perform(get("/v1/shop/audit")) // no filter params
                 .andExpect(status().isBadRequest());
@@ -151,8 +147,7 @@ class ShopAuditControllerTest {
 
         when(shopAuditService.findById(unknownId)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/v1/shop/audit/{id}", unknownId))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/v1/shop/audit/{id}", unknownId)).andExpect(status().isNotFound());
     }
 
     // ─── AC: Immutability — no DELETE endpoint ────────────────────────────────
@@ -167,8 +162,7 @@ class ShopAuditControllerTest {
     @Test
     void shopAuditController_hasNoDeleteMapping() {
         boolean hasDelete = java.util.Arrays.stream(ShopAuditController.class.getDeclaredMethods())
-                .anyMatch(m -> m.isAnnotationPresent(
-                        org.springframework.web.bind.annotation.DeleteMapping.class));
+                .anyMatch(m -> m.isAnnotationPresent(org.springframework.web.bind.annotation.DeleteMapping.class));
 
         assertThat(hasDelete)
                 .as("ShopAuditController must not define any @DeleteMapping "
@@ -190,11 +184,9 @@ class ShopAuditControllerTest {
         var methods = ShopAuditController.class.getDeclaredMethods();
 
         boolean hasPatch = java.util.Arrays.stream(methods)
-                .anyMatch(m -> m.isAnnotationPresent(
-                        org.springframework.web.bind.annotation.PatchMapping.class));
+                .anyMatch(m -> m.isAnnotationPresent(org.springframework.web.bind.annotation.PatchMapping.class));
         boolean hasPut = java.util.Arrays.stream(methods)
-                .anyMatch(m -> m.isAnnotationPresent(
-                        org.springframework.web.bind.annotation.PutMapping.class));
+                .anyMatch(m -> m.isAnnotationPresent(org.springframework.web.bind.annotation.PutMapping.class));
 
         assertThat(hasPatch)
                 .as("ShopAuditController must not define any @PatchMapping (immutability)")
@@ -219,9 +211,7 @@ class ShopAuditControllerTest {
      */
     @Test
     void searchAudit_withNoAuthenticationAtAll_returns401() throws Exception {
-        mockMvc.perform(get("/v1/shop/audit")
-                .param("workorderId", "WO-123"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/shop/audit").param("workorderId", "WO-123")).andExpect(status().isUnauthorized());
     }
 
     // ─── ADR-0017: 403 Missing permission ────────────────────────────────────
@@ -233,9 +223,7 @@ class ShopAuditControllerTest {
     @Test
     @WithMockUser(authorities = "some.unrelated.authority")
     void searchAudit_withoutAuditViewAuthority_returns403() throws Exception {
-        mockMvc.perform(get("/v1/shop/audit")
-                .param("workorderId", "WO-123"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/shop/audit").param("workorderId", "WO-123")).andExpect(status().isForbidden());
     }
 
     // ─── Test slice configuration ─────────────────────────────────────────────

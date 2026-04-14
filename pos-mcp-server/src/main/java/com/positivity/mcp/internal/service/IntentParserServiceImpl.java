@@ -38,8 +38,8 @@ public class IntentParserServiceImpl implements IntentParserService {
     private static final Logger log = LoggerFactory.getLogger(IntentParserServiceImpl.class);
 
     private static final Set<String> HIGH_RISK_VERBS = Set.of("delete", "remove");
-    private static final Set<String> QUERY_INDICATORS = Set.of(
-            "check", "show", "list", "find", "get", "what", "how many", "price");
+    private static final Set<String> QUERY_INDICATORS =
+            Set.of("check", "show", "list", "find", "get", "what", "how many", "price");
 
     private final NltiIntentRepository repository;
     private final AuditLedgerService auditLedgerService;
@@ -95,8 +95,10 @@ public class IntentParserServiceImpl implements IntentParserService {
 
         NltiIntent persistedIntent = repository.save(intent);
         if (persistedIntent == null) {
-            log.warn("Intent repository returned null for sessionId={}, correlationId={}; using in-memory fallback",
-                    sessionId, correlationId);
+            log.warn(
+                    "Intent repository returned null for sessionId={}, correlationId={}; using in-memory fallback",
+                    sessionId,
+                    correlationId);
             persistedIntent = intent;
         }
 
@@ -106,15 +108,20 @@ public class IntentParserServiceImpl implements IntentParserService {
             incrementClarificationCounter();
         }
 
-        log.debug("Parse completed intentId={}, type={}, status={}",
-                persistedIntent.getId(), persistedIntent.getIntentType(), persistedIntent.getStatus());
+        log.debug(
+                "Parse completed intentId={}, type={}, status={}",
+                persistedIntent.getId(),
+                persistedIntent.getIntentType(),
+                persistedIntent.getStatus());
         return toIntentV1(persistedIntent, slots, questions);
     }
 
     @Override
     public @NonNull IntentV1 resolve(@NonNull UUID intentId, @NonNull ClarificationResponseDTO response) {
-        boolean hasAnswer = response.userAnswer() != null && !response.userAnswer().isBlank();
-        boolean hasSelection = response.selectedOption() != null && !response.selectedOption().isBlank();
+        boolean hasAnswer =
+                response.userAnswer() != null && !response.userAnswer().isBlank();
+        boolean hasSelection =
+                response.selectedOption() != null && !response.selectedOption().isBlank();
         log.debug("Resolving intentId={} hasAnswer={} hasSelectedOption={}", intentId, hasAnswer, hasSelection);
         Optional<NltiIntent> existingIntent = repository.findById(intentId);
         if (existingIntent.isEmpty()) {
@@ -128,8 +135,7 @@ public class IntentParserServiceImpl implements IntentParserService {
         if (answer != null && !answer.isBlank() && selectedOption != null && !selectedOption.isBlank()) {
             intent.setStatus(NltiIntentStatus.READY);
             List<IntentSlot> resolved = List.of(
-                    new IntentSlot("selectedOption", selectedOption, 1.0),
-                    new IntentSlot("answer", answer, 1.0));
+                    new IntentSlot("selectedOption", selectedOption, 1.0), new IntentSlot("answer", answer, 1.0));
             intent.setSlotsJson(toJson(resolved));
             intent.setClarificationQuestionsJson("[]");
         } else {
@@ -144,12 +150,9 @@ public class IntentParserServiceImpl implements IntentParserService {
             incrementClarificationCounter();
         }
 
-        List<IntentSlot> slots = fromJson(persistedIntent.getSlotsJson(), new TypeReference<>() {
-        });
-        List<ClarificationQuestion> questions = fromJson(
-                persistedIntent.getClarificationQuestionsJson(),
-                new TypeReference<>() {
-                });
+        List<IntentSlot> slots = fromJson(persistedIntent.getSlotsJson(), new TypeReference<>() {});
+        List<ClarificationQuestion> questions =
+                fromJson(persistedIntent.getClarificationQuestionsJson(), new TypeReference<>() {});
         log.debug("Resolve completed intentId={} status={}", persistedIntent.getId(), persistedIntent.getStatus());
         return toIntentV1(persistedIntent, slots, questions);
     }
@@ -218,8 +221,12 @@ public class IntentParserServiceImpl implements IntentParserService {
         event.setSessionId(sessionId);
         event.setEventType(eventType);
         event.setTimestamp(resolveNow());
-        log.debug("Appending audit event eventId={} eventType={} correlationId={} sessionId={}",
-                event.getId(), eventType, correlationId, sessionId);
+        log.debug(
+                "Appending audit event eventId={} eventType={} correlationId={} sessionId={}",
+                event.getId(),
+                eventType,
+                correlationId,
+                sessionId);
         auditLedgerService.append(event);
     }
 
@@ -259,8 +266,11 @@ public class IntentParserServiceImpl implements IntentParserService {
             return objectMapper.readValue(json, ref);
         } catch (JsonProcessingException e) {
             int jsonLength = json.length();
-            log.warn("JSON deserialization failed for targetType={} (jsonLength={}), returning empty list: {}",
-                    ref.getType(), jsonLength, e.getMessage());
+            log.warn(
+                    "JSON deserialization failed for targetType={} (jsonLength={}), returning empty list: {}",
+                    ref.getType(),
+                    jsonLength,
+                    e.getMessage());
             return List.of();
         }
     }

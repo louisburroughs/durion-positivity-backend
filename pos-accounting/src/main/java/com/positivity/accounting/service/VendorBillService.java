@@ -1,19 +1,17 @@
 package com.positivity.accounting.service;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for Vendor Bill lifecycle management (Issue #130).
- * 
+ *
  * <p>
  * Receipt Accrual Workflow:
  * <ol>
@@ -24,7 +22,7 @@ import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
  * <li>If discrepancy: bill transitions to MATCH_EXCEPTION for manual
  * resolution</li>
  * </ol>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/130">Issue
  *      #130</a>
@@ -33,7 +31,7 @@ public interface VendorBillService {
 
     /**
      * Create vendor bill from GoodsReceivedEvent (primary trigger).
-     * 
+     *
      * <p>
      * Business rules:
      * <ul>
@@ -43,7 +41,7 @@ public interface VendorBillService {
      * <li>GL posting: Dr Inventory/Expense, Cr AP</li>
      * <li>Traceability: links eventId → bill → journalEntryId</li>
      * </ul>
-     * 
+     *
      * @param event GoodsReceivedEvent from inventory/purchasing system
      * @return VendorBillResponse with bill details
      * @throws IllegalArgumentException if PO/vendor not found or validation fails
@@ -53,7 +51,7 @@ public interface VendorBillService {
 
     /**
      * Match vendor invoice against existing bill (three-way match).
-     * 
+     *
      * <p>
      * Matching logic:
      * <ul>
@@ -62,7 +60,7 @@ public interface VendorBillService {
      * <li>If matched: bill auto-transitions to APPROVED</li>
      * <li>If discrepancy: bill transitions to MATCH_EXCEPTION</li>
      * </ul>
-     * 
+     *
      * @param event VendorInvoiceReceivedEvent from vendor/AP system
      * @return VendorBillResponse with updated bill status
      * @throws IllegalArgumentException if bill not found or already matched
@@ -72,7 +70,7 @@ public interface VendorBillService {
 
     /**
      * Resolve match exception (accept, correct, or void).
-     * 
+     *
      * @param billId           Vendor bill UUID
      * @param resolutionAction Action: ACCEPT, CORRECT, VOID
      * @param reason           Justification for resolution
@@ -81,14 +79,11 @@ public interface VendorBillService {
      */
     @NonNull
     VendorBillResponse resolveMatchException(
-            @NonNull UUID billId,
-            @NonNull String resolutionAction,
-            @NonNull String reason,
-            @NonNull String operatorId);
+            @NonNull UUID billId, @NonNull String resolutionAction, @NonNull String reason, @NonNull String operatorId);
 
     /**
      * Get vendor bill by ID.
-     * 
+     *
      * @param billId Vendor bill UUID
      * @return Optional bill response
      */
@@ -97,7 +92,7 @@ public interface VendorBillService {
 
     /**
      * Get vendor bill by origin event ID (for idempotency checks).
-     * 
+     *
      * @param originEventId Event ID from GoodsReceivedEvent
      * @return Optional bill response
      */

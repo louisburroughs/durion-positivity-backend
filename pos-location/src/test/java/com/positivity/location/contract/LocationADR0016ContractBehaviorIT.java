@@ -1,8 +1,5 @@
 package com.positivity.location.contract;
 
-import com.positivity.location.BaseContractIntegrationTest;
-import com.positivity.location.config.TestSecurityConfig;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,17 +7,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.location.BaseContractIntegrationTest;
+import com.positivity.location.config.TestSecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -68,11 +66,11 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-001"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-001"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.name").value("Main Workshop"))
@@ -93,16 +91,18 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         MvcResult createResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(createPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-002-create"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-002-create"))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String locationId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         String updatePayload = """
                 {
@@ -114,11 +114,11 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(put("/v1/locations/" + locationId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updatePayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-002-update"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updatePayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-002-update"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Updated Name"));
     }
@@ -136,24 +136,25 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-003-first"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-003-first"))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-003-dupe"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-003-dupe"))
                 .andExpect(status().isConflict());
     }
 
     @Test
-    @DisplayName("CP-119-003A: GET /v1/locations/{id}/validation returns exists=true and active=true for existing location")
+    @DisplayName(
+            "CP-119-003A: GET /v1/locations/{id}/validation returns exists=true and active=true for existing location")
     void CP_119_003A_locationValidation_existing_returns_exists_and_active() throws Exception {
         String payload = """
                 {
@@ -165,21 +166,23 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         MvcResult createResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-003a-create"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-003a-create"))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String locationId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         mockMvc.perform(get("/v1/locations/" + locationId + "/validation")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:read")
-                .header("X-Correlation-Id", "cp-119-003a-validate"))
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:read")
+                        .header("X-Correlation-Id", "cp-119-003a-validate"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locationId").value(locationId))
                 .andExpect(jsonPath("$.exists").value(true))
@@ -187,14 +190,15 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("CP-119-003B: GET /v1/locations/{id}/validation returns exists=false and active=false for missing location")
+    @DisplayName(
+            "CP-119-003B: GET /v1/locations/{id}/validation returns exists=false and active=false for missing location")
     void CP_119_003B_locationValidation_missing_returns_false_flags() throws Exception {
         String missingLocationId = "018e1c9f-dead-7000-8000-300000000001";
 
         mockMvc.perform(get("/v1/locations/" + missingLocationId + "/validation")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:read")
-                .header("X-Correlation-Id", "cp-119-003b-validate"))
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:read")
+                        .header("X-Correlation-Id", "cp-119-003b-validate"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locationId").value(missingLocationId))
                 .andExpect(jsonPath("$.exists").value(false))
@@ -216,15 +220,17 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult parentResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(parentPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-004-parent"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(parentPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-004-parent"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String parentId = objectMapper
+                .readTree(parentResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         // Create child location
         String childPayload = """
@@ -236,24 +242,26 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult childResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(childPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-004-child"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(childPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-004-child"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String childId = objectMapper
+                .readTree(childResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         // Add PHYSICAL parent relationship — ADR-0016 value
         // RED: this will fail until ParentType enum is migrated from HOME_OFFICE to
         // PHYSICAL
         mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
-                .param("parentType", "PHYSICAL")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-004-addparent"))
+                        .param("parentType", "PHYSICAL")
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-004-addparent"))
                 .andExpect(status().isOk());
     }
 
@@ -270,15 +278,17 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult parentResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(parentPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-005-parent"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(parentPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-005-parent"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String parentId = objectMapper
+                .readTree(parentResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         String childPayload = """
                 {
@@ -289,22 +299,24 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult childResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(childPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-005-child"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(childPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-005-child"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String childId = objectMapper
+                .readTree(childResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         // RED: ORGANIZATIONAL is an ADR-0016 value not yet in enum
         mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
-                .param("parentType", "ORGANIZATIONAL")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-005-addparent"))
+                        .param("parentType", "ORGANIZATIONAL")
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-005-addparent"))
                 .andExpect(status().isOk());
     }
 
@@ -321,15 +333,17 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult parentResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(parentPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-006-parent"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(parentPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-006-parent"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String parentId = objectMapper
+                .readTree(parentResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         String childPayload = """
                 {
@@ -340,22 +354,24 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
         MvcResult childResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(childPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-006-child"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(childPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-006-child"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String childId = objectMapper
+                .readTree(childResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         // HOME_OFFICE remains accepted while legacy parent types are still supported.
         mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
-                .param("parentType", "HOME_OFFICE")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-006-addparent"))
+                        .param("parentType", "HOME_OFFICE")
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-006-addparent"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.parentType").value("HOME_OFFICE"));
     }
@@ -363,7 +379,7 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("CP-119-007: All four ADR-0016 ParentType values are accepted")
     void CP_119_007_all_ADR0016_parentTypes_accepted() throws Exception {
-        String[] adr0016ParentTypes = { "PHYSICAL", "ORGANIZATIONAL", "FINANCIAL", "SHIPPING" };
+        String[] adr0016ParentTypes = {"PHYSICAL", "ORGANIZATIONAL", "FINANCIAL", "SHIPPING"};
 
         for (String parentType : adr0016ParentTypes) {
             String parentPayload = String.format("""
@@ -375,15 +391,17 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                     }
                     """, parentType, parentType);
             MvcResult parentResult = mockMvc.perform(post("/v1/locations")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(parentPayload)
-                    .header("X-User", "test-user")
-                    .header("X-Authorities", "location:write")
-                    .header("X-Correlation-Id", "cp-119-007-parent-" + parentType))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(parentPayload)
+                            .header("X-User", "test-user")
+                            .header("X-Authorities", "location:write")
+                            .header("X-Correlation-Id", "cp-119-007-parent-" + parentType))
                     .andExpect(status().isCreated())
                     .andReturn();
-            String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                    .get("id").asString();
+            String parentId = objectMapper
+                    .readTree(parentResult.getResponse().getContentAsString())
+                    .get("id")
+                    .asString();
 
             String childPayload = String.format("""
                     {
@@ -394,22 +412,24 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                     }
                     """, parentType, parentType);
             MvcResult childResult = mockMvc.perform(post("/v1/locations")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(childPayload)
-                    .header("X-User", "test-user")
-                    .header("X-Authorities", "location:write")
-                    .header("X-Correlation-Id", "cp-119-007-child-" + parentType))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(childPayload)
+                            .header("X-User", "test-user")
+                            .header("X-Authorities", "location:write")
+                            .header("X-Correlation-Id", "cp-119-007-child-" + parentType))
                     .andExpect(status().isCreated())
                     .andReturn();
-            String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                    .get("id").asString();
+            String childId = objectMapper
+                    .readTree(childResult.getResponse().getContentAsString())
+                    .get("id")
+                    .asString();
 
             // RED: PHYSICAL/ORGANIZATIONAL/FINANCIAL/SHIPPING not in current enum
             mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
-                    .param("parentType", parentType)
-                    .header("X-User", "test-user")
-                    .header("X-Authorities", "location:write")
-                    .header("X-Correlation-Id", "cp-119-007-link-" + parentType))
+                            .param("parentType", parentType)
+                            .header("X-User", "test-user")
+                            .header("X-Authorities", "location:write")
+                            .header("X-Correlation-Id", "cp-119-007-link-" + parentType))
                     .andExpect(status().isOk());
         }
     }
@@ -432,11 +452,11 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
 
         // RED: Location entity currently lacks geographicalLocationId field
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-010"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-010"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.geographicalLocationId").value(geographicalLocationId));
     }
@@ -455,11 +475,11 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "ve-119-001"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "ve-119-001"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -475,11 +495,11 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "ve-119-002"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "ve-119-002"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -489,9 +509,9 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-119-008: GET /v1/locations returns array")
     void CP_119_008_getLocations_returns_array() throws Exception {
         mockMvc.perform(get("/v1/locations")
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:read")
-                .header("X-Correlation-Id", "cp-119-008"))
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:read")
+                        .header("X-Correlation-Id", "cp-119-008"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }
@@ -509,21 +529,23 @@ class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
                 """;
 
         MvcResult createResult = mockMvc.perform(post("/v1/locations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(createPayload)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-009-create"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload)
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-009-create"))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                .get("id").asString();
+        String locationId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("id")
+                .asString();
 
         mockMvc.perform(delete("/v1/locations/" + locationId)
-                .header("X-User", "test-user")
-                .header("X-Authorities", "location:write")
-                .header("X-Correlation-Id", "cp-119-009-delete"))
+                        .header("X-User", "test-user")
+                        .header("X-Authorities", "location:write")
+                        .header("X-Correlation-Id", "cp-119-009-delete"))
                 .andExpect(status().isNoContent());
     }
 }

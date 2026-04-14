@@ -1,7 +1,7 @@
 package com.positivity.catalog.internal.client;
 
-import java.util.Optional;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -38,22 +38,12 @@ public interface InventoryClient {
      * fields.
      */
     record AvailabilityClientResponse(
-            int onHandQuantity,
-            int allocatedQuantity,
-            int availableToPromiseQuantity,
-            String unitOfMeasure) {
-    }
+            int onHandQuantity, int allocatedQuantity, int availableToPromiseQuantity, String unitOfMeasure) {}
 
     /**
      * Local response record mirroring the lead-time fields returned by
      * pos-inventory.
      */
     record LeadTimeClientResponse(
-            Integer minDays,
-            Integer maxDays,
-            String displayText,
-            String source,
-            String confidence,
-            Instant asOf) {
-    }
+            Integer minDays, Integer maxDays, String displayText, String source, String confidence, Instant asOf) {}
 }

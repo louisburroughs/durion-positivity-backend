@@ -14,5 +14,4 @@ public record OrderPriceOverrideApplied(
         UUID productId,
         BigDecimal originalPrice,
         BigDecimal overridePrice,
-        String requestedByUsername) {
-}
+        String requestedByUsername) {}

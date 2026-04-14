@@ -42,8 +42,7 @@ public class TemplateRegistration {
      * @param content HTML template content
      * @return builder for further customization
      */
-    public static TemplateRegistrationBuilder htmlTemplate(
-            String templateId, String description, String content) {
+    public static TemplateRegistrationBuilder htmlTemplate(String templateId, String description, String content) {
         return TemplateRegistration.builder()
                 .templateId(templateId)
                 .description(description)

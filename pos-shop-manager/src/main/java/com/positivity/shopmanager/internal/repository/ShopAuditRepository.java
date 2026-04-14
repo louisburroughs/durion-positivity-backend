@@ -40,15 +40,14 @@ public interface ShopAuditRepository extends Repository<ShopAuditEntry, UUID> {
      * Null dimension parameters are ignored (treated as wildcard).
      * Story #61 / RQ5 — prevents unbounded full-table scans.
      */
-    @Query("SELECT e FROM ShopAuditEntry e WHERE " +
-            "(:workorderId IS NULL OR e.workorderId = :workorderId) AND " +
-            "(:appointmentId IS NULL OR e.appointmentId = :appointmentId) AND " +
-            "(:mechanicId IS NULL OR e.mechanicId = :mechanicId) AND " +
-            "(:actorUserId IS NULL OR e.actorUserId = :actorUserId) AND " +
-            "(:eventType IS NULL OR e.eventType = :eventType) AND " +
-            "(:locationId IS NULL OR e.locationId = :locationId) AND " +
-            "e.recordedAt BETWEEN :from AND :to " +
-            "ORDER BY e.recordedAt DESC")
+    @Query("SELECT e FROM ShopAuditEntry e WHERE " + "(:workorderId IS NULL OR e.workorderId = :workorderId) AND "
+            + "(:appointmentId IS NULL OR e.appointmentId = :appointmentId) AND "
+            + "(:mechanicId IS NULL OR e.mechanicId = :mechanicId) AND "
+            + "(:actorUserId IS NULL OR e.actorUserId = :actorUserId) AND "
+            + "(:eventType IS NULL OR e.eventType = :eventType) AND "
+            + "(:locationId IS NULL OR e.locationId = :locationId) AND "
+            + "e.recordedAt BETWEEN :from AND :to "
+            + "ORDER BY e.recordedAt DESC")
     List<ShopAuditEntry> findByFilter(
             @Param("workorderId") String workorderId,
             @Param("appointmentId") String appointmentId,

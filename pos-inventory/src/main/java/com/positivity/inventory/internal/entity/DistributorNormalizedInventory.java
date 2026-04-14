@@ -22,8 +22,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Normalized distributor inventory state keyed by distributor and SKU.
  */
 @Entity
-@Table(name = "distributor_normalized_inventory", uniqueConstraints = @UniqueConstraint(columnNames = {
-        "distributor_id", "distributor_sku" }))
+@Table(
+        name = "distributor_normalized_inventory",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"distributor_id", "distributor_sku"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

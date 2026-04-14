@@ -11,7 +11,7 @@
  * JwtToken entity includes @Version field:
  *
  * ```java
- * 
+ *
  * @Entity
  *         public class JwtToken {
  * @Id

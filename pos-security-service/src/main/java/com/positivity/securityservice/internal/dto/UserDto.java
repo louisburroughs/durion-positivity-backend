@@ -12,6 +12,7 @@ public class UserDto {
     UUID id;
     String username;
     Set<String> roles;
-    @Nullable UUID personId;
-}
 
+    @Nullable
+    UUID personId;
+}

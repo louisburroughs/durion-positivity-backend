@@ -2,6 +2,13 @@ package com.positivity.mcp.internal.discovery;
 
 import io.modelcontextprotocol.server.McpAsyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.net.URI;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiFunction;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,14 +22,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.BiFunction;
-
 @Component
 public class OperationProxyFactory {
 
@@ -31,17 +30,14 @@ public class OperationProxyFactory {
     private final LoadBalancerClient loadBalancerClient;
     private final WebClient webClient;
 
-    OperationProxyFactory(@NonNull LoadBalancerClient loadBalancerClient,
-            @NonNull WebClient discoveryWebClient) {
+    OperationProxyFactory(@NonNull LoadBalancerClient loadBalancerClient, @NonNull WebClient discoveryWebClient) {
         this.loadBalancerClient = loadBalancerClient;
         this.webClient = discoveryWebClient;
     }
 
     @NonNull
     BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handler(
-            @NonNull String serviceId,
-            @NonNull HttpMethod method,
-            @NonNull String pathTemplate) {
+            @NonNull String serviceId, @NonNull HttpMethod method, @NonNull String pathTemplate) {
         return (exchange, request) -> {
             var arguments = Optional.ofNullable(request.arguments()).orElse(Map.of());
             Map<String, Object> pathParams = asMap(arguments.get("pathParams"));
@@ -67,19 +63,25 @@ public class OperationProxyFactory {
                     .toEntity(String.class)
                     .map(responseEntity -> successResult(responseEntity.getBody()))
                     .onErrorResume(ex -> {
-                        log.warn("Tool proxy failed for service {} {} {}: {}", serviceId, method, targetUri,
+                        log.warn(
+                                "Tool proxy failed for service {} {} {}: {}",
+                                serviceId,
+                                method,
+                                targetUri,
                                 ex.getMessage());
                         return Mono.just(errorResult(ex.getMessage()));
                     });
         };
     }
 
-    private URI buildUri(@NonNull ServiceInstance instance,
+    private URI buildUri(
+            @NonNull ServiceInstance instance,
             @NonNull String pathTemplate,
             @NonNull Map<String, Object> pathParams,
             @NonNull Map<String, Object> queryParams) {
         String resolvedPath = resolvePath(pathTemplate, pathParams);
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(instance.getUri()).path(resolvedPath);
+        UriComponentsBuilder builder =
+                UriComponentsBuilder.fromUri(instance.getUri()).path(resolvedPath);
         queryParams.forEach((key, value) -> {
             if (value instanceof List<?> list) {
                 list.forEach(item -> builder.queryParam(key, item));

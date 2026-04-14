@@ -10,7 +10,7 @@ package com.positivity.events;
  * </p>
  *
  * <h2>Usage in Event Type Initializers</h2>
- * 
+ *
  * <pre>{@code
  * &#64;Component
  * public class MyEventTypeInitializer implements ApplicationRunner {

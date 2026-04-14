@@ -1,7 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
@@ -11,6 +10,7 @@ import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderR
 import com.positivity.inventory.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -44,9 +44,21 @@ public class PurchaseOrderController {
     @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CREATE", apiVersion = "1")
     @Operation(summary = "Create purchase order", description = "Creates a purchase order with requested line items")
-    @ApiResponse(responseCode = "201", description = "Purchase order created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "201",
+            description = "Purchase order created",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order create authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
             @Valid @RequestBody CreatePurchaseOrderRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
@@ -59,9 +71,21 @@ public class PurchaseOrderController {
     @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_GET", apiVersion = "1")
     @Operation(summary = "Get purchase order", description = "Retrieves a purchase order by identifier")
-    @ApiResponse(responseCode = "200", description = "Purchase order returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> getPurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId) {
         return ResponseEntity.ok(purchaseOrderService.getPurchaseOrder(poId));
@@ -70,24 +94,48 @@ public class PurchaseOrderController {
     @GetMapping
     @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_LIST", apiVersion = "1")
-    @Operation(summary = "List purchase orders", description = "Lists purchase orders using filter and pagination parameters")
+    @Operation(
+            summary = "List purchase orders",
+            description = "Lists purchase orders using filter and pagination parameters")
     @ApiResponse(responseCode = "200", description = "Purchase orders returned")
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<PurchaseOrderResponse>> listPurchaseOrders(
-            @ModelAttribute ListPurchaseOrdersRequest filter,
-            Pageable pageable) {
+            @ModelAttribute ListPurchaseOrdersRequest filter, Pageable pageable) {
         return ResponseEntity.ok(purchaseOrderService.listPurchaseOrders(filter, pageable));
     }
 
     @PostMapping("/{poId}/approve")
     @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_APPROVE", apiVersion = "1")
-    @Operation(summary = "Approve purchase order", description = "Approves a purchase order and transitions it to an approvable state")
-    @ApiResponse(responseCode = "200", description = "Purchase order approved", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order approval authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @Operation(
+            summary = "Approve purchase order",
+            description = "Approves a purchase order and transitions it to an approvable state")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order approved",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order approval authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> approvePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody ApprovePurchaseOrderRequest request) {
@@ -106,11 +154,29 @@ public class PurchaseOrderController {
     @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_REVISE", apiVersion = "1")
     @Operation(summary = "Revise purchase order", description = "Creates a revision for an existing purchase order")
-    @ApiResponse(responseCode = "200", description = "Purchase order revised", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order revised",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order create authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> revisePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody RevisePurchaseOrderRequest request) {
@@ -123,10 +189,25 @@ public class PurchaseOrderController {
     @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CANCEL", apiVersion = "1")
     @Operation(summary = "Cancel purchase order", description = "Cancels a purchase order that is no longer needed")
-    @ApiResponse(responseCode = "200", description = "Purchase order cancelled", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order approval authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order cancelled",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order approval authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
@@ -137,12 +218,32 @@ public class PurchaseOrderController {
     @PostMapping("/{poId}/receive")
     @PreAuthorize("hasAuthority('inventory:purchase_order:receive')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_RECEIVE", apiVersion = "1")
-    @Operation(summary = "Receive purchase order", description = "Receives approved purchase order quantities and posts resulting ledger movements")
-    @ApiResponse(responseCode = "200", description = "Purchase order received", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivePurchaseOrderResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required purchase order receive authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @Operation(
+            summary = "Receive purchase order",
+            description = "Receives approved purchase order quantities and posts resulting ledger movements")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order received",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ReceivePurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order receive authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Purchase order is in a conflicting state",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReceivePurchaseOrderResponse> receivePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody ReceivePurchaseOrderRequest request) {

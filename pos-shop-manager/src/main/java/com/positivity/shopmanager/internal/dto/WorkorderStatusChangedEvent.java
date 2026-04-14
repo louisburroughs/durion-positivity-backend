@@ -4,9 +4,4 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record WorkorderStatusChangedEvent(
-        UUID eventId,
-        UUID workOrderId,
-        String newStatus,
-        Instant eventTimestamp,
-        UUID correlationId) {
-}
+        UUID eventId, UUID workOrderId, String newStatus, Instant eventTimestamp, UUID correlationId) {}

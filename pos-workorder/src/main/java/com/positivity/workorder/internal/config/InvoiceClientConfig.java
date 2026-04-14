@@ -17,8 +17,6 @@ public class InvoiceClientConfig {
     public RestClient invoiceServiceRestClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.invoice.base-url:http://pos-invoice:8089}") String invoiceBaseUrl) {
-        return restClientBuilder
-                .baseUrl(invoiceBaseUrl)
-                .build();
+        return restClientBuilder.baseUrl(invoiceBaseUrl).build();
     }
 }

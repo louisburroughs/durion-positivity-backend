@@ -8,10 +8,10 @@ import com.positivity.price.internal.enums.OverrideStatus;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
+import com.positivity.price.service.RestrictionOverrideService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import com.positivity.price.service.RestrictionOverrideService;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +24,7 @@ public class RestrictionOverrideServiceImpl implements RestrictionOverrideServic
     private final RestrictionRuleRepository ruleRepository;
 
     public RestrictionOverrideServiceImpl(
-            RestrictionOverrideAuditRepository auditRepository,
-            RestrictionRuleRepository ruleRepository) {
+            RestrictionOverrideAuditRepository auditRepository, RestrictionRuleRepository ruleRepository) {
         this.auditRepository = auditRepository;
         this.ruleRepository = ruleRepository;
     }
@@ -33,7 +32,8 @@ public class RestrictionOverrideServiceImpl implements RestrictionOverrideServic
     @Override
     public @NonNull RestrictionOverrideResponse createOverride(@NonNull RestrictionOverrideRequest request) {
         Instant issuedAt = Instant.now();
-        RestrictionRule rule = ruleRepository.findById(request.ruleId())
+        RestrictionRule rule = ruleRepository
+                .findById(request.ruleId())
                 .orElseThrow(() -> new RestrictionRuleNotFoundException("Rule not found: " + request.ruleId()));
         RestrictionOverrideAudit audit = RestrictionOverrideAudit.builder()
                 .actor(SecurityContextHelper.getCurrentUsernameOrDefault("system"))

@@ -1,12 +1,10 @@
 package com.positivity.inventory.internal.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
-
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,8 +15,8 @@ import org.springframework.data.repository.query.Param;
  */
 public interface NormalizedAvailabilityRepository extends JpaRepository<NormalizedAvailability, UUID> {
 
-    Optional<NormalizedAvailability> findByProductIdAndManufacturerIdAndAsOf(UUID productId, UUID manufacturerId,
-            Instant asOf);
+    Optional<NormalizedAvailability> findByProductIdAndManufacturerIdAndAsOf(
+            UUID productId, UUID manufacturerId, Instant asOf);
 
     @Query("""
             SELECT MIN(n.leadTimeDaysMin) AS minDays,

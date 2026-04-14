@@ -15,8 +15,7 @@ public class ErrorResponse {
 
     private Map<String, String> fieldErrors;
 
-    public ErrorResponse() {
-    }
+    public ErrorResponse() {}
 
     public ErrorResponse(String errorCode, String message, String correlationId, Instant timestamp) {
         this.errorCode = errorCode;
@@ -64,5 +63,4 @@ public class ErrorResponse {
     public void setFieldErrors(Map<String, String> fieldErrors) {
         this.fieldErrors = fieldErrors;
     }
-
 }

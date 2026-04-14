@@ -2,13 +2,12 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.util.UUID;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.util.UUID;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -24,6 +23,7 @@ public class OEMXReference {
 
     @ManyToOne
     private ProductEntity part; // Reference to the product
+
     @ManyToOne
     private ProductEntity oemPart; // Reference to the OEM product that matches
 }

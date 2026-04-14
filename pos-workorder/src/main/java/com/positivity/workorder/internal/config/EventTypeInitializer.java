@@ -1,8 +1,8 @@
 package com.positivity.workorder.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -51,18 +51,19 @@ public class EventTypeInitializer implements ApplicationRunner {
         }
 
         try {
-            initializerSupport.registerEventTypes(
-                    EventTypes.ALL_EVENT_TYPES,
-                    this::registerViaHttp);
+            initializerSupport.registerEventTypes(EventTypes.ALL_EVENT_TYPES, this::registerViaHttp);
         } catch (Exception e) {
-            log.warn("[{}] Failed to register event types at startup: {}. " +
-                    "Events will still be emitted, but event types may need manual registration.",
-                    SERVICE_NAME, e.getMessage());
+            log.warn(
+                    "[{}] Failed to register event types at startup: {}. "
+                            + "Events will still be emitted, but event types may need manual registration.",
+                    SERVICE_NAME,
+                    e.getMessage());
         }
     }
 
     private void registerViaHttp(EventTypeRegistration registration) {
-        var request = restClient.put()
+        var request = restClient
+                .put()
                 .uri("/{typeCode}", registration.getTypeCode())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(registration);

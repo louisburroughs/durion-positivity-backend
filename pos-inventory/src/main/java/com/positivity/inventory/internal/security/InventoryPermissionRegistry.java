@@ -1,23 +1,22 @@
 package com.positivity.inventory.internal.security;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 /**
  * Inventory Permission Registry
- * 
+ *
  * Defines all inventory permissions per domain-driven design.
  * Permissions are registered with the central Security Domain at service
  * startup.
- * 
+ *
  * Permission Format: inventory:resource:action
  * Risk Levels: LOW, MEDIUM, HIGH, CRITICAL
- * 
+ *
  * References:
  * - Issue #37: Adjustment workflow permissions
  * - Clarification #229: Putaway override permissions
@@ -108,7 +107,8 @@ public class InventoryPermissionRegistry {
      * proceed.
      * Requires: mandatory reason code and free-text justification.
      */
-    public static final String PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY = "inventory:putaway:override_location_compatibility";
+    public static final String PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY =
+            "inventory:putaway:override_location_compatibility";
 
     /**
      * Override location capacity limits.
@@ -170,80 +170,73 @@ public class InventoryPermissionRegistry {
     private static List<Map<String, String>> buildPermissionDefinitions() {
         return Arrays.asList(
                 // Adjustment permissions (3)
-                permission(ADJUSTMENT_CREATE,
+                permission(
+                        ADJUSTMENT_CREATE,
                         "Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes",
-                        "MEDIUM", "Issue #37"),
-                permission(ADJUSTMENT_APPROVE,
+                        "MEDIUM",
+                        "Issue #37"),
+                permission(
+                        ADJUSTMENT_APPROVE,
                         "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)",
-                        "HIGH", "Issue #37"),
-                permission(ADJUSTMENT_VIEW,
-                        "View adjustment history and details",
-                        "LOW"),
+                        "HIGH",
+                        "Issue #37"),
+                permission(ADJUSTMENT_VIEW, "View adjustment history and details", "LOW"),
 
                 // Stock movement permissions (1)
-                permission(STOCK_MOVEMENT_CREATE,
+                permission(
+                        STOCK_MOVEMENT_CREATE,
                         "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger",
-                        "HIGH", "Issue #37"),
+                        "HIGH",
+                        "Issue #37"),
 
                 // Location permissions (2)
-                permission(LOCATION_VIEW,
+                permission(
+                        LOCATION_VIEW,
                         "View storage location configuration and site default location assignments",
                         "LOW"),
-                permission(LOCATION_ADMIN,
+                permission(
+                        LOCATION_ADMIN,
                         "Manage storage location lifecycle and site default location assignments",
                         "HIGH"),
 
                 // Pick list permissions (3)
-                permission(PICK_LIST_CREATE,
-                        "Create pick lists for workorders",
-                        "MEDIUM"),
-                permission(PICK_LIST_VIEW,
-                        "View pick lists and pick tasks",
-                        "LOW"),
-                permission(PICK_LIST_EXECUTE,
+                permission(PICK_LIST_CREATE, "Create pick lists for workorders", "MEDIUM"),
+                permission(PICK_LIST_VIEW, "View pick lists and pick tasks", "LOW"),
+                permission(
+                        PICK_LIST_EXECUTE,
                         "Release pick lists, confirm pick tasks, update pick status, and complete picking workflows",
                         "HIGH"),
 
                 // Putaway permissions (4)
-                permission(PUTAWAY_GENERATE,
-                        "Generate putaway tasks from received inventory",
-                        "MEDIUM"),
-                permission(PUTAWAY_VIEW,
-                        "View putaway tasks and their assignment status",
-                        "LOW"),
-                permission(PUTAWAY_CLAIM,
-                        "Claim a putaway task for execution",
-                        "MEDIUM"),
-                permission(PUTAWAY_EXECUTE,
-                        "Execute a putaway task and move inventory into storage",
-                        "HIGH"),
+                permission(PUTAWAY_GENERATE, "Generate putaway tasks from received inventory", "MEDIUM"),
+                permission(PUTAWAY_VIEW, "View putaway tasks and their assignment status", "LOW"),
+                permission(PUTAWAY_CLAIM, "Claim a putaway task for execution", "MEDIUM"),
+                permission(PUTAWAY_EXECUTE, "Execute a putaway task and move inventory into storage", "HIGH"),
 
                 // Putaway override permissions (2)
-                permission(PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY,
+                permission(
+                        PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY,
                         "Override location compatibility rules when location is not valid for SKU",
-                        "HIGH", "Clarification #229"),
-                permission(PUTAWAY_OVERRIDE_LOCATION_CAPACITY,
+                        "HIGH",
+                        "Clarification #229"),
+                permission(
+                        PUTAWAY_OVERRIDE_LOCATION_CAPACITY,
                         "Override location capacity limits when at or near full capacity",
-                        "HIGH", "Clarification #229"),
+                        "HIGH",
+                        "Clarification #229"),
 
                 // Cycle count permissions (3)
-                permission(CYCLE_COUNT_INITIATE,
+                permission(
+                        CYCLE_COUNT_INITIATE,
                         "Initiate a cycle count for inventory reconciliation",
-                        "MEDIUM", "Clarification #229"),
-                permission(CYCLE_COUNT_VIEW,
-                        "View cycle count tasks and results",
-                        "LOW"),
-                permission(CYCLE_COUNT_COMPLETE,
-                        "Complete and submit cycle count results",
-                        "MEDIUM"),
+                        "MEDIUM",
+                        "Clarification #229"),
+                permission(CYCLE_COUNT_VIEW, "View cycle count tasks and results", "LOW"),
+                permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", "MEDIUM"),
 
                 // Inventory view permissions (2)
-                permission(INVENTORY_VIEW,
-                        "View on-hand inventory levels at locations",
-                        "LOW"),
-                permission(INVENTORY_SEARCH,
-                        "Search inventory across multiple locations",
-                        "LOW"));
+                permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
+                permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"));
     }
 
     /**

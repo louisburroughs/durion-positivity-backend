@@ -80,5 +80,4 @@ public class ReservationEntity {
     @OneToMany(mappedBy = "reservation", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Builder.Default
     private List<AllocationEntity> allocations = new ArrayList<>();
-
 }

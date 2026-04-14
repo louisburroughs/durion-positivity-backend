@@ -37,8 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class StorageLocationServiceImpl implements StorageLocationService {
 
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String CAPACITY = "capacity";
     private static final String TEMPERATURE = "temperature";
     private static final String UNIT_COUNT = "unitCount";
@@ -56,7 +55,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     private final StorageLocationInventoryTransferService storageLocationInventoryTransferService;
     private final LocationInventoryInquiryClient locationInventoryInquiryClient;
 
-    public StorageLocationServiceImpl(StorageLocationRepository storageLocationRepository,
+    public StorageLocationServiceImpl(
+            StorageLocationRepository storageLocationRepository,
             LocationRepository locationRepository,
             StorageLocationInventoryTransferService storageLocationInventoryTransferService,
             LocationInventoryInquiryClient locationInventoryInquiryClient) {
@@ -75,10 +75,11 @@ public class StorageLocationServiceImpl implements StorageLocationService {
      */
     @Override
     @NonNull
-    public StorageLocationResponse createStorageLocation(@NonNull UUID siteId,
-            @NonNull StorageLocationRequest request) {
+    public StorageLocationResponse createStorageLocation(
+            @NonNull UUID siteId, @NonNull StorageLocationRequest request) {
         // Issue CAP-214 #39: Validate site and uniqueness constraints for create.
-        Location site = locationRepository.findById(siteId)
+        Location site = locationRepository
+                .findById(siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SITE_NOT_FOUND"));
 
         String name = normalizeRequired(request.getName(), "name");
@@ -95,7 +96,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         UUID parentId = request.getParentStorageLocationId();
         StorageLocationEntity parentEntity = null;
         if (parentId != null) {
-            parentEntity = storageLocationRepository.findById(parentId)
+            parentEntity = storageLocationRepository
+                    .findById(parentId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_NOT_FOUND"));
             if (!siteId.equals(parentEntity.getSiteId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_SITE_MISMATCH");
@@ -127,7 +129,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     @NonNull
     @Transactional(readOnly = true)
     public StorageLocationResponse getStorageLocation(@NonNull UUID siteId, @NonNull UUID storageLocationId) {
-        StorageLocationEntity entity = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
+        StorageLocationEntity entity = storageLocationRepository
+                .findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
         return toResponse(entity);
     }
@@ -142,7 +145,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     @NonNull
     @Transactional(readOnly = true)
     public StorageLocationValidationResponseDTO getStorageLocationValidation(@NonNull UUID storageLocationId) {
-        return storageLocationRepository.findById(storageLocationId)
+        return storageLocationRepository
+                .findById(storageLocationId)
                 .map(entity -> StorageLocationValidationResponseDTO.builder()
                         .storageLocationId(storageLocationId)
                         .siteId(entity.getSiteId())
@@ -170,9 +174,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public Page<StorageLocationResponse> listStorageLocations(@NonNull UUID siteId, StorageLocationType type,
-            StorageLocationStatus status,
-            @NonNull Pageable pageable) {
+    public Page<StorageLocationResponse> listStorageLocations(
+            @NonNull UUID siteId, StorageLocationType type, StorageLocationStatus status, @NonNull Pageable pageable) {
         Page<StorageLocationEntity> page;
         if (type != null && status != null) {
             page = storageLocationRepository.findBySiteIdAndTypeAndStatus(siteId, type, status, pageable);
@@ -196,9 +199,10 @@ public class StorageLocationServiceImpl implements StorageLocationService {
      */
     @Override
     @NonNull
-    public StorageLocationResponse patchStorageLocation(@NonNull UUID siteId, @NonNull UUID storageLocationId,
-            @NonNull StorageLocationPatchRequest patch) {
-        StorageLocationEntity existing = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
+    public StorageLocationResponse patchStorageLocation(
+            @NonNull UUID siteId, @NonNull UUID storageLocationId, @NonNull StorageLocationPatchRequest patch) {
+        StorageLocationEntity existing = storageLocationRepository
+                .findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
         applyPatchedName(siteId, storageLocationId, patch, existing);
@@ -221,10 +225,10 @@ public class StorageLocationServiceImpl implements StorageLocationService {
      * @return updated storage location
      */
     @NonNull
-    public StorageLocationResponse deactivateStorageLocation(@NonNull UUID siteId,
-            @NonNull UUID storageLocationId,
-            UUID destinationStorageLocationId) {
-        StorageLocationEntity existing = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
+    public StorageLocationResponse deactivateStorageLocation(
+            @NonNull UUID siteId, @NonNull UUID storageLocationId, UUID destinationStorageLocationId) {
+        StorageLocationEntity existing = storageLocationRepository
+                .findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
         if (locationInventoryInquiryClient.getOnHandQuantity(storageLocationId) > 0) {
@@ -269,37 +273,37 @@ public class StorageLocationServiceImpl implements StorageLocationService {
             if (cursor.equals(storageLocationId)) {
                 return true;
             }
-            cursor = storageLocationRepository.findById(cursor)
+            cursor = storageLocationRepository
+                    .findById(cursor)
                     .map(StorageLocationEntity::getParentStorageLocationId)
                     .orElse(null);
         }
         return false;
     }
 
-    private void applyPatchedName(UUID siteId, UUID storageLocationId,
-            StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+    private void applyPatchedName(
+            UUID siteId, UUID storageLocationId, StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         if (patch.getName() == null) {
             return;
         }
         String newName = normalizeRequired(patch.getName(), "name");
         if (!newName.equalsIgnoreCase(existing.getName())
-                && storageLocationRepository.existsByNameIgnoreCaseAndSiteIdAndIdNot(newName, siteId,
-                        storageLocationId)) {
+                && storageLocationRepository.existsByNameIgnoreCaseAndSiteIdAndIdNot(
+                        newName, siteId, storageLocationId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "DUPLICATE_NAME");
         }
         existing.setName(newName);
     }
 
-    private void applyPatchedBarcode(UUID siteId, UUID storageLocationId,
-            StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+    private void applyPatchedBarcode(
+            UUID siteId, UUID storageLocationId, StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         if (patch.getBarcode() == null) {
             return;
         }
         String newBarcode = normalizeOptional(patch.getBarcode());
         if (newBarcode != null
                 && !newBarcode.equals(existing.getBarcode())
-                && storageLocationRepository.existsByBarcodeAndSiteIdAndIdNot(newBarcode, siteId,
-                        storageLocationId)) {
+                && storageLocationRepository.existsByBarcodeAndSiteIdAndIdNot(newBarcode, siteId, storageLocationId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "DUPLICATE_BARCODE");
         }
         existing.setBarcode(newBarcode);
@@ -319,8 +323,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         existing.setTemperature(serializeJson(patch.getTemperature(), TEMPERATURE));
     }
 
-    private void applyPatchedParent(UUID siteId, UUID storageLocationId,
-            StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+    private void applyPatchedParent(
+            UUID siteId, UUID storageLocationId, StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         UUID proposedParentId = patch.getParentStorageLocationId();
         if (proposedParentId == null) {
             return;
@@ -329,7 +333,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "CYCLE_DETECTED");
         }
 
-        StorageLocationEntity parent = storageLocationRepository.findById(proposedParentId)
+        StorageLocationEntity parent = storageLocationRepository
+                .findById(proposedParentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_NOT_FOUND"));
         if (!siteId.equals(parent.getSiteId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_SITE_MISMATCH");
@@ -342,8 +347,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         existing.setParentStorageLocation(parent);
     }
 
-    private void applyPatchedStatus(UUID siteId, UUID storageLocationId,
-            StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+    private void applyPatchedStatus(
+            UUID siteId, UUID storageLocationId, StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         StorageLocationStatus requested = patch.getStatus();
         if (requested == null) {
             return;

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
  * Capability flags indicating what actions the current user can perform on a
  * workorder.
  * Used for frontend UI gating without redundant permission checks.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */

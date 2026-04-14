@@ -12,5 +12,4 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration
 @Import(GatewaySecurityConfig.class)
-public class SecurityConfig {
-}
+public class SecurityConfig {}

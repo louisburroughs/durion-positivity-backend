@@ -1,15 +1,13 @@
 package com.positivity.workorder.internal.dto;
 
+import com.positivity.workorder.internal.entity.Estimate;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
-
-import com.positivity.workorder.internal.entity.Estimate;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

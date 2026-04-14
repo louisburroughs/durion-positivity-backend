@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -30,11 +29,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "audit_log_events", indexes = {
-        @Index(name = "idx_audit_log_events_timestamp", columnList = "timestamp"),
-        @Index(name = "idx_audit_log_events_actor_id", columnList = "actor_id"),
-        @Index(name = "idx_audit_log_events_entity_id", columnList = "entity_id")
-})
+@Table(
+        name = "audit_log_events",
+        indexes = {
+            @Index(name = "idx_audit_log_events_timestamp", columnList = "timestamp"),
+            @Index(name = "idx_audit_log_events_actor_id", columnList = "actor_id"),
+            @Index(name = "idx_audit_log_events_entity_id", columnList = "entity_id")
+        })
 public class AuditLogEvent {
 
     @Id
@@ -80,5 +81,5 @@ public class AuditLogEvent {
         if (timestamp == null) {
             timestamp = Instant.now(Clock.systemUTC());
         }
-}
+    }
 }

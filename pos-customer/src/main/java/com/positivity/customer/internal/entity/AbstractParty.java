@@ -1,17 +1,8 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
-
+import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -25,9 +16,15 @@ import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.Email;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.positivity.shared.id.UUIDv7Id;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Abstract base class for individual customers implementing PartyEntity
@@ -126,6 +123,5 @@ public abstract class AbstractParty implements Party {
         return updatedAt;
     }
 
-    public void setModifiedAt(Instant modifiedAt) {
-}
+    public void setModifiedAt(Instant modifiedAt) {}
 }

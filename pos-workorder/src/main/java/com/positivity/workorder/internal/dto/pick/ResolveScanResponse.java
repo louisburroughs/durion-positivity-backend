@@ -11,10 +11,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ResolveScanResponse {
-  private UUID pickTaskId;
-  private UUID pickListId;
-  private UUID resolvedSkuId;
-  private UUID resolvedLocationId;
-  private boolean matched;
-  private String matchStatus;
+    private UUID pickTaskId;
+    private UUID pickListId;
+    private UUID resolvedSkuId;
+    private UUID resolvedLocationId;
+    private boolean matched;
+    private String matchStatus;
 }

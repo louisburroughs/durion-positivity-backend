@@ -1,14 +1,13 @@
 package com.positivity.securityservice.internal.enums;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for the {@link PermissionCode} enum catalog contract (PERM-001).
@@ -64,9 +63,7 @@ class PermissionCodeTest {
                 .collect(Collectors.toSet());
         // Issue PERM-001: every index 0..226 must be present
         for (int i = 0; i < 227; i++) {
-            assertThat(bitIndexes)
-                    .as("bit index %d must be assigned", i)
-                    .contains(i);
+            assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
     }
 
@@ -77,9 +74,8 @@ class PermissionCodeTest {
     @Test
     @DisplayName("all code strings are unique")
     void allCodeStringsAreUnique() {
-        Set<String> codes = Arrays.stream(PermissionCode.values())
-                .map(PermissionCode::code)
-                .collect(Collectors.toSet());
+        Set<String> codes =
+                Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
         assertThat(codes).hasSize(227);
     }

@@ -13,5 +13,4 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
 @Import(GatewaySecurityConfig.class)
-public class SecurityConfig {
-}
+public class SecurityConfig {}

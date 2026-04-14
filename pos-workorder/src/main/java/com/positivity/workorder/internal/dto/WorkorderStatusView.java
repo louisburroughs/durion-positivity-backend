@@ -2,14 +2,13 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Summary view of a workorder's WIP status — used in paginated list responses.

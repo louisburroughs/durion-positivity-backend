@@ -1,11 +1,10 @@
 package com.positivity.people.internal.dto;
 
 import com.positivity.people.internal.enums.AssignmentStatus;
-import lombok.Builder;
-import lombok.Data;
-
 import java.time.LocalDate;
 import java.util.UUID;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder
@@ -30,5 +29,4 @@ public class PeopleAvailabilityResponse {
     private LocalDate effectiveTo;
 
     private LocalDate availableOn;
-
 }

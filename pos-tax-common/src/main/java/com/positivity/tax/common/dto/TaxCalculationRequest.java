@@ -4,18 +4,17 @@ import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.tax.common.validation.IsoCountryCode;
 import com.positivity.tax.common.validation.IsoCurrencyCode;
 import com.positivity.tax.common.validation.ValidSubdivisionForCountry;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Request for tax calculation.
@@ -68,7 +67,9 @@ public class TaxCalculationRequest {
      */
     @NotNull(message = "destinationAddress is required")
     @Valid
-    @Schema(description = "Destination address used to determine applicable tax jurisdictions", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Destination address used to determine applicable tax jurisdictions",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private TaxAddress destinationAddress;
 
     /**
@@ -103,7 +104,9 @@ public class TaxCalculationRequest {
      * Optional reference ID for the source transaction (e.g., estimate ID, invoice
      * ID).
      */
-    @Schema(description = "Optional reference identifier for the source transaction", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Optional reference identifier for the source transaction",
+            example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID referenceId;
     /**
      * Optional reference type for the source transaction (e.g., estimate, invoice).
@@ -173,7 +176,10 @@ public class TaxCalculationRequest {
          * Region/subdivision code (typically ISO 3166-2 subdivision part, e.g., CA, TX,
          * ON).
          */
-        @Schema(type = "string", description = "Region/subdivision code (typically ISO 3166-2 subdivision part)", example = "CA")
+        @Schema(
+                type = "string",
+                description = "Region/subdivision code (typically ISO 3166-2 subdivision part)",
+                example = "CA")
         private String regionCode;
 
         /**

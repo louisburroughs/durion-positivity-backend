@@ -15,6 +15,5 @@ public interface SelfRegistrationReviewCaseRepository extends JpaRepository<Self
 
     @NonNull
     List<SelfRegistrationReviewCase> findByCaseTypeAndStatusOrderByCreatedAtDesc(
-            @NonNull SelfRegistrationCaseType caseType,
-            @NonNull SelfRegistrationCaseStatus status);
+            @NonNull SelfRegistrationCaseType caseType, @NonNull SelfRegistrationCaseStatus status);
 }

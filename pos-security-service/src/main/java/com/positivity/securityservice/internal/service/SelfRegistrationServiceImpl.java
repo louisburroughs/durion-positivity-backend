@@ -10,8 +10,8 @@ import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.dto.SelfRegistrationReviewCaseCreateRequest;
-import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
@@ -70,8 +70,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 normalizedIdpSubject);
 
         if (idempotencyKey != null) {
-            Optional<SelfRegistrationAttempt> existingAttempt = selfRegistrationAttemptService
-                    .findByIdempotencyKey(idempotencyKey);
+            Optional<SelfRegistrationAttempt> existingAttempt =
+                    selfRegistrationAttemptService.findByIdempotencyKey(idempotencyKey);
             if (existingAttempt.isPresent()) {
                 return replayAttempt(existingAttempt.get(), requestFingerprint);
             }
@@ -89,11 +89,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                     idempotencyKey);
             if (idempotencyKey != null) {
                 selfRegistrationAttemptService.recordSuccess(
-                        idempotencyKey,
-                        requestFingerprint,
-                        normalizedEmail,
-                        chosenUsername,
-                        response);
+                        idempotencyKey, requestFingerprint, normalizedEmail, chosenUsername, response);
             }
             return response;
         } catch (SelfRegistrationConflictException ex) {
@@ -123,18 +119,12 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         ensureUserDoesNotAlreadyExist(chosenUsername, derivedUsername, normalizedEmail);
 
         List<CustomerPersonSearchResponse> crmMatches = customerRegistrationClient.searchPersons(
-                buildFullName(normalizedFirstName, normalizedLastName),
-                normalizedEmail,
-                normalizedPhone);
-        CrmSignalAssessment crmSignalAssessment = assessCrmMatches(
-                crmMatches,
-                normalizedEmail,
-                normalizedPhone,
-                normalizedFirstName,
-                normalizedLastName);
+                buildFullName(normalizedFirstName, normalizedLastName), normalizedEmail, normalizedPhone);
+        CrmSignalAssessment crmSignalAssessment =
+                assessCrmMatches(crmMatches, normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName);
 
-        PeopleResolvePersonResponse resolvedPerson = peopleRegistrationClient
-                .resolvePerson(PeopleResolvePersonRequest.builder()
+        PeopleResolvePersonResponse resolvedPerson =
+                peopleRegistrationClient.resolvePerson(PeopleResolvePersonRequest.builder()
                         .email(normalizedEmail)
                         .phone(normalizedPhone)
                         .firstName(normalizedFirstName)
@@ -201,9 +191,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                     .build();
         }
         throw new SelfRegistrationConflictException(
-                attempt.getConflictCode(),
-                attempt.getConflictMessage(),
-                attempt.getReferenceId());
+                attempt.getConflictCode(), attempt.getConflictMessage(), attempt.getReferenceId());
     }
 
     private CrmMatchSummaryDto toCrmMatchSummary(SelfRegistrationAttempt attempt) {
@@ -238,8 +226,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             }
             if (isActive(existing.get())) {
                 throw new SelfRegistrationConflictException(
-                        "USER_ALREADY_EXISTS",
-                        "A user account already exists for username " + username);
+                        "USER_ALREADY_EXISTS", "A user account already exists for username " + username);
             }
             UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
                     .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
@@ -262,7 +249,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private void enforceLinkedUserRules(UUID personId, String normalizedEmail, String chosenUsername) {
         List<UUID> linkedUserIds = peopleRegistrationClient.getLinkedUserIds(personId);
         for (UUID linkedUserId : linkedUserIds) {
-            User linkedUser = userRepository.findById(linkedUserId)
+            User linkedUser = userRepository
+                    .findById(linkedUserId)
                     .orElseThrow(() -> new SelfRegistrationConflictException(
                             USER_PERSON_LINK_CONFLICT,
                             "Resolved person has an inconsistent existing user link",
@@ -318,9 +306,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 .build());
         peopleRegistrationClient.deletePerson(resolvedPerson.personId());
         throw new SelfRegistrationConflictException(
-                "CRM_PERSON_CONFLICT",
-                buildCrmConflictMessage(crmSignalAssessment.summary()),
-                referenceId);
+                "CRM_PERSON_CONFLICT", buildCrmConflictMessage(crmSignalAssessment.summary()), referenceId);
     }
 
     private CrmSignalAssessment assessCrmMatches(
@@ -329,12 +315,11 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             String normalizedPhone,
             String normalizedFirstName,
             String normalizedLastName) {
-        boolean exactEmailMatch = crmMatches.stream()
-                .anyMatch(match -> hasMatchingEmail(match, normalizedEmail));
-        boolean exactPhoneMatch = normalizedPhone != null && crmMatches.stream()
-                .anyMatch(match -> hasMatchingPhone(match, normalizedPhone));
-        boolean exactNameMatch = crmMatches.stream()
-                .anyMatch(match -> hasMatchingName(match, normalizedFirstName, normalizedLastName));
+        boolean exactEmailMatch = crmMatches.stream().anyMatch(match -> hasMatchingEmail(match, normalizedEmail));
+        boolean exactPhoneMatch = normalizedPhone != null
+                && crmMatches.stream().anyMatch(match -> hasMatchingPhone(match, normalizedPhone));
+        boolean exactNameMatch =
+                crmMatches.stream().anyMatch(match -> hasMatchingName(match, normalizedFirstName, normalizedLastName));
 
         int individualCustomerCandidateCount = Math.toIntExact(crmMatches.stream()
                 .filter(CustomerPersonSearchResponse::individualCustomer)
@@ -379,9 +364,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     }
 
     private boolean hasMatchingName(
-            CustomerPersonSearchResponse match,
-            String normalizedFirstName,
-            String normalizedLastName) {
+            CustomerPersonSearchResponse match, String normalizedFirstName, String normalizedLastName) {
         String matchFirstName = normalizeOptionalText(match.firstName());
         String matchLastName = normalizeOptionalText(match.lastName());
         if (normalizedFirstName.equals(matchFirstName) && normalizedLastName.equals(matchLastName)) {
@@ -395,7 +378,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private String buildCrmConflictMessage(CrmMatchSummaryDto summary) {
         String identityContext;
         if (summary.getSharedIdentityCandidateCount() > 0) {
-            identityContext = "matching CRM records show the person is both an individual customer and a commercial contact";
+            identityContext =
+                    "matching CRM records show the person is both an individual customer and a commercial contact";
         } else if (summary.getCommercialContactCandidateCount() > 0) {
             identityContext = "matching CRM records show the person is already a commercial contact";
         } else {
@@ -406,7 +390,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     }
 
     private User createUser(String username, String password, UUID personId) {
-        Role defaultRole = roleRepository.findByName(DEFAULT_SELF_REGISTRATION_ROLE)
+        Role defaultRole = roleRepository
+                .findByName(DEFAULT_SELF_REGISTRATION_ROLE)
                 .orElseThrow(() -> new IllegalStateException(
                         "Required self-registration role not found: " + DEFAULT_SELF_REGISTRATION_ROLE));
         User user = new User();
@@ -496,7 +481,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             String normalizedLastName,
             String explicitUsername,
             String normalizedIdpSubject) {
-        String canonical = String.join("|",
+        String canonical = String.join(
+                "|",
                 normalizedEmail,
                 defaultString(normalizedPhone),
                 normalizedFirstName,

@@ -1,12 +1,11 @@
 package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.time.Instant;
+import java.util.List;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
-
-import java.time.Instant;
-import java.util.List;
 
 @Value
 @Builder

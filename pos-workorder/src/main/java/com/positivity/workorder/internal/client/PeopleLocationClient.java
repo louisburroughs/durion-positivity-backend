@@ -2,13 +2,11 @@ package com.positivity.workorder.internal.client;
 
 import java.util.Optional;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Client for resolving the current user's primary location from pos-people.
@@ -34,7 +32,8 @@ public class PeopleLocationClient {
     @NonNull
     public Optional<UUID> resolveCurrentUserPrimaryLocation() {
         try {
-            PrimaryLocationResponse response = peopleServiceRestClient.get()
+            PrimaryLocationResponse response = peopleServiceRestClient
+                    .get()
                     .uri("/v1/people/me/primary-location")
                     .retrieve()
                     .body(PrimaryLocationResponse.class);
@@ -47,8 +46,8 @@ public class PeopleLocationClient {
             log.debug("Resolved primary location {} for current user", response.locationId());
             return Optional.of(response.locationId());
         } catch (Exception ex) {
-            log.warn("Failed to resolve primary location from pos-people, falling back to default: {}",
-                    ex.getMessage());
+            log.warn(
+                    "Failed to resolve primary location from pos-people, falling back to default: {}", ex.getMessage());
             return Optional.empty();
         }
     }
@@ -57,6 +56,5 @@ public class PeopleLocationClient {
      * Minimal response record for the primary location endpoint.
      * Avoids cross-module dependency on pos-people DTOs.
      */
-    private record PrimaryLocationResponse(UUID locationId) {
-    }
+    private record PrimaryLocationResponse(UUID locationId) {}
 }

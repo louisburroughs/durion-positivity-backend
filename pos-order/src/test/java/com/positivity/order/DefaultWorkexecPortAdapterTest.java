@@ -35,10 +35,7 @@ class DefaultWorkexecPortAdapterTest {
     void cancelWorkorder_returnsSuccess() {
         UUID workorderId = UUID.randomUUID();
         CancelWorkorderCommand command = new CancelWorkorderCommand(
-                workorderId,
-                "test-user",
-                "CANCEL_REQUESTED",
-                UUID.randomUUID().toString());
+                workorderId, "test-user", "CANCEL_REQUESTED", UUID.randomUUID().toString());
 
         WorkorderCancelResult result = adapter.cancelWorkorder(workorderId, command);
 

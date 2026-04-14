@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,16 +41,15 @@ public class EventTypeInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("Registering {} inventory event types", EventTypes.all().size());
 
-        initializerSupport.registerEventTypes(
-                EventTypes.all(),
-                this::registerEventType);
+        initializerSupport.registerEventTypes(EventTypes.all(), this::registerEventType);
 
         log.info("Inventory event type registration complete");
     }
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

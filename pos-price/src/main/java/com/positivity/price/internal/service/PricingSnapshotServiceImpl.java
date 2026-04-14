@@ -29,7 +29,8 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
     @NonNull
     @Transactional(readOnly = true)
     public PricingSnapshotResponse getSnapshot(@NonNull UUID snapshotId) {
-        PricingSnapshot snapshot = pricingSnapshotRepository.findById(snapshotId)
+        PricingSnapshot snapshot = pricingSnapshotRepository
+                .findById(snapshotId)
                 .orElseThrow(() -> new SnapshotNotFoundException(snapshotId));
 
         PricingSnapshotResponse response = new PricingSnapshotResponse();

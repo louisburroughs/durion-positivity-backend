@@ -7,18 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Instant;
-import java.util.List;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-
 import com.positivity.securityservice.BaseContractIntegrationTest;
 import com.positivity.securityservice.PosSecurityServiceApplication;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
@@ -34,6 +22,16 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Contract behavior tests for the POS roles and permission matrix.
@@ -55,9 +53,11 @@ import com.positivity.shared.id.UUIDv7Generator;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         classes = PosSecurityServiceApplication.class,
-        properties = { "security.jwt.secret=test-jwt-secret-key-01234567890123456789" })
+        properties = {"security.jwt.secret=test-jwt-secret-key-01234567890123456789"})
 @ActiveProfiles("test")
-@WithMockUser(username = "system-admin", roles = { "ADMIN" })
+@WithMockUser(
+        username = "system-admin",
+        roles = {"ADMIN"})
 @DisplayName("Issue #2: Permission Management Contract Behavior")
 class PermissionManagementContractIT extends BaseContractIntegrationTest {
     private static final String ROLE_ASSIGN_AUTH = "ROLE_ADMIN,security:role:assign";
@@ -126,17 +126,17 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * {@code audit_log_events} containing actor_id (from security context per
      * ADR-0018) and timestamp.
      *
-        * <p><b>GREEN path:</b> {@code GlobalExceptionHandler.handleAuthorizationDeniedException()}
-        * persists a {@code PermissionDenied} audit event on HTTP 403 using
-        * actor identity from security context (ADR-0018).
+     * <p><b>GREEN path:</b> {@code GlobalExceptionHandler.handleAuthorizationDeniedException()}
+     * persists a {@code PermissionDenied} audit event on HTTP 403 using
+     * actor identity from security context (ADR-0018).
      */
     @Test
     @DisplayName("AC1: cashier denied role-assign operation – PermissionDenied audit event persisted")
     void ac1_cashierDeniedRoleAssign_permissionDeniedAuditEventPersisted() throws Exception {
         // When: CASHIER (no ROLE_ADMIN) attempts to assign a role — endpoint requires ROLE_ADMIN
         mockMvc.perform(withAuth(
-                put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                "ROLE_CASHIER"))
+                        put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        "ROLE_CASHIER"))
                 .andExpect(status().isForbidden());
 
         // Then: a PermissionDenied audit event must be persisted
@@ -146,7 +146,8 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
 
         // Issue #2 GREEN: GlobalExceptionHandler persists PermissionDenied audit event on HTTP 403
         assertThat(deniedEvents)
-                .as("Expected 1 AuditLogEvent with eventType='PermissionDenied' after HTTP 403, but found %d",
+                .as(
+                        "Expected 1 AuditLogEvent with eventType='PermissionDenied' after HTTP 403, but found %d",
                         deniedEvents.size())
                 .hasSize(1);
 
@@ -187,10 +188,10 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // When: Admin queries the authorization decision for the manager principal
         // Then: decision must be allow
         mockMvc.perform(withAuth(
-                get("/v1/users/authorization/decision")
-                        .param("principalId", managerPrincipal)
-                        .param("permission", "order:refund:approve"),
-                AUTHZ_DECISION_AUTH))
+                        get("/v1/users/authorization/decision")
+                                .param("principalId", managerPrincipal)
+                                .param("permission", "order:refund:approve"),
+                        AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("allow"));
     }
@@ -216,10 +217,10 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // When: Admin queries the authorization decision for the unprivileged principal
         // Then: decision must be deny (default-deny policy)
         mockMvc.perform(withAuth(
-                get("/v1/users/authorization/decision")
-                        .param("principalId", unprivilegedPrincipal)
-                        .param("permission", "order:refund:approve"),
-                AUTHZ_DECISION_AUTH))
+                        get("/v1/users/authorization/decision")
+                                .param("principalId", unprivilegedPrincipal)
+                                .param("permission", "order:refund:approve"),
+                        AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("deny"));
     }
@@ -231,17 +232,18 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * must persist a {@code RoleAssignedToUser} audit event in {@code audit_log_events}
      * recording actor_id (from security context), subject user_id, entity type, and timestamp.
      *
-        * <p><b>GREEN path:</b> {@code RoleManagementServiceImpl.assignRoleToUser()} now emits
-        * a {@code RoleAssignedToUser} audit event via {@code AuditEventService} after
-        * persisting the assignment.
+     * <p><b>GREEN path:</b> {@code RoleManagementServiceImpl.assignRoleToUser()} now emits
+     * a {@code RoleAssignedToUser} audit event via {@code AuditEventService} after
+     * persisting the assignment.
      */
     @Test
-    @DisplayName("AC3: role assignment persists RoleAssignedToUser audit event with actor, subject, role, and timestamp")
+    @DisplayName(
+            "AC3: role assignment persists RoleAssignedToUser audit event with actor, subject, role, and timestamp")
     void ac3_roleAssignment_persistsRoleAssignedToUserAuditEvent() throws Exception {
         // When: Admin assigns testRole to subjectUser
         mockMvc.perform(withAuth(
-                put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                ROLE_ASSIGN_AUTH))
+                        put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // Then: a RoleAssignedToUser audit event must be persisted
@@ -251,8 +253,9 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
 
         // Issue #2 GREEN: RoleManagementServiceImpl.assignRoleToUser() emits AuditLogEvent
         assertThat(assignedEvents)
-                .as("Expected 1 AuditLogEvent with eventType='RoleAssignedToUser' after"
-                        + " PUT /v1/users/{userId}/roles/{roleId}, but found %d",
+                .as(
+                        "Expected 1 AuditLogEvent with eventType='RoleAssignedToUser' after"
+                                + " PUT /v1/users/{userId}/roles/{roleId}, but found %d",
                         assignedEvents.size())
                 .hasSize(1);
 
@@ -282,17 +285,17 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * must persist a {@code RoleRevokedFromUser} audit event in {@code audit_log_events}
      * recording actor_id (from security context), subject user_id, and timestamp.
      *
-        * <p><b>GREEN path:</b> {@code RoleManagementServiceImpl.revokeRoleFromUser()} now emits
-        * a {@code RoleRevokedFromUser} audit event via {@code AuditEventService} after
-        * updating assignment end-date metadata.
+     * <p><b>GREEN path:</b> {@code RoleManagementServiceImpl.revokeRoleFromUser()} now emits
+     * a {@code RoleRevokedFromUser} audit event via {@code AuditEventService} after
+     * updating assignment end-date metadata.
      */
     @Test
     @DisplayName("AC4: role revocation persists RoleRevokedFromUser audit event with actor, subject, and timestamp")
     void ac4_roleRevocation_persistsRoleRevokedFromUserAuditEvent() throws Exception {
         // Given: subjectUser has testRole assigned
         mockMvc.perform(withAuth(
-                put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                ROLE_ASSIGN_AUTH))
+                        put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // Clear any events from the assignment setup to isolate the revocation assertion
@@ -300,8 +303,8 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
 
         // When: Admin revokes testRole from subjectUser
         mockMvc.perform(withAuth(
-                delete("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                ROLE_ASSIGN_AUTH))
+                        delete("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        ROLE_ASSIGN_AUTH))
                 .andExpect(status().isNoContent());
 
         // Then: a RoleRevokedFromUser audit event must be persisted
@@ -311,8 +314,9 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
 
         // Issue #2 GREEN: RoleManagementServiceImpl.revokeRoleFromUser() emits AuditLogEvent
         assertThat(revokedEvents)
-                .as("Expected 1 AuditLogEvent with eventType='RoleRevokedFromUser' after"
-                        + " DELETE /v1/users/{userId}/roles/{roleId}, but found %d",
+                .as(
+                        "Expected 1 AuditLogEvent with eventType='RoleRevokedFromUser' after"
+                                + " DELETE /v1/users/{userId}/roles/{roleId}, but found %d",
                         revokedEvents.size())
                 .hasSize(1);
 
@@ -336,25 +340,22 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * {@code eventType} to retrieve role-assignment history with timestamp,
      * actor identity, subject identity, and role name.
      *
-        * <p><b>GREEN path:</b> {@code AuditController.searchEvents()} supports
-        * querying by {@code eventType} alone and AC3 persists
-        * {@code RoleAssignedToUser}, enabling a non-empty history response.
+     * <p><b>GREEN path:</b> {@code AuditController.searchEvents()} supports
+     * querying by {@code eventType} alone and AC3 persists
+     * {@code RoleAssignedToUser}, enabling a non-empty history response.
      */
     @Test
     @DisplayName("AC5: audit events queryable by eventType=RoleAssignedToUser returns role assignment history")
     void ac5_auditEvents_queryableByEventType_returnsRoleAssignmentHistory() throws Exception {
         // Given: a role assignment has occurred
         mockMvc.perform(withAuth(
-                put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                ROLE_ASSIGN_AUTH))
+                        put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // When: Security Officer queries audit events by eventType
         // Issue #2 GREEN: endpoint supports eventType-only query and returns matching history
-        mockMvc.perform(withAuth(
-                get("/v1/audit/events")
-                        .param("eventType", "RoleAssignedToUser"),
-                AUDIT_VIEW_AUTH))
+        mockMvc.perform(withAuth(get("/v1/audit/events").param("eventType", "RoleAssignedToUser"), AUDIT_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1))

@@ -1,17 +1,5 @@
 package com.positivity.people.internal.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimeEntryAudit;
@@ -19,8 +7,17 @@ import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.TimeEntryService;
 import com.positivity.security.common.SecurityContextHelper;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of {@link TimeEntryService} responsible for processing batch decisions
@@ -69,7 +66,6 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         audit.setDetails(details);
         audit.setTimestamp(clock.instant());
         auditRepository.save(audit);
-
     }
 
     private boolean isAllowedToProcess(java.util.Set<String> permissions, String action) {
@@ -78,8 +74,9 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     }
 
     private boolean isPendingOrSubmitted(com.positivity.people.internal.enums.TimeEntryStatus status) {
-        return status != null && (status == com.positivity.people.internal.enums.TimeEntryStatus.SUBMITTED
-                || status == com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
+        return status != null
+                && (status == com.positivity.people.internal.enums.TimeEntryStatus.SUBMITTED
+                        || status == com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
     }
 
     private Map<String, TimeEntry> fetchTimeEntriesById(List<String> timeEntryIds) {
@@ -106,22 +103,22 @@ public class TimeEntryServiceImpl implements TimeEntryService {
      */
     @Override
     @Transactional
-    @NonNull public List<TimeEntryDecisionResult> approveEntries(List<String> timeEntryIds, String correlationId) {
+    @NonNull
+    public List<TimeEntryDecisionResult> approveEntries(List<String> timeEntryIds, String correlationId) {
         if (timeEntryIds == null || timeEntryIds.isEmpty()) {
             return new ArrayList<>();
         }
 
         String approverUserId = "system";
         java.util.Set<String> permissions = new java.util.HashSet<>();
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
-            .getContext()
-            .getAuthentication();
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication();
         if (auth != null && auth.isAuthenticated()) {
             approverUserId = auth.getName();
-            permissions = auth.getAuthorities()
-                .stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
-                .collect(Collectors.toSet());
+            permissions = auth.getAuthorities().stream()
+                    .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                    .collect(Collectors.toSet());
         }
 
         String finalApproverUserId = approverUserId;
@@ -132,15 +129,24 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         Map<String, TimeEntry> byId = fetchTimeEntriesById(timeEntryIds);
 
         return timeEntryIds.stream()
-            .map(id -> processApproval(id, byId.get(id), finalApproverUserId, finalPermissions, correlationId,
-                    auditActorId))
-            .toList();
+                .map(id -> processApproval(
+                        id, byId.get(id), finalApproverUserId, finalPermissions, correlationId, auditActorId))
+                .toList();
     }
 
-    private TimeEntryDecisionResult processApproval(String id, TimeEntry e, String approverUserId,
-            java.util.Set<String> permissions, String correlationId, String auditActorId) {
+    private TimeEntryDecisionResult processApproval(
+            String id,
+            TimeEntry e,
+            String approverUserId,
+            java.util.Set<String> permissions,
+            String correlationId,
+            String auditActorId) {
         if (e == null) {
-            recordAudit(id, "APPROVE_ATTEMPT_NOT_FOUND", auditActorId, correlationId,
+            recordAudit(
+                    id,
+                    "APPROVE_ATTEMPT_NOT_FOUND",
+                    auditActorId,
+                    correlationId,
                     "Time entry not found during approve attempt");
             return new TimeEntryDecisionResult(id, false, NOT_FOUND_CODE, NOT_FOUND_MSG);
         }
@@ -182,8 +188,9 @@ public class TimeEntryServiceImpl implements TimeEntryService {
      */
     @Override
     @Transactional
-    @NonNull public List<TimeEntryDecisionResult> rejectEntries(List<String> timeEntryIds, Map<String, String> rejectionReasons,
-            String correlationId) {
+    @NonNull
+    public List<TimeEntryDecisionResult> rejectEntries(
+            List<String> timeEntryIds, Map<String, String> rejectionReasons, String correlationId) {
         if (timeEntryIds == null || timeEntryIds.isEmpty()) {
             return new ArrayList<>();
         }
@@ -197,15 +204,14 @@ public class TimeEntryServiceImpl implements TimeEntryService {
 
         String rejectorUserId = "system";
         java.util.Set<String> permissions = new java.util.HashSet<>();
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
-            .getContext()
-            .getAuthentication();
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication();
         if (auth != null && auth.isAuthenticated()) {
             rejectorUserId = auth.getName();
-            permissions = auth.getAuthorities()
-                .stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
-                .collect(Collectors.toSet());
+            permissions = auth.getAuthorities().stream()
+                    .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                    .collect(Collectors.toSet());
         }
 
         String finalRejectorUserId = rejectorUserId;
@@ -216,15 +222,31 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         Map<String, TimeEntry> byId = fetchTimeEntriesById(timeEntryIds);
 
         return timeEntryIds.stream()
-            .map(id -> processRejection(id, byId.get(id), finalRejectorUserId, rejectionReasons.get(id),
-                    finalPermissions, correlationId, auditActorId))
-            .toList();
+                .map(id -> processRejection(
+                        id,
+                        byId.get(id),
+                        finalRejectorUserId,
+                        rejectionReasons.get(id),
+                        finalPermissions,
+                        correlationId,
+                        auditActorId))
+                .toList();
     }
 
-    private TimeEntryDecisionResult processRejection(String id, TimeEntry e, String rejectorUserId,
-            String rejectionReason, java.util.Set<String> permissions, String correlationId, String auditActorId) {
+    private TimeEntryDecisionResult processRejection(
+            String id,
+            TimeEntry e,
+            String rejectorUserId,
+            String rejectionReason,
+            java.util.Set<String> permissions,
+            String correlationId,
+            String auditActorId) {
         if (e == null) {
-            recordAudit(id, "REJECT_ATTEMPT_NOT_FOUND", auditActorId, correlationId,
+            recordAudit(
+                    id,
+                    "REJECT_ATTEMPT_NOT_FOUND",
+                    auditActorId,
+                    correlationId,
                     "Time entry not found during reject attempt");
             return new TimeEntryDecisionResult(id, false, NOT_FOUND_CODE, NOT_FOUND_MSG);
         }
@@ -245,9 +267,12 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         e.setRejectionReason(rejectionReason != null ? rejectionReason : "");
         repository.save(e);
 
-        recordAudit(id, "REJECTED", auditActorId, correlationId,
+        recordAudit(
+                id,
+                "REJECTED",
+                auditActorId,
+                correlationId,
                 "Rejected via batch API. Reason: " + (rejectionReason != null ? rejectionReason : "N/A"));
         return new TimeEntryDecisionResult(id, true, null, null);
     }
-
 }

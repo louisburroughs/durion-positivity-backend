@@ -38,15 +38,13 @@ public class RestrictionEvaluationServiceImpl implements RestrictionEvaluationSe
 
     @Override
     public @NonNull List<RestrictionEvaluationResult> evaluate(@NonNull RestrictionEvaluationRequest request) {
-        return request.items().stream()
-                .map(this::evaluateItem)
-                .toList();
+        return request.items().stream().map(this::evaluateItem).toList();
     }
 
     private RestrictionEvaluationResult evaluateItem(RestrictionEvaluationItem item) {
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            CompletableFuture<DecisionWithRules> future = CompletableFuture
-                    .supplyAsync(() -> resolveDecision(item), executor)
+            CompletableFuture<DecisionWithRules> future = CompletableFuture.supplyAsync(
+                            () -> resolveDecision(item), executor)
                     .orTimeout(evaluationTimeoutMs, TimeUnit.MILLISECONDS);
             try {
                 DecisionWithRules dwr = future.join();
@@ -76,8 +74,8 @@ public class RestrictionEvaluationServiceImpl implements RestrictionEvaluationSe
         if (isCommitPath(context)) {
             throw new RestrictionServiceUnavailableException("Evaluation failed on commit path", cause);
         }
-        return new RestrictionEvaluationResult(productId, RestrictionDecision.RESTRICTION_UNKNOWN, List.of(),
-                List.of());
+        return new RestrictionEvaluationResult(
+                productId, RestrictionDecision.RESTRICTION_UNKNOWN, List.of(), List.of());
     }
 
     private boolean isCommitPath(EvaluationContext context) {
@@ -86,6 +84,5 @@ public class RestrictionEvaluationServiceImpl implements RestrictionEvaluationSe
                 || context == EvaluationContext.COMMIT_SALE;
     }
 
-    private record DecisionWithRules(RestrictionDecision decision, List<UUID> ruleIds) {
-    }
+    private record DecisionWithRules(RestrictionDecision decision, List<UUID> ruleIds) {}
 }

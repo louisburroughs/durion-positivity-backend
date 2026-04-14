@@ -5,8 +5,7 @@ public class RenderResponse {
     private String format;
     private int bytes;
 
-    public RenderResponse() {
-    }
+    public RenderResponse() {}
 
     public RenderResponse(String format, int bytes) {
         this.format = format;

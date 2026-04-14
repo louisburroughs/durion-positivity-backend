@@ -38,8 +38,7 @@ public class OrderCancellationController {
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_REQUEST", apiVersion = "1")
     public ResponseEntity<CancellationResponse> cancelOrder(
-            @PathVariable UUID orderId,
-            @Valid @RequestBody CancelOrderRequest request) {
+            @PathVariable UUID orderId, @Valid @RequestBody CancelOrderRequest request) {
         CancelOrderCommand command = new CancelOrderCommand(
                 request.getCancellationReason(),
                 request.getWorkOrderId(),
@@ -63,8 +62,7 @@ public class OrderCancellationController {
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_RETRY", apiVersion = "1")
     public ResponseEntity<CancellationResponse> retryCancellation(
-            @PathVariable UUID orderId,
-            @RequestParam String idempotencyKey) {
+            @PathVariable UUID orderId, @RequestParam String idempotencyKey) {
         CancellationResult result = orderCancellationService.retryCancellation(orderId, idempotencyKey);
         CancellationResponse response = new CancellationResponse();
         response.setOrderId(result.orderId().toString());

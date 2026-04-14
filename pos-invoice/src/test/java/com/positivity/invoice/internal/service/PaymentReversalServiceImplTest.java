@@ -9,32 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.context.SecurityContextImpl;
-
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
-import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
@@ -50,6 +27,27 @@ import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 /**
  * Unit tests for {@link PaymentReversalServiceImpl} covering Story #8:
@@ -135,8 +133,7 @@ class PaymentReversalServiceImplTest {
         when(paymentGatewayPort.voidRemainder(any(GatewayVoidRequest.class))).thenReturn(successResult);
         when(paymentIntentRepository.save(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null);
+        paymentReversalServiceImpl.voidPayment(INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null);
 
         ArgumentCaptor<PaymentIntent> captor = ArgumentCaptor.forClass(PaymentIntent.class);
         verify(paymentIntentRepository).save(captor.capture());
@@ -155,7 +152,7 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.ENTRY_ERROR, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.ENTRY_ERROR, null))
                 .isInstanceOf(InvalidPaymentStateException.class);
 
         verify(paymentGatewayPort, never()).voidRemainder(any());
@@ -173,7 +170,7 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.MANAGER_DISCRETION, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.MANAGER_DISCRETION, null))
                 .isInstanceOf(PaymentWindowExpiredException.class);
 
         verify(paymentGatewayPort, never()).voidRemainder(any());
@@ -197,8 +194,7 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.save(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Must not throw — SUPERVISOR_OVERRIDE allows bypass
-        paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.FRAUD_PREVENTION, null);
+        paymentReversalServiceImpl.voidPayment(INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.FRAUD_PREVENTION, null);
 
         verify(paymentGatewayPort).voidRemainder(any(GatewayVoidRequest.class));
     }
@@ -222,7 +218,7 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThatCode(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
                 .doesNotThrowAnyException();
 
         verify(refundRecordRepository).save(any());
@@ -237,7 +233,7 @@ class PaymentReversalServiceImplTest {
         withAuthorities("REFUND_PAYMENT"); // no VOID_PAYMENT
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
                 .isInstanceOf(AccessDeniedException.class);
 
         verify(paymentGatewayPort, never()).voidRemainder(any());
@@ -251,7 +247,7 @@ class PaymentReversalServiceImplTest {
         SecurityContextHolder.setContext(new SecurityContextImpl(auth));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
                 .isInstanceOf(AccessDeniedException.class);
 
         verifyNoInteractions(paymentIntentRepository, refundRecordRepository, paymentGatewayPort);
@@ -269,7 +265,8 @@ class PaymentReversalServiceImplTest {
     void refundPayment_success_createsRefundRecord() {
         PaymentIntent pi = capturedPaymentIntent(); // capturedAmount = 500
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
-        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of()); // no prior refunds
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                .thenReturn(List.of()); // no prior refunds
 
         GatewayPaymentResult successResult = successResult();
         when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
@@ -280,11 +277,7 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
 
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(500_00, 2),
-                RefundReason.CUSTOMER_RETURN,
-                null);
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(500_00, 2), RefundReason.CUSTOMER_RETURN, null);
 
         verify(refundRecordRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(RefundStatus.COMPLETED);
@@ -313,11 +306,7 @@ class PaymentReversalServiceImplTest {
 
         // 200 ≤ (500 - 100 = 400 remaining) — should succeed
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(200_00, 2),
-                RefundReason.OVERCHARGE,
-                null);
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(200_00, 2), RefundReason.OVERCHARGE, null);
 
         verify(refundRecordRepository).save(any(RefundRecord.class));
     }
@@ -335,11 +324,11 @@ class PaymentReversalServiceImplTest {
         // 200 > capturedAmount 100 — wait, capturedPaymentIntent has 500; trying 600 to
         // exceed
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(600_00, 2), // exceeds capturedAmount=500
-                RefundReason.SERVICE_ERROR,
-                null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(600_00, 2), // exceeds capturedAmount=500
+                        RefundReason.SERVICE_ERROR,
+                        null))
                 .isInstanceOf(InsufficientRefundableAmountException.class);
 
         verify(paymentGatewayPort, never()).refund(any());
@@ -358,11 +347,7 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(100_00, 2),
-                RefundReason.GOODWILL,
-                null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
                 .isInstanceOf(PaymentWindowExpiredException.class);
 
         verify(paymentGatewayPort, never()).refund(any());
@@ -378,11 +363,11 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID,
-                PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(100_00, 2),
-                RefundReason.CHARGEBACK_AVOIDANCE,
-                null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100_00, 2),
+                        RefundReason.CHARGEBACK_AVOIDANCE,
+                        null))
                 .isInstanceOf(InvalidPaymentStateException.class);
 
         verify(paymentGatewayPort, never()).refund(any());
@@ -401,7 +386,7 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
         verify(paymentGatewayPort, never()).voidRemainder(any());
@@ -418,7 +403,7 @@ class PaymentReversalServiceImplTest {
 
         UUID differentInvoice = UUID.fromString("00000000-0000-7000-8000-000000000099");
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                differentInvoice, PAYMENT_INTENT_ID, VoidReason.ENTRY_ERROR, null))
+                        differentInvoice, PAYMENT_INTENT_ID, VoidReason.ENTRY_ERROR, null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
         verify(paymentGatewayPort, never()).voidRemainder(any());
@@ -438,7 +423,7 @@ class PaymentReversalServiceImplTest {
         when(paymentGatewayPort.voidRemainder(any(GatewayVoidRequest.class))).thenReturn(failResult);
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.FRAUD_PREVENTION, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.FRAUD_PREVENTION, null))
                 .isInstanceOf(PaymentGatewayException.class);
 
         verify(paymentIntentRepository, never()).save(any());
@@ -458,8 +443,7 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
         verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
@@ -476,8 +460,11 @@ class PaymentReversalServiceImplTest {
 
         UUID differentInvoice = UUID.fromString("00000000-0000-7000-8000-000000000099");
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                differentInvoice, PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(100_00, 2), RefundReason.OVERCHARGE, null))
+                        differentInvoice,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100_00, 2),
+                        RefundReason.OVERCHARGE,
+                        null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
         verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
@@ -500,8 +487,7 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
 
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID,
-                BigDecimal.valueOf(100_00, 2), RefundReason.CUSTOMER_RETURN, null);
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.CUSTOMER_RETURN, null);
 
         ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
         verify(refundRecordRepository).save(captor.capture());
@@ -583,10 +569,9 @@ class PaymentReversalServiceImplTest {
      * Replaces the security context with the given authority strings.
      */
     private void withAuthorities(String... authorities) {
-        var grants = List.of(authorities).stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("cashier1", null, grants));
+        var grants =
+                List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList();
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("cashier1", null, grants));
     }
 }

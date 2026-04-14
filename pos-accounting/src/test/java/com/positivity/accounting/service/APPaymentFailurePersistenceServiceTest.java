@@ -6,9 +6,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.service.APPaymentFailurePersistenceService;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,11 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.positivity.accounting.internal.entity.APPayment;
-import com.positivity.accounting.internal.enums.APPaymentStatus;
-import com.positivity.accounting.internal.repository.APPaymentRepository;
-import com.positivity.accounting.internal.service.APPaymentFailurePersistenceService;
 
 /**
  * Unit tests for APPaymentFailurePersistenceService.
@@ -77,8 +75,7 @@ class APPaymentFailurePersistenceServiceTest {
     @Test
     @DisplayName("persistGatewayFailure should catch exception and not rethrow")
     void persistGatewayFailure_ExceptionThrown_CaughtAndSilenced() {
-        when(paymentRepository.findById(testPaymentId))
-                .thenThrow(new RuntimeException("DB connection failed"));
+        when(paymentRepository.findById(testPaymentId)).thenThrow(new RuntimeException("DB connection failed"));
 
         // Should not throw even when exception occurs inside
         service.persistGatewayFailure(testPaymentId, "Gateway timeout");

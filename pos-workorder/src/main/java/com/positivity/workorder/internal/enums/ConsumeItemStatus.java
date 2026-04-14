@@ -8,12 +8,12 @@ package com.positivity.workorder.internal.enums;
  */
 public enum ConsumeItemStatus {
 
-  /** All requested quantity was successfully consumed. */
-  SUCCESS,
+    /** All requested quantity was successfully consumed. */
+    SUCCESS,
 
-  /** Only part of the requested quantity could be consumed. */
-  PARTIAL,
+    /** Only part of the requested quantity could be consumed. */
+    PARTIAL,
 
-  /** The consume operation failed for this item. */
-  FAILED
+    /** The consume operation failed for this item. */
+    FAILED
 }

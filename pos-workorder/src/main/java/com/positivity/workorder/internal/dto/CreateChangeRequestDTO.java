@@ -4,9 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
-import lombok.*;
 import java.util.List;
 import java.util.UUID;
+import lombok.*;
 
 @Data
 @NoArgsConstructor
@@ -18,13 +18,17 @@ public class CreateChangeRequestDTO {
     private UUID workorderId;
 
     @NotBlank(message = "description is required")
-    @Schema(description = "Description of additional requested work", example = "Customer requested additional diagnostics")
+    @Schema(
+            description = "Description of additional requested work",
+            example = "Customer requested additional diagnostics")
     private String description;
 
     @Schema(description = "Whether this request contains emergency/safety exception items", example = "false")
     private Boolean isEmergencyException;
 
-    @Schema(description = "Exception reason when emergency override context applies", example = "Safety-critical repair")
+    @Schema(
+            description = "Exception reason when emergency override context applies",
+            example = "Safety-critical repair")
     private String exceptionReason;
 
     @Valid
@@ -47,13 +51,19 @@ public class CreateChangeRequestDTO {
     @Builder
     @Schema(description = "Service or part line item included in a change request")
     public static class WorkorderItemDTO {
-        @Schema(description = "Service catalog entity identifier for service items", example = "550e8400-e29b-41d4-a716-446655440010")
+        @Schema(
+                description = "Service catalog entity identifier for service items",
+                example = "550e8400-e29b-41d4-a716-446655440010")
         private UUID serviceEntityId;
 
-        @Schema(description = "Product entity identifier for inventory part items", example = "550e8400-e29b-41d4-a716-446655440011")
+        @Schema(
+                description = "Product entity identifier for inventory part items",
+                example = "550e8400-e29b-41d4-a716-446655440011")
         private UUID productEntityId;
 
-        @Schema(description = "Product entity identifier for non-inventory part items", example = "550e8400-e29b-41d4-a716-446655440012")
+        @Schema(
+                description = "Product entity identifier for non-inventory part items",
+                example = "550e8400-e29b-41d4-a716-446655440012")
         private UUID nonInventoryProductEntityId;
 
         @Schema(description = "Requested quantity for part line items", example = "1")
@@ -62,10 +72,14 @@ public class CreateChangeRequestDTO {
         @Schema(description = "Whether this item is emergency/safety related", example = "false")
         private Boolean isEmergencySafety;
 
-        @Schema(description = "Photo evidence URL for emergency/safety documentation", example = "https://cdn.example.com/evidence/photo-123.jpg")
+        @Schema(
+                description = "Photo evidence URL for emergency/safety documentation",
+                example = "https://cdn.example.com/evidence/photo-123.jpg")
         private String photoEvidenceUrl;
 
-        @Schema(description = "Emergency notes used when photo evidence is unavailable", example = "Brake line rupture visible after wheel removal")
+        @Schema(
+                description = "Emergency notes used when photo evidence is unavailable",
+                example = "Brake line rupture visible after wheel removal")
         private String emergencyNotes;
 
         @Schema(description = "Flag indicating photo capture was not possible", example = "false")

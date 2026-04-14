@@ -1,10 +1,9 @@
 package com.positivity.vehicle.internal.dao;
 
+import com.positivity.vehicle.internal.entity.VehicleEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.positivity.vehicle.internal.entity.VehicleEntity;
 
 public interface VehicleDao {
     VehicleEntity save(VehicleEntity vehicle);

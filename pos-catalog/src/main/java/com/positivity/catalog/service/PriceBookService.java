@@ -19,8 +19,8 @@ public interface PriceBookService {
 
     PriceBookRuleDto createRule(@NonNull UUID priceBookId, @NonNull PriceBookRuleCreateRequestDto request);
 
-    PriceBookRuleDto updateRule(@NonNull UUID priceBookId, @NonNull UUID ruleId,
-            @NonNull PriceBookRuleCreateRequestDto request);
+    PriceBookRuleDto updateRule(
+            @NonNull UUID priceBookId, @NonNull UUID ruleId, @NonNull PriceBookRuleCreateRequestDto request);
 
     void deactivateRule(@NonNull UUID priceBookId, @NonNull UUID ruleId);
 

@@ -1,8 +1,5 @@
 package com.positivity.accounting.service;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
@@ -12,6 +9,8 @@ import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 public interface GLAccountService {
 
@@ -129,5 +128,4 @@ public interface GLAccountService {
      *                                    date
      */
     void validateAccountForPosting(UUID glAccountId, LocalDateTime transactionDate);
-
 }

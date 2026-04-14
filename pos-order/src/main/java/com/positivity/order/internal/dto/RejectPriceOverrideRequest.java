@@ -8,9 +8,9 @@ import lombok.Data;
  */
 @Data
 public class RejectPriceOverrideRequest {
-    
+
     @NotBlank(message = "Rejection reason is required")
     private String reason;
-    
+
     private String comments;
 }

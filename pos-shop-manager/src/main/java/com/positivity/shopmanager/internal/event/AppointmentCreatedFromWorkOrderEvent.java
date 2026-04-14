@@ -28,5 +28,4 @@ public record AppointmentCreatedFromWorkOrderEvent(
         Instant startAt,
         Instant endAt,
         String actorId,
-        Instant createdAt) {
-}
+        Instant createdAt) {}

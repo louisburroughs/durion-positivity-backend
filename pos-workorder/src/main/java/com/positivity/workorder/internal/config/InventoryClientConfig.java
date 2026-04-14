@@ -8,12 +8,10 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class InventoryClientConfig {
 
-  @Bean
-  public RestClient inventoryServiceRestClient(
-      RestClient.Builder restClientBuilder,
-      @Value("${pos.inventory.base-url:http://pos-inventory:8087}") String inventoryBaseUrl) {
-    return restClientBuilder
-        .baseUrl(inventoryBaseUrl)
-        .build();
-  }
+    @Bean
+    public RestClient inventoryServiceRestClient(
+            RestClient.Builder restClientBuilder,
+            @Value("${pos.inventory.base-url:http://pos-inventory:8087}") String inventoryBaseUrl) {
+        return restClientBuilder.baseUrl(inventoryBaseUrl).build();
+    }
 }

@@ -6,16 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
@@ -24,10 +14,18 @@ import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Contract behavior tests for Financial Reporting API (CAP-054).
- * 
+ *
  * Tests:
  * - Income Statement generation with revenue/expenses/net income
  * - Balance Sheet generation with assets/liabilities/equity
@@ -43,254 +41,251 @@ import com.positivity.accounting.internal.repository.StatementLineMappingReposit
 @Transactional
 class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private StatementLineMappingRepository statementLineMappingRepository;
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
 
-        @Autowired
-        private GLAccountRepository glAccountRepository;
+    @Autowired
+    private GLAccountRepository glAccountRepository;
 
-        // Fixed UUIDs for deterministic testing
-        private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
-        private static final UUID COGS_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
-        private static final UUID CASH_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
-        private static final UUID AP_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000004");
-        private static final UUID EQUITY_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000005");
+    // Fixed UUIDs for deterministic testing
+    private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID COGS_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
+    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
+    private static final UUID AP_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000004");
+    private static final UUID EQUITY_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000005");
 
-        @BeforeEach
-        void setUp() {
-                // Create referenced GL accounts first
-                createGLAccounts();
-                // Create sample statement line mappings for testing
-                createSampleStatementLineMappings();
-        }
+    @BeforeEach
+    void setUp() {
+        // Create referenced GL accounts first
+        createGLAccounts();
+        // Create sample statement line mappings for testing
+        createSampleStatementLineMappings();
+    }
 
-        private void createGLAccounts() {
-                createGLAccount(REVENUE_ACCOUNT_ID, "4000", "Sales Revenue", AccountType.REVENUE);
-                createGLAccount(COGS_ACCOUNT_ID, "5000", "Cost of Goods Sold", AccountType.EXPENSE);
-                createGLAccount(CASH_ACCOUNT_ID, "1000", "Cash", AccountType.ASSET);
-                createGLAccount(AP_ACCOUNT_ID, "2000", "Accounts Payable", AccountType.LIABILITY);
-                createGLAccount(EQUITY_ACCOUNT_ID, "3000", "Owner's Equity", AccountType.EQUITY);
-        }
+    private void createGLAccounts() {
+        createGLAccount(REVENUE_ACCOUNT_ID, "4000", "Sales Revenue", AccountType.REVENUE);
+        createGLAccount(COGS_ACCOUNT_ID, "5000", "Cost of Goods Sold", AccountType.EXPENSE);
+        createGLAccount(CASH_ACCOUNT_ID, "1000", "Cash", AccountType.ASSET);
+        createGLAccount(AP_ACCOUNT_ID, "2000", "Accounts Payable", AccountType.LIABILITY);
+        createGLAccount(EQUITY_ACCOUNT_ID, "3000", "Owner's Equity", AccountType.EQUITY);
+    }
 
-        private void createGLAccount(UUID id, String code, String name, AccountType type) {
-                GLAccount account = new GLAccount();
-                account.setGlAccountId(id);
-                account.setAccountCode(code);
-                account.setAccountName(name);
-                account.setAccountType(type);
-                account.setCreatedBy("TEST");
-                account.setModifiedBy("TEST");
-                glAccountRepository.save(account);
-        }
+    private void createGLAccount(UUID id, String code, String name, AccountType type) {
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(id);
+        account.setAccountCode(code);
+        account.setAccountName(name);
+        account.setAccountType(type);
+        account.setCreatedBy("TEST");
+        account.setModifiedBy("TEST");
+        glAccountRepository.save(account);
+    }
 
-        @Test
-        @DisplayName("Generate Income Statement - Happy Path")
-        void testGenerateIncomeStatement_Success() throws Exception {
-                MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$.startDate").value("2024-01-01"))
-                                .andExpect(jsonPath("$.endDate").value("2024-12-31"))
-                                .andExpect(jsonPath("$.lineItems").isMap())
-                                .andExpect(jsonPath("$.totalRevenue").isNumber())
-                                .andExpect(jsonPath("$.totalExpenses").isNumber())
-                                .andExpect(jsonPath("$.netIncome").isNumber())
-                                .andExpect(jsonPath("$.generatedAt").exists())
-                                .andReturn();
+    @Test
+    @DisplayName("Generate Income Statement - Happy Path")
+    void testGenerateIncomeStatement_Success() throws Exception {
+        MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.startDate").value("2024-01-01"))
+                .andExpect(jsonPath("$.endDate").value("2024-12-31"))
+                .andExpect(jsonPath("$.lineItems").isMap())
+                .andExpect(jsonPath("$.totalRevenue").isNumber())
+                .andExpect(jsonPath("$.totalExpenses").isNumber())
+                .andExpect(jsonPath("$.netIncome").isNumber())
+                .andExpect(jsonPath("$.generatedAt").exists())
+                .andReturn();
 
-                // Verify net income calculation: revenue - expenses
-                String responseJson = result.getResponse().getContentAsString();
-                assertThat(responseJson).contains("netIncome");
-        }
+        // Verify net income calculation: revenue - expenses
+        String responseJson = result.getResponse().getContentAsString();
+        assertThat(responseJson).contains("netIncome");
+    }
 
-        @Test
-        @DisplayName("Generate Balance Sheet - Happy Path")
-        void testGenerateBalanceSheet_Success() throws Exception {
-                MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"))
-                                .param("asOfDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$.asOfDate").value("2024-12-31"))
-                                .andExpect(jsonPath("$.lineItems").isMap())
-                                .andExpect(jsonPath("$.totalAssets").isNumber())
-                                .andExpect(jsonPath("$.totalLiabilities").isNumber())
-                                .andExpect(jsonPath("$.totalEquity").isNumber())
-                                .andExpect(jsonPath("$.balanced").isBoolean())
-                                .andExpect(jsonPath("$.generatedAt").exists())
-                                .andReturn();
+    @Test
+    @DisplayName("Generate Balance Sheet - Happy Path")
+    void testGenerateBalanceSheet_Success() throws Exception {
+        MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"))
+                        .param("asOfDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.asOfDate").value("2024-12-31"))
+                .andExpect(jsonPath("$.lineItems").isMap())
+                .andExpect(jsonPath("$.totalAssets").isNumber())
+                .andExpect(jsonPath("$.totalLiabilities").isNumber())
+                .andExpect(jsonPath("$.totalEquity").isNumber())
+                .andExpect(jsonPath("$.balanced").isBoolean())
+                .andExpect(jsonPath("$.generatedAt").exists())
+                .andReturn();
 
-                // Verify balance sheet equation flag is present
-                String responseJson = result.getResponse().getContentAsString();
-                assertThat(responseJson).contains("balanced");
-        }
+        // Verify balance sheet equation flag is present
+        String responseJson = result.getResponse().getContentAsString();
+        assertThat(responseJson).contains("balanced");
+    }
 
-        @Test
-        @DisplayName("Generate Income Statement - Unauthorized (403)")
-        void testGenerateIncomeStatement_Unauthorized() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"),
-                                "some:other:permission")
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isForbidden());
-        }
+    @Test
+    @DisplayName("Generate Income Statement - Unauthorized (403)")
+    void testGenerateIncomeStatement_Unauthorized() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"), "some:other:permission")
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
 
-        @Test
-        @DisplayName("Generate Balance Sheet - Unauthorized (403)")
-        void testGenerateBalanceSheet_Unauthorized() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"),
-                                "some:other:permission")
-                                .param("asOfDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isForbidden());
-        }
+    @Test
+    @DisplayName("Generate Balance Sheet - Unauthorized (403)")
+    void testGenerateBalanceSheet_Unauthorized() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"), "some:other:permission")
+                        .param("asOfDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
 
-        @Test
-        @DisplayName("Generate Income Statement - Invalid Date Range (400)")
-        void testGenerateIncomeStatement_InvalidDateRange() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
-                                .param("startDate", "2024-12-31")
-                                .param("endDate", "2024-01-01") // end before start
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isBadRequest());
-        }
+    @Test
+    @DisplayName("Generate Income Statement - Invalid Date Range (400)")
+    void testGenerateIncomeStatement_InvalidDateRange() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
+                        .param("startDate", "2024-12-31")
+                        .param("endDate", "2024-01-01") // end before start
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
 
-        @Test
-        @DisplayName("Drilldown to Accounts - Happy Path")
-        void testDrilldownToAccounts_Success() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$").isArray())
-                                .andExpect(jsonPath("$[0].accountId").value(REVENUE_ACCOUNT_ID.toString()))
-                                .andExpect(jsonPath("$[0].accountName").value("Sales Revenue"))
-                                .andExpect(jsonPath("$[0].balance").isNumber())
-                                .andExpect(jsonPath("$[0].statementLineCode").value("REVENUE_SALES"));
-        }
+    @Test
+    @DisplayName("Drilldown to Accounts - Happy Path")
+    void testDrilldownToAccounts_Success() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].accountId").value(REVENUE_ACCOUNT_ID.toString()))
+                .andExpect(jsonPath("$[0].accountName").value("Sales Revenue"))
+                .andExpect(jsonPath("$[0].balance").isNumber())
+                .andExpect(jsonPath("$[0].statementLineCode").value("REVENUE_SALES"));
+    }
 
-        @Test
-        @DisplayName("Drilldown to Journal Lines - Happy Path")
-        void testDrilldownToJournalLines_Success() throws Exception {
-                // Use the revenue account ID from test data
-                mockMvc.perform(withAuth(
-                                get("/v1/accounting/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID))
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$").isArray());
-                // Note: Array may be empty if no journal entries exist for this account in test
-                // data
-        }
+    @Test
+    @DisplayName("Drilldown to Journal Lines - Happy Path")
+    void testDrilldownToJournalLines_Success() throws Exception {
+        // Use the revenue account ID from test data
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID))
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray());
+        // Note: Array may be empty if no journal entries exist for this account in test
+        // data
+    }
 
-        @Test
-        @DisplayName("Drilldown to Accounts - Invalid Date Range (400)")
-        void testDrilldownToAccounts_InvalidDateRange() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
-                                .param("startDate", "2024-12-31")
-                                .param("endDate", "2024-01-01") // end before start
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isBadRequest());
-        }
+    @Test
+    @DisplayName("Drilldown to Accounts - Invalid Date Range (400)")
+    void testDrilldownToAccounts_InvalidDateRange() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
+                        .param("startDate", "2024-12-31")
+                        .param("endDate", "2024-01-01") // end before start
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
 
-        @Test
-        @DisplayName("Report Reproducibility - Same Params Return Same Results")
-        void testReportReproducibility() throws Exception {
-                // Generate report twice with same parameters
-                MvcResult result1 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andReturn();
+    @Test
+    @DisplayName("Report Reproducibility - Same Params Return Same Results")
+    void testReportReproducibility() throws Exception {
+        // Generate report twice with same parameters
+        MvcResult result1 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andReturn();
 
-                MvcResult result2 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
-                                .param("startDate", "2024-01-01")
-                                .param("endDate", "2024-12-31")
-                                .accept(MediaType.APPLICATION_JSON))
-                                .andExpect(status().isOk())
-                                .andReturn();
+        MvcResult result2 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
+                        .param("startDate", "2024-01-01")
+                        .param("endDate", "2024-12-31")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andReturn();
 
-                // Parse responses
-                String json1 = result1.getResponse().getContentAsString();
-                String json2 = result2.getResponse().getContentAsString();
+        // Parse responses
+        String json1 = result1.getResponse().getContentAsString();
+        String json2 = result2.getResponse().getContentAsString();
 
-                // Verify line items are identical (excluding generatedAt timestamp)
-                assertThat(json1).contains("\"startDate\":\"2024-01-01\"");
-                assertThat(json2).contains("\"startDate\":\"2024-01-01\"");
-                assertThat(json1).contains("\"endDate\":\"2024-12-31\"");
-                assertThat(json2).contains("\"endDate\":\"2024-12-31\"");
-        }
+        // Verify line items are identical (excluding generatedAt timestamp)
+        assertThat(json1).contains("\"startDate\":\"2024-01-01\"");
+        assertThat(json2).contains("\"startDate\":\"2024-01-01\"");
+        assertThat(json1).contains("\"endDate\":\"2024-12-31\"");
+        assertThat(json2).contains("\"endDate\":\"2024-12-31\"");
+    }
 
-        // ========== Test Data Setup ==========
+    // ========== Test Data Setup ==========
 
-        /**
-         * Create sample statement line mappings for testing with fixed UUIDs.
-         */
-        private void createSampleStatementLineMappings() {
-                // Income Statement Mappings
-                statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .glAccount(new GLAccount(REVENUE_ACCOUNT_ID))
-                                .accountName("Sales Revenue")
-                                .statementType(StatementType.INCOME_STATEMENT)
-                                .statementLineCode("REVENUE_SALES")
-                                .lineDescription("Revenue from product sales")
-                                .displayOrder(10)
-                                .operation(OperationType.SUM)
-                                .build());
+    /**
+     * Create sample statement line mappings for testing with fixed UUIDs.
+     */
+    private void createSampleStatementLineMappings() {
+        // Income Statement Mappings
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .glAccount(new GLAccount(REVENUE_ACCOUNT_ID))
+                .accountName("Sales Revenue")
+                .statementType(StatementType.INCOME_STATEMENT)
+                .statementLineCode("REVENUE_SALES")
+                .lineDescription("Revenue from product sales")
+                .displayOrder(10)
+                .operation(OperationType.SUM)
+                .build());
 
-                statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
-                                .glAccount(new GLAccount(COGS_ACCOUNT_ID))
-                                .accountName("Cost of Goods Sold")
-                                .statementType(StatementType.INCOME_STATEMENT)
-                                .statementLineCode("EXPENSE_COGS")
-                                .lineDescription("Cost of products sold")
-                                .displayOrder(20)
-                                .operation(OperationType.SUM)
-                                .build());
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .glAccount(new GLAccount(COGS_ACCOUNT_ID))
+                .accountName("Cost of Goods Sold")
+                .statementType(StatementType.INCOME_STATEMENT)
+                .statementLineCode("EXPENSE_COGS")
+                .lineDescription("Cost of products sold")
+                .displayOrder(20)
+                .operation(OperationType.SUM)
+                .build());
 
-                // Balance Sheet Mappings
-                statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
-                                .glAccount(new GLAccount(CASH_ACCOUNT_ID))
-                                .accountName("Cash")
-                                .statementType(StatementType.BALANCE_SHEET)
-                                .statementLineCode("ASSET_CURRENT_CASH")
-                                .lineDescription("Cash and cash equivalents")
-                                .displayOrder(10)
-                                .operation(OperationType.SUM)
-                                .build());
+        // Balance Sheet Mappings
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
+                .glAccount(new GLAccount(CASH_ACCOUNT_ID))
+                .accountName("Cash")
+                .statementType(StatementType.BALANCE_SHEET)
+                .statementLineCode("ASSET_CURRENT_CASH")
+                .lineDescription("Cash and cash equivalents")
+                .displayOrder(10)
+                .operation(OperationType.SUM)
+                .build());
 
-                statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
-                                .glAccount(new GLAccount(AP_ACCOUNT_ID))
-                                .accountName("Accounts Payable")
-                                .statementType(StatementType.BALANCE_SHEET)
-                                .statementLineCode("LIABILITY_CURRENT_AP")
-                                .lineDescription("Current accounts payable")
-                                .displayOrder(50)
-                                .operation(OperationType.SUM)
-                                .build());
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
+                .glAccount(new GLAccount(AP_ACCOUNT_ID))
+                .accountName("Accounts Payable")
+                .statementType(StatementType.BALANCE_SHEET)
+                .statementLineCode("LIABILITY_CURRENT_AP")
+                .lineDescription("Current accounts payable")
+                .displayOrder(50)
+                .operation(OperationType.SUM)
+                .build());
 
-                statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000005"))
-                                .glAccount(new GLAccount(EQUITY_ACCOUNT_ID))
-                                .accountName("Owner's Equity")
-                                .statementType(StatementType.BALANCE_SHEET)
-                                .statementLineCode("EQUITY_OWNERS")
-                                .lineDescription("Owner's capital")
-                                .displayOrder(80)
-                                .operation(OperationType.SUM)
-                                .build());
-        }
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000005"))
+                .glAccount(new GLAccount(EQUITY_ACCOUNT_ID))
+                .accountName("Owner's Equity")
+                .statementType(StatementType.BALANCE_SHEET)
+                .statementLineCode("EQUITY_OWNERS")
+                .lineDescription("Owner's capital")
+                .displayOrder(80)
+                .operation(OperationType.SUM)
+                .build());
+    }
 }

@@ -48,7 +48,7 @@ public class DocumentRenderException extends RuntimeException {
 
     @Override
     public String toString() {
-        return String.format("DocumentRenderException[templateId=%s, format=%s, message=%s]",
-                templateId, format, getMessage());
+        return String.format(
+                "DocumentRenderException[templateId=%s, format=%s, message=%s]", templateId, format, getMessage());
     }
 }

@@ -4,13 +4,12 @@ import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import lombok.Data;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Billing rules configuration for commercial accounts.
@@ -20,9 +19,9 @@ import java.util.UUID;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
-@Table(name = "billing_rules", indexes = {
-        @Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)
-})
+@Table(
+        name = "billing_rules",
+        indexes = {@Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)})
 public class BillingRules {
 
     @Id
@@ -62,6 +61,4 @@ public class BillingRules {
 
     @Column(name = "updated_by", nullable = false, length = 36)
     private String updatedBy;
-
 }
-

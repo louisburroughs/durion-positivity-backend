@@ -1,11 +1,10 @@
 package com.positivity.vehicle.service;
 
-import java.util.Optional;
-import java.util.UUID;
-
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import java.util.Optional;
+import java.util.UUID;
 
 public interface VehicleService {
 
@@ -33,5 +32,4 @@ public interface VehicleService {
      * Deletes (deactivates) a vehicle.
      */
     void deleteVehicle(UUID vehicleId);
-
 }

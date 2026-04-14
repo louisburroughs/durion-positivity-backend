@@ -6,7 +6,6 @@ import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
 import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
-
 import java.util.List;
 import java.util.UUID;
 

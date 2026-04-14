@@ -1,23 +1,22 @@
 package com.positivity.accounting.internal.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-import lombok.Data;
-
 /**
  * Configuration properties for Default GL Mapping feature.
- * 
+ *
  * <p>
  * Controls whether the accounting system should fall back to default GL
  * mappings
  * when no explicit posting rules exist for an event type.
  * </p>
- * 
+ *
  * <p>
  * <strong>Configuration Example:</strong>
  * </p>
- * 
+ *
  * <pre>
  * pos:
  *   accounting:
@@ -26,7 +25,7 @@ import lombok.Data;
  *       allow-global-defaults: true        # Allow organization-agnostic defaults
  *       require-amount-field: true         # Require payload.amount field in events
  * </pre>
- * 
+ *
  * <p>
  * <strong>Feature Behavior:</strong>
  * </p>
@@ -44,7 +43,7 @@ import lombok.Data;
  * <li><strong>require-amount-field=true:</strong> Validates that events have
  * payload.amount before using default mappings</li>
  * </ul>
- * 
+ *
  * @see com.positivity.accounting.internal.entity.DefaultGLMapping
  * @see com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl
  */
@@ -55,12 +54,12 @@ public class DefaultGLMappingProperties {
 
     /**
      * Master switch for default GL mapping fallback feature.
-     * 
+     *
      * <p>
      * When enabled, the posting rule evaluator will attempt to use default GL
      * mappings when no explicit posting rules are configured for an event type.
      * </p>
-     * 
+     *
      * <p>
      * Default: {@code true}
      * </p>
@@ -69,12 +68,12 @@ public class DefaultGLMappingProperties {
 
     /**
      * Whether to allow global (organization-agnostic) default mappings.
-     * 
+     *
      * <p>
      * When enabled, the system will fall back to global default mappings
      * (organizationId=null) if no organization-specific default exists.
      * </p>
-     * 
+     *
      * <p>
      * Resolution priority when this is enabled:
      * </p>
@@ -84,7 +83,7 @@ public class DefaultGLMappingProperties {
      * <li>Global default mapping (if allowed)</li>
      * <li>Fail with UNMAPPED_EVENT_TYPE</li>
      * </ol>
-     * 
+     *
      * <p>
      * Default: {@code true}
      * </p>
@@ -94,19 +93,19 @@ public class DefaultGLMappingProperties {
     /**
      * Whether to require the {@code payload.amount} field in events using default
      * mappings.
-     * 
+     *
      * <p>
      * When enabled, events must contain a {@code payload.amount} field to use
      * default mappings. This ensures that generated journal entries have valid
      * transaction amounts.
      * </p>
-     * 
+     *
      * <p>
      * When disabled, the system will attempt to generate journal entries with zero
      * amounts if {@code payload.amount} is missing (not recommended for
      * production).
      * </p>
-     * 
+     *
      * <p>
      * Default: {@code true}
      * </p>

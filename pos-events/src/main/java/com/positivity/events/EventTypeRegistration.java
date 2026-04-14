@@ -38,21 +38,25 @@ public class EventTypeRegistration {
 
     /** Fast read operations: p50=50ms, p95=200ms, p99=500ms */
     public static final long FAST_READ_P50 = 50_000L;
+
     public static final long FAST_READ_P95 = 200_000L;
     public static final long FAST_READ_P99 = 500_000L;
 
     /** Search/filter operations: p50=100ms, p95=500ms, p99=1s */
     public static final long SEARCH_P50 = 100_000L;
+
     public static final long SEARCH_P95 = 500_000L;
     public static final long SEARCH_P99 = 1_000_000L;
 
     /** Write/create operations: p50=200ms, p95=1s, p99=3s */
     public static final long WRITE_P50 = 200_000L;
+
     public static final long WRITE_P95 = 1_000_000L;
     public static final long WRITE_P99 = 3_000_000L;
 
     /** Approval workflow operations: p50=500ms, p95=2s, p99=5s */
     public static final long APPROVAL_P50 = 500_000L;
+
     public static final long APPROVAL_P95 = 2_000_000L;
     public static final long APPROVAL_P99 = 5_000_000L;
 

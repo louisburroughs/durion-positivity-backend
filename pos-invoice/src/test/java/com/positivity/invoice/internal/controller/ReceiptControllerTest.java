@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.controller;
 
+import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -7,13 +8,18 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.hamcrest.Matchers.notNullValue;
 
+import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
+import com.positivity.invoice.internal.enums.ReceiptStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
+import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
+import com.positivity.invoice.service.Receipt;
+import com.positivity.invoice.service.ReceiptService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,14 +30,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
-import com.positivity.invoice.internal.enums.ReceiptStatus;
-import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
-import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
-import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
-import com.positivity.invoice.service.Receipt;
-import com.positivity.invoice.service.ReceiptService;
 
 /**
  * Controller-layer unit tests for {@link ReceiptController} covering Story #7:
@@ -90,13 +88,12 @@ class ReceiptControllerTest {
     @Test
     void generateReceipt_returns201() throws Exception {
         var receipt = buildGeneratedReceipt();
-        when(receiptService.generateReceipt(
-                eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), any(), any()))
+        when(receiptService.generateReceipt(eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), any(), any()))
                 .thenReturn(receipt);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts", INVOICE_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "paymentIntentId": "00000000-0000-0000-0000-000000000020",
                           "terminalId": "POS-001",
@@ -115,20 +112,19 @@ class ReceiptControllerTest {
     @Test
     void generateReceipt_withEmptyBody_returns400() throws Exception {
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts", INVOICE_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void generateReceipt_invoiceNotFound_returns404() throws Exception {
-        when(receiptService.generateReceipt(
-                eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), any(), any()))
+        when(receiptService.generateReceipt(eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), any(), any()))
                 .thenThrow(new InvoiceNotFoundException(INVOICE_ID));
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts", INVOICE_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "paymentIntentId": "00000000-0000-0000-0000-000000000020",
                           "terminalId": "POS-001",
@@ -155,10 +151,9 @@ class ReceiptControllerTest {
 
         // reprintedBy resolved from security context per ADR-0018 — not submitted by
         // caller
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint",
-                INVOICE_ID, RECEIPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint", INVOICE_ID, RECEIPT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "reason": "CUSTOMER_REQUEST"
                         }
@@ -170,8 +165,8 @@ class ReceiptControllerTest {
     @Test
     void recordPrintDelivery_returns200() throws Exception {
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, RECEIPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "status": "SUCCESS"
                         }
@@ -182,8 +177,8 @@ class ReceiptControllerTest {
     @Test
     void sendEmailReceipt_returns200() throws Exception {
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/email", INVOICE_ID, RECEIPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "emailAddress": "test@example.com",
                           "status": "SUCCESS"
@@ -200,14 +195,14 @@ class ReceiptControllerTest {
     @Test
     void reprintReceipt_limitExceeded_returns409() throws Exception {
         doThrow(new ReprintLimitExceededException("Reprint limit of 5 exceeded"))
-                .when(receiptService).reprintReceipt(eq(RECEIPT_ID), any());
+                .when(receiptService)
+                .reprintReceipt(eq(RECEIPT_ID), any());
 
-        mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint",
-                INVOICE_ID, RECEIPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                // reprintedBy resolved from security context per ADR-0018 — not submitted by
-                // caller
-                .content("""
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint", INVOICE_ID, RECEIPT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        // reprintedBy resolved from security context per ADR-0018 — not submitted by
+                        // caller
+                        .content("""
                         {
                           "reason": "CUSTOMER_REQUEST"
                         }
@@ -218,11 +213,12 @@ class ReceiptControllerTest {
     @Test
     void recordPrintDelivery_receiptNotFound_returns404() throws Exception {
         doThrow(new ReceiptNotFoundException("Receipt not found"))
-                .when(receiptService).recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
+                .when(receiptService)
+                .recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, RECEIPT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
                         {
                           "status": "SUCCESS"
                         }

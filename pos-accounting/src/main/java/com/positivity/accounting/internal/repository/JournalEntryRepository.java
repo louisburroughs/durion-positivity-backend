@@ -1,18 +1,16 @@
 package com.positivity.accounting.internal.repository;
 
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
 
 /**
  * Repository for Journal Entry entity.
@@ -34,7 +32,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     /**
      * Find journal entries for a transaction date range.
      */
-    @Query("SELECT je FROM JournalEntry je WHERE je.transactionDate >= :startDate AND je.transactionDate <= :endDate ORDER BY je.transactionDate DESC")
+    @Query(
+            "SELECT je FROM JournalEntry je WHERE je.transactionDate >= :startDate AND je.transactionDate <= :endDate ORDER BY je.transactionDate DESC")
     List<JournalEntry> findByTransactionDateRange(LocalDateTime startDate, LocalDateTime endDate);
 
     /**
@@ -128,5 +127,4 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 ORDER BY je.transactionDate DESC
             """)
     List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
-
 }

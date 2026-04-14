@@ -1,7 +1,11 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,15 +14,10 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.io.Serializable;
-import java.time.Instant;
-import java.util.UUID;
-
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Contact role assignment entity linking contacts to customer accounts with
  * specific roles.
- * 
+ *
  * <p>
  * Uses a composite primary key consisting of contactId, customerAccountId, and
  * roleName.
@@ -29,7 +28,7 @@ import com.positivity.shared.id.UUIDv7Id;
  * <li>Each role can be marked as primary or non-primary</li>
  * <li>Only one contact can be primary for a given role per account</li>
  * </ul>
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/108">Backend
  *      Issue #108</a>
@@ -39,14 +38,18 @@ import com.positivity.shared.id.UUIDv7Id;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "contact_role_assignment", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_primary_role_per_account", columnNames = { "customer_account_id", "role_name",
-                "is_primary" })
-}, indexes = {
-        @Index(name = "idx_contact_role_contact", columnList = "contact_id"),
-        @Index(name = "idx_contact_role_account", columnList = "customer_account_id"),
-        @Index(name = "idx_contact_role_role", columnList = "role_name")
-})
+@Table(
+        name = "contact_role_assignment",
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_primary_role_per_account",
+                    columnNames = {"customer_account_id", "role_name", "is_primary"})
+        },
+        indexes = {
+            @Index(name = "idx_contact_role_contact", columnList = "contact_id"),
+            @Index(name = "idx_contact_role_account", columnList = "customer_account_id"),
+            @Index(name = "idx_contact_role_role", columnList = "role_name")
+        })
 @IdClass(ContactRoleAssignment.ContactRoleAssignmentId.class)
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Assignment of a role to a contact within a customer account")

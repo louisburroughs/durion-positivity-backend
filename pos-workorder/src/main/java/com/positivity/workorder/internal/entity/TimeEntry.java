@@ -14,6 +14,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,19 +27,18 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * Entity representing a time entry for a person on a workorder.
  * Implements Story #66 Approve Submitted Time.
  */
 @Entity
-@Table(name = "time_entry", indexes = {
-        @Index(name = "idx_time_entry_person_id", columnList = "personId"),
-        @Index(name = "idx_time_entry_work_order_id", columnList = "work_order_id"),
-        @Index(name = "idx_time_entry_status", columnList = "status")
-})
+@Table(
+        name = "time_entry",
+        indexes = {
+            @Index(name = "idx_time_entry_person_id", columnList = "personId"),
+            @Index(name = "idx_time_entry_work_order_id", columnList = "work_order_id"),
+            @Index(name = "idx_time_entry_status", columnList = "status")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -1,9 +1,8 @@
 package com.positivity.invoice.internal.payment;
 
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Request payload for gateway authorization and sale-capture operations.
@@ -18,5 +17,4 @@ public record PaymentGatewayRequest(
         @NonNull BigDecimal amount,
         @NonNull String paymentToken,
         @NonNull String idempotencyKey,
-        @NonNull UUID invoiceId) {
-}
+        @NonNull UUID invoiceId) {}

@@ -8,18 +8,16 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.UserService;
-
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +34,8 @@ public class UserServiceImpl implements UserService {
         }
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
-            Role role = roleRepository.findByName(roleName)
+            Role role = roleRepository
+                    .findByName(roleName)
                     .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
             roles.add(role);
         }
@@ -70,11 +69,13 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto assignRoles(String username, Set<String> roleNames) {
-        User user = userRepository.findByUsername(username)
+        User user = userRepository
+                .findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
-            Role role = roleRepository.findByName(roleName)
+            Role role = roleRepository
+                    .findByName(roleName)
                     .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
             roles.add(role);
         }
@@ -85,8 +86,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto updateUser(UUID id, UserUpdateRequest request) {
-        User existingUser = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        User existingUser =
+                userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             existingUser.setUsername(request.getUsername());
@@ -97,7 +98,8 @@ public class UserServiceImpl implements UserService {
         if (request.getRoles() != null) {
             Set<Role> roles = new HashSet<>();
             for (String roleName : request.getRoles()) {
-                Role role = roleRepository.findByName(roleName)
+                Role role = roleRepository
+                        .findByName(roleName)
                         .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
                 roles.add(role);
             }

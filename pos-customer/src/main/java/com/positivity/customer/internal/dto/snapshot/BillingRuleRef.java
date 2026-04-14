@@ -1,12 +1,11 @@
 package com.positivity.customer.internal.dto.snapshot;
 
 import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Read-only billing rule reference surfaced in CRM snapshots.
@@ -59,8 +58,7 @@ public class BillingRuleRef {
     @Nullable
     private Map<String, Object> extensions;
 
-    public BillingRuleRef() {
-    }
+    public BillingRuleRef() {}
 
     public boolean isPoRequired() {
         return poRequired;

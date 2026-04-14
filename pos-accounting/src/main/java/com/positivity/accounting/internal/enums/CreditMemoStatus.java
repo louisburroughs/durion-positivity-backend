@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.enums;
 
 /**
  * Status values for Credit Memo lifecycle.
- * 
+ *
  * Lifecycle:
  * DRAFT → POSTED → APPLIED or VOIDED
  */

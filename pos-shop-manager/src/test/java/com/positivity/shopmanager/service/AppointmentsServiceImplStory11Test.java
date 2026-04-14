@@ -7,20 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
 import com.positivity.shopmanager.internal.client.CrmVehicleClient;
@@ -40,6 +26,18 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Unit tests for CAP-249 Story #11: Reschedule Appointment with Notifications.
@@ -66,24 +64,34 @@ class AppointmentsServiceImplStory11Test {
 
     @Mock
     private AppointmentRepository appointmentRepository;
+
     @Mock
     private AppointmentAuditRepository appointmentAuditRepository;
+
     @Mock
     private RescheduleHistoryRepository rescheduleHistoryRepository;
+
     @Mock
     private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+
     @Mock
     private AppointmentLoadService appointmentLoadService;
+
     @Mock
     private CrmCustomerClient crmCustomerClient;
+
     @Mock
     private CrmVehicleClient crmVehicleClient;
+
     @Mock
     private HrAvailabilityClient hrAvailabilityClient;
+
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
     @Mock
     private ShopRepository shopRepository;
+
     @Mock
     private SourceEligibilityService sourceEligibilityService;
 
@@ -126,8 +134,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -148,8 +155,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.SHOP_CAPACITY, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -168,8 +174,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.PARTS_DELAY, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -253,12 +258,11 @@ class AppointmentsServiceImplStory11Test {
     void reschedule_withOtherReasonAndValidNotes_succeeds() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
-        RescheduleAppointmentRequest request = buildRequest(
-                RescheduleReasonCode.OTHER, "Customer rescheduled due to work conflict", false);
+        RescheduleAppointmentRequest request =
+                buildRequest(RescheduleReasonCode.OTHER, "Customer rescheduled due to work conflict", false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -280,8 +284,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.WEATHER, "Storm warning", true);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -319,14 +322,13 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.MECHANIC_UNAVAILABLE, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);
 
         // Issue #11: event must carry reason and clock-anchored rescheduledAt
-        ArgumentCaptor<AppointmentRescheduledEvent> eventCaptor = ArgumentCaptor
-                .forClass(AppointmentRescheduledEvent.class);
+        ArgumentCaptor<AppointmentRescheduledEvent> eventCaptor =
+                ArgumentCaptor.forClass(AppointmentRescheduledEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         AppointmentRescheduledEvent event = eventCaptor.getValue();
 
@@ -353,8 +355,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, true);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any(Appointment.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);
 

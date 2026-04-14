@@ -1,12 +1,5 @@
 package com.positivity.accounting.internal.audit.entity;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.accounting.internal.enums.AccountingIntent;
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.enums.CancellationType;
@@ -14,7 +7,6 @@ import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,30 +17,37 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable audit trail entry for financial exceptions.
- * 
+ *
  * <p>
  * Records price overrides, refunds, and cancellations with full traceability
  * including actor, authorization level, policy version, and accounting intent.
- * 
+ *
  * <p>
  * Entries are never updated or deleted - only appended with corrections.
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "audit_trail_entry", indexes = {
-        @Index(name = "idx_exception_type", columnList = "exception_type"),
-        @Index(name = "idx_order_id", columnList = "order_id"),
-        @Index(name = "idx_invoice_id", columnList = "invoice_id"),
-        @Index(name = "idx_actor_id", columnList = "actor_id"),
-        @Index(name = "idx_timestamp", columnList = "timestamp")
-})
+@Table(
+        name = "audit_trail_entry",
+        indexes = {
+            @Index(name = "idx_exception_type", columnList = "exception_type"),
+            @Index(name = "idx_order_id", columnList = "order_id"),
+            @Index(name = "idx_invoice_id", columnList = "invoice_id"),
+            @Index(name = "idx_actor_id", columnList = "actor_id"),
+            @Index(name = "idx_timestamp", columnList = "timestamp")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -201,5 +200,4 @@ public class AuditTrailEntry {
 
     @Column(name = "source_document_id", length = 255)
     private String sourceDocumentId;
-
 }

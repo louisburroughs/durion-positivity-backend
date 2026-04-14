@@ -5,10 +5,12 @@ import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.LlmApiConfigService;
-
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,10 +20,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.security.access.prepost.PreAuthorize;
-
-import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/llm-apis")
@@ -55,8 +53,8 @@ class LlmApiConfigController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_UPDATE + "')")
     @EmitEvent(id = "MCP_LLM_API_UPDATE", apiVersion = "1")
-    ResponseEntity<LlmApiConfigResponse> update(@PathVariable @NonNull UUID id,
-            @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
+    ResponseEntity<LlmApiConfigResponse> update(
+            @PathVariable @NonNull UUID id, @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.ok(service.update(id, request));
     }
 

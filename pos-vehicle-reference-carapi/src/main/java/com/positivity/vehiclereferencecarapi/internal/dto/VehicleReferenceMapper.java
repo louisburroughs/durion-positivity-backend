@@ -4,8 +4,7 @@ import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;
 
 public final class VehicleReferenceMapper {
-    private VehicleReferenceMapper() {
-    }
+    private VehicleReferenceMapper() {}
 
     public static CarApiMakeResponse toMakeResponse(CarApiMake make) {
         return CarApiMakeResponse.builder()

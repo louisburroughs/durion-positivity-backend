@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.security;
 
-import com.positivity.shared.error.ApiError;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.shared.error.ApiError;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,19 +40,15 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     public PermissionRegistrationSecretFilter(
-            @Value("${pos.security.api-secret:}") String expectedSecret,
-            Clock clock,
-            ObjectMapper objectMapper) {
+            @Value("${pos.security.api-secret:}") String expectedSecret, Clock clock, ObjectMapper objectMapper) {
         this.expectedSecret = expectedSecret;
         this.clock = clock;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         String path = request.getRequestURI();
         String method = request.getMethod();
@@ -67,22 +63,26 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
         }
 
         if (expectedSecret == null || expectedSecret.isBlank()) {
-            writeUnauthorized(response, request, "PERMISSION_REGISTRATION_SECRET_MISSING",
+            writeUnauthorized(
+                    response,
+                    request,
+                    "PERMISSION_REGISTRATION_SECRET_MISSING",
                     "Permission registration secret is not configured");
             return;
         }
 
         String providedSecret = request.getHeader(SECRET_HEADER);
         if (providedSecret == null || !expectedSecret.equals(providedSecret)) {
-            writeUnauthorized(response, request, "INVALID_PERMISSION_REGISTRATION_SECRET",
+            writeUnauthorized(
+                    response,
+                    request,
+                    "INVALID_PERMISSION_REGISTRATION_SECRET",
                     "Invalid or missing permission registration secret");
             return;
         }
 
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                "permission-registration-service",
-                null,
-                List.of(new SimpleGrantedAuthority(REQUIRED_AUTHORITY)));
+                "permission-registration-service", null, List.of(new SimpleGrantedAuthority(REQUIRED_AUTHORITY)));
         authentication.setDetails(Map.of("username", "permission-registration-service"));
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -94,10 +94,7 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
     }
 
     private void writeUnauthorized(
-            HttpServletResponse response,
-            HttpServletRequest request,
-            String code,
-            String message) throws IOException {
+            HttpServletResponse response, HttpServletRequest request, String code, String message) throws IOException {
         String correlationId = request.getHeader("X-Correlation-Id");
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();

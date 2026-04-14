@@ -1,13 +1,11 @@
 package com.positivity.documents.service;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.positivity.documents.internal.exception.RenderingException;
 import com.positivity.documents.internal.service.format.XmlFormatHandler;
-
-import org.junit.jupiter.api.Test;
-
 import java.util.HashMap;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class XmlFormatHandlerTest {
 
@@ -24,7 +22,7 @@ class XmlFormatHandlerTest {
 
     @Test
     void shouldThrowOnMalformedXml() {
-        assertThrows(RenderingException.class,
-                () -> handler.processContent("<invoice><id>123</invoice>", new HashMap<>()));
+        assertThrows(
+                RenderingException.class, () -> handler.processContent("<invoice><id>123</invoice>", new HashMap<>()));
     }
 }

@@ -2,47 +2,43 @@ package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
-
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 @Repository
 public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID> {
 
-        /**
-         * Find all items for a given estimate (excluding soft-deleted items).
-         */
-        @NonNull
-        List<EstimateItem> findByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
+    /**
+     * Find all items for a given estimate (excluding soft-deleted items).
+     */
+    @NonNull
+    List<EstimateItem> findByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
 
-        /**
-         * Find a specific item for an estimate (excluding soft-deleted items).
-         */
-        @NonNull
-        Optional<EstimateItem> findByIdAndEstimate_IdAndDeletedFalse(@NonNull UUID id, @NonNull UUID estimateId);
+    /**
+     * Find a specific item for an estimate (excluding soft-deleted items).
+     */
+    @NonNull
+    Optional<EstimateItem> findByIdAndEstimate_IdAndDeletedFalse(@NonNull UUID id, @NonNull UUID estimateId);
 
-        /**
-         * Count non-deleted items for an estimate.
-         */
-        long countByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
+    /**
+     * Count non-deleted items for an estimate.
+     */
+    long countByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
 
-        /**
-         * Find all items for a given estimate with a specific approval status,
-         * excluding soft-deleted items.
-         * Used for promotion validation to verify approved scope exists.
-         *
-         * @param estimateId     the ID of the estimate
-         * @param approvalStatus the approval status to filter by
-         * @return list of non-deleted items matching the criteria
-         */
-        @NonNull
-        List<EstimateItem> findByEstimate_IdAndApprovalStatusAndDeletedFalse(
-                        @NonNull UUID estimateId,
-                        @NonNull ApprovalStatus approvalStatus);
-
+    /**
+     * Find all items for a given estimate with a specific approval status,
+     * excluding soft-deleted items.
+     * Used for promotion validation to verify approved scope exists.
+     *
+     * @param estimateId     the ID of the estimate
+     * @param approvalStatus the approval status to filter by
+     * @return list of non-deleted items matching the criteria
+     */
+    @NonNull
+    List<EstimateItem> findByEstimate_IdAndApprovalStatusAndDeletedFalse(
+            @NonNull UUID estimateId, @NonNull ApprovalStatus approvalStatus);
 }

@@ -2,9 +2,8 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
 import com.positivity.workorder.internal.entity.TimeEntry;
-import org.jspecify.annotations.NonNull;
-
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface TimeEntryService {
 

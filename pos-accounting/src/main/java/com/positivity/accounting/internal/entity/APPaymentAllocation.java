@@ -1,14 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -20,16 +12,21 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * AP Payment Allocation entity - tracks allocation of a single payment across
  * one or more vendor bills.
- * 
+ *
  * <p>
  * Allocation rules (BR-4 from Issue #128):
  * <ul>
@@ -40,11 +37,11 @@ import lombok.ToString;
  * <li>Partial allocations are allowed</li>
  * <li>Unapplied remainder recorded in APPayment.unappliedAmount</li>
  * </ul>
- * 
+ *
  * <p>
  * Immutable after creation: allocations are persisted atomically with gateway
  * success.
- * 
+ *
  * @see APPayment
  * @see VendorBill
  * @see <a href=
@@ -58,10 +55,12 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "ap_payment_allocation", indexes = {
-        @Index(name = "idx_ap_payment_allocation_payment", columnList = "payment_id"),
-        @Index(name = "idx_ap_payment_allocation_bill", columnList = "vendor_bill_id")
-})
+@Table(
+        name = "ap_payment_allocation",
+        indexes = {
+            @Index(name = "idx_ap_payment_allocation_payment", columnList = "payment_id"),
+            @Index(name = "idx_ap_payment_allocation_bill", columnList = "vendor_bill_id")
+        })
 public class APPaymentAllocation {
 
     @EqualsAndHashCode.Include

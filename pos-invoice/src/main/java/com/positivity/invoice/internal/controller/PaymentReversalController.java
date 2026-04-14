@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +22,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/invoices")
@@ -63,11 +62,7 @@ public class PaymentReversalController {
             @PathVariable @NonNull UUID paymentId,
             @Valid @RequestBody @NonNull RefundPaymentRequest request) {
         var saved = paymentReversalService.refundPayment(
-                invoiceId,
-                paymentId,
-                request.amount(),
-                request.reason(),
-                request.notes());
+                invoiceId, paymentId, request.amount(), request.reason(), request.notes());
 
         RefundPaymentResponse response = new RefundPaymentResponse();
         response.setRefundId(saved.getRefundId());
@@ -83,15 +78,8 @@ public class PaymentReversalController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private record VoidPaymentRequest(
-            @NotNull VoidReason reason,
-            String notes) {
-    }
+    private record VoidPaymentRequest(@NotNull VoidReason reason, String notes) {}
 
     private record RefundPaymentRequest(
-            @NotNull @Positive BigDecimal amount,
-            @NotNull RefundReason reason,
-            String notes) {
-    }
-
+            @NotNull @Positive BigDecimal amount, @NotNull RefundReason reason, String notes) {}
 }

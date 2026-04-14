@@ -11,8 +11,7 @@ public class BreakDto {
 
     private Instant endedAt;
 
-    public BreakDto() {
-    }
+    public BreakDto() {}
 
     public BreakDto(UUID sessionId, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
@@ -43,5 +42,4 @@ public class BreakDto {
     public void setEndedAt(Instant endedAt) {
         this.endedAt = endedAt;
     }
-
 }

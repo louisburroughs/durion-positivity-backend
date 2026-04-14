@@ -1,35 +1,32 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
-
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Reconciliation entity - manages bank/cash reconciliation sessions.
- * 
+ *
  * Lifecycle: IN_PROGRESS → FINALIZED (or CANCELLED)
- * 
+ *
  * Process: Import statement → Match transactions → Create adjustments →
  * Finalize
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Reconciliation</a>
@@ -38,14 +35,16 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "statementLines", "glTransactions", "adjustments" })
+@ToString(exclude = {"statementLines", "glTransactions", "adjustments"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "reconciliation", indexes = {
-        @Index(name = "idx_reconciliation_account", columnList = "gl_account_id"),
-        @Index(name = "idx_reconciliation_status", columnList = "status"),
-        @Index(name = "idx_reconciliation_period", columnList = "period_start_date, period_end_date")
-})
+@Table(
+        name = "reconciliation",
+        indexes = {
+            @Index(name = "idx_reconciliation_account", columnList = "gl_account_id"),
+            @Index(name = "idx_reconciliation_status", columnList = "status"),
+            @Index(name = "idx_reconciliation_period", columnList = "period_start_date, period_end_date")
+        })
 public class Reconciliation {
 
     @EqualsAndHashCode.Include

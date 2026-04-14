@@ -2,10 +2,15 @@ package com.positivity.securityservice.internal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.service.AuditEventService;
+import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -16,12 +21,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Writes a JSON {@link ErrorResponse} body and persists a PermissionDenied
@@ -43,9 +42,8 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
 
     @Override
     public void handle(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            AccessDeniedException accessDeniedException) throws IOException {
+            HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
+            throws IOException {
 
         String correlationId = request.getHeader("X-Correlation-Id");
         if (correlationId == null) {
@@ -53,13 +51,19 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
         }
 
         if (accessDeniedException instanceof AuthorizationDeniedException) {
-            persistPermissionDeniedAuditEvent(
-                    correlationId, request, accessDeniedException.getMessage());
+            persistPermissionDeniedAuditEvent(correlationId, request, accessDeniedException.getMessage());
         }
 
         ApiError body = new ApiError(
-                "FORBIDDEN", "Access denied",
-                HttpServletResponse.SC_FORBIDDEN, Instant.now(clock).toString(), correlationId, null, null, null, null);
+                "FORBIDDEN",
+                "Access denied",
+                HttpServletResponse.SC_FORBIDDEN,
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                null,
+                null,
+                null);
 
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");
@@ -67,9 +71,7 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
     }
 
     private void persistPermissionDeniedAuditEvent(
-            @NonNull String correlationId,
-            @NonNull HttpServletRequest request,
-            String deniedPermissions) {
+            @NonNull String correlationId, @NonNull HttpServletRequest request, String deniedPermissions) {
         try {
             AuditEventService auditEventService = auditEventServiceProvider.getIfAvailable();
             if (auditEventService == null) {
@@ -80,14 +82,21 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
             String resourceUri = request.getRequestURI();
             String message = deniedPermissions != null ? deniedPermissions : "unknown";
             auditEventService.createEvent(new AuditLogEventRequest(
-                    "PermissionDenied", actorId, resourceUri, "Authorization", "", "",
+                    "PermissionDenied",
+                    actorId,
+                    resourceUri,
+                    "Authorization",
+                    "",
+                    "",
                     Map.of(
                             "message", message,
                             "requestUri", resourceUri,
                             "deniedPermissions", message)));
         } catch (Exception e) {
-            log.warn("Failed to persist PermissionDenied audit event (correlationId={}): {}",
-                    correlationId, e.getMessage());
+            log.warn(
+                    "Failed to persist PermissionDenied audit event (correlationId={}): {}",
+                    correlationId,
+                    e.getMessage());
         }
     }
 }

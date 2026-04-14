@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for updating an existing GL Account.
- * 
+ *
  * Only accountName and description can be updated.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GLAccount Request</a>
@@ -34,7 +34,6 @@ public class GLAccountUpdateRequest {
 
     @AssertTrue(message = "At least one non-blank field (accountName or description) is required")
     public boolean hasAtLeastOneFieldToUpdate() {
-        return (accountName != null && !accountName.isBlank())
-                || (description != null && !description.isBlank());
+        return (accountName != null && !accountName.isBlank()) || (description != null && !description.isBlank());
     }
 }

@@ -1,8 +1,8 @@
 package com.positivity.workorder.internal.enums;
 
-import java.util.Set;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 public enum WorkorderStatus {
     DRAFT,
@@ -21,8 +21,8 @@ public enum WorkorderStatus {
         ALLOWED_TRANSITIONS.put(DRAFT, Set.of(APPROVED, CANCELLED));
         ALLOWED_TRANSITIONS.put(APPROVED, Set.of(ASSIGNED, WORK_IN_PROGRESS, AWAITING_APPROVAL, CANCELLED));
         ALLOWED_TRANSITIONS.put(ASSIGNED, Set.of(WORK_IN_PROGRESS, CANCELLED));
-        ALLOWED_TRANSITIONS.put(WORK_IN_PROGRESS,
-                Set.of(AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED));
+        ALLOWED_TRANSITIONS.put(
+                WORK_IN_PROGRESS, Set.of(AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED));
         ALLOWED_TRANSITIONS.put(AWAITING_PARTS, Set.of(WORK_IN_PROGRESS, COMPLETED, CANCELLED));
         ALLOWED_TRANSITIONS.put(AWAITING_APPROVAL, Set.of(WORK_IN_PROGRESS, COMPLETED, CANCELLED));
         ALLOWED_TRANSITIONS.put(READY_FOR_PICKUP, Set.of(COMPLETED, CANCELLED));

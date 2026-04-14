@@ -42,10 +42,13 @@ class AssignmentServiceImplStory10Test {
 
     @Mock
     private AppointmentRepository appointmentRepository;
+
     @Mock
     private MechanicRepository mechanicRepository;
+
     @Mock
     private AssignmentRepository assignmentRepository;
+
     @Mock
     private AssignmentMechanicRepository assignmentMechanicRepository;
 
@@ -71,12 +74,13 @@ class AssignmentServiceImplStory10Test {
     void getByAppointmentId_mapsNotesToAssignmentNotes() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        Assignment assignment = baseAssignment(assignmentId, appointmentId)
-                .notes("Test note")
-                .build();
+        Assignment assignment =
+                baseAssignment(assignmentId, appointmentId).notes("Test note").build();
 
-        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId))
+                .thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId))
+                .thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -99,8 +103,10 @@ class AssignmentServiceImplStory10Test {
                 .updatedAt(UPDATED)
                 .build();
 
-        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId))
+                .thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId))
+                .thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -122,8 +128,10 @@ class AssignmentServiceImplStory10Test {
                 .updatedAt(UPDATED)
                 .build();
 
-        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId))
+                .thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId))
+                .thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -140,12 +148,13 @@ class AssignmentServiceImplStory10Test {
     void getByAppointmentId_nullNotesReturnedAsNull() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        Assignment assignment = baseAssignment(assignmentId, appointmentId)
-                .notes(null)
-                .build();
+        Assignment assignment =
+                baseAssignment(assignmentId, appointmentId).notes(null).build();
 
-        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId))
+                .thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId))
+                .thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -164,17 +173,17 @@ class AssignmentServiceImplStory10Test {
      */
     private static Assignment.AssignmentBuilder baseAssignment(UUID assignmentId, UUID appointmentId) {
         Appointment appointment = Appointment.builder()
-            .appointmentId(appointmentId)
-            .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-            .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
-            .locationId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
-            .startAt(CREATED)
-            .endAt(CREATED.plusSeconds(3600))
-            .status(AppointmentStatus.SCHEDULED)
-            .build();
+                .appointmentId(appointmentId)
+                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
+                .startAt(CREATED)
+                .endAt(CREATED.plusSeconds(3600))
+                .status(AppointmentStatus.SCHEDULED)
+                .build();
         return Assignment.builder()
                 .assignmentId(assignmentId)
-            .appointment(appointment)
+                .appointment(appointment)
                 .status(AssignmentStatusEnum.CONFIRMED)
                 .version(1)
                 .createdAt(CREATED)

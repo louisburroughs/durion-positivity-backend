@@ -4,8 +4,8 @@ import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.service.ToolRegistrationService;
-
 import io.modelcontextprotocol.server.McpAsyncServer;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +13,6 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.util.stream.Collectors;
 
 @Service
 public class ToolRegistrationServiceImpl implements ToolRegistrationService {
@@ -27,7 +25,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final OpenApiToolMapper openApiToolMapper;
     private final McpAsyncServer mcpAsyncServer;
 
-    public ToolRegistrationServiceImpl(@NonNull DiscoveryClient discoveryClient,
+    public ToolRegistrationServiceImpl(
+            @NonNull DiscoveryClient discoveryClient,
             @NonNull McpServerProperties properties,
             @NonNull OpenApiDocumentFetcher openApiDocumentFetcher,
             @NonNull OpenApiToolMapper openApiToolMapper,
@@ -45,14 +44,15 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                 .filter(service -> !"mcp-server".equalsIgnoreCase(service))
                 .filter(properties::includesService)
                 .flatMap(openApiDocumentFetcher::fetchForService)
-                .flatMap(discovered -> Flux.fromIterable(
-                        openApiToolMapper.toToolSpecifications(discovered.serviceId(), discovered.baseUri(),
-                                discovered.openApi())))
+                .flatMap(discovered -> Flux.fromIterable(openApiToolMapper.toToolSpecifications(
+                        discovered.serviceId(), discovered.baseUri(), discovered.openApi())))
                 .collectList()
                 .flatMap(specifications -> {
                     if (specifications.isEmpty()) {
-                        log.warn("No MCP tools matched the configured discovery allowlist. Services: {}, path prefixes: {}",
-                                properties.includedServices(), properties.includedPathPrefixes());
+                        log.warn(
+                                "No MCP tools matched the configured discovery allowlist. Services: {}, path prefixes: {}",
+                                properties.includedServices(),
+                                properties.includedPathPrefixes());
                         return Mono.empty();
                     }
 

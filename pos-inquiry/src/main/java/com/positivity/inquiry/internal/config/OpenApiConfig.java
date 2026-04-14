@@ -16,8 +16,7 @@ public class OpenApiConfig {
                         .title("Positivity Inquiry API")
                         .version("v1")
                         .description("API documentation for the Inquiry service")
-                        .contact(new Contact()
-                                .email("louis.burroughs@gmail.com")
-                                .name("Durion Team")));
+                        .contact(
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
     }
 }

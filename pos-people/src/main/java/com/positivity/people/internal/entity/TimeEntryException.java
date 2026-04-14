@@ -1,21 +1,18 @@
 package com.positivity.people.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.EnumType;
-import java.time.LocalDate;
-import java.util.UUID;
-
-import com.positivity.shared.id.UUIDv7Id;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
@@ -169,14 +166,11 @@ public class TimeEntryException {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {
-    }
+    public void setCreatedAt(Instant createdAt) {}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(Instant updatedAt) {
-    }
-
+    public void setUpdatedAt(Instant updatedAt) {}
 }

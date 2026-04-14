@@ -2,14 +2,13 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.UUID;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 @Slf4j
 @Data
 @Entity
@@ -31,5 +30,4 @@ public class DimensionEntity {
     private String description;
     private String unitOfMeasure;
     private double dimensionValue;
-
 }

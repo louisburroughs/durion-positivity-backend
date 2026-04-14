@@ -18,4 +18,3 @@ public class RoleDto {
     Instant lastModifiedAt;
     String lastModifiedBy;
 }
-

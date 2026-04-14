@@ -1,13 +1,11 @@
 package com.positivity.customer.service;
 
+import com.positivity.customer.internal.dto.CustomerDTO;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import com.positivity.customer.internal.dto.CustomerDTO;
 
 public interface CustomerService {
 
@@ -66,5 +64,4 @@ public interface CustomerService {
      * @return true if customer exists
      */
     boolean existsById(UUID id);
-
 }

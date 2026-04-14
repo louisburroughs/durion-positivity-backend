@@ -12,5 +12,4 @@ public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> 
     Optional<WorkSession> findByPerson_IdAndEndedAtIsNull(UUID personId);
 
     Optional<WorkSession> findBySessionIdAndEndedAtIsNull(UUID sessionId);
-
 }

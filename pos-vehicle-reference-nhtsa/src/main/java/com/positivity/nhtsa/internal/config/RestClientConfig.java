@@ -11,5 +11,3 @@ public class RestClientConfig {
         return RestClient.create();
     }
 }
-
-

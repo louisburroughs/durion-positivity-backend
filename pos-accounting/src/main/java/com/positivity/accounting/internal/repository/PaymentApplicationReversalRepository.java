@@ -1,14 +1,13 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repository for PaymentApplicationReversal entity.
@@ -19,23 +18,25 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
 
     /**
      * Find reversal by original payment application ID.
-     * 
+     *
      * @param originalPaymentApplicationId original application identifier
      * @return reversal if exists
      */
-    Optional<PaymentApplicationReversal> findByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
+    Optional<PaymentApplicationReversal> findByOriginalPaymentApplication_PaymentApplicationId(
+            UUID originalPaymentApplicationId);
 
     /**
      * Find all reversals for a payment application.
-     * 
+     *
      * @param originalPaymentApplicationId original application identifier
      * @return list of reversals (should be 0 or 1 in normal cases)
      */
-    List<PaymentApplicationReversal> findAllByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
+    List<PaymentApplicationReversal> findAllByOriginalPaymentApplication_PaymentApplicationId(
+            UUID originalPaymentApplicationId);
 
     /**
      * Find all reversals with pagination.
-     * 
+     *
      * @param pageable pagination parameters
      * @return page of reversals
      */
@@ -44,7 +45,7 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
 
     /**
      * Check if application was already reversed.
-     * 
+     *
      * @param originalPaymentApplicationId original application identifier
      * @return true if already reversed
      */

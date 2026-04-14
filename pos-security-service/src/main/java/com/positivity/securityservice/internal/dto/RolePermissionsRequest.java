@@ -1,11 +1,10 @@
 package com.positivity.securityservice.internal.dto;
 
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Request DTO for updating role permissions

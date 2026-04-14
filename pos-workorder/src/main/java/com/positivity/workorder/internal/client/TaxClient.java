@@ -20,7 +20,8 @@ public class TaxClient {
 
     @NonNull
     public TaxCalculationResponse calculateTax(@NonNull TaxCalculationRequest request) {
-        TaxCalculationResponse response = taxServiceRestClient.post()
+        TaxCalculationResponse response = taxServiceRestClient
+                .post()
                 .uri("/v1/tax/calculate")
                 .body(request)
                 .retrieve()

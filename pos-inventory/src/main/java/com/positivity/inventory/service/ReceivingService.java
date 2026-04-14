@@ -1,8 +1,8 @@
 package com.positivity.inventory.service;
 
+import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
-import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
@@ -38,8 +38,7 @@ public interface ReceivingService {
      */
     @NonNull
     ReceivingSessionResponse createReceivingSession(
-            @NonNull CreateReceivingSessionRequest request,
-            @NonNull String actorUserId);
+            @NonNull CreateReceivingSessionRequest request, @NonNull String actorUserId);
 
     /**
      * Retrieves a receiving session by ID.
@@ -69,9 +68,7 @@ public interface ReceivingService {
      */
     @NonNull
     ReceiveItemsResponse receiveItemsIntoStaging(
-            @NonNull UUID sessionId,
-            @NonNull ReceiveItemsRequest request,
-            @NonNull String actorUserId);
+            @NonNull UUID sessionId, @NonNull ReceiveItemsRequest request, @NonNull String actorUserId);
 
     /**
      * Cross-docks a receiving line directly to a workorder.

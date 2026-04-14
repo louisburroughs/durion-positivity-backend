@@ -13,15 +13,15 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "mcp.model.fallback.enabled", havingValue = "true")
 public class ModelFallbackConfiguration {
 
-  @Bean("fallbackChatModel")
-  public @NonNull ChatModel fallbackChatModel(
-      @Value("${OLLAMA_BASE_URL:http://localhost:11434}") @NonNull String baseUrl,
-      @Value("${mcp.model.fallback.secondary-model-name:mistral:7b}") @NonNull String modelName) {
-    return OllamaChatModel.builder()
-        .baseUrl(baseUrl)
-        .modelName(modelName)
-        .temperature(0.2)
-        .timeout(Duration.ofSeconds(60))
-        .build();
-  }
+    @Bean("fallbackChatModel")
+    public @NonNull ChatModel fallbackChatModel(
+            @Value("${OLLAMA_BASE_URL:http://localhost:11434}") @NonNull String baseUrl,
+            @Value("${mcp.model.fallback.secondary-model-name:mistral:7b}") @NonNull String modelName) {
+        return OllamaChatModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .temperature(0.2)
+                .timeout(Duration.ofSeconds(60))
+                .build();
+    }
 }

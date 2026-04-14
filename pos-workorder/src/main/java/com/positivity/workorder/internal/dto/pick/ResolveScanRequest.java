@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ResolveScanRequest {
-  @NotNull
-  private UUID scannedSkuId;
+    @NotNull
+    private UUID scannedSkuId;
 
-  @NotNull
-  private UUID scannedLocationId;
+    @NotNull
+    private UUID scannedLocationId;
 }

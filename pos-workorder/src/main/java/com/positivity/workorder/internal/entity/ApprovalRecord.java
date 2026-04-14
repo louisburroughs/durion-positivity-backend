@@ -1,7 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,6 +15,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,24 +27,23 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 /**
  * Immutable audit record for all change request resolution decisions.
  * This entity serves as the primary audit trail for customer-facing
  * approval decisions and emergency overrides.
  */
 @Entity
-@Table(name = "approval_record", indexes = {
-        @Index(name = "idx_approval_change_request", columnList = "change_request_id"),
-        @Index(name = "idx_approval_workorder", columnList = "workorder_id")
-})
+@Table(
+        name = "approval_record",
+        indexes = {
+            @Index(name = "idx_approval_change_request", columnList = "change_request_id"),
+            @Index(name = "idx_approval_workorder", columnList = "workorder_id")
+        })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = { "changeRequest", "workorder" })
+@ToString(exclude = {"changeRequest", "workorder"})
 @EntityListeners(AuditingEntityListener.class)
 public class ApprovalRecord {
     @Id

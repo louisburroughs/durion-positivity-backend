@@ -3,31 +3,10 @@ package com.positivity.invoice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
@@ -41,6 +20,25 @@ import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link ReceiptServiceImpl} covering Story #7:
@@ -114,9 +112,8 @@ class ReceiptServiceImplTest {
      * Sets up the security context with the provided authority strings.
      */
     private void withAuthorities(String... authorities) {
-        var grants = List.of(authorities).stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        var grants =
+                List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList();
         var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, CASHIER_ID));
         SecurityContextHolder.getContext().setAuthentication(auth);
@@ -155,14 +152,11 @@ class ReceiptServiceImplTest {
     void generateReceipt_generatesReferenceWithCorrectPattern() {
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
 
-        receiptServiceImpl.generateReceipt(
-                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+        receiptServiceImpl.generateReceipt(INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
 
         verify(receiptRepository).save(captor.capture());
         String reference = captor.getValue().getReference();
-        assertThat(reference)
-            .startsWith("RCP-INV-12345-")
-            .matches("RCP-INV-12345-\\d{8}T\\d{6}Z-\\d{3}");
+        assertThat(reference).startsWith("RCP-INV-12345-").matches("RCP-INV-12345-\\d{8}T\\d{6}Z-\\d{3}");
     }
 
     @Test
@@ -181,8 +175,7 @@ class ReceiptServiceImplTest {
      */
     @Test
     void generateReceipt_savesOnce() {
-        receiptServiceImpl.generateReceipt(
-                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+        receiptServiceImpl.generateReceipt(INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
 
         verify(receiptRepository, times(1)).save(any(Receipt.class));
     }
@@ -202,7 +195,7 @@ class ReceiptServiceImplTest {
         withAuthorities();
 
         assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
-                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
+                        INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -266,8 +259,8 @@ class ReceiptServiceImplTest {
         var receipt = buildExistingReceipt(0);
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
-        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.reprintReceipt(RECEIPT_ID,
-                "CUSTOMER_REQUEST");
+        com.positivity.invoice.service.Receipt saved =
+                receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST");
         assertThat(saved.getReprintCount()).isEqualTo(1);
         assertThat(saved.getLastReprintReason()).isEqualTo("CUSTOMER_REQUEST");
         assertThat(saved.getLastReprintedBy()).isEqualTo(CASHIER_ID);
@@ -304,7 +297,7 @@ class ReceiptServiceImplTest {
         when(invoiceRepository.findById(unknownInvoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
-                unknownInvoiceId, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
+                        unknownInvoiceId, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
                 .isInstanceOf(InvoiceNotFoundException.class)
                 .hasMessageContaining(unknownInvoiceId.toString());
     }
@@ -376,7 +369,7 @@ class ReceiptServiceImplTest {
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> receiptServiceImpl.sendEmailReceipt(
-                RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
+                        RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
                 .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
                 .hasMessageContaining(RECEIPT_ID.toString());
     }
@@ -396,8 +389,8 @@ class ReceiptServiceImplTest {
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
         withAuthorities("GENERATE_RECEIPT", "SUPERVISOR_OVERRIDE");
 
-        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.reprintReceipt(
-                RECEIPT_ID, "SUPERVISOR_APPROVED");
+        com.positivity.invoice.service.Receipt saved =
+                receiptServiceImpl.reprintReceipt(RECEIPT_ID, "SUPERVISOR_APPROVED");
 
         assertThat(saved.getReprintCount()).isEqualTo(6);
         assertThat(saved.getLastReprintReason()).isEqualTo("SUPERVISOR_APPROVED");

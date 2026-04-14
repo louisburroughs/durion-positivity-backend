@@ -7,5 +7,4 @@ import java.util.List;
  *
  * @param permissions list of decoded permission code strings
  */
-public record PermissionDecodeResponse(List<String> permissions) {
-}
+public record PermissionDecodeResponse(List<String> permissions) {}

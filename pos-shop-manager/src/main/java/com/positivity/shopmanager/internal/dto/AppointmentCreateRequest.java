@@ -1,11 +1,10 @@
 package com.positivity.shopmanager.internal.dto;
 
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**

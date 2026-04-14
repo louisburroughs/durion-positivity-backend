@@ -2,19 +2,17 @@ package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
-
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
 /**
  * Response DTO for workorder service line items with labor totals.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */

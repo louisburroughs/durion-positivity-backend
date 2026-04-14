@@ -1,8 +1,25 @@
 package com.positivity.vehicle.internal.entity;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.vehicle.internal.enums.OdometerUnit;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
-
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
@@ -10,26 +27,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.vehicle.internal.enums.OdometerUnit;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Vehicle record entity for CAP:091 - Vehicle Registry.
  * Supports VIN normalization, global uniqueness, and vehicle-account
@@ -40,12 +37,14 @@ import com.positivity.shared.id.UUIDv7Id;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "vehicle_records", indexes = {
-        @Index(name = "idx_vr_account_id", columnList = "account_id"),
-        @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
-        @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
-        @Index(name = "idx_vr_license_plate", columnList = "license_plate")
-})
+@Table(
+        name = "vehicle_records",
+        indexes = {
+            @Index(name = "idx_vr_account_id", columnList = "account_id"),
+            @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
+            @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
+            @Index(name = "idx_vr_license_plate", columnList = "license_plate")
+        })
 @EntityListeners(AuditingEntityListener.class)
 public class VehicleRecord {
 
@@ -54,6 +53,7 @@ public class VehicleRecord {
     @UUIDv7Id
     @Column(name = "vehicle_id", updatable = false, nullable = false)
     private UUID vehicleId;
+
     @NonNull
     @Column(name = "account_id", nullable = false)
     private UUID accountId;

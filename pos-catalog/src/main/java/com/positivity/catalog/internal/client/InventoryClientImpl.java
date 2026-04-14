@@ -1,12 +1,11 @@
 package com.positivity.catalog.internal.client;
 
+import java.util.Optional;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * RestClient implementation for {@link InventoryClient}.
@@ -36,7 +35,8 @@ public class InventoryClientImpl implements InventoryClient {
     public Optional<AvailabilityClientResponse> fetchAvailability(String productSku, UUID locationId) {
         log.debug("Fetching availability: productSku={}, locationId={}", productSku, locationId);
 
-        AvailabilityServiceResponse response = restClient.get()
+        AvailabilityServiceResponse response = restClient
+                .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/inventory/availability/query")
                         .queryParam("productSku", productSku)
@@ -63,7 +63,8 @@ public class InventoryClientImpl implements InventoryClient {
     public Optional<LeadTimeClientResponse> fetchLeadTime(UUID productId, UUID locationId) {
         log.debug("Fetching lead time: productId={}, locationId={}", productId, locationId);
         try {
-            LeadTimeServiceResponse response = restClient.get()
+            LeadTimeServiceResponse response = restClient
+                    .get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/v1/inventory/availability/lead-time")
                             .queryParam("productId", productId)
@@ -97,11 +98,7 @@ public class InventoryClientImpl implements InventoryClient {
     // -----------------------------------------------------------------------
 
     private record AvailabilityServiceResponse(
-            int onHandQuantity,
-            int allocatedQuantity,
-            int availableToPromiseQuantity,
-            String unitOfMeasure) {
-    }
+            int onHandQuantity, int allocatedQuantity, int availableToPromiseQuantity, String unitOfMeasure) {}
 
     private record LeadTimeServiceResponse(
             Integer minDays,
@@ -109,6 +106,5 @@ public class InventoryClientImpl implements InventoryClient {
             String displayText,
             String source,
             String confidence,
-            java.time.Instant asOf) {
-    }
+            java.time.Instant asOf) {}
 }

@@ -1,9 +1,8 @@
 package com.positivity.people.internal.dto;
 
-import com.positivity.people.internal.enums.AssignmentStatus;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.people.internal.enums.AssignmentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -11,15 +10,21 @@ import java.util.UUID;
 @Schema(description = "Staffing assignment response")
 public class StaffingAssignmentResponse {
 
-    @Schema(description = "Assignment identifier", example = "33333333-3333-3333-3333-333333333333",
+    @Schema(
+            description = "Assignment identifier",
+            example = "33333333-3333-3333-3333-333333333333",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID assignmentId;
 
-    @Schema(description = "Person identifier", example = "123e4567-e89b-12d3-a456-426614174000",
+    @Schema(
+            description = "Person identifier",
+            example = "123e4567-e89b-12d3-a456-426614174000",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
-    @Schema(description = "Location identifier", example = "22222222-2222-2222-2222-222222222222",
+    @Schema(
+            description = "Location identifier",
+            example = "22222222-2222-2222-2222-222222222222",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
 
@@ -27,14 +32,18 @@ public class StaffingAssignmentResponse {
     private String role;
 
     @JsonProperty("isPrimary")
-    @Schema(description = "Whether this assignment is primary", example = "true",
+    @Schema(
+            description = "Whether this assignment is primary",
+            example = "true",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean primary;
 
     @Schema(description = "Assignment lifecycle status", requiredMode = Schema.RequiredMode.REQUIRED)
     private AssignmentStatus status;
 
-    @Schema(description = "Assignment effective start date", example = "2026-02-16",
+    @Schema(
+            description = "Assignment effective start date",
+            example = "2026-02-16",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveFrom;
 
@@ -50,12 +59,20 @@ public class StaffingAssignmentResponse {
     @Schema(description = "Username that created the assignment", example = "manager.user")
     private String createdBy;
 
-    public StaffingAssignmentResponse() {
-    }
+    public StaffingAssignmentResponse() {}
 
-    public StaffingAssignmentResponse(UUID assignmentId, UUID personId, UUID locationId, String role, boolean primary,
-            AssignmentStatus status, LocalDate effectiveFrom, LocalDate effectiveTo, Instant createdAt,
-            Instant updatedAt, String createdBy) {
+    public StaffingAssignmentResponse(
+            UUID assignmentId,
+            UUID personId,
+            UUID locationId,
+            String role,
+            boolean primary,
+            AssignmentStatus status,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo,
+            Instant createdAt,
+            Instant updatedAt,
+            String createdBy) {
         this.assignmentId = assignmentId;
         this.personId = personId;
         this.locationId = locationId;
@@ -158,5 +175,4 @@ public class StaffingAssignmentResponse {
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
     }
-
 }

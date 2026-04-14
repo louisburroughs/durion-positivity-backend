@@ -1,21 +1,20 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
-import com.positivity.workorder.internal.enums.PriceLockStatus;
-import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
+import com.positivity.workorder.internal.enums.PriceLockStatus;
+import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderSubstitutionService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -74,25 +73,28 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             @NonNull String reason,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
-                () -> new IllegalStateException("Authenticated user context is required for part substitution"));
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() ->
+                        new IllegalStateException("Authenticated user context is required for part substitution"));
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
-                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION,
-                    idempotencyKey);
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION, idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning adjustment event {}", idempotencyKey,
+                log.info(
+                        "Idempotency key {} already processed, returning adjustment event {}",
+                        idempotencyKey,
                         existingEventId.get());
-                return adjustmentEventRepository.findById(existingEventId.get())
+                return adjustmentEventRepository
+                        .findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(
-                                () -> new IllegalStateException(
-                                        "Adjustment event not found: " + existingEventId.get()));
+                        .orElseThrow(() ->
+                                new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
             }
         }
 
-        WorkorderPart originalPart = workorderPartRepository.findById(originalPartId)
+        WorkorderPart originalPart = workorderPartRepository
+                .findById(originalPartId)
                 .orElseThrow(() -> new NoSuchElementException("Original part not found: " + originalPartId));
 
         UUID partWorkorderId = originalPart.getWorkorder() != null
@@ -172,13 +174,12 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         event = adjustmentEventRepository.save(event);
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.markKeyProcessedForPartAdjustment(
-                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION,
-                    idempotencyKey,
-                    event.getId());
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION, idempotencyKey, event.getId());
         }
 
         if (log.isInfoEnabled()) {
-            log.info("Substituted part {} with {} on workorder {}",
+            log.info(
+                    "Substituted part {} with {} on workorder {}",
                     maskForLog(originalPartId),
                     maskForLog(substitutePart.getId()),
                     maskForLog(workorderId));
@@ -191,10 +192,8 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString()
-                .replace('\r', '_')
-                .replace('\n', '_')
-                .replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";
@@ -226,7 +225,8 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         String substituteDescription = null;
         UUID substitutedPartId = event.getSubstitutedWithPartId();
         if (substitutedPartId != null) {
-            substituteDescription = workorderPartRepository.findById(substitutedPartId)
+            substituteDescription = workorderPartRepository
+                    .findById(substitutedPartId)
                     .map(WorkorderPart::getDescription)
                     .orElse(null);
         }

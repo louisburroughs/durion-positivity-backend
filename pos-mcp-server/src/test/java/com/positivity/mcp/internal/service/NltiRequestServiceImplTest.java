@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
@@ -13,8 +12,8 @@ import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -23,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,8 +68,7 @@ class NltiRequestServiceImplTest {
         meterRegistry = new SimpleMeterRegistry();
         service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
 
-        UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
         lenient().when(clock.instant()).thenReturn(Instant.parse("2026-01-01T12:00:00Z"));
@@ -97,8 +94,7 @@ class NltiRequestServiceImplTest {
         ReflectionTestUtils.setField(service, "perSessionRateLimit", 1);
 
         NltiSession session = buildSession(SESSION_ID, SUBJECT);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT))
-                .thenReturn(Optional.of(session));
+        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(session));
 
         NltiRequestDTO request = new NltiRequestDTO("close workorder 123", SESSION_ID, null);
 
@@ -122,8 +118,7 @@ class NltiRequestServiceImplTest {
     void submit_withNonExistentSessionId_createsSessionWithGeneratedId() {
         when(sessionRepository.findByIdAndSubjectId(UNKNOWN_SESSION_ID, SUBJECT))
                 .thenReturn(Optional.empty());
-        when(sessionRepository.findById(UNKNOWN_SESSION_ID))
-                .thenReturn(Optional.empty());
+        when(sessionRepository.findById(UNKNOWN_SESSION_ID)).thenReturn(Optional.empty());
 
         NltiRequestDTO request = new NltiRequestDTO("list open invoices", UNKNOWN_SESSION_ID, null);
         NltiResponseV1 response = service.submit(request);

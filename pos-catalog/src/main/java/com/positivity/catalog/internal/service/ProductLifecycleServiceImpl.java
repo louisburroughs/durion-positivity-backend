@@ -35,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductLifecycleServiceImpl implements ProductLifecycleService {
 
-    private static final String DISCONTINUED_REACTIVATION_ERROR = "Discontinued products cannot be reactivated. Specify a replacement product instead.";
+    private static final String DISCONTINUED_REACTIVATION_ERROR =
+            "Discontinued products cannot be reactivated. Specify a replacement product instead.";
     private static final Duration EFFECTIVE_AT_PAST_TOLERANCE = Duration.ofSeconds(2);
 
     private final ProductRepository productRepository;
@@ -63,8 +64,9 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     @Transactional(readOnly = true)
     public ProductLifecycleResponse getLifecycle(UUID productId) {
         ProductEntity product = findProduct(productId);
-        List<ProductReplacementEntity> replacements = productReplacementRepository
-            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
+        List<ProductReplacementEntity> replacements =
+                productReplacementRepository.findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(
+                        productId);
         return toResponse(product, replacements);
     }
 
@@ -76,8 +78,8 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
 
     @Override
     @Transactional
-    public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
-            ProductReplacementRequest request) {
+    public ProductLifecycleResponse.ReplacementOption addReplacement(
+            UUID productId, ProductReplacementRequest request) {
         return doAddReplacement(productId, request);
     }
 
@@ -119,13 +121,14 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     public List<ProductLifecycleResponse.ReplacementOption> getReplacementProducts(@NonNull UUID productId) {
         findProduct(productId);
         return productReplacementRepository
-            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
+                .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
                 .stream()
                 .map(replacement -> ProductLifecycleResponse.ReplacementOption.builder()
                         .replacementId(replacement.getReplacementId())
-                .replacementProductId(replacement.getReplacementProduct() == null
-                    ? null
-                    : replacement.getReplacementProduct().getId())
+                        .replacementProductId(
+                                replacement.getReplacementProduct() == null
+                                        ? null
+                                        : replacement.getReplacementProduct().getId())
                         .priorityOrder(replacement.getPriorityOrder())
                         .notes(replacement.getNotes())
                         .effectiveAt(replacement.getEffectiveAt())
@@ -156,14 +159,13 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
             throw new CatalogValidationException("lifecycleState is already set to " + currentState);
         }
 
-        if (currentState == ProductLifecycleState.DISCONTINUED
-                && nextState != ProductLifecycleState.DISCONTINUED) {
+        if (currentState == ProductLifecycleState.DISCONTINUED && nextState != ProductLifecycleState.DISCONTINUED) {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogBusinessRuleException(DISCONTINUED_REACTIVATION_ERROR);
         }
 
-        boolean overridePermissionUsed = nextState == ProductLifecycleState.DISCONTINUED
-                || currentState == ProductLifecycleState.DISCONTINUED;
+        boolean overridePermissionUsed =
+                nextState == ProductLifecycleState.DISCONTINUED || currentState == ProductLifecycleState.DISCONTINUED;
 
         if (overridePermissionUsed && !hasAuthority("product:lifecycle:override_discontinued")) {
             lifecycleUpdateDeniedCounter.increment();
@@ -201,13 +203,14 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
                 changedBy,
                 overridePermissionUsed);
 
-        List<ProductReplacementEntity> replacements = productReplacementRepository
-            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
+        List<ProductReplacementEntity> replacements =
+                productReplacementRepository.findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(
+                        productId);
         return toResponse(saved, replacements);
     }
 
-    private ProductLifecycleResponse.ReplacementOption doAddReplacement(UUID productId,
-            ProductReplacementRequest request) {
+    private ProductLifecycleResponse.ReplacementOption doAddReplacement(
+            UUID productId, ProductReplacementRequest request) {
         if (request == null || request.getReplacementProductId() == null) {
             throw new CatalogValidationException("replacementProductId is required");
         }
@@ -238,7 +241,10 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
 
         return ProductLifecycleResponse.ReplacementOption.builder()
                 .replacementId(saved.getReplacementId())
-            .replacementProductId(saved.getReplacementProduct() == null ? null : saved.getReplacementProduct().getId())
+                .replacementProductId(
+                        saved.getReplacementProduct() == null
+                                ? null
+                                : saved.getReplacementProduct().getId())
                 .priorityOrder(saved.getPriorityOrder())
                 .notes(saved.getNotes())
                 .effectiveAt(saved.getEffectiveAt())
@@ -246,7 +252,8 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     }
 
     private ProductEntity findProduct(UUID productId) {
-        return productRepository.findById(productId)
+        return productRepository
+                .findById(productId)
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 
@@ -295,9 +302,10 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         List<ProductLifecycleResponse.ReplacementOption> options = replacements.stream()
                 .map(replacement -> ProductLifecycleResponse.ReplacementOption.builder()
                         .replacementId(replacement.getReplacementId())
-                        .replacementProductId(replacement.getReplacementProduct() == null
-                            ? null
-                            : replacement.getReplacementProduct().getId())
+                        .replacementProductId(
+                                replacement.getReplacementProduct() == null
+                                        ? null
+                                        : replacement.getReplacementProduct().getId())
                         .priorityOrder(replacement.getPriorityOrder())
                         .notes(replacement.getNotes())
                         .effectiveAt(replacement.getEffectiveAt())

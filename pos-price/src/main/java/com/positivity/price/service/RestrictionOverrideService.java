@@ -1,9 +1,8 @@
 package com.positivity.price.service;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.price.internal.dto.RestrictionOverrideRequest;
 import com.positivity.price.internal.dto.RestrictionOverrideResponse;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Issues and audits restriction overrides.

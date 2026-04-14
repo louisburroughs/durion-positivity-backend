@@ -8,16 +8,16 @@ import org.jspecify.annotations.NonNull;
  */
 public interface AgentOrchestrationService {
 
-  /**
-   * Returns or creates a PosAssistant proxy for the given user and role.
-   * Multiple chat turns for the same user reuse the same agent instance.
-   */
-  @NonNull
-  String chat(@NonNull String userId, @NonNull String role, @NonNull String message);
+    /**
+     * Returns or creates a PosAssistant proxy for the given user and role.
+     * Multiple chat turns for the same user reuse the same agent instance.
+     */
+    @NonNull
+    String chat(@NonNull String userId, @NonNull String role, @NonNull String message);
 
-  /**
-   * Evicts the cached agent for the given user.
-   * Call on role changes or explicit logout.
-   */
-  void evict(@NonNull String userId);
+    /**
+     * Evicts the cached agent for the given user.
+     * Call on role changes or explicit logout.
+     */
+    void evict(@NonNull String userId);
 }

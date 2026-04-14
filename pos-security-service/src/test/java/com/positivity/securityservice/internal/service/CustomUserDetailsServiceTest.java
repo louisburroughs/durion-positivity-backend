@@ -4,9 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,9 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.UserRepository;
 
 /**
  * Unit tests for {@link CustomUserDetailsService#loadUserByUsername(String)}.
@@ -52,9 +50,7 @@ class CustomUserDetailsServiceTest {
     void t10_newUserEntity_hasExpectedAccountStateDefaults() {
         User user = new User();
 
-        assertThat(user.isEnabled())
-                .as("enabled defaults to true")
-                .isTrue();
+        assertThat(user.isEnabled()).as("enabled defaults to true").isTrue();
         assertThat(user.isAccountNonLocked())
                 .as("accountNonLocked defaults to true")
                 .isTrue();
@@ -211,8 +207,7 @@ class CustomUserDetailsServiceTest {
             entity.setId(expectedId);
             when(userRepository.findByUsername("useridtest")).thenReturn(Optional.of(entity));
 
-            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
-                    sut.loadUserByUsername("useridtest");
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal) sut.loadUserByUsername("useridtest");
 
             assertThat(principal.userId()).isEqualTo(expectedId);
         }
@@ -223,8 +218,7 @@ class CustomUserDetailsServiceTest {
             User entity = entityWithDefaults("nopersonid");
             when(userRepository.findByUsername("nopersonid")).thenReturn(Optional.of(entity));
 
-            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
-                    sut.loadUserByUsername("nopersonid");
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal) sut.loadUserByUsername("nopersonid");
 
             assertThat(principal.personId()).isNull();
         }
@@ -237,8 +231,7 @@ class CustomUserDetailsServiceTest {
             entity.setPersonId(expectedPersonId);
             when(userRepository.findByUsername("withpersonid")).thenReturn(Optional.of(entity));
 
-            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
-                    sut.loadUserByUsername("withpersonid");
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal) sut.loadUserByUsername("withpersonid");
 
             assertThat(principal.personId()).isEqualTo(expectedPersonId);
         }

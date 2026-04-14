@@ -6,14 +6,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
+import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
+import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
+import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
+import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
-import tools.jackson.databind.JsonNode;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,13 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
-
-import com.positivity.accounting.BaseContractIntegrationTest;
-import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
-import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
-import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
-import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
-import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Acceptance criteria contract tests for Story #1: Audit Trail — Track Price
@@ -52,8 +49,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
     private static final String AUDIT_BASE = "/v1/accounting/audit";
 
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-03-10T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-03-10T12:00:00Z"), ZoneOffset.UTC);
 
     /** Role used for happy-path overrides; bound to the "generous" policy. */
     private static final String ROLE_MANAGER = "STORE_MANAGER";
@@ -61,14 +57,10 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     /** Role used for threshold-exceeded tests; bound to the "tight" policy. */
     private static final String ROLE_CASHIER = "CASHIER";
 
-    private static final UUID ORDER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID LINE_ITEM_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID INVOICE_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000003");
-    private static final UUID PAYMENT_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000004");
+    private static final UUID ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID LINE_ITEM_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
 
     // -----------------------------------------------------------------------
     // Repository injections for seeding / cleanup
@@ -98,36 +90,33 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
         refundPolicyRepository.deleteAll();
 
         // STORE_MANAGER — generous threshold: $200 absolute, 50 % off
-        overridePolicyRepository.save(
-                OverridePolicyThreshold.builder()
-                        .role(ROLE_MANAGER)
-                        .maxAbsoluteAmount(new BigDecimal("200.00"))
-                        .maxPercentOff(new BigDecimal("50.00"))
-                        .effectiveDate(Instant.now(FIXED_CLOCK).minusSeconds(3600))
-                        .version("v-test")
-                        .active(true)
-                        .build());
+        overridePolicyRepository.save(OverridePolicyThreshold.builder()
+                .role(ROLE_MANAGER)
+                .maxAbsoluteAmount(new BigDecimal("200.00"))
+                .maxPercentOff(new BigDecimal("50.00"))
+                .effectiveDate(Instant.now(FIXED_CLOCK).minusSeconds(3600))
+                .version("v-test")
+                .active(true)
+                .build());
 
         // CASHIER — tight threshold: $10 absolute, 5 % off
-        overridePolicyRepository.save(
-                OverridePolicyThreshold.builder()
-                        .role(ROLE_CASHIER)
-                        .maxAbsoluteAmount(new BigDecimal("10.00"))
-                        .maxPercentOff(new BigDecimal("5.00"))
-                        .effectiveDate(Instant.now(FIXED_CLOCK).minusSeconds(3600))
-                        .version("v-test")
-                        .active(true)
-                        .build());
+        overridePolicyRepository.save(OverridePolicyThreshold.builder()
+                .role(ROLE_CASHIER)
+                .maxAbsoluteAmount(new BigDecimal("10.00"))
+                .maxPercentOff(new BigDecimal("5.00"))
+                .effectiveDate(Instant.now(FIXED_CLOCK).minusSeconds(3600))
+                .version("v-test")
+                .active(true)
+                .build());
 
         // Active refund policy required by refund/cancellation endpoints
-        refundPolicyRepository.save(
-                RefundPolicyConfig.builder()
-                        .requiresSeparateAuthorization(false)
-                        .settledPaymentHandling("CREDIT_MEMO")
-                        .unsettledPaymentHandling("REVERSAL")
-                        .version("v-test")
-                        .active(true)
-                        .build());
+        refundPolicyRepository.save(RefundPolicyConfig.builder()
+                .requiresSeparateAuthorization(false)
+                .settledPaymentHandling("CREDIT_MEMO")
+                .unsettledPaymentHandling("REVERSAL")
+                .version("v-test")
+                .active(true)
+                .build());
     }
 
     @AfterEach
@@ -145,9 +134,9 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC1: price override exceeding role threshold → 403 'Authorization threshold exceeded', no audit entry")
-    void ac1_priceOverrideExceedingRoleThreshold_rejectedWithExactReasonAndNoEntry()
-            throws Exception {
+    @DisplayName(
+            "AC1: price override exceeding role threshold → 403 'Authorization threshold exceeded', no audit entry")
+    void ac1_priceOverrideExceedingRoleThreshold_rejectedWithExactReasonAndNoEntry() throws Exception {
         // Arrange — CASHIER has max $10 abs; discount = $400
         String payload = """
                 {
@@ -184,8 +173,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("AC2: below-cost price override → 403 'Pricing below cost not permitted', no audit entry")
-    void ac2_belowCostPriceOverride_rejectedAsForbiddenCategoryWithNoEntry()
-            throws Exception {
+    void ac2_belowCostPriceOverride_rejectedAsForbiddenCategoryWithNoEntry() throws Exception {
         // Arrange — amounts within CASHIER threshold so only the category check
         // would reject; categoryCode = "BELOW_COST" is passed to service via DTO
         String payload = """
@@ -222,7 +210,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC3: recorded price override → GET audit trail includes actorId, timestamp, exceptionType, prices, policyValidationResult=APPROVED")
+    @DisplayName(
+            "AC3: recorded price override → GET audit trail includes actorId, timestamp, exceptionType, prices, policyValidationResult=APPROVED")
     void ac3_recordedPriceOverride_auditTrailContainsAllRequiredFields() throws Exception {
         // Arrange — small discount well within STORE_MANAGER threshold
         String payload = """
@@ -265,8 +254,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("AC4: GET /by-order/{orderId} → returns all exceptions sorted by timestamp")
-    void ac4_queryByOrderId_returnsEntriesSortedByTimestampAtCorrectPath()
-            throws Exception {
+    void ac4_queryByOrderId_returnsEntriesSortedByTimestampAtCorrectPath() throws Exception {
         // Arrange — record two overrides so the query has entries to return
         String payload1 = """
                 {
@@ -291,13 +279,13 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                 """.formatted(ORDER_ID, LINE_ITEM_ID, ROLE_MANAGER);
 
         mockMvc.perform(withAuth(post(AUDIT_BASE + "/price-override"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload1))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload1))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(withAuth(post(AUDIT_BASE + "/price-override"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(payload2))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload2))
                 .andExpect(status().isCreated());
 
         // AC4: story mandates the by-order path with sorted results
@@ -370,8 +358,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     void ac6_cancellation_capturesAllSnapshotFields() throws Exception {
         // Arrange
         String beforeSnapshot = "{\"status\":\"PENDING\",\"total\":150.00}";
-        String afterSnapshot  = "{\"status\":\"CANCELLED\",\"total\":0.00}";
-        String partialInfo    = "{\"amountPaid\":50.00,\"outstanding\":100.00}";
+        String afterSnapshot = "{\"status\":\"CANCELLED\",\"total\":0.00}";
+        String partialInfo = "{\"amountPaid\":50.00,\"outstanding\":100.00}";
 
         String payload = """
                 {
@@ -384,11 +372,11 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                     "reason": "Customer requested cancellation"
                 }
                 """.formatted(
-                ORDER_ID,
-                "\"" + beforeSnapshot.replace("\"", "\\\"") + "\"",
-                "\"" + afterSnapshot.replace("\"", "\\\"") + "\"",
-                "\"" + partialInfo.replace("\"", "\\\"") + "\"",
-                ROLE_MANAGER);
+                        ORDER_ID,
+                        "\"" + beforeSnapshot.replace("\"", "\\\"") + "\"",
+                        "\"" + afterSnapshot.replace("\"", "\\\"") + "\"",
+                        "\"" + partialInfo.replace("\"", "\\\"") + "\"",
+                        ROLE_MANAGER);
 
         // Act & Assert
         mockMvc.perform(withAuth(post(AUDIT_BASE + "/cancellation"))
@@ -411,7 +399,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC7: audit entry includes accountingIntent, accountingStatus=PENDING_POSTING, sourceEventId, sourceDocumentId")
+    @DisplayName(
+            "AC7: audit entry includes accountingIntent, accountingStatus=PENDING_POSTING, sourceEventId, sourceDocumentId")
     void ac7_auditEntry_includesAccountingFields() throws Exception {
         // Arrange
         String payload = """

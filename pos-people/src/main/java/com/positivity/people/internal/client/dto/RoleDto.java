@@ -20,5 +20,4 @@ public class RoleDto {
     private String scopeType;
 
     private Boolean active;
-
 }

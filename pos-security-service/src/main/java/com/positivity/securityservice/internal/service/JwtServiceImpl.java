@@ -1,5 +1,21 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.dto.UserDto;
+import com.positivity.securityservice.internal.entity.JwtToken;
+import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.repository.JwtTokenRepository;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.RoleAuthorityService;
+import com.positivity.securityservice.service.UserService;
+import com.positivity.shared.id.UUIDv7Generator;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,35 +29,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
-import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
-import com.positivity.securityservice.internal.dto.UserDto;
-import com.positivity.securityservice.internal.entity.JwtToken;
-import com.positivity.securityservice.internal.enums.PermissionCode;
-import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
-import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.RoleAuthorityService;
-import com.positivity.securityservice.service.UserService;
-import com.positivity.shared.id.UUIDv7Generator;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.JwtParser;
-import io.jsonwebtoken.Jwts;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
@@ -74,8 +70,7 @@ public class JwtServiceImpl implements JwtService {
     @PostConstruct
     void initializeSecretKey() {
         if (jwtSecret == null || jwtSecret.isBlank()) {
-            throw new IllegalStateException(
-                    "JWT secret must be provided via SECURITY_JWT_SECRET environment variable");
+            throw new IllegalStateException("JWT secret must be provided via SECURITY_JWT_SECRET environment variable");
         }
 
         byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
@@ -85,11 +80,7 @@ public class JwtServiceImpl implements JwtService {
                             + "Current length: " + secretBytes.length + " bytes");
         }
 
-        this.secretKey = new SecretKeySpec(
-                secretBytes,
-                0,
-                secretBytes.length,
-                "HmacSHA256");
+        this.secretKey = new SecretKeySpec(secretBytes, 0, secretBytes.length, "HmacSHA256");
 
         log.info("JwtService initialized with environment-injected JWT secret");
     }
@@ -128,15 +119,16 @@ public class JwtServiceImpl implements JwtService {
             return true;
 
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Token validation failed: signature or format error. error={}", e.getClass().getSimpleName());
+            log.debug(
+                    "Token validation failed: signature or format error. error={}",
+                    e.getClass().getSimpleName());
             return false;
         }
     }
 
     @Override
     public String getUsernameFromToken(@NonNull String token) {
-        return getClaims(token)
-                .getSubject();
+        return getClaims(token).getSubject();
     }
 
     @Override
@@ -193,8 +185,7 @@ public class JwtServiceImpl implements JwtService {
         if (permBitsValue != null) {
             Object permVerRaw = claims.get(PERM_VER);
             int permVer = (permVerRaw instanceof Number n) ? n.intValue() : PermissionCode.CATALOG_VERSION;
-            return PermissionBitsetCodec.decodeToPermissions(permBitsValue, permVer)
-                    .stream()
+            return PermissionBitsetCodec.decodeToPermissions(permBitsValue, permVer).stream()
                     .map(PermissionCode::code)
                     .collect(Collectors.toSet());
         }
@@ -239,7 +230,8 @@ public class JwtServiceImpl implements JwtService {
                 }
             }
         } catch (JwtException e) {
-            log.warn("Token deleted from DB but failed to revoke in Redis: error={}",
+            log.warn(
+                    "Token deleted from DB but failed to revoke in Redis: error={}",
                     e.getClass().getSimpleName());
         }
 
@@ -281,17 +273,22 @@ public class JwtServiceImpl implements JwtService {
                 return;
             }
 
-            long secondsLeft = ChronoUnit.SECONDS.between(Instant.now(clock), claims.getExpiration().toInstant());
+            long secondsLeft = ChronoUnit.SECONDS.between(
+                    Instant.now(clock), claims.getExpiration().toInstant());
             if (secondsLeft > 0) {
                 tokenRevocationManager.revokeToken(jti, secondsLeft);
             }
         } catch (JwtException e) {
-            log.debug("Failed to revoke {} token JTI: error={}", tokenType, e.getClass().getSimpleName());
+            log.debug(
+                    "Failed to revoke {} token JTI: error={}",
+                    tokenType,
+                    e.getClass().getSimpleName());
         }
     }
 
     @Override
-    public TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
+    public TokenPair generateTokenPair(
+            @NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username cannot be blank");
         }
@@ -328,7 +325,9 @@ public class JwtServiceImpl implements JwtService {
                 .id(accessJti)
                 .subject(username)
                 .issuer(ISSUER)
-                .audience().add(AUDIENCE).and()
+                .audience()
+                .add(AUDIENCE)
+                .and()
                 .claim(UID, userId.toString())
                 .claim(USERNAME, username)
                 .claim(ROLES, roleClaims)
@@ -348,7 +347,9 @@ public class JwtServiceImpl implements JwtService {
                 .id(refreshJti)
                 .subject(username)
                 .issuer(ISSUER)
-                .audience().add(AUDIENCE).and()
+                .audience()
+                .add(AUDIENCE)
+                .and()
                 .claim(UID, userId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
@@ -365,8 +366,12 @@ public class JwtServiceImpl implements JwtService {
         jwtToken.setSubject(username);
         jwtTokenRepository.save(jwtToken);
 
-        log.debug("Generated token pair: username={}, userId={}, accessJti={}, refreshJti={}",
-                username, userId, accessJti, refreshJti);
+        log.debug(
+                "Generated token pair: username={}, userId={}, accessJti={}, refreshJti={}",
+                username,
+                userId,
+                accessJti,
+                refreshJti);
 
         return new TokenPair(accessToken, refreshToken);
     }
@@ -400,7 +405,8 @@ public class JwtServiceImpl implements JwtService {
             return true;
 
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Refresh token validation failed: signature or format error. error={}",
+            log.debug(
+                    "Refresh token validation failed: signature or format error. error={}",
                     e.getClass().getSimpleName());
             return false;
         }
@@ -431,24 +437,28 @@ public class JwtServiceImpl implements JwtService {
         String username = jwtToken.getSubject();
 
         try {
-            Claims oldAccessClaims = jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
+            Claims oldAccessClaims =
+                    jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
             String oldAccessJti = oldAccessClaims.getId();
             if (oldAccessJti != null) {
                 tokenRevocationManager.revokeToken(oldAccessJti, ACCESS_TOKEN_EXPIRATION_SECONDS);
             }
         } catch (JwtException e) {
-            log.debug("Failed to extract JTI from old access token for revocation: error={}",
+            log.debug(
+                    "Failed to extract JTI from old access token for revocation: error={}",
                     e.getClass().getSimpleName());
         }
 
         try {
-            Claims oldRefreshClaims = jwtParser().parseSignedClaims(refreshToken).getPayload();
+            Claims oldRefreshClaims =
+                    jwtParser().parseSignedClaims(refreshToken).getPayload();
             String oldRefreshJti = oldRefreshClaims.getId();
             if (oldRefreshJti != null) {
                 tokenRevocationManager.revokeToken(oldRefreshJti, REFRESH_TOKEN_EXPIRATION_SECONDS);
             }
         } catch (JwtException e) {
-            log.debug("Failed to extract JTI from old refresh token for revocation: error={}",
+            log.debug(
+                    "Failed to extract JTI from old refresh token for revocation: error={}",
                     e.getClass().getSimpleName());
         }
 

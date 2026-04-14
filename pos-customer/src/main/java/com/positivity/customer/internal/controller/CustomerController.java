@@ -1,7 +1,17 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.dto.CustomerDTO;
+import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
+import com.positivity.customer.internal.service.PersonPartyServiceImpl;
+import com.positivity.customer.service.CustomerService;
+import com.positivity.events.EmitEvent;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
-
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -16,19 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.positivity.customer.internal.dto.CustomerDTO;
-import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
-import com.positivity.customer.internal.service.PersonPartyServiceImpl;
-import com.positivity.customer.service.CustomerService;
-import com.positivity.events.EmitEvent;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Customer API", description = "Operations related to customers")
@@ -46,13 +43,20 @@ public class CustomerController {
         this.personService = personService;
     }
 
-    @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
+    @Operation(
+            summary = "Get all customers",
+            description =
+                    "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
     @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
     @GetMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     public Page<CustomerDTO> getAllCustomers(
-            @Parameter(description = "Customer type filter: PERSON or COMMERCIAL", example = "PERSON") @RequestParam(required = false, defaultValue = "PERSON") String customerType,
-            @Parameter(description = "Pagination parameters (page, size, sort)") @PageableDefault(size = 20, sort = "lastName") Pageable pageable) {
+            @Parameter(description = "Customer type filter: PERSON or COMMERCIAL", example = "PERSON")
+                    @RequestParam(required = false, defaultValue = "PERSON")
+                    String customerType,
+            @Parameter(description = "Pagination parameters (page, size, sort)")
+                    @PageableDefault(size = 20, sort = "lastName")
+                    Pageable pageable) {
         log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
 
         if (COMMERCIAL.equalsIgnoreCase(customerType)) {
@@ -68,10 +72,13 @@ public class CustomerController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     public ResponseEntity<CustomerDTO> getCustomerById(
-            @Parameter(description = "ID of the customer to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
+            @Parameter(description = "ID of the customer to retrieve", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID id) {
         log.info("Fetching customer with id: {}", id);
 
-        return commercialService.getCustomerById(id)
+        return commercialService
+                .getCustomerById(id)
                 .or(() -> personService.getCustomerById(id))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -85,9 +92,8 @@ public class CustomerController {
     public ResponseEntity<CustomerDTO> createCustomer(
             @Parameter(description = "Customer object to be created") @RequestBody CustomerDTO customer) {
         log.info("Creating new customer: {}", customer);
-        CustomerService service = COMMERCIAL.equalsIgnoreCase(customer.getCustomerType())
-                ? commercialService
-                : personService;
+        CustomerService service =
+                COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
         CustomerDTO saved = service.createCustomer(customer);
         return ResponseEntity.status(201).body(saved);
     }
@@ -99,12 +105,13 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_EDIT + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_UPDATE", apiVersion = "1")
     public ResponseEntity<CustomerDTO> updateCustomer(
-            @Parameter(description = "ID of the customer to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
+            @Parameter(description = "ID of the customer to update", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID id,
             @Parameter(description = "Updated customer object") @RequestBody CustomerDTO customer) {
         log.info("Updating customer with id: {}", id);
-        CustomerService service = COMMERCIAL.equalsIgnoreCase(customer.getCustomerType())
-                ? commercialService
-                : personService;
+        CustomerService service =
+                COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
         return service.updateCustomer(id, customer)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -117,7 +124,9 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_DEACTIVATE + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCustomer(
-            @Parameter(description = "ID of the customer to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
+            @Parameter(description = "ID of the customer to delete", example = "123e4567-e89b-12d3-a456-426614174000")
+                    @PathVariable
+                    UUID id) {
         log.info("Deleting customer with id: {}", id);
         if (commercialService.deleteCustomer(id) || personService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();

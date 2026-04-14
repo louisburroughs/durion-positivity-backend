@@ -1,16 +1,5 @@
 package com.positivity.catalog.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.catalog.internal.dto.ItemCostAuditDto;
 import com.positivity.catalog.internal.dto.ItemCostsDto;
 import com.positivity.catalog.internal.dto.PurchaseOrderReceivedEventDto;
@@ -24,6 +13,15 @@ import com.positivity.catalog.internal.repository.ItemCostAuditRepository;
 import com.positivity.catalog.internal.repository.ItemCostRepository;
 import com.positivity.catalog.service.ItemCostService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ItemCostServiceImpl implements ItemCostService {
@@ -50,8 +48,7 @@ public class ItemCostServiceImpl implements ItemCostService {
             throw new CatalogValidationException("newCost must be positive.");
         }
 
-        ItemCostEntity itemCost = itemCostRepository.findByItemId(itemId)
-                .orElseGet(() -> initializeItemCost(itemId));
+        ItemCostEntity itemCost = itemCostRepository.findByItemId(itemId).orElseGet(() -> initializeItemCost(itemId));
 
         BigDecimal oldValue = itemCost.getStandardCost();
         BigDecimal newValue = request.getNewCost().setScale(4, RoundingMode.HALF_UP);
@@ -59,8 +56,14 @@ public class ItemCostServiceImpl implements ItemCostService {
         itemCostRepository.save(itemCost);
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        itemCostAuditRepository.save(buildAudit(itemId, CostType.STANDARD, oldValue, newValue,
-                new AuditSource(ChangeSourceType.MANUAL, "MANUAL"), actor, request.getReasonCode()));
+        itemCostAuditRepository.save(buildAudit(
+                itemId,
+                CostType.STANDARD,
+                oldValue,
+                newValue,
+                new AuditSource(ChangeSourceType.MANUAL, "MANUAL"),
+                actor,
+                request.getReasonCode()));
 
         return toItemCostsDto(itemCost);
     }
@@ -68,20 +71,17 @@ public class ItemCostServiceImpl implements ItemCostService {
     @Override
     @Transactional(readOnly = true)
     public ItemCostsDto getItemCosts(@NonNull UUID itemId) {
-        return itemCostRepository.findByItemId(itemId)
-                .map(this::toItemCostsDto)
-                .orElseGet(() -> {
-                    ItemCostsDto dto = new ItemCostsDto();
-                    dto.setItemId(itemId);
-                    return dto;
-                });
+        return itemCostRepository.findByItemId(itemId).map(this::toItemCostsDto).orElseGet(() -> {
+            ItemCostsDto dto = new ItemCostsDto();
+            dto.setItemId(itemId);
+            return dto;
+        });
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ItemCostAuditDto> getAuditHistory(@NonNull UUID itemId) {
-        return itemCostAuditRepository.findByItemIdOrderByTimestampDesc(itemId)
-                .stream()
+        return itemCostAuditRepository.findByItemIdOrderByTimestampDesc(itemId).stream()
                 .map(this::toAuditDto)
                 .toList();
     }
@@ -90,17 +90,22 @@ public class ItemCostServiceImpl implements ItemCostService {
     @Transactional
     public void processPoReceivedEvent(@NonNull PurchaseOrderReceivedEventDto event) {
         if (event.getReceivedUnitCost() == null || event.getReceivedUnitCost().signum() <= 0) {
-            log.error("Ignoring PO event with invalid unit cost: itemId={}, purchaseOrderId={}", event.getItemId(),
+            log.error(
+                    "Ignoring PO event with invalid unit cost: itemId={}, purchaseOrderId={}",
+                    event.getItemId(),
                     event.getPurchaseOrderId());
             return;
         }
         if (event.getReceivedQty() == null || event.getReceivedQty().signum() <= 0) {
-            log.error("Ignoring PO event with invalid quantity: itemId={}, purchaseOrderId={}", event.getItemId(),
+            log.error(
+                    "Ignoring PO event with invalid quantity: itemId={}, purchaseOrderId={}",
+                    event.getItemId(),
                     event.getPurchaseOrderId());
             return;
         }
 
-        ItemCostEntity itemCost = itemCostRepository.findByItemId(event.getItemId())
+        ItemCostEntity itemCost = itemCostRepository
+                .findByItemId(event.getItemId())
                 .orElseGet(() -> initializeItemCost(event.getItemId()));
 
         BigDecimal oldLast = itemCost.getLastCost();
@@ -112,8 +117,7 @@ public class ItemCostServiceImpl implements ItemCostService {
         BigDecimal newQtyOnHand = oldQtyOnHand.add(receivedQty);
 
         BigDecimal oldAverageForMath = oldAverage == null ? BigDecimal.ZERO : oldAverage;
-        BigDecimal weightedValue = oldQtyOnHand.multiply(oldAverageForMath)
-                .add(receivedQty.multiply(receivedUnitCost));
+        BigDecimal weightedValue = oldQtyOnHand.multiply(oldAverageForMath).add(receivedQty.multiply(receivedUnitCost));
         BigDecimal newAverage = weightedValue.divide(newQtyOnHand, 4, RoundingMode.HALF_UP);
 
         itemCost.setLastCost(receivedUnitCost);
@@ -121,10 +125,22 @@ public class ItemCostServiceImpl implements ItemCostService {
         itemCost.setQtyOnHand(newQtyOnHand);
         itemCostRepository.save(itemCost);
 
-        itemCostAuditRepository.save(buildAudit(event.getItemId(), CostType.LAST, oldLast, receivedUnitCost,
-                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), SYSTEM, null));
-        itemCostAuditRepository.save(buildAudit(event.getItemId(), CostType.AVERAGE, oldAverage, newAverage,
-                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), SYSTEM, null));
+        itemCostAuditRepository.save(buildAudit(
+                event.getItemId(),
+                CostType.LAST,
+                oldLast,
+                receivedUnitCost,
+                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()),
+                SYSTEM,
+                null));
+        itemCostAuditRepository.save(buildAudit(
+                event.getItemId(),
+                CostType.AVERAGE,
+                oldAverage,
+                newAverage,
+                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()),
+                SYSTEM,
+                null));
     }
 
     private ItemCostEntity initializeItemCost(UUID itemId) {
@@ -134,8 +150,14 @@ public class ItemCostServiceImpl implements ItemCostService {
         return entity;
     }
 
-    private ItemCostAuditEntity buildAudit(UUID itemId, CostType costType, BigDecimal oldValue, BigDecimal newValue,
-            AuditSource source, String actor, String reasonCode) {
+    private ItemCostAuditEntity buildAudit(
+            UUID itemId,
+            CostType costType,
+            BigDecimal oldValue,
+            BigDecimal newValue,
+            AuditSource source,
+            String actor,
+            String reasonCode) {
         ItemCostAuditEntity audit = new ItemCostAuditEntity();
         audit.setItemId(itemId);
         audit.setCostTypeChanged(costType);
@@ -148,8 +170,7 @@ public class ItemCostServiceImpl implements ItemCostService {
         return audit;
     }
 
-    private record AuditSource(ChangeSourceType type, String id) {
-    }
+    private record AuditSource(ChangeSourceType type, String id) {}
 
     private ItemCostsDto toItemCostsDto(ItemCostEntity entity) {
         ItemCostsDto dto = new ItemCostsDto();

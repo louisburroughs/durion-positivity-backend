@@ -4,11 +4,9 @@ import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-
+import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.math.BigDecimal;
 
 public class AdjustmentRequest {
 

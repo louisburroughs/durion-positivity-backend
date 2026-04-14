@@ -5,8 +5,7 @@ import org.jspecify.annotations.NonNull;
 
 public final class PromotionRedemptionMapper {
 
-    private PromotionRedemptionMapper() {
-    }
+    private PromotionRedemptionMapper() {}
 
     public static PromotionRedemptionResponse toResponse(@NonNull PromotionRedemption redemption) {
         return new PromotionRedemptionResponse(

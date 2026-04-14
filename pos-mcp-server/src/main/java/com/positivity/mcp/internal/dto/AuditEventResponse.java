@@ -9,5 +9,4 @@ public record AuditEventResponse(
         String eventType,
         Instant timestamp,
         String actorSubjectId,
-        String payloadRef) {
-}
+        String payloadRef) {}

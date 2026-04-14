@@ -11,23 +11,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-
 import com.positivity.vehiclefitment.BaseContractIntegrationTest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Contract behavior tests for {@link VehicleApplicabilityHintController}.
@@ -48,7 +46,7 @@ import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
 class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest {
 
     private static final UUID TEST_PRODUCT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID TEST_HINT_ID    = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID TEST_HINT_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     @Autowired
     private MockMvc mockMvc;
@@ -168,8 +166,7 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
     @DisplayName("VAH-C005: filter by vehicle attributes returns matching products → 200")
     void VAH_C005_filterByVehicleAttributes_returnsMatchingProducts_200() throws Exception {
         String matchingProductId = TEST_PRODUCT_ID.toString();
-        FilterProductsResponse serviceResponse =
-                new FilterProductsResponse(List.of(matchingProductId), 1);
+        FilterProductsResponse serviceResponse = new FilterProductsResponse(List.of(matchingProductId), 1);
         when(hintService.filterProductsByVehicleAttributes(any())).thenReturn(serviceResponse);
 
         mockMvc.perform(withGatewayAuth(post("/v1/vehicle-fitment/hints/filter-products")
@@ -196,8 +193,7 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
     @Test
     @DisplayName("VAH-C006: filter with no match → 200 with empty productIds")
     void VAH_C006_filterByVehicleAttributes_noMatch_returns200Empty() throws Exception {
-        when(hintService.filterProductsByVehicleAttributes(any()))
-                .thenReturn(new FilterProductsResponse(List.of(), 0));
+        when(hintService.filterProductsByVehicleAttributes(any())).thenReturn(new FilterProductsResponse(List.of(), 0));
 
         mockMvc.perform(withGatewayAuth(post("/v1/vehicle-fitment/hints/filter-products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -247,7 +243,8 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
     @DisplayName("VAH-C008: non-existent product, service throws → 404")
     void VAH_C008_nonExistentProduct_serviceThrows_returns404() throws Exception {
         doThrow(new IllegalArgumentException("Product not found"))
-                .when(hintService).createHint(any());
+                .when(hintService)
+                .createHint(any());
 
         mockMvc.perform(withGatewayAuth(post("/v1/vehicle-fitment/hints")
                         .contentType(MediaType.APPLICATION_JSON)

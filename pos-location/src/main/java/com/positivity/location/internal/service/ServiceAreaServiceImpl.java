@@ -1,7 +1,5 @@
 package com.positivity.location.internal.service;
 
-import com.positivity.location.service.ServiceAreaService;
-
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
@@ -9,6 +7,7 @@ import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
+import com.positivity.location.service.ServiceAreaService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -87,7 +86,8 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
     @Transactional
     public ServiceAreaResponse patch(String id, Map<String, Object> patch) {
         UUID areaId = parseUuidStrict(id);
-        ServiceAreaEntity entity = serviceAreaRepository.findById(areaId)
+        ServiceAreaEntity entity = serviceAreaRepository
+                .findById(areaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Service area not found"));
 
         if (patch.containsKey(DESCRIPTION)) {
@@ -121,8 +121,8 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
 
     private ServiceAreaRequest toRequest(Map<String, Object> map) {
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> rawPostalCodes = (List<Map<String, Object>>) map.getOrDefault("postalCodes",
-                List.of());
+        List<Map<String, Object>> rawPostalCodes =
+                (List<Map<String, Object>>) map.getOrDefault("postalCodes", List.of());
         List<ServiceAreaRequest.PostalCodeEntry> postalCodes = new ArrayList<>();
         for (Map<String, Object> rawPostalCode : rawPostalCodes) {
             postalCodes.add(ServiceAreaRequest.PostalCodeEntry.builder()
@@ -144,7 +144,8 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
             throw new IllegalArgumentException("service area must include at least one postal code");
         }
         boolean missingCountryCode = postalCodes.stream()
-                .anyMatch(entry -> entry.getCountryCode() == null || entry.getCountryCode().isBlank());
+                .anyMatch(entry ->
+                        entry.getCountryCode() == null || entry.getCountryCode().isBlank());
         if (missingCountryCode) {
             throw new IllegalArgumentException("postal code entries require countryCode");
         }

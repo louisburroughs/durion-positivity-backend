@@ -1,20 +1,17 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-
-import com.positivity.shared.id.UUIDv7Generator;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -42,20 +39,19 @@ public class KafkaProducer {
 
     public void publish(@NonNull String eventType, @NonNull String key, @NonNull Object payload) {
         String message = serializeEnvelope(eventType, payload);
-        kafkaTemplate.send(eventsTopic, key, message)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to publish Kafka event type={} topic={} key={}", eventType, eventsTopic, key,
-                                ex);
-                        return;
-                    }
-                    log.debug("Published Kafka event type={} topic={} key={} partition={} offset={}",
-                            eventType,
-                            eventsTopic,
-                            key,
-                            result.getRecordMetadata().partition(),
-                            result.getRecordMetadata().offset());
-                });
+        kafkaTemplate.send(eventsTopic, key, message).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to publish Kafka event type={} topic={} key={}", eventType, eventsTopic, key, ex);
+                return;
+            }
+            log.debug(
+                    "Published Kafka event type={} topic={} key={} partition={} offset={}",
+                    eventType,
+                    eventsTopic,
+                    key,
+                    result.getRecordMetadata().partition(),
+                    result.getRecordMetadata().offset());
+        });
     }
 
     private String serializeEnvelope(String eventType, Object payload) {

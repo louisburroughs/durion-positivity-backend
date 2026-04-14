@@ -1,14 +1,7 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -18,10 +11,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Audit log for inbound workorder-originated events consumed by the CRM system.
@@ -40,9 +37,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "processing_log", indexes = {
-        @Index(name = "idx_proc_log_event_id", columnList = "event_id", unique = true)
-})
+@Table(
+        name = "processing_log",
+        indexes = {@Index(name = "idx_proc_log_event_id", columnList = "event_id", unique = true)})
 @EntityListeners(AuditingEntityListener.class)
 public class ProcessingLog {
 

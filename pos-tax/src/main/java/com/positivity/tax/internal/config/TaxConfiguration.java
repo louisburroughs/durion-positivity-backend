@@ -1,13 +1,12 @@
 package com.positivity.tax.internal.config;
 
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
-
-import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
 
 /**
  * Configuration for the tax service.
@@ -59,8 +58,8 @@ public class TaxConfiguration {
 
         RetryConfig config = RetryConfig.custom()
                 .maxAttempts(retryProps.getMaxAttempts())
-                .intervalFunction(attempt -> (long) (retryProps.getInitialBackoff()
-                        * Math.pow(retryProps.getMultiplier(), attempt - 1)))
+                .intervalFunction(attempt ->
+                        (long) (retryProps.getInitialBackoff() * Math.pow(retryProps.getMultiplier(), attempt - 1)))
                 .build();
 
         return Retry.of("taxService", config);

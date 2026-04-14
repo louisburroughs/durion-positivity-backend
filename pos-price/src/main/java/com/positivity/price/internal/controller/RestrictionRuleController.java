@@ -58,8 +58,7 @@ public class RestrictionRuleController {
     @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/{ruleId}")
-    public ResponseEntity<@NonNull RestrictionRuleResponse> getRuleById(
-            @PathVariable @NonNull UUID ruleId) {
+    public ResponseEntity<@NonNull RestrictionRuleResponse> getRuleById(@PathVariable @NonNull UUID ruleId) {
         log.info("GET /v1/price/restrictions/rules/{}", ruleId);
         RestrictionRuleResponse response = restrictionRuleService.getRuleById(ruleId);
         return ResponseEntity.ok(response);
@@ -84,8 +83,7 @@ public class RestrictionRuleController {
     @EmitEvent(id = "PRICE_RESTRICTION_RULE_DEACTIVATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('pricing:restriction:manage')")
     @DeleteMapping("/{ruleId}")
-    public ResponseEntity<@NonNull RestrictionRuleResponse> deactivateRule(
-            @PathVariable @NonNull UUID ruleId) {
+    public ResponseEntity<@NonNull RestrictionRuleResponse> deactivateRule(@PathVariable @NonNull UUID ruleId) {
         log.info("DELETE /v1/price/restrictions/rules/{}", ruleId);
         RestrictionRuleResponse response = restrictionRuleService.deactivateRule(ruleId);
         return ResponseEntity.ok(response);

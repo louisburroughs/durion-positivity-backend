@@ -92,8 +92,7 @@ class OrderCancellationServiceImplTest {
     }
 
     private CancelOrderCommand cancelCommand(UUID workOrderId, UUID paymentId) {
-        return new CancelOrderCommand(
-                "Customer request", workOrderId, paymentId, "idem-key-1");
+        return new CancelOrderCommand("Customer request", workOrderId, paymentId, "idem-key-1");
     }
 
     // ── Issue #19: happy path ─────────────────────────────────────────────────
@@ -131,8 +130,7 @@ class OrderCancellationServiceImplTest {
         SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID))
-                .thenReturn(new WorkorderStatusResult("OPEN", true, null));
+        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
 
@@ -158,16 +156,15 @@ class OrderCancellationServiceImplTest {
         SalesOrder order = orderWithWorkorderAndPayment();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID))
-                .thenReturn(new WorkorderStatusResult("OPEN", true, null));
+        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
         when(billingPort.reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class)))
                 .thenReturn(new PaymentReversalResult(true, "VOID", "Payment voided"));
 
         // Act
-        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID,
-                cancelCommand(WORKORDER_ID, PAYMENT_ID));
+        CancellationResult result =
+                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID));
 
         // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -202,14 +199,14 @@ class OrderCancellationServiceImplTest {
      * CANCEL_FAILED_WORKEXEC.
      */
     @Test
-    @DisplayName("CC-005: Workexec cancelWorkorder returns success=false → IllegalStateException, CANCEL_FAILED_WORKEXEC")
+    @DisplayName(
+            "CC-005: Workexec cancelWorkorder returns success=false → IllegalStateException, CANCEL_FAILED_WORKEXEC")
     void cancelOrder_workexec_cancelFails_statusSetToFailWorkexec() {
         // Arrange
         SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID))
-                .thenReturn(new WorkorderStatusResult("OPEN", true, null));
+        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(false, "Failed to cancel"));
 
@@ -231,8 +228,7 @@ class OrderCancellationServiceImplTest {
         SalesOrder order = orderWithWorkorderAndPayment();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID))
-                .thenReturn(new WorkorderStatusResult("OPEN", true, null));
+        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
         when(billingPort.reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class)))
@@ -240,7 +236,7 @@ class OrderCancellationServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(
-                () -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID)))
+                        () -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID)))
                 .isInstanceOf(IllegalStateException.class);
     }
 

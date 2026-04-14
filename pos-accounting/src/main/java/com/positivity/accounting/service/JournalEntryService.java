@@ -1,14 +1,12 @@
 package com.positivity.accounting.service;
 
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface JournalEntryService {
 
@@ -93,5 +91,4 @@ public interface JournalEntryService {
      * Find entries by status (DRAFT, POSTED, REVERSED).
      */
     List<JournalEntry> findByStatus(JournalEntryStatus status);
-
 }

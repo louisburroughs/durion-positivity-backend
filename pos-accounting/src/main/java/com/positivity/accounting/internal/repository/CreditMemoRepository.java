@@ -2,13 +2,12 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Repository for CreditMemo entity.
@@ -19,7 +18,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
 
     /**
      * Find all credit memos for an invoice.
-     * 
+     *
      * @param originalInvoiceId invoice identifier
      * @return list of credit memos
      */
@@ -27,7 +26,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
 
     /**
      * Find all credit memos for an invoice with pagination.
-     * 
+     *
      * @param originalInvoiceId invoice identifier
      * @param pageable pagination parameters
      * @return page of credit memos
@@ -36,7 +35,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
 
     /**
      * Find all credit memos for a customer with pagination.
-     * 
+     *
      * @param customerId customer identifier
      * @param pageable   pagination parameters
      * @return page of credit memos
@@ -45,7 +44,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
 
     /**
      * Find all credit memos by status.
-     * 
+     *
      * @param status   credit memo status
      * @param pageable pagination parameters
      * @return page of credit memos
@@ -54,7 +53,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
 
     /**
      * Check if any credit memos exist for an invoice.
-     * 
+     *
      * @param originalInvoiceId invoice identifier
      * @return true if credit memos exist
      */

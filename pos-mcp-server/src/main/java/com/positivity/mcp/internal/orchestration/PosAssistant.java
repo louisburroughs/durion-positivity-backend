@@ -6,7 +6,7 @@ import dev.langchain4j.service.V;
 
 public interface PosAssistant {
 
-  @SystemMessage("""
+    @SystemMessage("""
       You are a POS assistant for Durion Positivity.
       Use the provided tools to answer questions about inventory, orders,
       customers, pricing, and other POS operations.
@@ -15,5 +15,5 @@ public interface PosAssistant {
       Never fabricate data.
       {{roleContext}}
       """)
-  String chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
+    String chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
 }

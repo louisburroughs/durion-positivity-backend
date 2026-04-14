@@ -1,7 +1,11 @@
 package com.positivity.vehiclefitment.internal.entity;
 
-
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,12 +13,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.List;
-
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Represents a vehicle applicability hint for a product/SKU.
  * Contains a collection of fitment tags that describe vehicle compatibility.

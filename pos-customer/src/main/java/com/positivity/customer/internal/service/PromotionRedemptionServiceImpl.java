@@ -1,15 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.customer.internal.dto.PromotionRedemptionMapper;
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;
@@ -21,8 +11,15 @@ import com.positivity.customer.internal.repository.PromotionCounterRepository;
 import com.positivity.customer.internal.repository.PromotionRedemptionRepository;
 import com.positivity.customer.service.PromotionRedemptionService;
 import com.positivity.security.common.SecurityContextHelper;
-
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -51,12 +48,12 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         redemption.setRecordedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         redemption.setRecordedOverLimit(
                 request.getRecordedOverLimit() != null ? request.getRecordedOverLimit() : false);
-        redemption.setStatus(Boolean.TRUE.equals(request.getRecordedOverLimit())
-                ? RedemptionStatus.RECORDED_OVER_LIMIT
-                : RedemptionStatus.RECORDED);
-        redemption.setRedemptionTimestamp(request.getRedemptionTimestamp() != null
-                ? request.getRedemptionTimestamp()
-                : LocalDateTime.now(clock));
+        redemption.setStatus(
+                Boolean.TRUE.equals(request.getRecordedOverLimit())
+                        ? RedemptionStatus.RECORDED_OVER_LIMIT
+                        : RedemptionStatus.RECORDED);
+        redemption.setRedemptionTimestamp(
+                request.getRedemptionTimestamp() != null ? request.getRedemptionTimestamp() : LocalDateTime.now(clock));
 
         PromotionRedemption saved;
         try {
@@ -73,8 +70,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
     @Override
     @Transactional(readOnly = true)
     public List<PromotionRedemptionResponse> getRedemptionsByCustomer(@NonNull UUID customerId) {
-        return promotionRedemptionRepository.findByCustomerId(customerId)
-                .stream()
+        return promotionRedemptionRepository.findByCustomerId(customerId).stream()
                 .map(PromotionRedemptionMapper::toResponse)
                 .toList();
     }
@@ -97,8 +93,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         }
 
         if (promotionCounterRepository.incrementTotalUsageCount(promotionId) == 0) {
-            throw new IllegalStateException(
-                    "Failed to increment promotion counter for promotionId=" + promotionId);
+            throw new IllegalStateException("Failed to increment promotion counter for promotionId=" + promotionId);
         }
     }
 }

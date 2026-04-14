@@ -11,5 +11,4 @@ import org.springframework.stereotype.Repository;
  * Issue: #41
  */
 @Repository
-public interface PricingSnapshotRepository extends JpaRepository<PricingSnapshot, UUID> {
-}
+public interface PricingSnapshotRepository extends JpaRepository<PricingSnapshot, UUID> {}

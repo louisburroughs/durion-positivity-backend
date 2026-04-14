@@ -13,8 +13,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * - Order line item operations
  * - Audit trail and compliance reporting
  */
-
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
 @EnableJpaRepositories
 public class PosOrderApplication {
 

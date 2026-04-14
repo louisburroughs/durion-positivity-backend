@@ -1,20 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -33,6 +18,19 @@ import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -43,9 +41,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final TaxServiceClient taxServiceClient;
 
     public InvoiceServiceImpl(
-            @NonNull InvoiceRepository invoiceRepository,
-            @NonNull TaxServiceClient taxServiceClient,
-            Clock clock) {
+            @NonNull InvoiceRepository invoiceRepository, @NonNull TaxServiceClient taxServiceClient, Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
@@ -73,7 +69,8 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new IllegalArgumentException("workorderId is required");
         }
 
-        return invoiceRepository.findByWorkorderId(request.getWorkorderId())
+        return invoiceRepository
+                .findByWorkorderId(request.getWorkorderId())
                 .map(this::toGenerationResponse)
                 .orElseGet(() -> createNewInvoice(request));
     }
@@ -82,16 +79,16 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Transactional(readOnly = true)
     @NonNull
     public InvoiceDetailsResponse getInvoice(@NonNull UUID invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
         return toDetailsResponse(invoice);
     }
 
     @Override
     @NonNull
     public InvoiceDetailsResponse applyAdjustment(@NonNull UUID invoiceId, @NonNull AdjustmentRequest request) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
 
         validateDraftState(invoice);
         validateAdjustmentRequest(request);
@@ -123,10 +120,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         for (InvoiceLineItem sourceItem : lineItems) {
             InvoiceItem item = new InvoiceItem();
             String description = sourceItem.getDescription();
-            item.setDescription(
-                    description.isBlank()
-                            ? "Invoice line item"
-                            : description.trim());
+            item.setDescription(description.isBlank() ? "Invoice line item" : description.trim());
             item.setQuantity(safeMoney(sourceItem.getQuantity(), BigDecimal.ONE));
             item.setUnitPrice(safeMoney(sourceItem.getUnitPrice(), BigDecimal.ZERO));
             item.setLineTotal(resolveLineTotal(sourceItem));
@@ -188,10 +182,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .setScale(4, RoundingMode.HALF_UP);
         invoice.setTax(tax);
 
-        BigDecimal total = invoice.getSubtotal()
-                .add(tax)
-                .add(adjustmentTotal)
-                .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal total = invoice.getSubtotal().add(tax).add(adjustmentTotal).setScale(4, RoundingMode.HALF_UP);
 
         if (total.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException(
@@ -268,8 +259,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setReversionReason(invoice.getReversionReason());
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
-                .sorted(Comparator
-                        .comparing(item -> Objects.requireNonNullElse(item.getId(), UUIDv7Generator.generate())))
+                .sorted(Comparator.comparing(
+                        item -> Objects.requireNonNullElse(item.getId(), UUIDv7Generator.generate())))
                 .map(this::toItemResponse)
                 .toList();
         response.setItems(new ArrayList<>(itemResponses));

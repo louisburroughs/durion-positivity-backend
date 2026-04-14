@@ -4,13 +4,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Account tier levels for customer segmentation and service classification.
- * 
+ *
  * Tiers are typically assigned based on business rules such as:
  * - Annual revenue/spending
  * - Contract terms
  * - Service level agreements
  * - Account age and history
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/">Related
  *      backend issue</a>
@@ -62,7 +62,7 @@ public enum AccountTier {
 
     /**
      * Get the display name for this tier.
-     * 
+     *
      * @return formatted tier name
      */
     public String getDisplayName() {
@@ -78,7 +78,7 @@ public enum AccountTier {
 
     /**
      * Check if this tier is premium (above STANDARD).
-     * 
+     *
      * @return true if premium tier
      */
     public boolean isPremium() {
@@ -87,7 +87,7 @@ public enum AccountTier {
 
     /**
      * Get the tier level as an ordinal rank (higher = better).
-     * 
+     *
      * @return tier level rank
      */
     public int getTierLevel() {

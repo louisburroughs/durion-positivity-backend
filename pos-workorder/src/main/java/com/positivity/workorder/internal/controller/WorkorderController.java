@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
@@ -10,12 +11,11 @@ import com.positivity.workorder.internal.dto.CreateWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
-import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
+import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
-import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -24,13 +24,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.UUID;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
 @RestController
@@ -49,8 +49,7 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_LIST", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public List<WorkorderResponse> getAllWorkorders() {
-        return workorderService.getAllWorkorders()
-                .stream()
+        return workorderService.getAllWorkorders().stream()
                 .map(WorkorderResponse::fromEntity)
                 .toList();
     }
@@ -61,27 +60,51 @@ public class WorkorderController {
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public ResponseEntity<WorkorderResponse> getWorkorderById(
-            @Parameter(description = "ID of the work order to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
-        return workorderService.getWorkorderById(workorderId)
+            @Parameter(
+                            description = "ID of the work order to retrieve",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId) {
+        return workorderService
+                .getWorkorderById(workorderId)
                 .map(WorkorderResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Create a new work order", description = "Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.")
-    @ApiResponse(responseCode = "200", description = "Work order created successfully, or existing work order returned if idempotency key was previously processed.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Work order creation request", required = true, content = @Content(schema = @Schema(implementation = CreateWorkorderRequest.class), examples = @ExampleObject(name = "createWorkorder", value = "{\"estimateId\":\"550e8400-e29b-41d4-a716-446655440001\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\"}")))
+    @Operation(
+            summary = "Create a new work order",
+            description =
+                    "Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.")
+    @ApiResponse(
+            responseCode = "200",
+            description =
+                    "Work order created successfully, or existing work order returned if idempotency key was previously processed.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Work order creation request",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = CreateWorkorderRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "createWorkorder",
+                                            value =
+                                                    "{\"estimateId\":\"550e8400-e29b-41d4-a716-446655440001\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\"}")))
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkorderResponse> createWorkorder(
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "workorder-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(
+                            description =
+                                    "Optional idempotency key to prevent duplicate creation (recommended for retries)",
+                            example = "workorder-create-550e8400-e29b-41d4-a716-446655440000")
+                    @RequestHeader(value = "Idempotency-Key", required = false)
+                    String idempotencyKey) {
         // Service handles entity creation internally, including idempotency check
         var created = workorderService.createWorkorderWithIdempotency(
-                request.getEstimateId(),
-                request.getCustomerId(),
-                idempotencyKey);
+                request.getEstimateId(), request.getCustomerId(), idempotencyKey);
         return ResponseEntity.ok(WorkorderResponse.fromEntity(created));
     }
 
@@ -92,17 +115,23 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteWorkorder(
-            @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId) {
         workorderService.deleteWorkorder(workorderId);
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
+    @Operation(
+            summary = "Get transition history",
+            description = "Retrieve the state transition history for a work order.")
     @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
     @GetMapping("/{workorderId}/transitions")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
-            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId) {
         var history = workorderService.getTransitionHistory(workorderId);
         return ResponseEntity.ok(history.stream()
                 .map(WorkorderStateTransitionResponse::fromEntity)
@@ -114,27 +143,46 @@ public class WorkorderController {
     @GetMapping("/{workorderId}/snapshots")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
-            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId) {
         var history = workorderService.getSnapshotHistory(workorderId);
-        return ResponseEntity.ok(history.stream()
-                .map(WorkorderSnapshotResponse::fromEntity)
-                .toList());
+        return ResponseEntity.ok(
+                history.stream().map(WorkorderSnapshotResponse::fromEntity).toList());
     }
 
-    @Operation(summary = "Approve a work order with customer signature", description = "Transition work order to APPROVED status with customer signature capture. "
-            +
-            "Work order can be approved from DRAFT status. Requires customer ID validation " +
-            "and signature data (base64-encoded image).")
+    @Operation(
+            summary = "Approve a work order with customer signature",
+            description = "Transition work order to APPROVED status with customer signature capture. "
+                    + "Work order can be approved from DRAFT status. Requires customer ID validation "
+                    + "and signature data (base64-encoded image).")
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
-    @ApiResponse(responseCode = "400", description = "Work order cannot be approved in current state or customer ID mismatch.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Work order cannot be approved in current state or customer ID mismatch.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID and signature capture", required = true, content = @Content(schema = @Schema(implementation = ApproveWorkorderRequest.class), examples = @ExampleObject(name = "approveWorkorder", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved by customer\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Approval request with customer ID and signature capture",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = ApproveWorkorderRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "approveWorkorder",
+                                            value =
+                                                    "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved by customer\"}")))
     @PostMapping("/{workorderId}/approval")
     @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:approve')")
     public ResponseEntity<WorkorderResponse> approveWorkorder(
-            @Parameter(description = "ID of the work order to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
+            @Parameter(
+                            description = "ID of the work order to approve",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId,
+            @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody
+                    ApproveWorkorderRequest request) {
         try {
             var approved = workorderService.approveWorkorder(
                     workorderId,
@@ -149,16 +197,32 @@ public class WorkorderController {
         }
     }
 
-    @Operation(summary = "Complete a work order", description = "Complete a work order, transitioning it to COMPLETED status and emitting a WorkCompleted event.")
+    @Operation(
+            summary = "Complete a work order",
+            description =
+                    "Complete a work order, transitioning it to COMPLETED status and emitting a WorkCompleted event.")
     @ApiResponse(responseCode = "200", description = "Work order completed successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Complete workorder request", required = true, content = @Content(schema = @Schema(implementation = CompleteWorkorderRequest.class), examples = @ExampleObject(name = "completeWorkorder", value = "{\"completionNotes\":\"Completed and verified\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Complete workorder request",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = CompleteWorkorderRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "completeWorkorder",
+                                            value = "{\"completionNotes\":\"Completed and verified\"}")))
     @PostMapping("/{workorderId}/complete")
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:complete')")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
-            @Parameter(description = "ID of the work order to complete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
+            @Parameter(
+                            description = "ID of the work order to complete",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId,
             @RequestBody CompleteWorkorderRequest request) {
         try {
             String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
@@ -176,8 +240,8 @@ public class WorkorderController {
 
             return ResponseEntity.ok(response);
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(
-                    CompleteWorkorderResponse.builder()
+            return ResponseEntity.badRequest()
+                    .body(CompleteWorkorderResponse.builder()
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
@@ -186,31 +250,48 @@ public class WorkorderController {
         }
     }
 
-    @Operation(summary = "Generate invoice draft from completed workorder", description = "Generate an invoice draft from a completed workorder with optional idempotency key.")
-    @ApiResponse(responseCode = "200", description = "Invoice generated successfully or existing invoice returned for idempotent replay.")
+    @Operation(
+            summary = "Generate invoice draft from completed workorder",
+            description = "Generate an invoice draft from a completed workorder with optional idempotency key.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Invoice generated successfully or existing invoice returned for idempotent replay.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @ApiResponse(responseCode = "409", description = "Work order is not in COMPLETED state.")
     @PostMapping("/{workorderId}/generate-invoice")
     @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
-            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId,
+            @Parameter(
+                            description =
+                                    "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)",
+                            example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000")
+                    @RequestHeader(value = "Idempotency-Key", required = false)
+                    String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Validate completion preconditions", description = "Evaluate completion preconditions for a workorder and return checklist + blocking reasons.")
+    @Operation(
+            summary = "Validate completion preconditions",
+            description = "Evaluate completion preconditions for a workorder and return checklist + blocking reasons.")
     @ApiResponse(responseCode = "200", description = "Completion preconditions evaluated successfully.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @GetMapping("/{workorderId}/completion-preconditions")
     @PreAuthorize("hasAuthority('workorder:workorder:complete')")
     public ResponseEntity<CompletionPreconditionsResponse> getCompletionPreconditions(
-            @Parameter(description = "ID of the workorder to validate", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
+            @Parameter(
+                            description = "ID of the workorder to validate",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId) {
         try {
-            WorkorderStateMachine.CompletionPreconditions preconditions = workorderService
-                    .getCompletionPreconditions(workorderId);
+            WorkorderStateMachine.CompletionPreconditions preconditions =
+                    workorderService.getCompletionPreconditions(workorderId);
 
             CompletionPreconditionsResponse response = CompletionPreconditionsResponse.builder()
                     .workorderId(preconditions.workorderId())
@@ -231,16 +312,32 @@ public class WorkorderController {
         }
     }
 
-    @Operation(summary = "Reopen completed workorder", description = "Controlled reopen for completed workorders. Requires elevated permission and mandatory reason.")
+    @Operation(
+            summary = "Reopen completed workorder",
+            description =
+                    "Controlled reopen for completed workorders. Requires elevated permission and mandatory reason.")
     @ApiResponse(responseCode = "200", description = "Workorder reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Workorder cannot be reopened or reason missing.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reopen workorder request", required = true, content = @Content(schema = @Schema(implementation = ReopenWorkorderRequest.class), examples = @ExampleObject(name = "reopenWorkorder", value = "{\"reopenReason\":\"Customer requested additional work\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Reopen workorder request",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = ReopenWorkorderRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "reopenWorkorder",
+                                            value = "{\"reopenReason\":\"Customer requested additional work\"}")))
     @PostMapping("/{workorderId}/reopen")
     @EmitEvent(id = "WORKORDER_REOPEN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:reopen_completed')")
     public ResponseEntity<ReopenWorkorderResponse> reopenWorkorder(
-            @Parameter(description = "ID of the completed workorder to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
+            @Parameter(
+                            description = "ID of the completed workorder to reopen",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID workorderId,
             @RequestBody ReopenWorkorderRequest request) {
         try {
             WorkorderService.ReopenResult reopened = workorderService.reopenCompletedWorkorder(
@@ -260,8 +357,8 @@ public class WorkorderController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(
-                    ReopenWorkorderResponse.builder()
+            return ResponseEntity.badRequest()
+                    .body(ReopenWorkorderResponse.builder()
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
@@ -271,5 +368,4 @@ public class WorkorderController {
     private String resolveCurrentActorUserId() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER_ID);
     }
-
 }

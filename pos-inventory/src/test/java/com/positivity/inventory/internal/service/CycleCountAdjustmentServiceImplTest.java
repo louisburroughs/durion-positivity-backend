@@ -7,6 +7,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
+import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
+import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.service.ApprovalThresholdEvaluator;
+import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -14,7 +24,6 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,17 +37,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
-import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
-import com.positivity.inventory.internal.entity.CycleCountAdjustment;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.AdjustmentStatus;
-import com.positivity.inventory.internal.enums.ApprovalTier;
-import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.service.ApprovalThresholdEvaluator;
-import com.positivity.security.common.GatewaySecurityConstants;
-
 @ExtendWith(MockitoExtension.class)
 class CycleCountAdjustmentServiceImplTest {
     private static final String ACTOR_USER_ID = "actor-person-id-001";
@@ -46,10 +44,13 @@ class CycleCountAdjustmentServiceImplTest {
 
     @Mock
     private CycleCountAdjustmentRepository adjustmentRepository;
+
     @Mock
     private InventoryLedgerEntryRepository ledgerRepository;
+
     @Mock
     private ApprovalThresholdEvaluator thresholdEvaluator;
+
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
@@ -59,11 +60,7 @@ class CycleCountAdjustmentServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CycleCountAdjustmentServiceImpl(
-                adjustmentRepository,
-                ledgerRepository,
-                thresholdEvaluator,
-                eventPublisher,
-                fixedClock);
+                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher, fixedClock);
     }
 
     @AfterEach
@@ -129,22 +126,20 @@ class CycleCountAdjustmentServiceImplTest {
             when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                     .thenReturn(Optional.empty());
 
-            when(adjustmentRepository.save(any(CycleCountAdjustment.class)))
-                    .thenAnswer(invocation -> {
-                        CycleCountAdjustment saved = invocation.getArgument(0);
-                        if (saved.getAdjustmentId() == null) {
-                            saved.setAdjustmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                        }
-                        return saved;
-                    });
+            when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(invocation -> {
+                CycleCountAdjustment saved = invocation.getArgument(0);
+                if (saved.getAdjustmentId() == null) {
+                    saved.setAdjustmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                }
+                return saved;
+            });
 
             when(ledgerRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
-            when(ledgerRepository.save(any(InventoryLedgerEntry.class)))
-                    .thenAnswer(invocation -> {
-                        InventoryLedgerEntry entry = invocation.getArgument(0);
-                        entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                        return entry;
-                    });
+            when(ledgerRepository.save(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+                InventoryLedgerEntry entry = invocation.getArgument(0);
+                entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                return entry;
+            });
 
             service.createAdjustment(request);
 
@@ -171,9 +166,7 @@ class CycleCountAdjustmentServiceImplTest {
         @BeforeEach
         void setUp() {
             adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            request = ApproveAdjustmentRequest.builder()
-                    .notes("Test notes")
-                    .build();
+            request = ApproveAdjustmentRequest.builder().notes("Test notes").build();
             setUpAuthenticatedActor();
         }
 
@@ -209,8 +202,8 @@ class CycleCountAdjustmentServiceImplTest {
         @BeforeEach
         void setUp() {
             adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            request = new com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest("reject-user-id",
-                    "Test rejection");
+            request = new com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest(
+                    "reject-user-id", "Test rejection");
         }
 
         @Test
@@ -267,8 +260,8 @@ class CycleCountAdjustmentServiceImplTest {
     }
 
     private void setUpAuthenticatedActor() {
-        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
-                ACTOR_USERNAME, "password", "ROLE_MANAGER");
+        TestingAuthenticationToken authentication =
+                new TestingAuthenticationToken(ACTOR_USERNAME, "password", "ROLE_MANAGER");
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USER_ID, ACTOR_USER_ID,
                 GatewaySecurityConstants.DETAIL_USERNAME, ACTOR_USERNAME));

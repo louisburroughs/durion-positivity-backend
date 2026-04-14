@@ -1,41 +1,37 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.UUID;
-
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import jakarta.persistence.GeneratedValue;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.EntityListeners;
+
 /**
  * Accounting Event - canonical event ingestion for JE generation.
- * 
+ *
  * Lifecycle: RECEIVED → PROCESSING → PROCESSED (or FAILED/SUSPENDED)
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Accounting Event</a>
@@ -47,14 +43,16 @@ import jakarta.persistence.EntityListeners;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "accounting_event", indexes = {
-        @Index(name = "idx_accounting_event_type", columnList = "event_type"),
-        @Index(name = "idx_accounting_event_status", columnList = "status"),
-        @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
-        @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
-        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
-        @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
-})
+@Table(
+        name = "accounting_event",
+        indexes = {
+            @Index(name = "idx_accounting_event_type", columnList = "event_type"),
+            @Index(name = "idx_accounting_event_status", columnList = "status"),
+            @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
+            @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
+            @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
+            @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
+        })
 public class AccountingEvent {
 
     @EqualsAndHashCode.Include
@@ -170,5 +168,4 @@ public class AccountingEvent {
      */
     @Column(name = "mapping_version_attempted", length = 50)
     private String mappingVersionAttempted;
-
 }

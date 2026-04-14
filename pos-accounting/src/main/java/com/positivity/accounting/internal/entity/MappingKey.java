@@ -1,14 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -20,17 +12,22 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Mapping Key - second level of GL mapping taxonomy hierarchy.
- * 
+ *
  * Each key belongs to a PostingCategory and can have multiple GLMappings.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GL Mapping</a>
@@ -42,10 +39,12 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "mapping_key", indexes = {
-        @Index(name = "idx_mapping_key_category", columnList = "posting_category_id"),
-        @Index(name = "idx_mapping_key_name", columnList = "key_name")
-})
+@Table(
+        name = "mapping_key",
+        indexes = {
+            @Index(name = "idx_mapping_key_category", columnList = "posting_category_id"),
+            @Index(name = "idx_mapping_key_name", columnList = "key_name")
+        })
 public class MappingKey {
 
     @EqualsAndHashCode.Include

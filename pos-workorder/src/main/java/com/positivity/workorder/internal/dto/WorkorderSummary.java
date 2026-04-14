@@ -1,11 +1,10 @@
 package com.positivity.workorder.internal.dto;
 
-import lombok.Builder;
-import lombok.Value;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
+import lombok.Builder;
+import lombok.Value;
 
 @Value
 @Builder

@@ -1,14 +1,13 @@
 package com.positivity.customer.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class BillingRuleRefTest {
 

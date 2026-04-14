@@ -23,17 +23,16 @@ public class SiteDefaultsClient {
     private final RestClient restClient;
 
     public SiteDefaultsClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(gatewayUrl + "/location/v1/locations")
-                .build();
+            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+        this.restClient =
+                restClientBuilder.baseUrl(gatewayUrl + "/location/v1/locations").build();
     }
 
     @NonNull
     public Optional<UUID> getDefaultStagingLocationId(@NonNull UUID siteId) {
         try {
-            SiteDefaultsResponse response = restClient.get()
+            SiteDefaultsResponse response = restClient
+                    .get()
                     .uri("/{siteId}/defaults", siteId)
                     .headers(this::applySecurityHeaders)
                     .retrieve()

@@ -2,18 +2,17 @@ package com.positivity.accounting.internal.dto;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
 import org.jspecify.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 /**
  * Result of evaluating a posting rule against an accounting event.
  * Contains either a successful journal entry draft or failure details.
- * 
+ *
  * Immutable value object following result pattern for posting engine
  * operations.
  */
@@ -49,7 +48,7 @@ public class PostingResult {
 
     /**
      * Creates a successful result with a journal entry draft.
-     * 
+     *
      * @param journalEntry   the generated journal entry (must be balanced)
      * @param mappingVersion the mapping version UUID that was used
      * @return success result
@@ -64,14 +63,14 @@ public class PostingResult {
 
     /**
      * Creates a successful result with evaluation details.
-     * 
+     *
      * @param journalEntry      the generated journal entry
      * @param mappingVersion    the mapping version used
      * @param evaluationDetails metadata about the evaluation process
      * @return success result with metadata
      */
-    public static PostingResult success(JournalEntry journalEntry, UUID mappingVersion,
-            Map<String, Object> evaluationDetails) {
+    public static PostingResult success(
+            JournalEntry journalEntry, UUID mappingVersion, Map<String, Object> evaluationDetails) {
         return PostingResult.builder()
                 .success(true)
                 .journalEntryDraft(journalEntry)
@@ -82,7 +81,7 @@ public class PostingResult {
 
     /**
      * Creates a failure result with reason and details.
-     * 
+     *
      * @param reason  the enumerated failure reason
      * @param details human-readable failure description
      * @return failure result
@@ -97,14 +96,14 @@ public class PostingResult {
 
     /**
      * Creates a failure result with evaluation metadata.
-     * 
+     *
      * @param reason            the failure reason
      * @param details           failure description
      * @param evaluationDetails metadata about what was attempted
      * @return failure result with metadata
      */
-    public static PostingResult failure(PostingFailureReason reason, String details,
-            Map<String, Object> evaluationDetails) {
+    public static PostingResult failure(
+            PostingFailureReason reason, String details, Map<String, Object> evaluationDetails) {
         return PostingResult.builder()
                 .success(false)
                 .failureReason(reason)

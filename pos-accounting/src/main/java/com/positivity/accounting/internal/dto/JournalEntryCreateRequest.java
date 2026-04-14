@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,7 +19,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for creating a new Journal Entry.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Journal Entry Request</a>
@@ -36,7 +35,9 @@ public class JournalEntryCreateRequest {
     private UUID organizationId;
 
     @NotNull(message = "transactionDate is required")
-    @Schema(description = "Journal transaction date and time", example = "2026-01-15T10:30:00",
+    @Schema(
+            description = "Journal transaction date and time",
+            example = "2026-01-15T10:30:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime transactionDate;
 
@@ -72,7 +73,9 @@ public class JournalEntryCreateRequest {
     @Schema(description = "Journal entry line request")
     public static class JournalEntryLineRequest {
         @NotNull(message = "glAccountId is required")
-        @Schema(description = "GL account UUID", example = "01936e5d-1234-7a3d-8b6e-3c4567890123",
+        @Schema(
+                description = "GL account UUID",
+                example = "01936e5d-1234-7a3d-8b6e-3c4567890123",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private UUID glAccountId;
 

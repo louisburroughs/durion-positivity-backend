@@ -1,24 +1,23 @@
 package com.positivity.accounting.internal.entity;
 
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Posting Category - top level of GL mapping taxonomy hierarchy.
- * 
+ *
  * Hierarchy: PostingCategory → MappingKey → GLMapping → GLAccount
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GL Mapping</a>
@@ -30,9 +29,9 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "posting_category", indexes = {
-        @Index(name = "idx_category_name", columnList = "category_name")
-})
+@Table(
+        name = "posting_category",
+        indexes = {@Index(name = "idx_category_name", columnList = "category_name")})
 public class PostingCategory {
 
     @EqualsAndHashCode.Include
@@ -41,6 +40,7 @@ public class PostingCategory {
     @UUIDv7Id
     @Column(name = "posting_category_id", nullable = false, columnDefinition = "UUID")
     private UUID postingCategoryId;
+
     @Column(name = "category_name", length = 100, nullable = false)
     private String categoryName;
 

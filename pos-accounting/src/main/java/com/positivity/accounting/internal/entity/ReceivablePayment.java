@@ -1,16 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -23,28 +13,35 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * ReceivablePayment - tracks cleared payments available for application to AR
  * invoices.
- * 
+ *
  * Lifecycle:
  * - Created when PaymentCleared event received from Payment domain
  * - AVAILABLE status when unappliedAmount > 0
  * - FULLY_APPLIED when unappliedAmount = 0
- * 
+ *
  * Business Rules:
  * - Payment domain is SoR for payment lifecycle (auth/capture/settlement)
  * - Accounting domain is SoR for payment APPLICATION lifecycle
  * - Applications reduce unappliedAmount; reversals increase it
  * - Overpayments create CustomerCredit and set unappliedAmount to 0
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Decision Record</a>
@@ -57,13 +54,16 @@ import lombok.ToString;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "receivable_payment", indexes = {
-        @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
-        @Index(name = "idx_receivable_payment_status", columnList = "status"),
-        @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
-})
+@Table(
+        name = "receivable_payment",
+        indexes = {
+            @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
+            @Index(name = "idx_receivable_payment_status", columnList = "status"),
+            @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at")
+        },
+        uniqueConstraints = {
+            @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
+        })
 public class ReceivablePayment {
 
     @EqualsAndHashCode.Include
@@ -119,7 +119,7 @@ public class ReceivablePayment {
 
     /**
      * Check if this payment has sufficient funds for an application.
-     * 
+     *
      * @param amount amount to check
      * @return true if unappliedAmount >= amount
      */
@@ -131,7 +131,7 @@ public class ReceivablePayment {
     /**
      * Apply an amount to this payment (reduces unapplied balance).
      * Does not persist - caller must save.
-     * 
+     *
      * @param amount amount to apply
      * @throws IllegalArgumentException if insufficient funds
      */
@@ -149,7 +149,7 @@ public class ReceivablePayment {
     /**
      * Reverse a previously applied amount (increases unapplied balance).
      * Does not persist - caller must save.
-     * 
+     *
      * @param amount amount to reverse
      */
     public void reverseAmount(@NonNull BigDecimal amount) {

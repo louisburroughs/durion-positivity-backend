@@ -5,11 +5,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.BaseContractIntegrationTest;
+import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.dto.TokenPairResponse;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.JwtService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-
 import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,18 +29,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
-
-import com.positivity.securityservice.BaseContractIntegrationTest;
-import com.positivity.securityservice.internal.dto.LoginRequest;
-import com.positivity.securityservice.internal.dto.TokenPairResponse;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.RoleRepository;
-import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.JwtService;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 
 /**
  * AUTH-001 RED integration tests for {@link AuthController}.
@@ -138,7 +134,8 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         // Remove any stale user from a previous test run
         userRepository.findByUsername(TEST_USERNAME).ifPresent(userRepository::delete);
 
-        Role role = roleRepository.findByName(TEST_ROLE)
+        Role role = roleRepository
+                .findByName(TEST_ROLE)
                 .orElseThrow(() -> new IllegalStateException("Test role SHOP_MANAGER not found after save"));
 
         User user = new User();
@@ -160,23 +157,17 @@ class AuthControllerIT extends BaseContractIntegrationTest {
 
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: returns 200 with TokenPairResponse
-        MvcResult result = mockMvc.perform(post(LOGIN_PATH)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        MvcResult result = mockMvc.perform(
+                        post(LOGIN_PATH).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()) // FAILS in RED (500 ≠ 200)
                 .andReturn();
 
         // Reached only in GREEN phase:
-        TokenPairResponse response = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
-                TokenPairResponse.class);
+        TokenPairResponse response =
+                objectMapper.readValue(result.getResponse().getContentAsString(), TokenPairResponse.class);
 
-        assertThat(response.accessToken())
-                .as("accessToken must not be blank")
-                .isNotBlank();
-        assertThat(response.refreshToken())
-                .as("refreshToken must not be blank")
-                .isNotBlank();
+        assertThat(response.accessToken()).as("accessToken must not be blank").isNotBlank();
+        assertThat(response.refreshToken()).as("refreshToken must not be blank").isNotBlank();
 
         // Verify JWT claims: perm_bits present, authorities absent (AC6 / PERM
         // contract)
@@ -212,9 +203,7 @@ class AuthControllerIT extends BaseContractIntegrationTest {
 
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: AuthenticationManager throws BadCredentialsException → 401
-        mockMvc.perform(post(LOGIN_PATH)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(post(LOGIN_PATH).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized()) // FAILS in RED (500 ≠ 401)
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
@@ -231,9 +220,7 @@ class AuthControllerIT extends BaseContractIntegrationTest {
 
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: same 401 response as wrong-password — prevents user enumeration
-        mockMvc.perform(post(LOGIN_PATH)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+        mockMvc.perform(post(LOGIN_PATH).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized()) // FAILS in RED (500 ≠ 401)
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
@@ -248,26 +235,26 @@ class AuthControllerIT extends BaseContractIntegrationTest {
     class ValidationTests {
 
         @Test
-                @DisplayName("T4: blank username → HTTP 400")
+        @DisplayName("T4: blank username → HTTP 400")
         void login_blankUsername_returns400() throws Exception {
             String body = objectMapper.writeValueAsString(new LoginRequest("", "somepassword"));
 
-                        // Validation rejects blank username and the API returns INVALID_REQUEST/400.
+            // Validation rejects blank username and the API returns INVALID_REQUEST/400.
             mockMvc.perform(post(LOGIN_PATH)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
                     .andExpect(status().isBadRequest());
         }
 
         @Test
-                @DisplayName("T5: blank password → HTTP 400")
+        @DisplayName("T5: blank password → HTTP 400")
         void login_blankPassword_returns400() throws Exception {
             String body = objectMapper.writeValueAsString(new LoginRequest(TEST_USERNAME, ""));
 
-                        // Validation rejects blank password and the API returns INVALID_REQUEST/400.
+            // Validation rejects blank password and the API returns INVALID_REQUEST/400.
             mockMvc.perform(post(LOGIN_PATH)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
                     .andExpect(status().isBadRequest());
         }
 
@@ -277,8 +264,7 @@ class AuthControllerIT extends BaseContractIntegrationTest {
             // Jackson throws HttpMessageNotReadableException (no Hibernate Validator
             // needed)
             // → GlobalExceptionHandler → 400; stub never reached.
-            mockMvc.perform(post(LOGIN_PATH)
-                    .contentType(MediaType.APPLICATION_JSON))
+            mockMvc.perform(post(LOGIN_PATH).contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest());
         }
     }

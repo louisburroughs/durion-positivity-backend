@@ -1,9 +1,8 @@
 package com.positivity.inventory.service;
 
-import java.util.UUID;
-
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
+import java.util.UUID;
 
 public interface CycleCountPlanService {
 

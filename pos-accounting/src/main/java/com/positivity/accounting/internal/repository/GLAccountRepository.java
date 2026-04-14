@@ -2,20 +2,19 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for GL Account entity.
  * Supports CRUD operations and queries for account lookup by code, type,
  * and activation status.
- * 
+ *
  * Note: Entity does not have organizationId field. Multi-tenancy not supported
  * at entity level.
  */
@@ -38,9 +37,9 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
      * Active: activationDate <= date AND (deactivationDate IS NULL OR
      * deactivationDate > date)
      */
-    @Query("SELECT g FROM GLAccount g WHERE g.activationDate <= :transactionDate " +
-            "AND (g.deactivationDate IS NULL OR g.deactivationDate > :transactionDate) " +
-            "ORDER BY g.accountCode")
+    @Query("SELECT g FROM GLAccount g WHERE g.activationDate <= :transactionDate "
+            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :transactionDate) "
+            + "ORDER BY g.accountCode")
     List<GLAccount> findActiveAccountsOn(LocalDateTime transactionDate);
 
     /**

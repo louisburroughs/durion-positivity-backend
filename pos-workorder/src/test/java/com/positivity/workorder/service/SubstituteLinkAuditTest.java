@@ -1,5 +1,10 @@
 package com.positivity.workorder.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
 import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
@@ -9,6 +14,10 @@ import com.positivity.workorder.internal.enums.SubstituteType;
 import com.positivity.workorder.internal.repository.SubstituteAuditRepository;
 import com.positivity.workorder.internal.repository.SubstituteLinkRepository;
 import com.positivity.workorder.internal.service.SubstituteLinkServiceImpl;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,16 +31,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests verifying ADR-0018: actor fields (createdBy/updatedBy/actorId) are
@@ -200,7 +199,8 @@ class SubstituteLinkAuditTest {
     // Issue CAP-171 Story #45: soft-delete must record audit entry with DELETE
     // operation
     @Test
-    @DisplayName("AC6: soft-delete records SubstituteAudit entry with operation=DELETE and actorId from SecurityContext")
+    @DisplayName(
+            "AC6: soft-delete records SubstituteAudit entry with operation=DELETE and actorId from SecurityContext")
     void whenDeleteSubstituteLink_thenAuditEntryWithDeleteOperation() {
         // Arrange
         var existingLink = buildPersistedLink(0);
@@ -237,8 +237,8 @@ class SubstituteLinkAuditTest {
      * @param username the username to inject as the authenticated actor
      */
     private void setAuthenticatedUserInSecurityContext(String username) {
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
-                Collections.emptyList());
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USERNAME, username,
                 GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID));

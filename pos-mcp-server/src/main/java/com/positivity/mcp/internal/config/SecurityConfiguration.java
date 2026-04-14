@@ -1,10 +1,9 @@
 package com.positivity.mcp.internal.config;
 
-import java.time.Clock;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.security.common.GatewaySecurityConfig;
+import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,8 +24,7 @@ public class SecurityConfiguration {
     @ConditionalOnProperty(prefix = "mcp.security", name = "permit-all-transport", havingValue = "true")
     @SuppressWarnings("java:S4502")
     public SecurityFilterChain localMcpTransportSecurityFilterChain(HttpSecurity http, McpServerProperties properties) {
-        http
-                .securityMatcher(properties.sseEndpoint(), properties.messageEndpoint())
+        http.securityMatcher(properties.sseEndpoint(), properties.messageEndpoint())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
@@ -53,13 +51,11 @@ public class SecurityConfiguration {
             HttpSecurity http,
             GatewayAuthoritiesFilter gatewayAuthoritiesFilter,
             ApiErrorAuthenticationEntryPoint apiErrorEntryPoint) {
-        http
-                .securityMatcher("/v1/mcp/**", "/v1/nlt/**")
+        http.securityMatcher("/v1/mcp/**", "/v1/nlt/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
-                .exceptionHandling(handler -> handler
-                        .authenticationEntryPoint(apiErrorEntryPoint))
+                .exceptionHandling(handler -> handler.authenticationEntryPoint(apiErrorEntryPoint))
                 .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

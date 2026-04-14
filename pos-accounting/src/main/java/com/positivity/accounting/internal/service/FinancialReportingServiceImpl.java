@@ -1,5 +1,16 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
+import com.positivity.accounting.internal.dto.BalanceSheetReport;
+import com.positivity.accounting.internal.dto.IncomeStatementReport;
+import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.StatementLineMapping;
+import com.positivity.accounting.internal.enums.OperationType;
+import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import com.positivity.accounting.service.FinancialReportingService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -12,24 +23,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
-import com.positivity.accounting.internal.dto.BalanceSheetReport;
-import com.positivity.accounting.internal.dto.IncomeStatementReport;
-import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.StatementLineMapping;
-import com.positivity.accounting.internal.enums.OperationType;
-import com.positivity.accounting.internal.enums.StatementType;
-import com.positivity.accounting.internal.repository.JournalEntryRepository;
-import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
-import com.positivity.accounting.service.FinancialReportingService;
 
 /**
  * Service implementation for financial reporting (Income Statement, Balance
@@ -63,8 +61,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     @Override
     public @NonNull IncomeStatementReport generateIncomeStatement(
-            @NonNull LocalDate startDate,
-            @NonNull LocalDate endDate) {
+            @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
@@ -76,8 +73,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // Load all income statement mappings (ordered by display order)
-        List<StatementLineMapping> mappings = statementLineMappingRepository
-                .findByStatementTypeOrderByDisplayOrder(StatementType.INCOME_STATEMENT);
+        List<StatementLineMapping> mappings =
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(StatementType.INCOME_STATEMENT);
 
         if (mappings.isEmpty()) {
             log.warn("No statement line mappings configured for INCOME_STATEMENT");
@@ -104,9 +101,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .collect(Collectors.toMap(
                         glAccountId -> glAccountId,
                         glAccountId -> journalEntryRepository.sumPostedBalanceForAccount(
-                                glAccountId,
-                                startDateTime,
-                                endDateTime)));
+                                glAccountId, startDateTime, endDateTime)));
 
         for (StatementLineMapping mapping : mappings) {
             BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
@@ -129,14 +124,15 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
 
         // Calculate totals
-        BigDecimal totalRevenue = revenueLines.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalExpenses = expenseLines.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalRevenue = revenueLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalExpenses = expenseLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal netIncome = totalRevenue.subtract(totalExpenses);
 
-        log.info("Income statement generated: revenue={}, expenses={}, netIncome={}",
-                totalRevenue, totalExpenses, netIncome);
+        log.info(
+                "Income statement generated: revenue={}, expenses={}, netIncome={}",
+                totalRevenue,
+                totalExpenses,
+                netIncome);
 
         return IncomeStatementReport.builder()
                 .startDate(startDate)
@@ -157,8 +153,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime asOfDateTime = asOfDate.atTime(LocalTime.MAX);
 
         // Load all balance sheet mappings (ordered by display order)
-        List<StatementLineMapping> mappings = statementLineMappingRepository
-                .findByStatementTypeOrderByDisplayOrder(StatementType.BALANCE_SHEET);
+        List<StatementLineMapping> mappings =
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(StatementType.BALANCE_SHEET);
 
         if (mappings.isEmpty()) {
             log.warn("No statement line mappings configured for BALANCE_SHEET");
@@ -193,8 +189,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement
             // line
             String lineCode = mapping.getStatementLineCode();
-            lineItems.merge(lineCode, accountBalance,
-                    (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
+            lineItems.merge(
+                    lineCode, accountBalance, (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
 
             // Track asset/liability/equity lines for totals
             BigDecimal currentTotal = lineItems.get(lineCode);
@@ -208,24 +204,29 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
 
         // Calculate totals
-        BigDecimal totalAssets = assetLines.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalLiabilities = liabilityLines.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalEquity = equityLines.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalAssets = assetLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalLiabilities = liabilityLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalEquity = equityLines.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Validate balance sheet equation: Assets = Liabilities + Equity (within
         // tolerance)
-        BigDecimal difference = totalAssets.subtract(totalLiabilities.add(totalEquity)).abs();
+        BigDecimal difference =
+                totalAssets.subtract(totalLiabilities.add(totalEquity)).abs();
         boolean balanced = difference.compareTo(BALANCE_TOLERANCE) <= 0;
 
         if (!balanced) {
-            log.warn("Balance sheet equation not balanced: assets={}, liabilities+equity={}, diff={}",
-                    totalAssets, totalLiabilities.add(totalEquity), difference);
+            log.warn(
+                    "Balance sheet equation not balanced: assets={}, liabilities+equity={}, diff={}",
+                    totalAssets,
+                    totalLiabilities.add(totalEquity),
+                    difference);
         } else {
-            log.info("Balance sheet generated: assets={}, liabilities={}, equity={}, balanced={}",
-                    totalAssets, totalLiabilities, totalEquity, balanced);
+            log.info(
+                    "Balance sheet generated: assets={}, liabilities={}, equity={}, balanced={}",
+                    totalAssets,
+                    totalLiabilities,
+                    totalEquity,
+                    balanced);
         }
 
         return BalanceSheetReport.builder()
@@ -241,23 +242,23 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     @Override
     public @NonNull List<AccountDrilldownResponse> drilldownToAccounts(
-            @NonNull String statementLineCode,
-            @NonNull LocalDate startDate,
-            @NonNull LocalDate endDate) {
+            @NonNull String statementLineCode, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
         }
 
-        log.info("Drilling down statement line {} to accounts for period {} to {}",
-                statementLineCode, startDate, endDate);
+        log.info(
+                "Drilling down statement line {} to accounts for period {} to {}",
+                statementLineCode,
+                startDate,
+                endDate);
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // Find all accounts mapped to this statement line
-        List<StatementLineMapping> mappings = statementLineMappingRepository
-                .findByStatementLineCode(statementLineCode);
+        List<StatementLineMapping> mappings = statementLineMappingRepository.findByStatementLineCode(statementLineCode);
 
         if (mappings.isEmpty()) {
             log.warn("No account mappings found for statement line: {}", statementLineCode);
@@ -268,9 +269,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         return mappings.stream()
                 .map(mapping -> {
                     BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceForAccount(
-                            mapping.getGlAccountId(),
-                            startDateTime,
-                            endDateTime);
+                            mapping.getGlAccountId(), startDateTime, endDateTime);
                     // Apply operation to transform the balance for display (starting from zero)
                     BigDecimal displayBalance = applyOperation(BigDecimal.ZERO, accountBalance, mapping.getOperation());
 
@@ -286,9 +285,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     @Override
     public @NonNull List<JournalLineDrilldownResponse> drilldownToJournalLines(
-            @NonNull String accountId,
-            @NonNull LocalDate startDate,
-            @NonNull LocalDate endDate) {
+            @NonNull String accountId, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
@@ -304,17 +301,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
 
         String maskedAccountId = accountId.substring(0, 8) + "...";
-        log.info("Drilling down account {} to journal lines for period {} to {}",
-                maskedAccountId, startDate, endDate);
+        log.info("Drilling down account {} to journal lines for period {} to {}", maskedAccountId, startDate, endDate);
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // Find all posted journal entries affecting this account
-        List<JournalEntry> entries = journalEntryRepository.findPostedEntriesForAccount(
-                glAccountId,
-                startDateTime,
-                endDateTime);
+        List<JournalEntry> entries =
+                journalEntryRepository.findPostedEntriesForAccount(glAccountId, startDateTime, endDateTime);
 
         // Extract journal lines for this account
         return entries.stream()
@@ -336,7 +330,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     /**
      * Apply operation type to combine an amount with a running total.
-     * 
+     *
      * @param total         the current running total for the statement line
      * @param amount        the account balance to apply
      * @param operationType the operation to perform (SUM, SUBTRACT, or NEGATE)
@@ -370,9 +364,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (lineCode == null) {
             return false;
         }
-        return lineCode.startsWith("REVENUE_")
-                || lineCode.startsWith("PL_REVENUE_")
-                || lineCode.contains("INCOME");
+        return lineCode.startsWith("REVENUE_") || lineCode.startsWith("PL_REVENUE_") || lineCode.contains("INCOME");
     }
 
     /**
@@ -399,8 +391,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (lineCode == null) {
             return false;
         }
-        return lineCode.startsWith("ASSET_")
-                || lineCode.startsWith("BS_ASSETS_");
+        return lineCode.startsWith("ASSET_") || lineCode.startsWith("BS_ASSETS_");
     }
 
     /**
@@ -427,7 +418,6 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (lineCode == null) {
             return false;
         }
-        return lineCode.startsWith("EQUITY_")
-                || lineCode.startsWith("BS_EQUITY_");
+        return lineCode.startsWith("EQUITY_") || lineCode.startsWith("BS_EQUITY_");
     }
 }

@@ -1,15 +1,13 @@
 package com.positivity.workorder.internal.dto;
 
-import java.math.BigDecimal;
-
-import org.jspecify.annotations.Nullable;
-
-import jakarta.validation.constraints.DecimalMin;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMin;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Request DTO for updating an existing line item on an estimate.

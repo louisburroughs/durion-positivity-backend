@@ -19,15 +19,24 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Estimate context used for applying promotion rules and calculations")
 public class EstimateContext {
 
-    @Schema(description = "Estimate identifier", requiredMode = Schema.RequiredMode.REQUIRED, example = "00000000-0000-0000-0000-000000000001")
+    @Schema(
+            description = "Estimate identifier",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "00000000-0000-0000-0000-000000000001")
     @NotNull(message = "estimateId is required")
     private UUID estimateId;
 
-    @Schema(description = "Customer identifier", requiredMode = Schema.RequiredMode.REQUIRED, example = "00000000-0000-0000-0000-000000000002")
+    @Schema(
+            description = "Customer identifier",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "00000000-0000-0000-0000-000000000002")
     @NotNull(message = "customerId is required")
     private UUID customerId;
 
-    @Schema(description = "Optional vehicle identifier for vehicle-specific eligibility checks", example = "00000000-0000-0000-0000-000000000003", nullable = true)
+    @Schema(
+            description = "Optional vehicle identifier for vehicle-specific eligibility checks",
+            example = "00000000-0000-0000-0000-000000000003",
+            nullable = true)
     @Nullable
     private UUID vehicleId;
 
@@ -36,12 +45,19 @@ public class EstimateContext {
     @Size(min = 1, message = "lineItems must contain at least one item")
     private List<@Valid LineItemContext> lineItems;
 
-    @Schema(description = "Estimate subtotal before promotions", requiredMode = Schema.RequiredMode.REQUIRED, example = "500.00")
+    @Schema(
+            description = "Estimate subtotal before promotions",
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "500.00")
     @NotNull(message = "subtotal is required")
     @DecimalMin(value = "0", message = "subtotal must be zero or greater")
     private BigDecimal subtotal;
 
-    @Schema(description = "Promotion codes already applied to this estimate", nullable = true, example = "[\"SPRING10\"]")
+    @Schema(
+            description = "Promotion codes already applied to this estimate",
+            nullable = true,
+            example = "[\"SPRING10\"]")
     @Nullable
-    private List<@Size(max = 64, message = "applied promo code must not exceed 64 characters") String> appliedPromoCodes;
+    private List<@Size(max = 64, message = "applied promo code must not exceed 64 characters") String>
+            appliedPromoCodes;
 }

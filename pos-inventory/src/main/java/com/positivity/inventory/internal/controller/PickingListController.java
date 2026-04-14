@@ -21,11 +21,14 @@ public class PickingListController {
     @PostMapping("/{id}/confirm")
     @EmitEvent(id = "INVENTORY_PICKING_LIST_CONFIRM", apiVersion = "1")
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
-    @Operation(summary = "Confirm picking list", description = "Confirms a picking list and commits consumption. Stub implementation.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Picking list confirmed"),
-            @ApiResponse(responseCode = "501", description = "Not implemented")
-    })
+    @Operation(
+            summary = "Confirm picking list",
+            description = "Confirms a picking list and commits consumption. Stub implementation.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Picking list confirmed"),
+                @ApiResponse(responseCode = "501", description = "Not implemented")
+            })
     public ResponseEntity<Void> confirmPickingList(
             @Parameter(description = "Picking list identifier", required = true) @PathVariable String id,
             @RequestBody(required = false) Object requestBody) {

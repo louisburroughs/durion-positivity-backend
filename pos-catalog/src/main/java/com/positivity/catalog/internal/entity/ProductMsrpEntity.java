@@ -61,5 +61,4 @@ public class ProductMsrpEntity {
 
     @Version
     private Long version;
-
 }

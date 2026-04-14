@@ -1,12 +1,11 @@
 package com.positivity.inventory.internal.dto;
 
 import com.positivity.inventory.internal.enums.OverrideReasonCode;
-
 import java.util.UUID;
 
 /**
  * Request DTO for executing a putaway move from staging to storage.
- * 
+ *
  * <p>
  * Represents the clerk's scan data and optional override information.
  */
@@ -23,11 +22,9 @@ public class PutawayExecutionRequest {
     private String overrideJustification;
     private String approvedBy;
 
-    public PutawayExecutionRequest() {
-    }
+    public PutawayExecutionRequest() {}
 
-    public PutawayExecutionRequest(String skuId, UUID sourceLocationId,
-            UUID destinationLocationId, int quantity) {
+    public PutawayExecutionRequest(String skuId, UUID sourceLocationId, UUID destinationLocationId, int quantity) {
         this.skuId = skuId;
         this.sourceLocationId = sourceLocationId;
         this.destinationLocationId = destinationLocationId;

@@ -37,7 +37,7 @@ public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, 
         return findActiveCandidates(productId, asOf).stream().findFirst();
     }
 
-        List<ProductMsrpEntity> findByProduct_IdOrderByEffectiveStartDateDesc(UUID productId);
+    List<ProductMsrpEntity> findByProduct_IdOrderByEffectiveStartDateDesc(UUID productId);
 
-        long countByProduct_IdAndEffectiveEndDateIsNull(UUID productId);
+    long countByProduct_IdAndEffectiveEndDateIsNull(UUID productId);
 }

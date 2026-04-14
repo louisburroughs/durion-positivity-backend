@@ -25,7 +25,8 @@ public class SourceDocumentStubClient {
             RestClient.Builder restClientBuilder,
             @Value("${pos.inventory.receiving.stub.enabled:false}") boolean enabled,
             @Value("${pos.inventory.receiving.stub.base-url:http://localhost:8080}") String baseUrl,
-            @Value("${pos.inventory.receiving.stub.path:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}")
+            @Value(
+                            "${pos.inventory.receiving.stub.path:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}")
                     String pathTemplate) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         this.enabled = enabled;
@@ -54,8 +55,10 @@ public class SourceDocumentStubClient {
         }
 
         try {
-            SourceDocumentLinesResponse response = restClient.get()
-                    .uri(uriBuilder -> uriBuilder.path(pathTemplate)
+            SourceDocumentLinesResponse response = restClient
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path(pathTemplate)
                             .queryParam("service", sourceService)
                             .build(sourceDocumentType.name(), sourceDocumentId))
                     .retrieve()
@@ -77,9 +80,7 @@ public class SourceDocumentStubClient {
     }
 
     private SourceDocumentLinesResponse emptyResponse(
-            String sourceDocumentId,
-            SourceDocumentType sourceDocumentType,
-            String sourceService) {
+            String sourceDocumentId, SourceDocumentType sourceDocumentType, String sourceService) {
         SourceDocumentLinesResponse response = new SourceDocumentLinesResponse();
         response.setSourceDocumentId(sourceDocumentId);
         response.setSourceDocumentType(sourceDocumentType.name());
@@ -105,9 +106,7 @@ public class SourceDocumentStubClient {
                 return false;
             }
             String normalized = status.trim().toUpperCase(Locale.ROOT);
-            return "RECEIVED".equals(normalized)
-                    || "COMPLETED".equals(normalized)
-                    || "CLOSED".equals(normalized);
+            return "RECEIVED".equals(normalized) || "COMPLETED".equals(normalized) || "CLOSED".equals(normalized);
         }
     }
 

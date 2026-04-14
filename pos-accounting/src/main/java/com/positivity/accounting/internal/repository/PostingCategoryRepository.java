@@ -1,20 +1,20 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PostingCategory;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for Posting Category entity.
  * Supports looking up categories by name.
  */
 @Repository
-public interface PostingCategoryRepository extends JpaRepository<PostingCategory, UUID>, JpaSpecificationExecutor<PostingCategory> {
+public interface PostingCategoryRepository
+        extends JpaRepository<PostingCategory, UUID>, JpaSpecificationExecutor<PostingCategory> {
 
     /**
      * Find a category by name.

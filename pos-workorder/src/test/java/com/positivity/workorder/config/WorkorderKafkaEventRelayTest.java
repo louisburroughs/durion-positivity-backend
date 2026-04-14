@@ -1,21 +1,18 @@
 package com.positivity.workorder.config;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-
-import java.time.Instant;
-import java.util.UUID;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 import com.positivity.workorder.internal.config.KafkaEventRelay;
 import com.positivity.workorder.internal.config.KafkaProducer;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 class WorkorderKafkaEventRelayTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -28,11 +25,16 @@ class WorkorderKafkaEventRelayTest {
     void relaysWorkSessionStartedEvent() {
         WorkSessionStartedEvent event = new WorkSessionStartedEvent(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.now(TEST_CLOCK));
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                Instant.now(TEST_CLOCK));
 
         relay.onWorkSessionStarted(event);
 
-        verify(producer).publish("workorder.work_session.started.v1", event.workSessionId().toString(), event);
+        verify(producer)
+                .publish(
+                        "workorder.work_session.started.v1",
+                        event.workSessionId().toString(),
+                        event);
     }
 
     @Test

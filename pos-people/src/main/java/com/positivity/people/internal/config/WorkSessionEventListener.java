@@ -24,5 +24,4 @@ public class WorkSessionEventListener {
     public void onWorkSessionCorrected(WorkSessionCorrectedEvent event) {
         service.recordCorrection(event);
     }
-
 }

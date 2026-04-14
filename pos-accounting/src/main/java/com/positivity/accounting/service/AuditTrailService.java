@@ -1,11 +1,10 @@
 package com.positivity.accounting.service;
 
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.audit.dto.AuditTrailResponse;
 import com.positivity.accounting.internal.audit.dto.CancellationRequest;
 import com.positivity.accounting.internal.audit.dto.PriceOverrideRequest;
 import com.positivity.accounting.internal.audit.dto.RefundRequest;
+import org.jspecify.annotations.NonNull;
 
 public interface AuditTrailService {
 

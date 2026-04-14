@@ -1,9 +1,8 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * CRM Snapshot response DTO.
@@ -12,14 +11,19 @@ import java.util.List;
 public class CrmSnapshotDTO {
     @NonNull
     private SnapshotMetadata snapshotMetadata;
+
     @NonNull
     private AccountSummary account;
+
     @NonNull
     private List<ContactSummary> contacts;
+
     @NonNull
     private List<VehicleSummary> vehicles;
+
     @Nullable
     private BillingPreferences preferences;
+
     @Nullable
     private BillingRuleRef billingRules;
 
@@ -29,19 +33,23 @@ public class CrmSnapshotDTO {
     public static class VehicleSummary {
         @NonNull
         private String vehicleId;
+
         @Nullable
         private String vin;
+
         @Nullable
         private String licensePlate;
+
         @Nullable
         private String make;
+
         @Nullable
         private String model;
+
         @Nullable
         private Integer year;
 
-        public VehicleSummary() {
-        }
+        public VehicleSummary() {}
 
         @NonNull
         public String getVehicleId() {
@@ -104,11 +112,11 @@ public class CrmSnapshotDTO {
     public static class BillingPreferences {
         private boolean marketingOptOut;
         private boolean doNotContact;
+
         @Nullable
         private String invoiceDeliveryMethod;
 
-        public BillingPreferences() {
-        }
+        public BillingPreferences() {}
 
         public boolean isMarketingOptOut() {
             return marketingOptOut;
@@ -138,12 +146,15 @@ public class CrmSnapshotDTO {
 
     // Constructors
 
-    public CrmSnapshotDTO() {
-    }
+    public CrmSnapshotDTO() {}
 
-    public CrmSnapshotDTO(@NonNull SnapshotMetadata snapshotMetadata, @NonNull AccountSummary account,
-            @NonNull List<ContactSummary> contacts, @NonNull List<VehicleSummary> vehicles,
-            @Nullable BillingPreferences preferences, @Nullable BillingRuleRef billingRules) {
+    public CrmSnapshotDTO(
+            @NonNull SnapshotMetadata snapshotMetadata,
+            @NonNull AccountSummary account,
+            @NonNull List<ContactSummary> contacts,
+            @NonNull List<VehicleSummary> vehicles,
+            @Nullable BillingPreferences preferences,
+            @Nullable BillingRuleRef billingRules) {
         this.snapshotMetadata = snapshotMetadata;
         this.account = account;
         this.contacts = contacts;

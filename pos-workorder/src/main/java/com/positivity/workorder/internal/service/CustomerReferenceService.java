@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -33,7 +32,8 @@ public class CustomerReferenceService {
 
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = customerRestClient.get()
+            Map<String, Object> body = customerRestClient
+                    .get()
                     .uri("/v1/customers/{customerId}", customerId)
                     .retrieve()
                     .body(Map.class);
@@ -51,9 +51,7 @@ public class CustomerReferenceService {
                     extract(payload, "legalName"),
                     fallbackName);
             String phone = firstNonBlank(
-                    extract(payload, "phoneNumber"),
-                    extract(payload, "phone"),
-                    extract(payload, "mobilePhone"));
+                    extract(payload, "phoneNumber"), extract(payload, "phone"), extract(payload, "mobilePhone"));
             return new CustomerContact(name, phone);
         } catch (Exception ex) {
             log.debug("Unable to resolve customer reference for {}: {}", customerId, ex.getMessage());
@@ -98,7 +96,8 @@ public class CustomerReferenceService {
         return null;
     }
 
-    public record CustomerContact(@Nullable String name, @Nullable String phoneNumber) {
+    public record CustomerContact(
+            @Nullable String name, @Nullable String phoneNumber) {
         public static @NonNull CustomerContact empty() {
             return new CustomerContact("", null);
         }

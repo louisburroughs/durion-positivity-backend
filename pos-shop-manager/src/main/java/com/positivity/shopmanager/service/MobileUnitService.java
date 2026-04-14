@@ -9,5 +9,4 @@ public interface MobileUnitService {
     Object manageMobileUnits(Object request);
 
     void deleteMobileUnit(Long locationId, Long bayId);
-
 }

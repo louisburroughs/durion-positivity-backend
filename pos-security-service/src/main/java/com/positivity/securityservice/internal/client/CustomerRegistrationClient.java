@@ -21,11 +21,11 @@ public class CustomerRegistrationClient {
 
     @NonNull
     public List<CustomerPersonSearchResponse> searchPersons(
-            @Nullable String name,
-            @Nullable String email,
-            @Nullable String phone) {
-        List<CustomerPersonSearchResponse> response = restClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/v1/crm/persons")
+            @Nullable String name, @Nullable String email, @Nullable String phone) {
+        List<CustomerPersonSearchResponse> response = restClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/crm/persons")
                         .queryParamIfPresent("name", java.util.Optional.ofNullable(name))
                         .queryParamIfPresent("email", java.util.Optional.ofNullable(email))
                         .queryParamIfPresent("phone", java.util.Optional.ofNullable(phone))
@@ -34,10 +34,10 @@ public class CustomerRegistrationClient {
                         .build())
                 .retrieve()
                 .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                    throw new IllegalStateException("Customer person search failed with status " + res.getStatusCode().value());
+                    throw new IllegalStateException("Customer person search failed with status "
+                            + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {
-                });
+                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {});
         return response == null ? List.of() : response;
     }
 }

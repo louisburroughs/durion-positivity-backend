@@ -2,21 +2,18 @@ package com.positivity.securityservice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.UserRepository;
-
-import jakarta.persistence.EntityManager;
 
 /**
  * Integration tests for {@link User} entity account-state field persistence —
@@ -70,9 +67,9 @@ class UserEntityAccountStateIT {
         // Clear the first-level cache to force a genuine SQL SELECT on the next read
         entityManager.clear();
 
-        User fetched = userRepository.findById(saved.getId())
-                .orElseThrow(() -> new AssertionError(
-                        "User was not found after saveAndFlush — ID: " + saved.getId()));
+        User fetched = userRepository
+                .findById(saved.getId())
+                .orElseThrow(() -> new AssertionError("User was not found after saveAndFlush — ID: " + saved.getId()));
 
         assertThat(fetched.isEnabled())
                 .as("enabled must be persisted and retrieved as false")
@@ -121,7 +118,8 @@ class UserEntityAccountStateIT {
         User saved = userRepository.saveAndFlush(user);
         entityManager.clear();
 
-        User fetched = userRepository.findById(saved.getId())
+        User fetched = userRepository
+                .findById(saved.getId())
                 .orElseThrow(() -> new AssertionError("User not found after saveAndFlush — ID: " + saved.getId()));
 
         assertThat(fetched.getLastFailedLoginAt()).isNotNull();

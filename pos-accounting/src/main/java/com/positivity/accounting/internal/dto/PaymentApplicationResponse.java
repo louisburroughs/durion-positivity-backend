@@ -1,17 +1,15 @@
 package com.positivity.accounting.internal.dto;
 
-import lombok.*;
-
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import com.positivity.accounting.internal.enums.InvoiceStatus;
+import lombok.*;
 
 /**
  * Response DTO for payment application operations.
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114</a>

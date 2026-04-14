@@ -5,6 +5,9 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,10 +15,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.time.Duration;
-import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * Client for interacting with pos-documents service.
@@ -30,7 +29,7 @@ import java.util.function.Supplier;
  *
  * <p>
  * Usage:
- * 
+ *
  * <pre>
  * DocumentClient client = new DocumentClient(restClient, "http://pos-documents:8080");
  * byte[] pdf = client.renderDocument(renderRequest);
@@ -59,22 +58,27 @@ public class DocumentClient {
         this.baseUrl = Objects.requireNonNull(baseUrl, "baseUrl cannot be null");
 
         // Configure retry: max 3 attempts, exponential backoff
-        this.retry = Retry.of("documentClient", RetryConfig.custom()
-                .maxAttempts(3)
-                .waitDuration(Duration.ofMillis(500))
-                .retryExceptions(RestClientException.class)
-                .build());
+        this.retry = Retry.of(
+                "documentClient",
+                RetryConfig.custom()
+                        .maxAttempts(3)
+                        .waitDuration(Duration.ofMillis(500))
+                        .retryExceptions(RestClientException.class)
+                        .build());
 
         // Configure circuit breaker: open after 5 failures, half-open after 30s
-        this.circuitBreaker = CircuitBreaker.of("documentClient", CircuitBreakerConfig.custom()
-                .failureRateThreshold(50)
-                .waitDurationInOpenState(Duration.ofSeconds(30))
-                .permittedNumberOfCallsInHalfOpenState(3)
-                .slidingWindowSize(10)
-                .build());
+        this.circuitBreaker = CircuitBreaker.of(
+                "documentClient",
+                CircuitBreakerConfig.custom()
+                        .failureRateThreshold(50)
+                        .waitDurationInOpenState(Duration.ofSeconds(30))
+                        .permittedNumberOfCallsInHalfOpenState(3)
+                        .slidingWindowSize(10)
+                        .build());
 
         // Log circuit breaker state changes
-        circuitBreaker.getEventPublisher()
+        circuitBreaker
+                .getEventPublisher()
                 .onStateTransition(event -> log.warn("Document client circuit breaker state changed: {}", event));
     }
 
@@ -91,7 +95,8 @@ public class DocumentClient {
 
         Supplier<Void> registrationCall = () -> {
             try {
-                restClient.put()
+                restClient
+                        .put()
                         .uri(baseUrl + "/v1/documents/templates/{id}", registration.getTemplateId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(registration)
@@ -103,15 +108,13 @@ public class DocumentClient {
             } catch (Exception e) {
                 log.error("Template registration failed for {}: {}", registration.getTemplateId(), e.getMessage());
                 throw new com.positivity.documents.helper.exception.TemplateRegistrationException(
-                        registration.getTemplateId(),
-                        "HTTP PUT failed",
-                        e);
+                        registration.getTemplateId(), "HTTP PUT failed", e);
             }
         };
 
         // Apply retry and circuit breaker
-        Supplier<Void> decoratedCall = Retry.decorateSupplier(retry,
-                CircuitBreaker.decorateSupplier(circuitBreaker, registrationCall));
+        Supplier<Void> decoratedCall =
+                Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(circuitBreaker, registrationCall));
 
         decoratedCall.get();
     }
@@ -129,7 +132,8 @@ public class DocumentClient {
 
         Supplier<byte[]> renderCall = () -> {
             try {
-                var response = restClient.post()
+                var response = restClient
+                        .post()
                         .uri(baseUrl + "/v1/documents/render")
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
@@ -138,8 +142,7 @@ public class DocumentClient {
 
                 if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
                     throw new DocumentRenderException(
-                            request.getTemplateId(),
-                            "Unexpected response status: " + response.getStatusCode());
+                            request.getTemplateId(), "Unexpected response status: " + response.getStatusCode());
                 }
 
                 log.debug("Successfully rendered document with template: {}", request.getTemplateId());
@@ -148,16 +151,13 @@ public class DocumentClient {
                 throw e;
             } catch (Exception e) {
                 log.error("Document rendering failed for template {}: {}", request.getTemplateId(), e.getMessage());
-                throw new DocumentRenderException(
-                        request.getTemplateId(),
-                        "HTTP POST failed",
-                        e);
+                throw new DocumentRenderException(request.getTemplateId(), "HTTP POST failed", e);
             }
         };
 
         // Apply retry and circuit breaker
-        Supplier<byte[]> decoratedCall = Retry.decorateSupplier(retry,
-                CircuitBreaker.decorateSupplier(circuitBreaker, renderCall));
+        Supplier<byte[]> decoratedCall =
+                Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(circuitBreaker, renderCall));
 
         return decoratedCall.get();
     }

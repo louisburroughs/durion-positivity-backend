@@ -1,10 +1,9 @@
 package com.positivity.customer.internal.dto.snapshot;
 
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Snapshot metadata for CRM snapshot response.
@@ -13,8 +12,10 @@ import java.util.UUID;
 public class SnapshotMetadata {
     @NonNull
     private UUID snapshotId;
+
     @NonNull
     private Instant createdAt;
+
     @NonNull
     private String version;
     /** Data source: CACHE or CRM_API. Null if not set. */
@@ -28,8 +29,7 @@ public class SnapshotMetadata {
     @Nullable
     private Instant staleSince;
 
-    public SnapshotMetadata() {
-    }
+    public SnapshotMetadata() {}
 
     public SnapshotMetadata(@NonNull UUID snapshotId, @NonNull Instant createdAt, @NonNull String version) {
         this.snapshotId = snapshotId;

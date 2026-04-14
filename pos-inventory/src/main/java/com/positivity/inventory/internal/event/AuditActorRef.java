@@ -12,6 +12,4 @@ import org.jspecify.annotations.NonNull;
  * @param username display name / login (from JWT claim or security context)
  */
 public record AuditActorRef(
-                @NonNull String personId,
-                @NonNull String username) {
-}
+        @NonNull String personId, @NonNull String username) {}

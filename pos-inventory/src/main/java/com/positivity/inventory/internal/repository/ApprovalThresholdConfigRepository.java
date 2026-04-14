@@ -1,14 +1,12 @@
 package com.positivity.inventory.internal.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
 import com.positivity.inventory.internal.enums.ApprovalTier;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 /**
  * Repository for {@link ApprovalThresholdConfig} entities.
@@ -18,7 +16,7 @@ public interface ApprovalThresholdConfigRepository extends JpaRepository<Approva
 
     /**
      * Find configuration for a specific approval tier.
-     * 
+     *
      * @param approvalTier the approval tier
      * @return optional configuration
      */
@@ -26,7 +24,7 @@ public interface ApprovalThresholdConfigRepository extends JpaRepository<Approva
 
     /**
      * Find all active configurations ordered by tier.
-     * 
+     *
      * @return list of active threshold configurations
      */
     List<ApprovalThresholdConfig> findByActiveTrueOrderByApprovalTierAsc();

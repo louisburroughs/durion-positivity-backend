@@ -2,7 +2,6 @@ package com.positivity.vehiclefitment;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
@@ -62,10 +61,10 @@ public abstract class BaseContractIntegrationTest {
     private static String buildUnsignedTestToken(String userId) {
         String headerJson = "{\"alg\":\"none\"}";
         String payloadJson = "{\"userId\":\"" + userId + "\"}";
-        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-        String encodedPayload = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        String encodedHeader =
+                Base64.getUrlEncoder().withoutPadding().encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String encodedPayload =
+                Base64.getUrlEncoder().withoutPadding().encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
         return encodedHeader + "." + encodedPayload + ".test-signature";
     }
 }

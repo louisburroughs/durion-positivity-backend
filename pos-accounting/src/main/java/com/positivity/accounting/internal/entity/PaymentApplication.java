@@ -1,24 +1,21 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
+import static jakarta.persistence.FetchType.LAZY;
 
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import jakarta.persistence.*;
-import lombok.*;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
-import static jakarta.persistence.FetchType.LAZY;
-
 /**
  * PaymentApplication - immutable record linking a payment to an invoice.
- * 
+ *
  * Business Rules:
  * - ONE payment can be applied to MULTIPLE invoices
  * - ONE invoice can have MULTIPLE payments applied
@@ -26,7 +23,7 @@ import static jakarta.persistence.FetchType.LAZY;
  * - Applications are IDEMPOTENT via applicationRequestId
  * - Applications are IMMUTABLE - use PaymentApplicationReversal for corrections
  * - No hard deletes - reversals are compensating transactions
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Decision Record</a>
@@ -39,14 +36,18 @@ import static jakarta.persistence.FetchType.LAZY;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "payment_application", indexes = {
-        @Index(name = "idx_payment_application_payment", columnList = "payment_id"),
-        @Index(name = "idx_payment_application_customer", columnList = "customer_id"),
-        @Index(name = "idx_payment_application_timestamp", columnList = "application_timestamp")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_payment_application_idempotency", columnNames = { "application_request_id",
-                "invoice_id" })
-})
+@Table(
+        name = "payment_application",
+        indexes = {
+            @Index(name = "idx_payment_application_payment", columnList = "payment_id"),
+            @Index(name = "idx_payment_application_customer", columnList = "customer_id"),
+            @Index(name = "idx_payment_application_timestamp", columnList = "application_timestamp")
+        },
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_payment_application_idempotency",
+                    columnNames = {"application_request_id", "invoice_id"})
+        })
 public class PaymentApplication {
 
     @EqualsAndHashCode.Include

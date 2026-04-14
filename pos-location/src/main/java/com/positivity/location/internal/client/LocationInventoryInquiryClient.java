@@ -2,9 +2,8 @@ package com.positivity.location.internal.client;
 
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.Data;
-
 import java.util.UUID;
+import lombok.Data;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -25,15 +24,15 @@ public class LocationInventoryInquiryClient {
     private final RestClient restClient;
 
     public LocationInventoryInquiryClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayUrl + "/inventory/v1/inventory/locations")
                 .build();
     }
 
     public int getOnHandQuantity(@NonNull UUID storageLocationId) {
-        LocationInventoryInquiryResponse response = restClient.get()
+        LocationInventoryInquiryResponse response = restClient
+                .get()
                 .uri("/{storageLocationId}/inventory-inquiry", storageLocationId)
                 .header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())
                 .retrieve()

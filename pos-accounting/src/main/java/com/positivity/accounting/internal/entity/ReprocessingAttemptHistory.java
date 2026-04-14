@@ -1,45 +1,41 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
-import java.time.Instant;
-import java.util.UUID;
-
-import org.jspecify.annotations.NonNull;
-
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.EntityListeners;
+
 /**
  * Reprocessing Attempt History - tracks all attempts to reprocess a suspended
  * accounting event.
- * 
+ *
  * Provides complete audit trail of reprocessing operations including:
  * - Who triggered the reprocessing
  * - When it was attempted
  * - Outcome (SUCCESS or FAILURE)
  * - Detailed outcome information
- * 
+ *
  * @see AccountingEvent
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
@@ -52,11 +48,13 @@ import jakarta.persistence.EntityListeners;
 @ToString(exclude = "accountingEvent")
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "reprocessing_attempt_history", indexes = {
-        @Index(name = "idx_reprocessing_event_id", columnList = "event_id"),
-        @Index(name = "idx_reprocessing_attempted_at", columnList = "attempted_at"),
-        @Index(name = "idx_reprocessing_outcome", columnList = "outcome")
-})
+@Table(
+        name = "reprocessing_attempt_history",
+        indexes = {
+            @Index(name = "idx_reprocessing_event_id", columnList = "event_id"),
+            @Index(name = "idx_reprocessing_attempted_at", columnList = "attempted_at"),
+            @Index(name = "idx_reprocessing_outcome", columnList = "outcome")
+        })
 public class ReprocessingAttemptHistory {
 
     @EqualsAndHashCode.Include
@@ -119,7 +117,7 @@ public class ReprocessingAttemptHistory {
 
     /**
      * Create a reprocessing attempt record.
-     * 
+     *
      * @param accountingEvent   the event being reprocessed
      * @param triggeredByUserId the user who triggered the reprocessing
      * @param outcome           the result of the reprocessing attempt

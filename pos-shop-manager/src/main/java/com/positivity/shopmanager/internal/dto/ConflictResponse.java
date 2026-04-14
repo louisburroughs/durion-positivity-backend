@@ -17,15 +17,10 @@ public class ConflictResponse {
     private List<Conflict> conflicts; // Array of specific conflicts
     private List<SuggestedAlternative> suggestedAlternatives; // Optional alternatives (may be null/empty)
 
-    public ConflictResponse() {
-    }
+    public ConflictResponse() {}
 
     public ConflictResponse(
-            String errorCode,
-            String message,
-            String correlationId,
-            Instant timestamp,
-            List<Conflict> conflicts) {
+            String errorCode, String message, String correlationId, Instant timestamp, List<Conflict> conflicts) {
         this.errorCode = errorCode;
         this.message = message;
         this.correlationId = correlationId;
@@ -33,8 +28,13 @@ public class ConflictResponse {
         this.conflicts = conflicts;
     }
 
-    public ConflictResponse(String errorCode, String message, String correlationId, Instant timestamp,
-            List<Conflict> conflicts, List<SuggestedAlternative> suggestedAlternatives) {
+    public ConflictResponse(
+            String errorCode,
+            String message,
+            String correlationId,
+            Instant timestamp,
+            List<Conflict> conflicts,
+            List<SuggestedAlternative> suggestedAlternatives) {
         this.errorCode = errorCode;
         this.message = message;
         this.correlationId = correlationId;
@@ -103,8 +103,7 @@ public class ConflictResponse {
         private Boolean overridable; // HARD=false, SOFT=true
         private String affectedResource; // e.g., "Mechanic: John Doe", "Facility hours: 8am-5pm"
 
-        public Conflict() {
-        }
+        public Conflict() {}
 
         public Conflict(String severity, String code, String message, Boolean overridable, String affectedResource) {
             this.severity = severity;
@@ -164,8 +163,7 @@ public class ConflictResponse {
         private String endDateTime; // ISO-8601 with offset
         private String reason; // e.g., "Mechanic available"
 
-        public SuggestedAlternative() {
-        }
+        public SuggestedAlternative() {}
 
         public SuggestedAlternative(String startDateTime, String endDateTime, String reason) {
             this.startDateTime = startDateTime;

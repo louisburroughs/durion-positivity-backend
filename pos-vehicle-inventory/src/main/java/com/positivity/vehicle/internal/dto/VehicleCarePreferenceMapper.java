@@ -3,8 +3,7 @@ package com.positivity.vehicle.internal.dto;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 
 public final class VehicleCarePreferenceMapper {
-    private VehicleCarePreferenceMapper() {
-    }
+    private VehicleCarePreferenceMapper() {}
 
     public static VehicleCarePreferenceResponse toResponse(VehicleCarePreference preference) {
         return VehicleCarePreferenceResponse.builder()

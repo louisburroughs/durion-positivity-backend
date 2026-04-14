@@ -1,9 +1,5 @@
 package com.positivity.securityservice.service;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,8 +18,10 @@ import com.positivity.securityservice.internal.repository.RoleAssignmentReposito
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.RoleManagementServiceImpl;
-
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -41,126 +39,123 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class RoleManagementServiceImplTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        @Spy
-        Clock clock = TEST_CLOCK;
+    @Spy
+    Clock clock = TEST_CLOCK;
 
-        @Mock
-        private RoleRepository roleRepository;
-        @Mock
-        private PermissionRepository permissionRepository;
-        @Mock
-        private RoleAssignmentRepository roleAssignmentRepository;
-        @Mock
-        private UserRepository userRepository;
+    @Mock
+    private RoleRepository roleRepository;
 
-        @InjectMocks
-        private RoleManagementServiceImpl roleManagementService;
+    @Mock
+    private PermissionRepository permissionRepository;
 
-        @AfterEach
-        void cleanupSecurityContext() {
-                SecurityContextHolder.clearContext();
-        }
+    @Mock
+    private RoleAssignmentRepository roleAssignmentRepository;
 
-        @Test
-        void createRole_andUpdatePermissions_success() {
-                SecurityContextHolder.getContext().setAuthentication(
-                                new UsernamePasswordAuthenticationToken(
-                                                "agent-user",
-                                                "n/a",
-                                                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    @Mock
+    private UserRepository userRepository;
 
-                Role role = new Role();
-                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                role.setId(roleId);
-                role.setName("MANAGER");
+    @InjectMocks
+    private RoleManagementServiceImpl roleManagementService;
 
-                Permission permission = new Permission();
-                permission.setName("security:role:grant");
+    @AfterEach
+    void cleanupSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
-                when(roleRepository.existsByNameIgnoreCase("MANAGER")).thenReturn(false);
-                when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
-                when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
-                when(permissionRepository.findByName("security:role:grant")).thenReturn(Optional.of(permission));
+    @Test
+    void createRole_andUpdatePermissions_success() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "agent-user", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
-                RoleDto created = roleManagementService.createRole("MANAGER", "Manager role");
-                RoleDto updated = roleManagementService.updateRolePermissions(
-                                new RolePermissionsRequest(roleId, Set.of("security:role:grant")));
+        Role role = new Role();
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        role.setId(roleId);
+        role.setName("MANAGER");
 
-                assertThat(created.getCreatedBy()).isEqualTo("agent-user");
-                assertThat(updated.getPermissions()).extracting("name").contains("security:role:grant");
-        }
+        Permission permission = new Permission();
+        permission.setName("security:role:grant");
 
-        @Test
-        void createRoleAssignment_andPermissionChecks_success() {
-                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(roleRepository.existsByNameIgnoreCase("MANAGER")).thenReturn(false);
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        when(permissionRepository.findByName("security:role:grant")).thenReturn(Optional.of(permission));
 
-                User user = new User();
-                user.setId(userId);
-                user.setUsername("alice");
+        RoleDto created = roleManagementService.createRole("MANAGER", "Manager role");
+        RoleDto updated = roleManagementService.updateRolePermissions(
+                new RolePermissionsRequest(roleId, Set.of("security:role:grant")));
 
-                Permission permission = new Permission();
-                permission.setName("security:role:grant");
+        assertThat(created.getCreatedBy()).isEqualTo("agent-user");
+        assertThat(updated.getPermissions()).extracting("name").contains("security:role:grant");
+    }
 
-                Role role = new Role();
-                role.setId(roleId);
-                role.setName("MANAGER");
-                role.setPermissions(Set.of(permission));
+    @Test
+    void createRoleAssignment_andPermissionChecks_success() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                RoleAssignment assignment = new RoleAssignment();
-                assignment.setUser(user);
-                assignment.setRole(role);
-                assignment.setScopeType(ScopeType.GLOBAL);
-                assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
+        User user = new User();
+        user.setId(userId);
+        user.setUsername("alice");
 
-                RoleAssignmentRequest request = new RoleAssignmentRequest(
-                                userId,
-                                roleId,
-                                ScopeType.GLOBAL,
-                                Set.of(),
-                                LocalDateTime.now(TEST_CLOCK).minusHours(1),
-                                null);
+        Permission permission = new Permission();
+        permission.setName("security:role:grant");
 
-                when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-                when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
-                when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, ScopeType.GLOBAL))
-                                .thenReturn(List.of());
-                when(roleAssignmentRepository.save(any(RoleAssignment.class)))
-                                .thenAnswer(invocation -> invocation.getArgument(0));
-                when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
-                when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        Role role = new Role();
+        role.setId(roleId);
+        role.setName("MANAGER");
+        role.setPermissions(Set.of(permission));
 
-                var createdAssignment = roleManagementService.createRoleAssignment(request);
-                boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
-                roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setScopeType(ScopeType.GLOBAL);
+        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
-                assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
-                assertThat(hasPermission).isTrue();
-        }
+        RoleAssignmentRequest request = new RoleAssignmentRequest(
+                userId,
+                roleId,
+                ScopeType.GLOBAL,
+                Set.of(),
+                LocalDateTime.now(TEST_CLOCK).minusHours(1),
+                null);
 
-        @Test
-        void validationBranches_throwOnInvalidScopeAndMissingRole() {
-                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, ScopeType.GLOBAL))
+                .thenReturn(List.of());
+        when(roleAssignmentRepository.save(any(RoleAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+        when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
-                RoleAssignmentRequest invalidLocationRequest = new RoleAssignmentRequest(
-                                userId,
-                                roleId,
-                                ScopeType.LOCATION,
-                                Set.of(),
-                                LocalDateTime.now(TEST_CLOCK),
-                                null);
+        var createdAssignment = roleManagementService.createRoleAssignment(request);
+        boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
+        roleManagementService.revokeRoleAssignment(
+                assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
 
-                assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("LOCATION scope requires at least one location ID");
+        assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
+        assertThat(hasPermission).isTrue();
+    }
 
-                when(roleRepository.findByName("MISSING")).thenReturn(Optional.empty());
-                assertThatThrownBy(() -> roleManagementService.getRoleByName("MISSING"))
-                                .isInstanceOf(RuntimeException.class)
-                                .hasMessageContaining("Role not found");
-        }
+    @Test
+    void validationBranches_throwOnInvalidScopeAndMissingRole() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        RoleAssignmentRequest invalidLocationRequest = new RoleAssignmentRequest(
+                userId, roleId, ScopeType.LOCATION, Set.of(), LocalDateTime.now(TEST_CLOCK), null);
+
+        assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("LOCATION scope requires at least one location ID");
+
+        when(roleRepository.findByName("MISSING")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> roleManagementService.getRoleByName("MISSING"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Role not found");
+    }
 }

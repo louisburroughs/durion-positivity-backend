@@ -1,11 +1,9 @@
 package com.positivity.workorder.internal.exception;
 
+import java.util.UUID;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import lombok.Getter;
-
-import java.util.UUID;
 
 /**
  * Exception thrown when estimate promotion validation fails.
@@ -17,16 +15,12 @@ public class PromotionValidationException extends RuntimeException {
     private final PromotionErrorCode errorCode;
     private final UUID existingWorkorderId;
 
-    public PromotionValidationException(
-            @NonNull PromotionErrorCode errorCode,
-            @NonNull String message) {
+    public PromotionValidationException(@NonNull PromotionErrorCode errorCode, @NonNull String message) {
         this(errorCode, message, null);
     }
 
     public PromotionValidationException(
-            @NonNull PromotionErrorCode errorCode,
-            @NonNull String message,
-            @Nullable UUID existingWorkorderId) {
+            @NonNull PromotionErrorCode errorCode, @NonNull String message, @Nullable UUID existingWorkorderId) {
         super(message);
         this.errorCode = errorCode;
         this.existingWorkorderId = existingWorkorderId;

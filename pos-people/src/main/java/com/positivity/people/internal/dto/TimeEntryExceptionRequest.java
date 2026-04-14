@@ -7,23 +7,30 @@ import java.time.OffsetDateTime;
 @Schema(description = "Request to create a time entry exception")
 public class TimeEntryExceptionRequest {
 
-    @Schema(description = "Employee identifier associated with the exception", example = "EMP-001",
+    @Schema(
+            description = "Employee identifier associated with the exception",
+            example = "EMP-001",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String employeeId;
 
     @JsonAlias("issueCode")
-    @Schema(description = "Exception code identifying the type of exception", example = "MISSED_CLOCK_OUT",
+    @Schema(
+            description = "Exception code identifying the type of exception",
+            example = "MISSED_CLOCK_OUT",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String exceptionCode;
 
-    @Schema(description = "Severity level of the exception", example = "HIGH",
-            allowableValues = { "LOW", "MEDIUM", "HIGH", "CRITICAL" })
+    @Schema(
+            description = "Severity level of the exception",
+            example = "HIGH",
+            allowableValues = {"LOW", "MEDIUM", "HIGH", "CRITICAL"})
     private String severity;
 
     @Schema(description = "Time entry identifier associated with the exception", example = "te-12345")
     private String timeEntryId;
 
-    @Schema(description = "Notes describing the exception or initial resolution steps",
+    @Schema(
+            description = "Notes describing the exception or initial resolution steps",
             example = "Employee forgot to clock out at end of shift")
     private String resolutionNotes;
 
@@ -77,5 +84,4 @@ public class TimeEntryExceptionRequest {
     public void setDetectedAt(OffsetDateTime detectedAt) {
         this.detectedAt = detectedAt;
     }
-
 }

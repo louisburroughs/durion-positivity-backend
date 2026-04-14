@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -34,9 +33,11 @@ class NltiRunbookPresenceTest {
     void authzOutageRunbookExists() {
         Path runbook = DOCS_ROOT.resolve("runbooks/authz-outage.md");
         assertThat(Files.exists(runbook))
-                .as("runbooks/authz-outage.md must exist").isTrue();
+                .as("runbooks/authz-outage.md must exist")
+                .isTrue();
         assertThat(sizeOf(runbook))
-                .as("runbooks/authz-outage.md must be non-empty").isGreaterThan(0L);
+                .as("runbooks/authz-outage.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     @Test
@@ -44,9 +45,11 @@ class NltiRunbookPresenceTest {
     void downstreamTimeoutRunbookExists() {
         Path runbook = DOCS_ROOT.resolve("runbooks/downstream-timeout.md");
         assertThat(Files.exists(runbook))
-                .as("runbooks/downstream-timeout.md must exist").isTrue();
+                .as("runbooks/downstream-timeout.md must exist")
+                .isTrue();
         assertThat(sizeOf(runbook))
-                .as("runbooks/downstream-timeout.md must be non-empty").isGreaterThan(0L);
+                .as("runbooks/downstream-timeout.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     @Test
@@ -54,9 +57,11 @@ class NltiRunbookPresenceTest {
     void auditStorageFailureRunbookExists() {
         Path runbook = DOCS_ROOT.resolve("runbooks/audit-storage-failure.md");
         assertThat(Files.exists(runbook))
-                .as("runbooks/audit-storage-failure.md must exist").isTrue();
+                .as("runbooks/audit-storage-failure.md must exist")
+                .isTrue();
         assertThat(sizeOf(runbook))
-                .as("runbooks/audit-storage-failure.md must be non-empty").isGreaterThan(0L);
+                .as("runbooks/audit-storage-failure.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     @Test
@@ -64,9 +69,11 @@ class NltiRunbookPresenceTest {
     void planningFailureRunbookExists() {
         Path runbook = DOCS_ROOT.resolve("runbooks/planning-failure.md");
         assertThat(Files.exists(runbook))
-                .as("runbooks/planning-failure.md must exist").isTrue();
+                .as("runbooks/planning-failure.md must exist")
+                .isTrue();
         assertThat(sizeOf(runbook))
-                .as("runbooks/planning-failure.md must be non-empty").isGreaterThan(0L);
+                .as("runbooks/planning-failure.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     @Test
@@ -74,9 +81,11 @@ class NltiRunbookPresenceTest {
     void confirmationGateMismatchRunbookExists() {
         Path runbook = DOCS_ROOT.resolve("runbooks/confirmation-gate-mismatch.md");
         assertThat(Files.exists(runbook))
-                .as("runbooks/confirmation-gate-mismatch.md must exist").isTrue();
+                .as("runbooks/confirmation-gate-mismatch.md must exist")
+                .isTrue();
         assertThat(sizeOf(runbook))
-                .as("runbooks/confirmation-gate-mismatch.md must be non-empty").isGreaterThan(0L);
+                .as("runbooks/confirmation-gate-mismatch.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     // ─── AC6-AC8: Dashboard & Alerts ──────────────────────────────────────
@@ -86,19 +95,19 @@ class NltiRunbookPresenceTest {
     void dashboardDescriptorExists() {
         Path dashboard = DOCS_ROOT.resolve("dashboards/nlti-overview.md");
         assertThat(Files.exists(dashboard))
-                .as("dashboards/nlti-overview.md must exist").isTrue();
+                .as("dashboards/nlti-overview.md must exist")
+                .isTrue();
         assertThat(sizeOf(dashboard))
-                .as("dashboards/nlti-overview.md must be non-empty").isGreaterThan(0L);
+                .as("dashboards/nlti-overview.md must be non-empty")
+                .isGreaterThan(0L);
     }
 
     @Test
     @DisplayName("nlti-alerts alert rules descriptor exists and is non-empty")
     void alertRulesDescriptorExists() {
         Path alerts = DOCS_ROOT.resolve("alerts/nlti-alerts.md");
-        assertThat(Files.exists(alerts))
-                .as("alerts/nlti-alerts.md must exist").isTrue();
-        assertThat(sizeOf(alerts))
-                .as("alerts/nlti-alerts.md must be non-empty").isGreaterThan(0L);
+        assertThat(Files.exists(alerts)).as("alerts/nlti-alerts.md must exist").isTrue();
+        assertThat(sizeOf(alerts)).as("alerts/nlti-alerts.md must be non-empty").isGreaterThan(0L);
     }
 
     private static long sizeOf(Path path) {

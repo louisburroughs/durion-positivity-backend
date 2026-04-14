@@ -4,14 +4,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.EstimateStatus;
@@ -20,15 +12,20 @@ import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
-
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
+import java.math.BigDecimal;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Contract behavior integration tests for change request creation and approval
  * workflow.
  * CAP:005 - Story #156: Request Additional Work and Flag for Approval
- * 
+ *
  * Tests cover:
  * - Happy path: create change request with services and parts
  * - Idempotency: same key returns same resource (when implemented)
@@ -36,7 +33,7 @@ import io.restassured.response.Response;
  * - List change requests by workorder
  * - Get change request by ID
  * - Invalid state: workorder not in WORK_IN_PROGRESS
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/156">Issue
  *      #156</a>
@@ -71,7 +68,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CR-001: Successfully create change request with services and parts")
     void testCreateChangeRequest_HappyPath() {
         UUID workorderId = seedWorkorderInProgress();
-        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String idempotencyKey =
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
         String requestBody = String.format("""
                 {
@@ -108,13 +106,16 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("requestedByUserId", equalTo(SYSTEM_USER_ID))
                 .body("status", equalTo("AWAITING_ADVISOR_REVIEW"))
-                .body("description",
+                .body(
+                        "description",
                         equalTo("Technician discovered brake rotors below minimum thickness during pad replacement"))
                 .body("isEmergencyException", equalTo(false))
                 .body("isApprovalGated", equalTo(true))
                 .body("requestedAt", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                .log()
+                .ifValidationFails()
+                .extract()
+                .response();
 
         String changeRequestId = response.path("id");
 
@@ -128,7 +129,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CR-002: Retry with same idempotency key returns existing change request")
     void testCreateChangeRequest_WithSameIdempotencyKey_ReturnsExisting() {
         UUID workorderId = seedWorkorderInProgress();
-        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String idempotencyKey =
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
         String requestBody = String.format("""
                 {
@@ -155,8 +157,10 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(200)
                 .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                .log()
+                .ifValidationFails()
+                .extract()
+                .response();
 
         String firstChangeRequestId = firstResponse.path("id");
 
@@ -173,8 +177,10 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(200)
                 .body("id", equalTo(firstChangeRequestId))
-                .log().ifValidationFails()
-                .extract().response();
+                .log()
+                .ifValidationFails()
+                .extract()
+                .response();
 
         String secondChangeRequestId = secondResponse.path("id");
 
@@ -212,7 +218,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/" + workorderId + "/changeRequests")
                 .then()
                 .statusCode(400)
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     @Test
@@ -235,7 +242,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/" + workorderId + "/changeRequests")
                 .then()
                 .statusCode(400)
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     @Test
@@ -265,7 +273,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/" + workorderId + "/changeRequests")
                 .then()
                 .statusCode(400)
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     // ========== CHANGE REQUEST RETRIEVAL TESTS ==========
@@ -332,7 +341,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .body("$", hasSize(2))
                 .body("[0].workorderId", equalTo(workorderId.toString()))
                 .body("[1].workorderId", equalTo(workorderId.toString()))
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     @Test
@@ -363,7 +373,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/" + workorderId + "/changeRequests")
                 .then()
                 .statusCode(200)
-                .extract().response();
+                .extract()
+                .response();
 
         String changeRequestId = createResponse.path("id");
 
@@ -377,7 +388,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("description", equalTo("Test change request retrieval by ID"))
                 .body("status", equalTo("AWAITING_ADVISOR_REVIEW"))
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     @Test
@@ -390,7 +402,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .get("/v1/workorders/changeRequests/" + nonExistentId)
                 .then()
                 .statusCode(404)
-                .log().ifValidationFails();
+                .log()
+                .ifValidationFails();
     }
 
     // ========== HELPER METHODS ==========

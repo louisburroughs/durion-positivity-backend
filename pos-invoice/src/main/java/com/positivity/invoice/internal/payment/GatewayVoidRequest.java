@@ -1,8 +1,7 @@
 package com.positivity.invoice.internal.payment;
 
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Request payload for voiding an authorization remainder.
@@ -12,6 +11,4 @@ import java.math.BigDecimal;
  * @param voidedAmount     amount being voided (remainder after partial capture)
  */
 public record GatewayVoidRequest(
-        @NonNull String gatewayReference,
-        @NonNull BigDecimal voidedAmount) {
-}
+        @NonNull String gatewayReference, @NonNull BigDecimal voidedAmount) {}

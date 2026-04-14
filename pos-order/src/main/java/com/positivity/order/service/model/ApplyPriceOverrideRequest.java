@@ -30,7 +30,10 @@ public class ApplyPriceOverrideRequest {
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;
 
-    @Schema(description = "Reason code for the price override", example = "PRICE_MATCH", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Reason code for the price override",
+            example = "PRICE_MATCH",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank
     private String reasonCode;
 
@@ -40,6 +43,9 @@ public class ApplyPriceOverrideRequest {
      * Optional idempotency key. If provided and a prior override with this
      * key exists, returns the existing override without creating a duplicate.
      */
-    @Schema(description = "Optional idempotency key for duplicate prevention", example = "req-abc123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Optional idempotency key for duplicate prevention",
+            example = "req-abc123",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String idempotencyKey;
 }

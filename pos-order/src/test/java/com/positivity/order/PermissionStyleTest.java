@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -26,8 +25,7 @@ class PermissionStyleTest {
 
         List<String> violations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(controllerRoot)) {
-            files.filter(path -> path.toString().endsWith(".java"))
-                    .forEach(path -> inspectFile(path, violations));
+            files.filter(path -> path.toString().endsWith(".java")).forEach(path -> inspectFile(path, violations));
         }
 
         assertTrue(

@@ -11,6 +11,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleDto;
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
+import com.positivity.securityservice.internal.service.CustomUserDetailsService;
+import com.positivity.securityservice.service.RoleManagementService;
+import com.positivity.securityservice.service.RolePermissionService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
@@ -19,19 +26,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
-
-import com.positivity.securityservice.internal.dto.PermissionDto;
-import com.positivity.securityservice.internal.dto.RoleDto;
-import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
-import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
-import com.positivity.securityservice.service.RoleManagementService;
-import com.positivity.securityservice.service.RolePermissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,16 +33,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Story #62 controller slice tests for {@link RoleController}.
@@ -132,7 +130,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * </tr>
  * </table>
  */
-@WebMvcTest({ RoleController.class, UserRoleController.class })
+@WebMvcTest({RoleController.class, UserRoleController.class})
 @DisplayName("RoleManagementControllerTest — Story #62")
 class RoleManagementControllerTest {
 
@@ -146,12 +144,14 @@ class RoleManagementControllerTest {
 
     @MockitoBean
     private RoleManagementService roleManagementService;
+
     @MockitoBean
     private RolePermissionService rolePermissionService;
 
     // Security infrastructure beans required by SecurityConfig
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
     @MockitoBean
     private CustomUserDetailsService customUserDetailsService;
 
@@ -164,9 +164,11 @@ class RoleManagementControllerTest {
     @BeforeEach
     void configureJwtFilterPassthrough() throws Exception {
         doAnswer(inv -> {
-            ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
-            return null;
-        }).when(jwtAuthenticationFilter).doFilter(any(), any(), any());
+                    ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
+                    return null;
+                })
+                .when(jwtAuthenticationFilter)
+                .doFilter(any(), any(), any());
     }
 
     // ── SC1: POST /v1/roles → 201 ────────────────────────────────────────────
@@ -196,8 +198,8 @@ class RoleManagementControllerTest {
         when(roleManagementService.createRole("ShopManager", null)).thenReturn(dto);
 
         mockMvc.perform(post("/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"ShopManager\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"ShopManager\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(ROLE_ID.toString()))
                 .andExpect(jsonPath("$.name").value("ShopManager"));
@@ -225,8 +227,8 @@ class RoleManagementControllerTest {
                 .thenThrow(new DuplicateRoleNameException("Role already exists: ShopManager"));
 
         mockMvc.perform(post("/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"ShopManager\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"ShopManager\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -304,8 +306,7 @@ class RoleManagementControllerTest {
     @WithMockUser(authorities = "security:role:delete")
     @DisplayName("DELETE /v1/roles/{id} → 204 No Content")
     void deleteRole_returns204() throws Exception {
-        mockMvc.perform(delete("/v1/roles/{id}", ROLE_ID))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/v1/roles/{id}", ROLE_ID)).andExpect(status().isNoContent());
     }
 
     // ── SC7: PUT /v1/roles/{id}/permissions/{permId} → 204 ───────────────────
@@ -412,10 +413,10 @@ class RoleManagementControllerTest {
     @DisplayName("GET /v1/users/{userId}/permissions → 200 effective permissions")
     void getEffectivePermissions_returns200() throws Exception {
         when(roleManagementService.getUserPermissions(USER_ID))
-                .thenReturn(Set.of(PermissionDto.builder().name("security:roles:create").build()));
+                .thenReturn(Set.of(
+                        PermissionDto.builder().name("security:roles:create").build()));
 
-        mockMvc.perform(get("/v1/users/{userId}/permissions", USER_ID))
-                .andExpect(status().isOk());
+        mockMvc.perform(get("/v1/users/{userId}/permissions", USER_ID)).andExpect(status().isOk());
     }
 
     // ── SC12: Unauthenticated → 401 ──────────────────────────────────────────
@@ -432,8 +433,8 @@ class RoleManagementControllerTest {
     @DisplayName("SC12: unauthenticated POST /v1/roles → 401 Unauthorized")
     void createRole_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"TestRole\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"TestRole\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -455,8 +456,8 @@ class RoleManagementControllerTest {
     @DisplayName("SC13: VIEWER on POST /v1/roles → 403 Forbidden")
     void createRole_viewerRole_returns403() throws Exception {
         mockMvc.perform(post("/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"TestRole\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"TestRole\"}"))
                 .andExpect(status().isForbidden());
     }
 

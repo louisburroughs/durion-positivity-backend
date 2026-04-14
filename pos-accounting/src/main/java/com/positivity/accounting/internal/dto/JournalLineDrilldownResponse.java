@@ -1,16 +1,15 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
+import lombok.*;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Drilldown response showing an individual journal line for an account.
- * 
+ *
  * Each response represents one journal line (debit or credit).
  * Service returns a list of these for all lines affecting an account.
  */

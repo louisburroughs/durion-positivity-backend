@@ -16,13 +16,13 @@ public class ImageServiceImpl implements ImageService {
 
     @Override
     public Optional<ImageFileView> findById(Long id) {
-        return imageRepository.findById(id)
-                .map(image -> new ImageFileView(image.getFilename(), image.getUrl()));
+        return imageRepository.findById(id).map(image -> new ImageFileView(image.getFilename(), image.getUrl()));
     }
 
     @Override
     public Optional<ImageFileView> findByFilename(String filename) {
-        return imageRepository.findByFilename(filename)
+        return imageRepository
+                .findByFilename(filename)
                 .map(image -> new ImageFileView(image.getFilename(), image.getUrl()));
     }
 }

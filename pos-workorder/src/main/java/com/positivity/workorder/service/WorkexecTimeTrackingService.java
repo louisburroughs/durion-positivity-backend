@@ -21,42 +21,26 @@ public interface WorkexecTimeTrackingService {
             @NonNull List<UUID> technicianIds);
 
     @NonNull
-    LaborPerformedResult recordLaborPerformed(
-            @NonNull LaborPerformedRequest request,
-            @NonNull String idempotencyKey);
+    LaborPerformedResult recordLaborPerformed(@NonNull LaborPerformedRequest request, @NonNull String idempotencyKey);
 
     @NonNull
     List<TimerEntry> getActiveTimers(@NonNull UUID mechanicId);
 
     @NonNull
     TimerStartResult startTimer(
-            @NonNull UUID mechanicId,
-            @NonNull TimerStartRequest request,
-            @Nullable String idempotencyKey);
+            @NonNull UUID mechanicId, @NonNull TimerStartRequest request, @Nullable String idempotencyKey);
 
     @NonNull
     List<TimerEntry> stopTimers(@NonNull UUID mechanicId);
 
-    record JobTimeTotal(
-            UUID technicianId,
-            UUID locationId,
-            LocalDate localDate,
-            Integer totalJobMinutes) {
-    }
+    record JobTimeTotal(UUID technicianId, UUID locationId, LocalDate localDate, Integer totalJobMinutes) {}
 
-    record LaborQuantity(BigDecimal quantity, String unit) {
-    }
+    record LaborQuantity(BigDecimal quantity, String unit) {}
 
-    record SourceReference(String system, String sourceReferenceId) {
-    }
+    record SourceReference(String system, String sourceReferenceId) {}
 
     record LaborPerformedRequest(
-            UUID workorderId,
-            UUID technicianId,
-            Instant performedAt,
-            LaborQuantity labor,
-            SourceReference source) {
-    }
+            UUID workorderId, UUID technicianId, Instant performedAt, LaborQuantity labor, SourceReference source) {}
 
     record LaborPerformedResponse(
             UUID laborPerformedId,
@@ -66,17 +50,11 @@ public interface WorkexecTimeTrackingService {
             BigDecimal quantity,
             String unit,
             String sourceSystem,
-            String sourceReferenceId) {
-    }
+            String sourceReferenceId) {}
 
-    record LaborPerformedResult(LaborPerformedResponse response, boolean replayed) {
-    }
+    record LaborPerformedResult(LaborPerformedResponse response, boolean replayed) {}
 
-    record TimerStartRequest(
-            UUID workorderId,
-            UUID workorderItemId,
-            String laborCode) {
-    }
+    record TimerStartRequest(UUID workorderId, UUID workorderItemId, String laborCode) {}
 
     record TimerEntry(
             UUID timeEntryId,
@@ -87,11 +65,9 @@ public interface WorkexecTimeTrackingService {
             LocalDateTime startTime,
             LocalDateTime endTime,
             Long durationInSeconds,
-            String status) {
-    }
+            String status) {}
 
-    record TimerStartResult(TimerEntry response, boolean replayed) {
-    }
+    record TimerStartResult(TimerEntry response, boolean replayed) {}
 
     final class WorkexecConflictException extends RuntimeException {
         private final String code;

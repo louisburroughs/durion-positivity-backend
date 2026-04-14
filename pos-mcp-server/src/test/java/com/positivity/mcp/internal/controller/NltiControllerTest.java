@@ -10,9 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.service.NltiRequestService;
-
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,18 +81,17 @@ class NltiControllerTest {
     @DisplayName("AC-1: POST /v1/nlt/requests with valid prompt returns 202 with envelope fields")
     void submitRequest_withValidPrompt_returns202WithRequiredFields() throws Exception {
         // Arrange — Issue NLTI-001: mock service to show contract shape
-        NltiResponseV1 stubResponse = new NltiResponseV1(
-                REQUEST_ID, CORRELATION_ID, SESSION_ID, "ACCEPTED", null, null);
+        NltiResponseV1 stubResponse =
+                new NltiResponseV1(REQUEST_ID, CORRELATION_ID, SESSION_ID, "ACCEPTED", null, null);
         when(nltiRequestService.submit(any())).thenReturn(stubResponse);
         when(nltiRequestService.submit(any(), any())).thenReturn(stubResponse);
 
-        String body = objectMapper.writeValueAsString(
-                new NltiRequestDTO("close workorder 123", null, null));
+        String body = objectMapper.writeValueAsString(new NltiRequestDTO("close workorder 123", null, null));
 
         // Act + Assert
         mockMvc.perform(post("/v1/nlt/requests")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.requestId").value(REQUEST_ID.toString()))
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID.toString()))
@@ -124,14 +121,14 @@ class NltiControllerTest {
         // Issue NLTI-001: @NotBlank on NltiRequestDTO.prompt → Spring MVC 400
         // Requires spring-boot-starter-validation (Hibernate Validator) to be active
         mockMvc.perform(post("/v1/nlt/requests")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, inboundCorrId.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, inboundCorrId.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.correlationId").value(inboundCorrId.toString()))
-                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse()
-                        .getHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(
+                                result.getResponse().getHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER))
                         .isEqualTo(inboundCorrId.toString()));
     }
 
@@ -151,19 +148,17 @@ class NltiControllerTest {
     void submitRequest_withCorrelationIdHeader_echosItInResponse() throws Exception {
         // Arrange — Issue NLTI-001: the header value is a valid UUID string
         UUID inboundCorrId = UUID.fromString("00000000-0000-7000-8000-000000000099");
-        NltiResponseV1 stubResponse = new NltiResponseV1(
-                REQUEST_ID, inboundCorrId, SESSION_ID, "ACCEPTED", null, null);
+        NltiResponseV1 stubResponse = new NltiResponseV1(REQUEST_ID, inboundCorrId, SESSION_ID, "ACCEPTED", null, null);
         when(nltiRequestService.submit(any())).thenReturn(stubResponse);
         when(nltiRequestService.submit(any(), any())).thenReturn(stubResponse);
 
-        String body = objectMapper.writeValueAsString(
-                new NltiRequestDTO("check inventory levels", null, null));
+        String body = objectMapper.writeValueAsString(new NltiRequestDTO("check inventory levels", null, null));
 
         // Act + Assert
         mockMvc.perform(post("/v1/nlt/requests")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-                .header("X-Correlation-Id", inboundCorrId.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .header("X-Correlation-Id", inboundCorrId.toString()))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.correlationId").value(inboundCorrId.toString()));
     }
@@ -184,12 +179,11 @@ class NltiControllerTest {
     @DisplayName("AC-4: POST /v1/nlt/requests without auth returns 401 Unauthorized")
     void submitRequest_withoutAuthentication_returns401() throws Exception {
         // Issue NLTI-001: no @WithMockUser → @PreAuthorize throws → 401
-        String body = objectMapper.writeValueAsString(
-                new NltiRequestDTO("close workorder 123", null, null));
+        String body = objectMapper.writeValueAsString(new NltiRequestDTO("close workorder 123", null, null));
 
         mockMvc.perform(post("/v1/nlt/requests")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
                 .andExpect(jsonPath("$.status").value(401))

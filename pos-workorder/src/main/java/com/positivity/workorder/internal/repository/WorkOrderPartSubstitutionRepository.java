@@ -11,5 +11,4 @@ import org.springframework.stereotype.Repository;
  * Issue: #49
  */
 @Repository
-public interface WorkOrderPartSubstitutionRepository extends JpaRepository<WorkOrderPartSubstitution, UUID> {
-}
+public interface WorkOrderPartSubstitutionRepository extends JpaRepository<WorkOrderPartSubstitution, UUID> {}

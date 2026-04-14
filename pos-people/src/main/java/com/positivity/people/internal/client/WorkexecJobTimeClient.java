@@ -1,6 +1,9 @@
 package com.positivity.people.internal.client;
 
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
@@ -8,10 +11,6 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
 
 @Component
 public class WorkexecJobTimeClient {
@@ -22,40 +21,47 @@ public class WorkexecJobTimeClient {
         this.restClient = restClient;
     }
 
-    @NonNull public List<WorkexecJobTimeTotal> getJobTimeTotals(@NonNull LocalDate startDate, @NonNull LocalDate endDate,
-            @NonNull String timezone, UUID locationId, @NonNull List<UUID> technicianIds) {
+    @NonNull
+    public List<WorkexecJobTimeTotal> getJobTimeTotals(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull String timezone,
+            UUID locationId,
+            @NonNull List<UUID> technicianIds) {
         try {
-            List<WorkexecJobTimeTotal> response = restClient.get().uri(uriBuilder -> {
-                var builder = uriBuilder.path("/v1/workexec/job-time-totals")
-                    .queryParam("startDate", startDate)
-                    .queryParam("endDate", endDate)
-                    .queryParam("timezone", timezone);
+            List<WorkexecJobTimeTotal> response = restClient
+                    .get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder
+                                .path("/v1/workexec/job-time-totals")
+                                .queryParam("startDate", startDate)
+                                .queryParam("endDate", endDate)
+                                .queryParam("timezone", timezone);
 
-                if (locationId != null) {
-                    builder.queryParam("locationId", locationId);
-                }
-                if (!technicianIds.isEmpty()) {
-                    builder.queryParam("technicianIds", technicianIds.toArray());
-                }
+                        if (locationId != null) {
+                            builder.queryParam("locationId", locationId);
+                        }
+                        if (!technicianIds.isEmpty()) {
+                            builder.queryParam("technicianIds", technicianIds.toArray());
+                        }
 
-                return builder.build();
-            }).retrieve().onStatus(HttpStatusCode::isError, (request, responseError) -> {
-                int status = responseError.getStatusCode().value();
-                throw new WorkexecClientException("Work Execution request failed with status " + status, status,
-                        mapErrorCode(status));
-            }).body(new ParameterizedTypeReference<List<WorkexecJobTimeTotal>>() {
-            });
+                        return builder.build();
+                    })
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, responseError) -> {
+                        int status = responseError.getStatusCode().value();
+                        throw new WorkexecClientException(
+                                "Work Execution request failed with status " + status, status, mapErrorCode(status));
+                    })
+                    .body(new ParameterizedTypeReference<List<WorkexecJobTimeTotal>>() {});
 
             return response == null ? List.of() : response;
-        }
-        catch (WorkexecClientException ex) {
+        } catch (WorkexecClientException ex) {
             throw ex;
-        }
-        catch (RestClientResponseException ex) {
+        } catch (RestClientResponseException ex) {
             int status = ex.getStatusCode().value();
             throw new WorkexecClientException("Work Execution response error", status, mapErrorCode(status), ex);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             throw new WorkexecClientException("Work Execution unavailable", 503, "WORKEXEC_UNAVAILABLE", ex);
         }
     }
@@ -69,5 +75,4 @@ public class WorkexecJobTimeClient {
             default -> status >= 500 ? "WORKEXEC_INTERNAL_ERROR" : "WORKEXEC_INVALID_REQUEST";
         };
     }
-
 }

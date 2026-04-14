@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 public class LocationInventoryInquiryServiceImpl implements LocationInventoryInquiryService {
 
     private static final List<InventoryLedgerEventType> ON_HAND_EVENT_TYPES = Arrays.stream(
-            InventoryLedgerEventType.values())
+                    InventoryLedgerEventType.values())
             .filter(InventoryLedgerEventType::affectsOnHand)
             .toList();
 
@@ -30,9 +30,8 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @Override
     @NonNull
     public LocationInventoryInquiryResponse getLocationInventory(@NonNull UUID locationId) {
-        Integer onHandQuantity = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
-                locationId,
-                ON_HAND_EVENT_TYPES);
+        Integer onHandQuantity =
+                inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(locationId, ON_HAND_EVENT_TYPES);
 
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)

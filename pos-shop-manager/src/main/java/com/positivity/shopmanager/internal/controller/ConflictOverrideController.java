@@ -52,12 +52,12 @@ public class ConflictOverrideController {
     @ApiResponse(responseCode = "404", description = "Appointment not found.")
     public @NonNull ConflictOverrideResponse executeOverride(
             @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
-            @Parameter(description = "Conflict override request payload", required = true) @RequestBody @NonNull ConflictOverrideRequest request) {
+            @Parameter(description = "Conflict override request payload", required = true) @RequestBody @NonNull
+                    ConflictOverrideRequest request) {
         // Validate that path appointmentId is consistent with request body
         // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {
-            throw new IllegalArgumentException(
-                    "Path appointmentId does not match request body appointmentId");
+            throw new IllegalArgumentException("Path appointmentId does not match request body appointmentId");
         }
         return conflictOverrideService.execute(request);
     }

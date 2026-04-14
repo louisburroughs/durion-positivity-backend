@@ -24,8 +24,6 @@ import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.PriceBookService;
 import jakarta.persistence.OptimisticLockException;
-import lombok.RequiredArgsConstructor;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -40,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -127,9 +126,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     @Override
     @Transactional
     public PriceBookRuleDto updateRule(
-            @NonNull UUID priceBookId,
-            @NonNull UUID ruleId,
-            @NonNull PriceBookRuleCreateRequestDto request) {
+            @NonNull UUID priceBookId, @NonNull UUID ruleId, @NonNull PriceBookRuleCreateRequestDto request) {
         validateRuleRequest(request);
 
         PriceBookRuleEntity entity = requireRule(priceBookId, ruleId);
@@ -166,8 +163,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     @Transactional(readOnly = true)
     public List<PriceBookRuleDto> listRules(@NonNull UUID priceBookId) {
         requirePriceBook(priceBookId);
-        return priceBookRuleRepository.findAllByPriceBookId(priceBookId)
-                .stream()
+        return priceBookRuleRepository.findAllByPriceBookId(priceBookId).stream()
                 .map(this::toPriceBookRuleDto)
                 .toList();
     }
@@ -179,7 +175,8 @@ public class PriceBookServiceImpl implements PriceBookService {
             throw new CatalogValidationException("productId is required.");
         }
 
-        ProductEntity product = productRepository.findById(request.getProductId())
+        ProductEntity product = productRepository
+                .findById(request.getProductId())
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + request.getProductId()));
 
         LocalDate asOfDate = request.getAsOf() == null ? LocalDate.now(clock) : request.getAsOf();
@@ -187,11 +184,12 @@ public class PriceBookServiceImpl implements PriceBookService {
 
         List<UUID> priceBookIds = resolveCandidatePriceBookIds(request);
         if (!priceBookIds.isEmpty()) {
-            var candidates = priceBookRuleRepository
-                    .findActiveRulesForBooks(priceBookIds, PriceBookRuleStatus.ACTIVE, asOf)
-                    .stream()
-                    .filter(rule -> isRuleApplicable(rule, request, product))
-                    .toList();
+            var candidates =
+                    priceBookRuleRepository
+                            .findActiveRulesForBooks(priceBookIds, PriceBookRuleStatus.ACTIVE, asOf)
+                            .stream()
+                            .filter(rule -> isRuleApplicable(rule, request, product))
+                            .toList();
 
             var winner = pickWinner(candidates, product);
             if (winner != null) {
@@ -199,10 +197,12 @@ public class PriceBookServiceImpl implements PriceBookService {
             }
         }
 
-        return productMsrpRepository.findActive(request.getProductId(), asOfDate)
+        return productMsrpRepository
+                .findActive(request.getProductId(), asOfDate)
                 .map(msrp -> {
                     ResolvePriceResponseDto dto = new ResolvePriceResponseDto();
-                    dto.setResolvedAmount(msrp.getAmount().setScale(4, RoundingMode.HALF_UP).toPlainString());
+                    dto.setResolvedAmount(
+                            msrp.getAmount().setScale(4, RoundingMode.HALF_UP).toPlainString());
                     dto.setCurrency(msrp.getCurrency());
                     dto.setSource(ResolvePriceSource.MSRP);
                     dto.setFallbackReason("MSRP_FALLBACK");
@@ -235,9 +235,7 @@ public class PriceBookServiceImpl implements PriceBookService {
             }
 
             String selectedCurrency = selectConfiguredCurrency(
-                    amountsNode,
-                    requestedCurrency,
-                    root.path("defaultCurrency").asString(null));
+                    amountsNode, requestedCurrency, root.path("defaultCurrency").asString(null));
 
             JsonNode amountNode = amountsNode.get(selectedCurrency);
             if (amountNode == null || amountNode.isNull()) {
@@ -307,18 +305,17 @@ public class PriceBookServiceImpl implements PriceBookService {
         }
 
         List<PriceBookRuleEntity> mutable = new ArrayList<>(candidates);
-        mutable.sort(Comparator
-                .comparingInt((PriceBookRuleEntity r) -> precedenceScore(r, product)).reversed()
+        mutable.sort(Comparator.comparingInt((PriceBookRuleEntity r) -> precedenceScore(r, product))
+                .reversed()
                 .thenComparing(PriceBookRuleEntity::getPriority, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(PriceBookRuleEntity::getEffectiveStartAt,
-                        Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(
+                        PriceBookRuleEntity::getEffectiveStartAt, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(r -> r.getRuleId().toString()));
         return mutable.get(0);
     }
 
     private int precedenceScore(PriceBookRuleEntity rule, ProductEntity product) {
-        if (rule.getTargetType() == PriceBookRuleTargetType.SKU
-                && skuTargetMatches(rule.getTargetId(), product)) {
+        if (rule.getTargetType() == PriceBookRuleTargetType.SKU && skuTargetMatches(rule.getTargetId(), product)) {
             return 3;
         }
         if (rule.getTargetType() == PriceBookRuleTargetType.CATEGORY
@@ -332,11 +329,12 @@ public class PriceBookServiceImpl implements PriceBookService {
     }
 
     private boolean isRuleApplicable(PriceBookRuleEntity rule, ResolvePriceRequestDto request, ProductEntity product) {
-        boolean targetMatch = switch (rule.getTargetType()) {
-            case SKU -> skuTargetMatches(rule.getTargetId(), product);
-            case CATEGORY -> taxonomyTargetMatches(rule.getTargetId(), product);
-            case GLOBAL -> true;
-        };
+        boolean targetMatch =
+                switch (rule.getTargetType()) {
+                    case SKU -> skuTargetMatches(rule.getTargetId(), product);
+                    case CATEGORY -> taxonomyTargetMatches(rule.getTargetId(), product);
+                    case GLOBAL -> true;
+                };
 
         if (!targetMatch) {
             return false;
@@ -344,10 +342,11 @@ public class PriceBookServiceImpl implements PriceBookService {
 
         return switch (rule.getConditionType()) {
             case NONE -> true;
-            case LOCATION -> request.getLocationId() != null
-                    && request.getLocationId().toString().equals(rule.getConditionValue());
-            case CUSTOMER_TIER -> request.getCustomerTier() != null
-                    && request.getCustomerTier().equals(rule.getConditionValue());
+            case LOCATION ->
+                request.getLocationId() != null
+                        && request.getLocationId().toString().equals(rule.getConditionValue());
+            case CUSTOMER_TIER ->
+                request.getCustomerTier() != null && request.getCustomerTier().equals(rule.getConditionValue());
         };
     }
 
@@ -377,17 +376,14 @@ public class PriceBookServiceImpl implements PriceBookService {
 
         if (request.getLocationId() != null) {
             var locationBook = priceBookRepository.findByScopeAndScopeIdAndStatus(
-                    PriceBookScope.LOCATION,
-                    request.getLocationId(),
-                    PriceBookStatus.ACTIVE);
+                    PriceBookScope.LOCATION, request.getLocationId(), PriceBookStatus.ACTIVE);
             if (locationBook.isPresent()) {
                 return List.of(locationBook.get().getPriceBookId());
             }
         }
 
-        return priceBookRepository.findByScopeAndIsDefaultTrueAndStatus(
-                PriceBookScope.COMPANY_DEFAULT,
-                PriceBookStatus.ACTIVE)
+        return priceBookRepository
+                .findByScopeAndIsDefaultTrueAndStatus(PriceBookScope.COMPANY_DEFAULT, PriceBookStatus.ACTIVE)
                 .map(book -> List.of(book.getPriceBookId()))
                 .orElseGet(List::of);
     }
@@ -399,8 +395,8 @@ public class PriceBookServiceImpl implements PriceBookService {
         if (request.getScope() == null) {
             throw new CatalogValidationException("scope is required.");
         }
-        if ((request.getScope() == PriceBookScope.LOCATION
-                || request.getScope() == PriceBookScope.CUSTOMER_TIER) && request.getScopeId() == null) {
+        if ((request.getScope() == PriceBookScope.LOCATION || request.getScope() == PriceBookScope.CUSTOMER_TIER)
+                && request.getScopeId() == null) {
             throw new CatalogValidationException("scopeId is required for LOCATION and CUSTOMER_TIER scopes.");
         }
     }
@@ -444,7 +440,8 @@ public class PriceBookServiceImpl implements PriceBookService {
         PriceBookRuleConditionType conditionType = request.getConditionType();
         if (conditionType == PriceBookRuleConditionType.LOCATION
                 || conditionType == PriceBookRuleConditionType.CUSTOMER_TIER) {
-            if (request.getConditionValue() == null || request.getConditionValue().isBlank()) {
+            if (request.getConditionValue() == null
+                    || request.getConditionValue().isBlank()) {
                 throw new CatalogValidationException(
                         "conditionValue is required for LOCATION and CUSTOMER_TIER conditionType.");
             }
@@ -461,10 +458,11 @@ public class PriceBookServiceImpl implements PriceBookService {
     }
 
     private void ensureRuleNoConflict(UUID priceBookId, PriceBookRuleCreateRequestDto request, UUID excludeRuleId) {
-        PriceBookRuleConditionType conditionType = request.getConditionType() == null ? PriceBookRuleConditionType.NONE
-                : request.getConditionType();
+        PriceBookRuleConditionType conditionType =
+                request.getConditionType() == null ? PriceBookRuleConditionType.NONE : request.getConditionType();
 
-        Instant windowEnd = request.getEffectiveEndAt() == null ? FAR_FUTURE_EFFECTIVE_END_AT
+        Instant windowEnd = request.getEffectiveEndAt() == null
+                ? FAR_FUTURE_EFFECTIVE_END_AT
                 : toInstant(request.getEffectiveEndAt());
 
         var conflicts = priceBookRuleRepository.findConflicts(
@@ -484,14 +482,17 @@ public class PriceBookServiceImpl implements PriceBookService {
     }
 
     private PriceBookEntity requirePriceBook(UUID priceBookId) {
-        return priceBookRepository.findById(priceBookId)
+        return priceBookRepository
+                .findById(priceBookId)
                 .orElseThrow(() -> new CatalogNotFoundException("PriceBook not found: " + priceBookId));
     }
 
     private PriceBookRuleEntity requireRule(UUID priceBookId, UUID ruleId) {
-        PriceBookRuleEntity entity = priceBookRuleRepository.findById(ruleId)
+        PriceBookRuleEntity entity = priceBookRuleRepository
+                .findById(ruleId)
                 .orElseThrow(() -> new CatalogNotFoundException("PriceBook rule not found: " + ruleId));
-        if (entity.getPriceBook() == null || !entity.getPriceBook().getPriceBookId().equals(priceBookId)) {
+        if (entity.getPriceBook() == null
+                || !entity.getPriceBook().getPriceBookId().equals(priceBookId)) {
             throw new CatalogNotFoundException("PriceBook rule not found for priceBookId=" + priceBookId);
         }
         return entity;
@@ -514,7 +515,8 @@ public class PriceBookServiceImpl implements PriceBookService {
     private PriceBookRuleDto toPriceBookRuleDto(PriceBookRuleEntity entity) {
         PriceBookRuleDto dto = new PriceBookRuleDto();
         dto.setRuleId(entity.getRuleId());
-        dto.setPriceBookId(entity.getPriceBook() == null ? null : entity.getPriceBook().getPriceBookId());
+        dto.setPriceBookId(
+                entity.getPriceBook() == null ? null : entity.getPriceBook().getPriceBookId());
         dto.setTargetType(entity.getTargetType());
         dto.setTargetId(entity.getTargetId());
         dto.setPricingLogic(entity.getPricingLogic());
@@ -539,6 +541,5 @@ public class PriceBookServiceImpl implements PriceBookService {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
-    private record PricePayload(BigDecimal amount, String currency) {
-    }
+    private record PricePayload(BigDecimal amount, String currency) {}
 }

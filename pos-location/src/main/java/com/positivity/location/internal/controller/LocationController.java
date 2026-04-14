@@ -1,11 +1,25 @@
 package com.positivity.location.internal.controller;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.location.internal.dto.LocationParentResponseDTO;
+import com.positivity.location.internal.dto.LocationPatchRequest;
+import com.positivity.location.internal.dto.LocationRef;
+import com.positivity.location.internal.dto.LocationRequestDTO;
+import com.positivity.location.internal.dto.LocationResponseDTO;
+import com.positivity.location.internal.dto.LocationValidationResponseDTO;
+import com.positivity.location.internal.dto.PersonDTO;
+import com.positivity.location.service.LocationRosterService;
+import com.positivity.location.service.LocationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.time.Instant;
-
-import jakarta.validation.Valid;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -14,32 +28,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.positivity.events.EmitEvent;
-import com.positivity.location.internal.dto.LocationRef;
-import com.positivity.location.internal.dto.LocationParentResponseDTO;
-import com.positivity.location.internal.dto.LocationPatchRequest;
-import com.positivity.location.internal.dto.LocationRequestDTO;
-import com.positivity.location.internal.dto.LocationResponseDTO;
-import com.positivity.location.internal.dto.LocationValidationResponseDTO;
-import com.positivity.location.internal.dto.PersonDTO;
-import com.positivity.location.service.LocationRosterService;
-import com.positivity.location.service.LocationService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -70,8 +66,12 @@ public class LocationController {
     @EmitEvent(id = "LOCATION_ROSTER_GET", apiVersion = "1")
     @GetMapping("/roster")
     public Page<LocationRef> getRoster(
-            @Parameter(description = "Optional status filter", example = "ACTIVE") @RequestParam(required = false) String status,
-            @Parameter(description = "Optional since-updated-at filter", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant sinceUpdatedAt,
+            @Parameter(description = "Optional status filter", example = "ACTIVE") @RequestParam(required = false)
+                    String status,
+            @Parameter(description = "Optional since-updated-at filter", example = "2026-01-01T00:00:00Z")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                    Instant sinceUpdatedAt,
             Pageable pageable) {
         return locationRosterService.getRoster(status, sinceUpdatedAt, pageable);
     }
@@ -82,18 +82,25 @@ public class LocationController {
     @PreAuthorize("hasAuthority('location:read')")
     @GetMapping("/{locationId}")
     public ResponseEntity<LocationResponseDTO> getLocationById(
-            @Parameter(description = "ID of the location to retrieve", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
-        return locationService.getLocationByIdDto(locationId)
+            @Parameter(description = "ID of the location to retrieve", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId) {
+        return locationService
+                .getLocationByIdDto(locationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Validate location reference", description = "Return existence and active state for a location ID.")
+    @Operation(
+            summary = "Validate location reference",
+            description = "Return existence and active state for a location ID.")
     @ApiResponse(responseCode = "200", description = "Validation result returned.")
     @PreAuthorize("hasAuthority('location:read')")
     @GetMapping("/{locationId}/validation")
     public ResponseEntity<LocationValidationResponseDTO> validateLocation(
-            @Parameter(description = "ID of the location to validate", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the location to validate", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId) {
         return ResponseEntity.ok(locationService.getLocationValidation(locationId));
     }
 
@@ -109,17 +116,18 @@ public class LocationController {
     }
 
     @Operation(summary = "Update an existing location", description = "Update the details of an existing location.")
-
     @ApiResponse(responseCode = "200", description = "Location updated successfully.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-
     @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:write')")
     @PutMapping("/{locationId}")
     public ResponseEntity<LocationResponseDTO> updateLocation(
-            @Parameter(description = "ID of the location to update", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
+            @Parameter(description = "ID of the location to update", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId,
             @Parameter(description = "Updated location object") @Valid @RequestBody LocationRequestDTO location) {
-        return locationService.updateLocation(locationId, location)
+        return locationService
+                .updateLocation(locationId, location)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -131,20 +139,23 @@ public class LocationController {
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_PATCH", apiVersion = "1")
     public ResponseEntity<LocationResponseDTO> patchLocation(
-            @Parameter(description = "ID of the location to patch", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
+            @Parameter(description = "ID of the location to patch", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId,
             @Parameter(description = "Partial location payload") @RequestBody LocationPatchRequest patch) {
         return ResponseEntity.ok(locationService.patchLocation(locationId, patch));
     }
 
     @Operation(summary = "Delete a location", description = "Delete a location by its unique ID.")
-
     @ApiResponse(responseCode = "204", description = "Location deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('location:write')")
     @DeleteMapping("/{locationId}")
     @EmitEvent(id = "LOCATION_LOCATION_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteLocation(
-            @Parameter(description = "ID of the location to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the location to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId) {
         if (locationService.getLocationByIdDto(locationId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -158,8 +169,12 @@ public class LocationController {
     @PreAuthorize("hasAuthority('location:write')")
     @PostMapping("/{childId}/parents/{parentId}")
     public ResponseEntity<LocationParentResponseDTO> addParent(
-            @Parameter(description = "ID of the child location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID childId,
-            @Parameter(description = "ID of the parent location", example = "018e1c9f-0000-7890-abcd-1234567890ab") @PathVariable UUID parentId,
+            @Parameter(description = "ID of the child location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID childId,
+            @Parameter(description = "ID of the parent location", example = "018e1c9f-0000-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID parentId,
             @Parameter(description = "Type of the parent relationship") @RequestParam String parentType) {
         LocationParentResponseDTO parent = locationService.addParent(childId, parentId, parentType);
         return ResponseEntity.ok(parent);
@@ -173,23 +188,32 @@ public class LocationController {
         return locationService.getAllParentsDto();
     }
 
-    @Operation(summary = "Get all children for a location", description = "Retrieve all child locations for a given parent location.")
+    @Operation(
+            summary = "Get all children for a location",
+            description = "Retrieve all child locations for a given parent location.")
     @ApiResponse(responseCode = "200", description = "List of child locations returned successfully.")
     @PreAuthorize("hasAuthority('location:read')")
     @GetMapping("/{locationId}/children")
     public List<LocationResponseDTO> getAllChildren(
-            @Parameter(description = "ID of the parent location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
-            @Parameter(description = "Optional parent relationship type filter") @RequestParam(required = false) String parentType) {
+            @Parameter(description = "ID of the parent location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId,
+            @Parameter(description = "Optional parent relationship type filter") @RequestParam(required = false)
+                    String parentType) {
         return locationService.getAllChildrenDto(locationId, parentType);
     }
 
-    @Operation(summary = "Get responsible person for a location", description = "Retrieve the person responsible for a given location.")
+    @Operation(
+            summary = "Get responsible person for a location",
+            description = "Retrieve the person responsible for a given location.")
     @ApiResponse(responseCode = "200", description = "Responsible person found and returned.")
     @ApiResponse(responseCode = "404", description = "Responsible person not found.")
     @PreAuthorize("hasAuthority('location:read')")
     @GetMapping("/{locationId}/responsible-person")
     public ResponseEntity<PersonDTO> getResponsiblePerson(
-            @Parameter(description = "ID of the location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId) {
         PersonDTO person = locationService.getResponsiblePerson(locationId);
         if (person == null) {
             return ResponseEntity.notFound().build();

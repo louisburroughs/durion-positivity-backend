@@ -1,8 +1,12 @@
 package com.positivity.workorder.support;
 
+import com.positivity.workorder.config.TestSecurityConfig;
+import com.positivity.workorder.contract.ContractTestConfiguration;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import io.restassured.specification.RequestSpecification;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,13 +17,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import com.positivity.workorder.config.TestSecurityConfig;
-import com.positivity.workorder.contract.ContractTestConfiguration;
-
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
 
 /**
  * Shared contract-test scaffolding for REST Assured based tests.
@@ -34,7 +31,7 @@ import io.restassured.specification.RequestSpecification;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
+@Import({TestSecurityConfig.class, ContractTestConfiguration.class})
 public abstract class BaseContractIntegrationTest {
 
     @Autowired
@@ -46,7 +43,8 @@ public abstract class BaseContractIntegrationTest {
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String TEST_BEARER_TOKEN = buildTestOnlyBearerToken(SYSTEM_USER_ID);
 
-    protected static final String TEST_AUTHORITIES = String.join(",",
+    protected static final String TEST_AUTHORITIES = String.join(
+            ",",
             "workorder:approval_config:view",
             "workorder:approval_config:create",
             "workorder:approval_config:edit",
@@ -136,8 +134,7 @@ public abstract class BaseContractIntegrationTest {
     }
 
     protected MockHttpServletRequestBuilder withAuthMvc(MockHttpServletRequestBuilder req) {
-        return req
-                .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
+        return req.header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
                 .header("X-User-Id", SYSTEM_USER_ID)
                 .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", TEST_AUTHORITIES);
@@ -155,10 +152,10 @@ public abstract class BaseContractIntegrationTest {
     private static String buildTestOnlyBearerToken(String userId) {
         String headerJson = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
         String payloadJson = "{\"userId\":\"" + userId + "\"}";
-        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-        String encodedPayload = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        String encodedHeader =
+                Base64.getUrlEncoder().withoutPadding().encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String encodedPayload =
+                Base64.getUrlEncoder().withoutPadding().encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
         return encodedHeader + "." + encodedPayload + ".test-signature-not-verified";
     }
 }

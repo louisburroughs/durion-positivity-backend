@@ -1,9 +1,8 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * Contact summary in CRM snapshot.
@@ -12,20 +11,25 @@ import java.util.List;
 public class ContactSummary {
     @NonNull
     private String contactId;
+
     private boolean isPrimary;
+
     @NonNull
     private String name;
+
     @NonNull
     private List<String> roles;
+
     @NonNull
     private List<PhoneNumberDTO> phoneNumbers;
+
     @NonNull
     private List<EmailAddressDTO> emailAddresses;
+
     @Nullable
     private ContactPreferences preferences;
 
-    public ContactSummary() {
-    }
+    public ContactSummary() {}
 
     @NonNull
     public String getContactId() {
@@ -92,11 +96,11 @@ public class ContactSummary {
     public static class PhoneNumberDTO {
         @NonNull
         private String type;
+
         @NonNull
         private String number;
 
-        public PhoneNumberDTO() {
-        }
+        public PhoneNumberDTO() {}
 
         public PhoneNumberDTO(@NonNull String type, @NonNull String number) {
             this.type = type;
@@ -125,11 +129,11 @@ public class ContactSummary {
     public static class EmailAddressDTO {
         @NonNull
         private String type;
+
         @NonNull
         private String address;
 
-        public EmailAddressDTO() {
-        }
+        public EmailAddressDTO() {}
 
         public EmailAddressDTO(@NonNull String type, @NonNull String address) {
             this.type = type;
@@ -160,13 +164,14 @@ public class ContactSummary {
         private boolean smsOptIn;
         private boolean phoneOptIn;
         private boolean doNotContact;
+
         @Nullable
         private String preferredContactMethod;
+
         @Nullable
         private String preferredLanguage;
 
-        public ContactPreferences() {
-        }
+        public ContactPreferences() {}
 
         public boolean isEmailOptIn() {
             return emailOptIn;

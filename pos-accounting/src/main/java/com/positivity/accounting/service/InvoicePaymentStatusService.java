@@ -1,9 +1,8 @@
 package com.positivity.accounting.service;
 
-import java.util.UUID;
-
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import java.util.UUID;
 
 public interface InvoicePaymentStatusService {
 
@@ -17,5 +16,4 @@ public interface InvoicePaymentStatusService {
      * Get current status of an invoice.
      */
     InvoiceStatusResponse getInvoiceStatus(UUID invoiceId);
-
 }

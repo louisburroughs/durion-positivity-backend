@@ -1,22 +1,10 @@
 package com.positivity.accounting.internal.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,19 +23,28 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Journal Entry - balanced set of GL postings.
- * 
+ *
  * Must satisfy: sum(debitAmount) == sum(creditAmount) within tolerance ±0.0001
- * 
+ *
  * Once POSTED, entry and lines are immutable.
- * 
+ *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Journal Entry</a>
@@ -56,17 +53,18 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "lines", "postingRuleSet", "postingRuleVersion", "reversalJournalEntry",
-        "reversedByJournalEntry" })
+@ToString(exclude = {"lines", "postingRuleSet", "postingRuleVersion", "reversalJournalEntry", "reversedByJournalEntry"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "journal_entry", indexes = {
-        @Index(name = "idx_journal_entry_status", columnList = "status"),
-        @Index(name = "idx_journal_entry_entry_type", columnList = "entry_type"),
-        @Index(name = "idx_journal_entry_transaction_date", columnList = "transaction_date"),
-        @Index(name = "idx_journal_entry_source_event", columnList = "source_event_id"),
-        @Index(name = "idx_journal_entry_posted_at", columnList = "posted_at")
-})
+@Table(
+        name = "journal_entry",
+        indexes = {
+            @Index(name = "idx_journal_entry_status", columnList = "status"),
+            @Index(name = "idx_journal_entry_entry_type", columnList = "entry_type"),
+            @Index(name = "idx_journal_entry_transaction_date", columnList = "transaction_date"),
+            @Index(name = "idx_journal_entry_source_event", columnList = "source_event_id"),
+            @Index(name = "idx_journal_entry_posted_at", columnList = "posted_at")
+        })
 public class JournalEntry {
 
     private static final String SYSTEM = "SYSTEM";
@@ -209,13 +207,11 @@ public class JournalEntry {
      * Call after adding/updating lines.
      */
     public void calculateTotals() {
-        this.totalDebits = lines.stream()
-                .map(JournalEntryLine::getDebitAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.totalDebits =
+                lines.stream().map(JournalEntryLine::getDebitAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        this.totalCredits = lines.stream()
-                .map(JournalEntryLine::getCreditAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.totalCredits =
+                lines.stream().map(JournalEntryLine::getCreditAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Balance check: difference must be within ±0.0001
         BigDecimal difference = totalDebits.subtract(totalCredits).abs();
@@ -224,7 +220,7 @@ public class JournalEntry {
 
     /**
      * Check if this JE is immutable (cannot be edited).
-     * 
+     *
      * @return true if status is POSTED or REVERSED
      */
     @Transient
@@ -237,7 +233,7 @@ public class JournalEntry {
      * The journalEntryId and lineNumber will be set automatically during
      * persistence
      * via the @PrePersist hook.
-     * 
+     *
      * @param line the line to add
      */
     public void addLine(JournalEntryLine line) {
@@ -287,7 +283,7 @@ public class JournalEntry {
     }
 
     public void setReversedByJournalEntryId(UUID reversedByJournalEntryId) {
-        this.reversedByJournalEntry = reversedByJournalEntryId != null ? new JournalEntry(reversedByJournalEntryId)
-                : null;
+        this.reversedByJournalEntry =
+                reversedByJournalEntryId != null ? new JournalEntry(reversedByJournalEntryId) : null;
     }
 }

@@ -1,16 +1,14 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.ApprovalTier;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.positivity.inventory.internal.enums.AdjustmentStatus;
-import com.positivity.inventory.internal.enums.ApprovalTier;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Response DTO for cycle count adjustment operations.

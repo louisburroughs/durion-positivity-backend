@@ -1,8 +1,8 @@
 package com.positivity.catalog.internal.config;
 
-import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
+import com.positivity.events.EventsApiConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,16 +40,15 @@ public class EventTypeInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("Registering {} catalog event types", CatalogEventTypes.all().size());
 
-        initializerSupport.registerEventTypes(
-                CatalogEventTypes.all(),
-                this::registerEventType);
+        initializerSupport.registerEventTypes(CatalogEventTypes.all(), this::registerEventType);
 
         log.info("Catalog event type registration complete");
     }
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            var request = restClient.put()
+            var request = restClient
+                    .put()
                     .uri("/{typeCode}", registration.getTypeCode())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(registration);

@@ -55,8 +55,6 @@ public class RestClientConfig {
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-        return builder
-                .requestFactory(factory)
-                .build();
+        return builder.requestFactory(factory).build();
     }
 }

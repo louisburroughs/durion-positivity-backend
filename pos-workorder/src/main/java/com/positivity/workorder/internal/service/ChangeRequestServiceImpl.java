@@ -1,21 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.zip.CRC32;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.client.RestClient;
-
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.ApprovalRecord;
@@ -32,9 +16,22 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.ChangeRequestService;
 import com.positivity.workorder.service.IdempotencyService;
-
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.zip.CRC32;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -80,7 +77,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         // Validate work order exists and is in progress
-        Workorder workOrder = workOrderRepository.findById(dto.getWorkorderId())
+        Workorder workOrder = workOrderRepository
+                .findById(dto.getWorkorderId())
                 .orElseThrow(() -> new IllegalArgumentException("Work order not found: " + dto.getWorkorderId()));
 
         if (workOrder.getStatus() != WorkorderStatus.WORK_IN_PROGRESS) {
@@ -111,8 +109,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Create associated work order services
         if (dto.getServices() != null) {
             for (CreateChangeRequestDTO.WorkorderItemDTO serviceDto : dto.getServices()) {
-                com.positivity.workorder.internal.entity.WorkorderServiceLine service = createWorkorderServiceEntity(
-                        workOrder, changeRequest, serviceDto);
+                com.positivity.workorder.internal.entity.WorkorderServiceLine service =
+                        createWorkorderServiceEntity(workOrder, changeRequest, serviceDto);
                 workOrderServiceRepository.save(service);
             }
         }
@@ -153,14 +151,16 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Check for existing change request if idempotency key is provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
-                    IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
-                    idempotencyKey);
+                    IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE, idempotencyKey);
             if (existingChangeRequestId.isPresent()) {
-                log.info("Idempotent request detected for key {}; returning existing change request {}",
-                        idempotencyKey, existingChangeRequestId.get());
-                return changeRequestRepository.findById(existingChangeRequestId.get())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Idempotency key points to non-existent change request: "
+                log.info(
+                        "Idempotent request detected for key {}; returning existing change request {}",
+                        idempotencyKey,
+                        existingChangeRequestId.get());
+                return changeRequestRepository
+                        .findById(existingChangeRequestId.get())
+                        .orElseThrow(() ->
+                                new IllegalStateException("Idempotency key points to non-existent change request: "
                                         + existingChangeRequestId.get()));
             }
         }
@@ -172,9 +172,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
                 idempotencyService.markKeyProcessedForChangeRequest(
-                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
-                        idempotencyKey,
-                        created.getId());
+                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE, idempotencyKey, created.getId());
                 // Force flush so any unique-constraint violation is raised within this
                 // try/catch
                 TransactionAspectSupport.currentTransactionStatus().flush();
@@ -191,23 +189,24 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 // committed, so the change request should be visible with READ_COMMITTED
                 // isolation.
                 Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
-                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
-                        idempotencyKey);
+                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE, idempotencyKey);
                 if (existingChangeRequestId.isPresent()) {
                     log.warn(
                             "Race condition detected: idempotency key {} already registered for change request {}, returning existing change request",
-                            idempotencyKey, existingChangeRequestId.get());
+                            idempotencyKey,
+                            existingChangeRequestId.get());
                     // Return the existing change request to maintain idempotency semantics
                     // The transaction will be rolled back, preventing the duplicate 'created'
                     // change request
-                    return changeRequestRepository.findById(existingChangeRequestId.get())
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "Idempotency key " + idempotencyKey + " points to non-existent change request: "
-                                            + existingChangeRequestId.get()));
+                    return changeRequestRepository
+                            .findById(existingChangeRequestId.get())
+                            .orElseThrow(() -> new IllegalStateException("Idempotency key " + idempotencyKey
+                                    + " points to non-existent change request: " + existingChangeRequestId.get()));
                 } else {
                     // This should not happen - if DataIntegrityViolationException was thrown,
                     // the key must exist. This indicates a serious data inconsistency.
-                    log.error("Race condition detected but no existing change request found for idempotency key {}",
+                    log.error(
+                            "Race condition detected but no existing change request found for idempotency key {}",
                             idempotencyKey);
                     throw new IllegalStateException(
                             "Idempotency key collision but no existing change request found: " + idempotencyKey, e);
@@ -224,9 +223,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
-        String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
-                () -> new IllegalStateException("Authenticated user context is required for approving change request"));
-        ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
+        String resolvedActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Authenticated user context is required for approving change request"));
+        ChangeRequest changeRequest = changeRequestRepository
+                .findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canApprove()) {
@@ -270,9 +271,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest declineChangeRequest(UUID changeRequestId, String approvalNote) {
-        String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
-                () -> new IllegalStateException("Authenticated user context is required for declining change request"));
-        ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
+        String resolvedActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Authenticated user context is required for declining change request"));
+        ChangeRequest changeRequest = changeRequestRepository
+                .findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canDecline()) {
@@ -316,9 +319,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest applyEmergencyOverride(UUID changeRequestId, String exceptionReason) {
-        String managerActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
-                () -> new IllegalStateException("Authenticated user context is required for emergency override"));
-        ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
+        String managerActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() ->
+                        new IllegalStateException("Authenticated user context is required for emergency override"));
+        ChangeRequest changeRequest = changeRequestRepository
+                .findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canApprove()) {
@@ -363,7 +368,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public void recordCustomerDenialAcknowledgment(UUID changeRequestId) {
-        ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
+        ChangeRequest changeRequest = changeRequestRepository
+                .findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         boolean isEmergencyException = Boolean.TRUE.equals(changeRequest.getIsEmergencyException());
@@ -376,8 +382,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         // Mark all emergency items as acknowledged
-        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
-                .findByChangeRequest_Id(changeRequestId);
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services =
+                workOrderServiceRepository.findByChangeRequest_Id(changeRequestId);
         for (com.positivity.workorder.internal.entity.WorkorderServiceLine service : services) {
             if (Boolean.TRUE.equals(service.getIsEmergencySafety())) {
                 service.setCustomerDenialAcknowledged(true);
@@ -402,8 +408,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     public boolean canCloseWorkorder(UUID workorderId) {
-        List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
-                workorderId, ChangeRequestStatus.DECLINED);
+        List<ChangeRequest> emergencyRequests =
+                changeRequestRepository.findByWorkorder_IdAndStatus(workorderId, ChangeRequestStatus.DECLINED);
 
         return emergencyRequests.stream()
                 .filter(this::isEmergencyException)
@@ -415,13 +421,12 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     }
 
     private boolean hasUnacknowledgedEmergencyItems(ChangeRequest request) {
-        return hasUnacknowledgedEmergencyServices(request.getId())
-                || hasUnacknowledgedEmergencyParts(request.getId());
+        return hasUnacknowledgedEmergencyServices(request.getId()) || hasUnacknowledgedEmergencyParts(request.getId());
     }
 
     private boolean hasUnacknowledgedEmergencyServices(UUID changeRequestId) {
-        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
-                .findByChangeRequest_Id(changeRequestId);
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services =
+                workOrderServiceRepository.findByChangeRequest_Id(changeRequestId);
         return services.stream()
                 .anyMatch(service -> Boolean.TRUE.equals(service.getIsEmergencySafety())
                         && !Boolean.TRUE.equals(service.getCustomerDenialAcknowledged()));
@@ -444,8 +449,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         // Filter for approval-gated requests (all are by default, but check field)
-        return pendingRequests.stream()
-                .anyMatch(request -> Boolean.TRUE.equals(request.getIsApprovalGated()));
+        return pendingRequests.stream().anyMatch(request -> Boolean.TRUE.equals(request.getIsApprovalGated()));
     }
 
     /**
@@ -469,7 +473,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     @Override
     public ChangeRequest getChangeRequestById(UUID id) {
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository
+                .findById(id)
                 .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + id));
     }
 
@@ -502,9 +507,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     private void validateEmergencyItem(CreateChangeRequestDTO.WorkorderItemDTO item) {
         // Photo evidence OR explicit "photo not possible" + notes required
-        boolean hasPhoto = item.getPhotoEvidenceUrl() != null && !item.getPhotoEvidenceUrl().trim().isEmpty();
+        boolean hasPhoto = item.getPhotoEvidenceUrl() != null
+                && !item.getPhotoEvidenceUrl().trim().isEmpty();
         boolean photoNotPossible = Boolean.TRUE.equals(item.getPhotoNotPossible());
-        boolean hasNotes = item.getEmergencyNotes() != null && !item.getEmergencyNotes().trim().isEmpty();
+        boolean hasNotes = item.getEmergencyNotes() != null
+                && !item.getEmergencyNotes().trim().isEmpty();
 
         if (!hasPhoto && !photoNotPossible) {
             throw new IllegalArgumentException(
@@ -518,8 +525,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     }
 
     private com.positivity.workorder.internal.entity.WorkorderServiceLine createWorkorderServiceEntity(
-            Workorder workOrder, ChangeRequest changeRequest,
-            CreateChangeRequestDTO.WorkorderItemDTO dto) {
+            Workorder workOrder, ChangeRequest changeRequest, CreateChangeRequestDTO.WorkorderItemDTO dto) {
         return com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
                 .workOrder(workOrder)
                 .serviceEntityId(dto.getServiceEntityId())
@@ -532,8 +538,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .build();
     }
 
-    private WorkorderPart createWorkorderPart(Workorder workOrder, ChangeRequest changeRequest,
-            CreateChangeRequestDTO.WorkorderItemDTO dto) {
+    private WorkorderPart createWorkorderPart(
+            Workorder workOrder, ChangeRequest changeRequest, CreateChangeRequestDTO.WorkorderItemDTO dto) {
         return WorkorderPart.builder()
                 .workorder(workOrder)
                 .productEntityId(dto.getProductEntityId())
@@ -551,8 +557,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     private void updateItemsStatus(UUID changeRequestId, WorkorderItemStatus newStatus) {
         // Update services
-        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
-                .findByChangeRequest_Id(changeRequestId);
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services =
+                workOrderServiceRepository.findByChangeRequest_Id(changeRequestId);
         for (com.positivity.workorder.internal.entity.WorkorderServiceLine service : services) {
             service.setStatus(newStatus);
             workOrderServiceRepository.save(service);
@@ -575,7 +581,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             renderRequest.put("templateId", supplementalEstimateTemplateId);
             renderRequest.put("content", contentJson);
 
-            byte[] renderedPdf = documentServiceRestClient.post()
+            byte[] renderedPdf = documentServiceRestClient
+                    .post()
                     .uri("/v1/documents/render")
                     .body(renderRequest)
                     .retrieve()
@@ -587,8 +594,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
             return generatePdfReferenceId(renderedPdf);
         } catch (Exception e) {
-            log.warn("Failed to generate supplemental estimate PDF for change request {}: {}",
-                    changeRequest.getId(), e.getMessage());
+            log.warn(
+                    "Failed to generate supplemental estimate PDF for change request {}: {}",
+                    changeRequest.getId(),
+                    e.getMessage());
             return null;
         }
     }
@@ -598,7 +607,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("documentType", "SUPPLEMENTAL_ESTIMATE");
             payload.put("changeRequestId", String.valueOf(changeRequest.getId()));
-            payload.put("workorderId", String.valueOf(changeRequest.getWorkorder().getId()));
+            payload.put(
+                    "workorderId", String.valueOf(changeRequest.getWorkorder().getId()));
             payload.put("requestedByUserId", String.valueOf(changeRequest.getRequestedByUserId()));
             payload.put("requestedAt", String.valueOf(changeRequest.getRequestedAt()));
             payload.put("status", String.valueOf(changeRequest.getStatus()));
@@ -607,7 +617,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             payload.put("exceptionReason", changeRequest.getExceptionReason());
             payload.put("services", mapItems(dto.getServices()));
             payload.put("parts", mapItems(dto.getParts()));
-            payload.put("serviceCount", dto.getServices() == null ? 0 : dto.getServices().size());
+            payload.put(
+                    "serviceCount",
+                    dto.getServices() == null ? 0 : dto.getServices().size());
             payload.put("partCount", dto.getParts() == null ? 0 : dto.getParts().size());
             return objectMapper.writeValueAsString(payload);
         } catch (Exception e) {

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.events.EventsApiConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -19,8 +20,6 @@ import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
-
-import com.positivity.events.EventsApiConstants;
 
 /**
  * Unit tests for {@link EventTypeInitializer}.
@@ -121,16 +120,15 @@ class SecurityEventTypeInitializerTest {
         @DisplayName("T_SETI3 — run() calls header(SECRET_HEADER, secret) for every event type when secret is set")
         void run_withSecret_setsSecretHeader() {
             String secret = "test-api-secret-value";
-            EventTypeInitializer sutWithSecret = new EventTypeInitializer(restClientBuilder, "http://localhost:8085",
-                    secret);
+            EventTypeInitializer sutWithSecret =
+                    new EventTypeInitializer(restClientBuilder, "http://localhost:8085", secret);
 
             sutWithSecret.run(null);
 
             int expectedCount = EventTypes.all().size();
             // Issue AUTH-008: verify that the shared secret header is applied for each
             // registration
-            verify(requestBodyUriSpec, times(expectedCount))
-                    .header(EventsApiConstants.SECRET_HEADER, secret);
+            verify(requestBodyUriSpec, times(expectedCount)).header(EventsApiConstants.SECRET_HEADER, secret);
         }
 
         @Test
@@ -141,8 +139,7 @@ class SecurityEventTypeInitializerTest {
 
             // Issue AUTH-008: secret header must not be sent when no apiSecret is
             // configured
-            verify(requestBodyUriSpec, never())
-                    .header(eq(EventsApiConstants.SECRET_HEADER), anyString());
+            verify(requestBodyUriSpec, never()).header(eq(EventsApiConstants.SECRET_HEADER), anyString());
         }
     }
 
