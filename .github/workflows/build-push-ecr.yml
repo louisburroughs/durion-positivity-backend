@@ -147,17 +147,17 @@ jobs:
       - name: Stage JAR artifacts
         run: |
           set -euo pipefail
-          rm -rf .artifact-jars
+          rm -rf artifact-jars
           jq -r '.[]' <<< '${{ needs.detect-services.outputs.services }}' | while read -r service; do
-            mkdir -p ".artifact-jars/${service}/target"
-            cp "${service}"/target/*.jar ".artifact-jars/${service}/target/"
+            mkdir -p "artifact-jars/${service}/target"
+            cp "${service}"/target/*.jar "artifact-jars/${service}/target/"
           done
 
       - name: Store JAR artifacts
         uses: actions/upload-artifact@v4
         with:
           name: service-jars
-          path: .artifact-jars/**
+          path: artifact-jars/**
           retention-days: 1
           if-no-files-found: error
 
@@ -192,7 +192,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${{ matrix.service }}/target"
-          cp ".artifact-jars/${{ matrix.service }}/target/"*.jar "${{ matrix.service }}/target/"
+          cp "artifact-jars/${{ matrix.service }}/target/"*.jar "${{ matrix.service }}/target/"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
