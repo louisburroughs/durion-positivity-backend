@@ -24,57 +24,57 @@ import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = {
-		"user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
+        "user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
 public class UserPersonLink {
 
-	@Id
-	@GeneratedValue
-	@UUIDv7Id
-	@Column(columnDefinition = "UUID")
-	private UUID id;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
-	@Column(name = "user_id", nullable = false, unique = true)
-	@NonNull
-	private UUID userId;
+    @Column(name = "user_id", nullable = false, unique = true)
+    @NonNull
+    private UUID userId;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "person_id", nullable = false)
-	@NonNull
-	private Person person;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "person_id", nullable = false)
+    @NonNull
+    private Person person;
 
-	public UUID getPersonId() {
-		return person != null ? person.getId() : null;
-	}
+    public UUID getPersonId() {
+        return person != null ? person.getId() : null;
+    }
 
-	@Column(name = "link_type", length = 50)
-	private String linkType = "PRIMARY";
+    @Column(name = "link_type", length = 50)
+    private String linkType = "PRIMARY";
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "status", nullable = false, length = 20)
-	@NonNull
-	private UserLinkStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @NonNull
+    private UserLinkStatus status;
 
-	@CreatedDate
-	@Column(name = "created_at", nullable = false, updatable = false)
-	private Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-	@LastModifiedDate
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
-	@Column(name = "created_by", length = 255)
-	private String createdBy;
+    @Column(name = "created_by", length = 255)
+    private String createdBy;
 
-	@Column(name = "notes", length = 1000)
-	private String notes;
+    @Column(name = "notes", length = 1000)
+    private String notes;
 
-	@PrePersist
-	protected void onCreate() {
-		if (status == null) {
-			status = UserLinkStatus.ACTIVE;
-		}
-	}
+    @PrePersist
+    protected void onCreate() {
+        if (status == null) {
+            status = UserLinkStatus.ACTIVE;
+        }
+    }
 
 }

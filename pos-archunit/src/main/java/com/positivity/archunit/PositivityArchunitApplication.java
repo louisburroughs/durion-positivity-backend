@@ -24,8 +24,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class PositivityArchunitApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(PositivityArchunitApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(PositivityArchunitApplication.class, args);
+    }
 
 }

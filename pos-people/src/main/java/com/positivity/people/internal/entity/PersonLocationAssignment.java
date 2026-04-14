@@ -34,63 +34,63 @@ import lombok.NoArgsConstructor;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "person_location_assignment", uniqueConstraints = @UniqueConstraint(columnNames = { "person_id",
-		"location_id", "role", "effective_from" }))
+        "location_id", "role", "effective_from" }))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class PersonLocationAssignment {
 
-	@Id
-	@GeneratedValue
-	@UUIDv7Id
-	@Column(columnDefinition = "UUID")
-	private UUID id;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "person_id", nullable = false)
-	@NonNull
-	private Person person;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "person_id", nullable = false)
+    @NonNull
+    private Person person;
 
-	public UUID getPersonId() {
-		return person != null ? person.getId() : null;
-	}
+    public UUID getPersonId() {
+        return person != null ? person.getId() : null;
+    }
 
-	@NonNull
-	@NotNull
-	@Column(name = "location_id", nullable = false)
-	private UUID locationId;
+    @NonNull
+    @NotNull
+    @Column(name = "location_id", nullable = false)
+    private UUID locationId;
 
-	@NonNull
-	@NotBlank
-	@Column(name = "role", nullable = false)
-	private String role;
+    @NonNull
+    @NotBlank
+    @Column(name = "role", nullable = false)
+    private String role;
 
-	@Column(name = "is_primary", nullable = false)
-	private boolean isPrimary;
+    @Column(name = "is_primary", nullable = false)
+    private boolean isPrimary;
 
-	@NonNull
-	@NotNull
-	@Column(name = "effective_from", nullable = false)
-	private LocalDate effectiveFrom;
+    @NonNull
+    @NotNull
+    @Column(name = "effective_from", nullable = false)
+    private LocalDate effectiveFrom;
 
-	@Column(name = "effective_to")
-	private LocalDate effectiveTo;
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "status", nullable = false)
-	@Builder.Default
-	private AssignmentStatus status = AssignmentStatus.ACTIVE;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private AssignmentStatus status = AssignmentStatus.ACTIVE;
 
-	@CreatedDate
-	@Column(name = "created_at", nullable = false, updatable = false)
-	private Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-	@LastModifiedDate
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
-	@Column(name = "created_by", updatable = false)
-	private String createdBy;
+    @Column(name = "created_by", updatable = false)
+    private String createdBy;
 
 }

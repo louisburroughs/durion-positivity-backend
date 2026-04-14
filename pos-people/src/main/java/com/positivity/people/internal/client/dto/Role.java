@@ -13,10 +13,10 @@ import java.util.UUID;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Role {
 
-	private UUID id;
+    private UUID id;
 
-	private String name;
+    private String name;
 
-	private String description;
+    private String description;
 
 }

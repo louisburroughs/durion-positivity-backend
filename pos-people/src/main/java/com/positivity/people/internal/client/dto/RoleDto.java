@@ -11,14 +11,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RoleDto {
 
-	private String code;
+    private String code;
 
-	private String name;
+    private String name;
 
-	private String description;
+    private String description;
 
-	private String scopeType;
+    private String scopeType;
 
-	private Boolean active;
+    private Boolean active;
 
 }

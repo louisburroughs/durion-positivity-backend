@@ -37,71 +37,71 @@ import lombok.NoArgsConstructor;
 @Builder
 public class Person {
 
-	@Id
-	@GeneratedValue
-	@UUIDv7Id
-	@Column(columnDefinition = "UUID")
-	private UUID id;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
-	@PrePersist
-	public void generateId() {
-		if (status != null && statusEffectiveAt == null) {
-			statusEffectiveAt = Instant.now(Clock.systemUTC());
-		}
-	}
+    @PrePersist
+    public void generateId() {
+        if (status != null && statusEffectiveAt == null) {
+            statusEffectiveAt = Instant.now(Clock.systemUTC());
+        }
+    }
 
-	private String firstName;
+    private String firstName;
 
-	private String lastName;
+    private String lastName;
 
-	@Column(name = "legal_name")
-	private String legalName;
+    @Column(name = "legal_name")
+    private String legalName;
 
-	@Column(name = "preferred_name")
-	private String preferredName;
+    @Column(name = "preferred_name")
+    private String preferredName;
 
-	@Column(name = "employee_number")
-	private String employeeNumber;
+    @Column(name = "employee_number")
+    private String employeeNumber;
 
-	@Enumerated(EnumType.STRING)
-	private EmployeeStatus status;
+    @Enumerated(EnumType.STRING)
+    private EmployeeStatus status;
 
-	@Column(name = "hire_date")
-	private LocalDate hireDate;
+    @Column(name = "hire_date")
+    private LocalDate hireDate;
 
-	@Column(name = "termination_date")
-	private LocalDate terminationDate;
+    @Column(name = "termination_date")
+    private LocalDate terminationDate;
 
-	@Lob
-	@Column(name = "contact_info_json")
-	private String contactInfoJson;
+    @Lob
+    @Column(name = "contact_info_json")
+    private String contactInfoJson;
 
-	@Column(name = "status_effective_at")
-	private Instant statusEffectiveAt;
+    @Column(name = "status_effective_at")
+    private Instant statusEffectiveAt;
 
-	@CreatedDate
-	@Column(name = "created_at", updatable = false)
-	private Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
 
-	@LastModifiedDate
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
-	private String primaryEmail;
+    private String primaryEmail;
 
-	private String secondaryEmail;
+    private String secondaryEmail;
 
-	@ElementCollection
-	private List<String> phoneNumbers;
+    @ElementCollection
+    private List<String> phoneNumbers;
 
-	/** Optional, validated externally - stick with username not userName */
-	private String username;
+    /** Optional, validated externally - stick with username not userName */
+    private String username;
 
-	@PreUpdate
-	public void ensureStatusEffectiveAt() {
-		if (status != null && statusEffectiveAt == null) {
-			statusEffectiveAt = Instant.now(Clock.systemUTC());
-		}
-	}
+    @PreUpdate
+    public void ensureStatusEffectiveAt() {
+        if (status != null && statusEffectiveAt == null) {
+            statusEffectiveAt = Instant.now(Clock.systemUTC());
+        }
+    }
 
 }

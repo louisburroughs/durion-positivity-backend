@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 public class TimeEntryExceptionResolveRequest {
 
-	@Schema(description = "Notes explaining the resolution", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-	private String resolutionNotes;
+    @Schema(description = "Notes explaining the resolution", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String resolutionNotes;
 
 }

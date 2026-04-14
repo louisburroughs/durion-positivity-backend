@@ -19,54 +19,54 @@ import lombok.Data;
 @Data
 public class TimeEntryAdjustment {
 
-	@Id
-	@GeneratedValue
-	@UUIDv7Id
-	@Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
-	private UUID adjustmentId;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
+    private UUID adjustmentId;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "time_entry_id", nullable = false)
-	private TimeEntry timeEntry;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "time_entry_id", nullable = false)
+    private TimeEntry timeEntry;
 
-	public UUID getTimeEntryId() {
-		return timeEntry != null ? timeEntry.getTimeEntryId() : null;
-	}
+    public UUID getTimeEntryId() {
+        return timeEntry != null ? timeEntry.getTimeEntryId() : null;
+    }
 
-	@Column(name = "reason_code", length = 200)
-	private String reasonCode;
+    @Column(name = "reason_code", length = 200)
+    private String reasonCode;
 
-	@Column(name = "notes", columnDefinition = "TEXT")
-	private String notes;
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
 
-	@Column(name = "proposed_start_at")
-	private Instant proposedStartAt;
+    @Column(name = "proposed_start_at")
+    private Instant proposedStartAt;
 
-	@Column(name = "proposed_end_at")
-	private Instant proposedEndAt;
+    @Column(name = "proposed_end_at")
+    private Instant proposedEndAt;
 
-	@Column(name = "minutes_delta")
-	private Integer minutesDelta;
+    @Column(name = "minutes_delta")
+    private Integer minutesDelta;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "status", length = 50)
-	private AdjustmentStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 50)
+    private AdjustmentStatus status;
 
-	@Column(name = "created_by")
-	private String createdBy;
+    @Column(name = "created_by")
+    private String createdBy;
 
-	@CreatedDate
-	@Column(name = "created_at")
-	private Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at")
+    private Instant createdAt;
 
-	@LastModifiedDate
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
-	@Column(name = "decided_by")
-	private String decidedBy;
+    @Column(name = "decided_by")
+    private String decidedBy;
 
-	@Column(name = "decided_at")
-	private Instant decidedAt;
+    @Column(name = "decided_at")
+    private Instant decidedAt;
 
 }

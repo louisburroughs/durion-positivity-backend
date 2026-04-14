@@ -11,14 +11,14 @@ import org.jspecify.annotations.NonNull;
 
 public interface TimeEntryExceptionService {
 
-	@NonNull TimeEntryExceptionResponse createException(@NonNull TimeEntryExceptionRequest request);
+    @NonNull TimeEntryExceptionResponse createException(@NonNull TimeEntryExceptionRequest request);
 
-	@NonNull List<TimeEntryException> listByEmployee(String employeeId);
+    @NonNull List<TimeEntryException> listByEmployee(String employeeId);
 
-	void actionException(@NonNull UUID exceptionId, @NonNull ExceptionStatus targetStatus, String actionNotes,
-			String correlationId);
+    void actionException(@NonNull UUID exceptionId, @NonNull ExceptionStatus targetStatus, String actionNotes,
+            String correlationId);
 
-	void resolveException(@NonNull UUID exceptionId, Set<String> permissions, String resolutionNotes,
-			String resolutionAction, String correlationId);
+    void resolveException(@NonNull UUID exceptionId, Set<String> permissions, String resolutionNotes,
+            String resolutionAction, String correlationId);
 
 }

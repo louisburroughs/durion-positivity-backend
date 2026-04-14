@@ -9,8 +9,8 @@ import java.util.UUID;
 @Repository
 public interface TimeEntryExceptionRepository extends JpaRepository<TimeEntryException, UUID> {
 
-	java.util.List<TimeEntryException> findByEmployeeId(String employeeId);
+    java.util.List<TimeEntryException> findByEmployeeId(String employeeId);
 
-	java.util.List<TimeEntryException> findByTimeEntryId(String timeEntryId);
+    java.util.List<TimeEntryException> findByTimeEntryId(String timeEntryId);
 
 }

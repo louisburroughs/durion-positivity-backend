@@ -11,15 +11,15 @@ import java.util.UUID;
 
 public interface StaffingAssignmentService {
 
-	@NonNull StaffingAssignmentResponse create(@NonNull CreateStaffingAssignmentRequest request, @NonNull String actor);
+    @NonNull StaffingAssignmentResponse create(@NonNull CreateStaffingAssignmentRequest request, @NonNull String actor);
 
-	@NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId);
+    @NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId);
 
-	@NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId);
+    @NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId);
 
-	@NonNull Optional<StaffingAssignmentResponse> update(@NonNull UUID assignmentId,
-			@NonNull UpdateStaffingAssignmentRequest request, @NonNull String actor);
+    @NonNull Optional<StaffingAssignmentResponse> update(@NonNull UUID assignmentId,
+            @NonNull UpdateStaffingAssignmentRequest request, @NonNull String actor);
 
-	void end(@NonNull UUID assignmentId);
+    void end(@NonNull UUID assignmentId);
 
 }

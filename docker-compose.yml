@@ -681,45 +681,6 @@ services:
       timeout: 3s
       retries: 20
 
-  # pos-agent-framework:  I don't need this to run for now, so commenting out
-  #   build:
-  #     context: ./pos-agent-framework
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8093:8080"
-  #   environment:
-  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-  #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_PROFILES_ACTIVE: dev
-  #     # Database
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_agent_framework_db
-  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-  #     # Event-driven agent configurations
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-  #     SCHEMA_REGISTRY_URL: http://schema-registry:8081
-  #     RABBITMQ_HOST: rabbitmq
-  #     RABBITMQ_PORT: 5672
-  #     RABBITMQ_USERNAME: guest
-  #     RABBITMQ_PASSWORD: guest
-  #     # Configuration management
-  #     CONFIG_SERVER_URL: http://config-server:8888
-  #     # Feature flags
-  #     CONSUL_URL: http://consul:8500
-  #   depends_on:
-  #     pos-security-service:
-  #       condition: service_healthy
-  #   networks:
-  #     - pos-network
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 60s
-
   pos-api-gateway:
     build:
       context: ./pos-api-gateway

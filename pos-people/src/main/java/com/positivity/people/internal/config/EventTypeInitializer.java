@@ -20,47 +20,47 @@ import org.springframework.web.client.RestClient;
 @Component
 public class EventTypeInitializer implements ApplicationRunner {
 
-	private static final Logger log = LoggerFactory.getLogger(EventTypeInitializer.class);
+    private static final Logger log = LoggerFactory.getLogger(EventTypeInitializer.class);
 
-	private final RestClient restClient;
+    private final RestClient restClient;
 
-	private final EventTypeInitializerSupport initializerSupport;
+    private final EventTypeInitializerSupport initializerSupport;
 
-	private final String apiSecret;
+    private final String apiSecret;
 
-	public EventTypeInitializer(RestClient.Builder restClientBuilder,
-			@Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
-			@Value("${pos.events.api-secret:}") String apiSecret) {
-		this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
-		this.initializerSupport = new EventTypeInitializerSupport("pos-people");
-		this.apiSecret = apiSecret;
-	}
+    public EventTypeInitializer(RestClient.Builder restClientBuilder,
+            @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
+            @Value("${pos.events.api-secret:}") String apiSecret) {
+        this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
+        this.initializerSupport = new EventTypeInitializerSupport("pos-people");
+        this.apiSecret = apiSecret;
+    }
 
-	@Override
-	public void run(ApplicationArguments args) {
-		log.info("Registering {} people event types", EventTypes.all().size());
+    @Override
+    public void run(ApplicationArguments args) {
+        log.info("Registering {} people event types", EventTypes.all().size());
 
-		initializerSupport.registerEventTypes(EventTypes.all(), this::registerEventType);
+        initializerSupport.registerEventTypes(EventTypes.all(), this::registerEventType);
 
-		log.info("People event type registration complete");
-	}
+        log.info("People event type registration complete");
+    }
 
-	private void registerEventType(EventTypeRegistration registration) {
-		try {
-			var request = restClient.put()
-					.uri("/{typeCode}", registration.getTypeCode())
-					.contentType(MediaType.APPLICATION_JSON)
-					.body(registration);
+    private void registerEventType(EventTypeRegistration registration) {
+        try {
+            var request = restClient.put()
+                    .uri("/{typeCode}", registration.getTypeCode())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(registration);
 
-			if (EventsApiConstants.hasSecret(apiSecret)) {
-				request.header(EventsApiConstants.SECRET_HEADER, apiSecret);
-			}
+            if (EventsApiConstants.hasSecret(apiSecret)) {
+                request.header(EventsApiConstants.SECRET_HEADER, apiSecret);
+            }
 
-			request.retrieve().toBodilessEntity();
-			log.debug("Registered event type: {}", registration.getTypeCode());
-		} catch (Exception e) {
-			log.warn("Failed to register event type {}: {}", registration.getTypeCode(), e.getMessage());
-		}
-	}
+            request.retrieve().toBodilessEntity();
+            log.debug("Registered event type: {}", registration.getTypeCode());
+        } catch (Exception e) {
+            log.warn("Failed to register event type {}: {}", registration.getTypeCode(), e.getMessage());
+        }
+    }
 
 }

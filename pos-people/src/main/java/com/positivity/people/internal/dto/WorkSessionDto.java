@@ -5,65 +5,65 @@ import java.util.UUID;
 
 public class WorkSessionDto {
 
-	private UUID sessionId;
+    private UUID sessionId;
 
-	private UUID personId;
+    private UUID personId;
 
-	private String status;
+    private String status;
 
-	private Instant startedAt;
+    private Instant startedAt;
 
-	private Instant endedAt;
+    private Instant endedAt;
 
-	public WorkSessionDto() {
-	}
+    public WorkSessionDto() {
+    }
 
-	public WorkSessionDto(UUID sessionId, UUID personId, String status, Instant startedAt, Instant endedAt) {
-		this.sessionId = sessionId;
-		this.personId = personId;
-		this.status = status;
-		this.startedAt = startedAt;
-		this.endedAt = endedAt;
-	}
+    public WorkSessionDto(UUID sessionId, UUID personId, String status, Instant startedAt, Instant endedAt) {
+        this.sessionId = sessionId;
+        this.personId = personId;
+        this.status = status;
+        this.startedAt = startedAt;
+        this.endedAt = endedAt;
+    }
 
-	public UUID getSessionId() {
-		return sessionId;
-	}
+    public UUID getSessionId() {
+        return sessionId;
+    }
 
-	public void setSessionId(UUID sessionId) {
-		this.sessionId = sessionId;
-	}
+    public void setSessionId(UUID sessionId) {
+        this.sessionId = sessionId;
+    }
 
-	public UUID getPersonId() {
-		return personId;
-	}
+    public UUID getPersonId() {
+        return personId;
+    }
 
-	public void setPersonId(UUID personId) {
-		this.personId = personId;
-	}
+    public void setPersonId(UUID personId) {
+        this.personId = personId;
+    }
 
-	public String getStatus() {
-		return status;
-	}
+    public String getStatus() {
+        return status;
+    }
 
-	public void setStatus(String status) {
-		this.status = status;
-	}
+    public void setStatus(String status) {
+        this.status = status;
+    }
 
-	public Instant getStartedAt() {
-		return startedAt;
-	}
+    public Instant getStartedAt() {
+        return startedAt;
+    }
 
-	public void setStartedAt(Instant startedAt) {
-		this.startedAt = startedAt;
-	}
+    public void setStartedAt(Instant startedAt) {
+        this.startedAt = startedAt;
+    }
 
-	public Instant getEndedAt() {
-		return endedAt;
-	}
+    public Instant getEndedAt() {
+        return endedAt;
+    }
 
-	public void setEndedAt(Instant endedAt) {
-		this.endedAt = endedAt;
-	}
+    public void setEndedAt(Instant endedAt) {
+        this.endedAt = endedAt;
+    }
 
 }

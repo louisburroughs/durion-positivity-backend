@@ -8,12 +8,12 @@ import java.util.UUID;
 
 public interface WorkSessionService {
 
-	@NonNull WorkSessionDto startSession(@NonNull UUID personId);
+    @NonNull WorkSessionDto startSession(@NonNull UUID personId);
 
-	@NonNull WorkSessionDto stopSession(@NonNull UUID personId);
+    @NonNull WorkSessionDto stopSession(@NonNull UUID personId);
 
-	@NonNull BreakDto startBreak(@NonNull UUID sessionId);
+    @NonNull BreakDto startBreak(@NonNull UUID sessionId);
 
-	@NonNull BreakDto stopBreak(@NonNull UUID sessionId);
+    @NonNull BreakDto stopBreak(@NonNull UUID sessionId);
 
 }

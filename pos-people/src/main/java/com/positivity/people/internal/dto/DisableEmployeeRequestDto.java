@@ -8,10 +8,10 @@ import java.time.LocalDate;
 @Data
 public class DisableEmployeeRequestDto {
 
-	private String disableReason;
+    private String disableReason;
 
-	private AssignmentTerminationPolicy assignmentPolicy = AssignmentTerminationPolicy.IMMEDIATE;
+    private AssignmentTerminationPolicy assignmentPolicy = AssignmentTerminationPolicy.IMMEDIATE;
 
-	private LocalDate assignmentEndDate;
+    private LocalDate assignmentEndDate;
 
 }

@@ -9,8 +9,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> {
 
-	Optional<WorkSession> findByPerson_IdAndEndedAtIsNull(UUID personId);
+    Optional<WorkSession> findByPerson_IdAndEndedAtIsNull(UUID personId);
 
-	Optional<WorkSession> findBySessionIdAndEndedAtIsNull(UUID sessionId);
+    Optional<WorkSession> findBySessionIdAndEndedAtIsNull(UUID sessionId);
 
 }

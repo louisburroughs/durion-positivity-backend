@@ -66,6 +66,12 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 - **Database**: PostgreSQL (Each service owns its own schema/database)
 - **Infrastructure**: Docker & Docker Compose (for local development)
 
+## Container Publishing
+
+- The main CI workflow in [.github/workflows/ci.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/ci.yml) always validates Docker builds for changed services.
+- Docker Hub publishing from that workflow is optional and only runs when the repository variable `ENABLE_DOCKERHUB_PUSH` is set to `true`.
+- The dedicated ECR publishing workflow remains [.github/workflows/build-push-ecr.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/build-push-ecr.yml).
+
 ## Project Structure
 
 The project is organized as a multi-module Maven build. Key directories include:

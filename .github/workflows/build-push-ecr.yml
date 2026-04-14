@@ -81,6 +81,7 @@ jobs:
           - pos-inventory
           - pos-invoice
           - pos-location
+          - pos-mcp-server
           - pos-people
           - pos-price
           - pos-security-service
@@ -167,7 +168,7 @@ jobs:
           for SERVICE in \
             pos-accounting pos-api-gateway pos-catalog pos-customer \
             pos-event-receiver pos-image pos-inventory pos-invoice \
-            pos-location pos-people pos-price pos-security-service \
+            pos-location pos-mcp-server pos-people pos-price pos-security-service \
             pos-service-discovery pos-shop-manager pos-vehicle-inventory pos-workorder; do
             echo "| \`${SERVICE}\` | \`durion/${SERVICE}:${IMAGE_TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
           done
@@ -243,20 +244,28 @@ jobs:
 
             cd "${BACKEND_DIR}"
 
+            COMPOSE_ARGS=(
+              -f docker-compose.yml
+              -f "${PROD_OVERRIDE}"
+              --env-file "${ENV_FILE}"
+            )
+
+            AVAILABLE_SERVICES="$(docker compose "${COMPOSE_ARGS[@]}" config --services)"
+            if printf '%s\n' "${AVAILABLE_SERVICES}" | grep -qx 'pos-mcp-server'; then
+              BACKEND_SERVICES+=(pos-mcp-server)
+              echo "Including pos-mcp-server in alpha deployment."
+            else
+              echo "pos-mcp-server is not defined in alpha compose files; skipping alpha deployment for that service."
+            fi
+
             docker compose \
-              -f docker-compose.yml \
-              -f "${PROD_OVERRIDE}" \
-              --env-file "${ENV_FILE}" \
+              "${COMPOSE_ARGS[@]}" \
               pull "${BACKEND_SERVICES[@]}"
 
             docker compose \
-              -f docker-compose.yml \
-              -f "${PROD_OVERRIDE}" \
-              --env-file "${ENV_FILE}" \
+              "${COMPOSE_ARGS[@]}" \
               up -d --force-recreate "${BACKEND_SERVICES[@]}"
 
             docker compose \
-              -f docker-compose.yml \
-              -f "${PROD_OVERRIDE}" \
-              --env-file "${ENV_FILE}" \
+              "${COMPOSE_ARGS[@]}" \
               ps

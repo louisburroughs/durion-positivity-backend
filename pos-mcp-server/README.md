@@ -60,33 +60,29 @@ Compile-only NLTI API surface has been scaffolded in this module.
 
 These controller methods are now implemented and wired to their corresponding services; behavior is governed by the underlying service implementations.
 
-## Agent integration draft
+## Agent integration
 
-The current external-agent integration specification lives in [docs/llm-tool-orchestration-spec.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/llm-tool-orchestration-spec.md).
+The current orchestration reference lives in [docs/langchain4j-orchestration-spec.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/langchain4j-orchestration-spec.md).
 
-It now assumes:
+Current assumptions:
 
-- `Onyx` is the orchestration layer
-- `Ollama` is the model backend used by Onyx
-- `pos-mcp-server` is the MCP tool host and governance boundary
+- `pos-mcp-server` owns orchestration, tool governance, and transport
+- `Ollama` provides the model runtime for chat and embeddings
 - [docs/tool-registry-implementation.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/tool-registry-implementation.md) remains the reference for curated tool metadata and future registry-based narrowing
 
-The server no longer treats embedded LLM orchestration as the primary architecture. Keep this module focused on MCP transport, tool exposure, backend integration, security, and observability.
+Keep this module focused on MCP transport, tool exposure, backend integration, security, and observability.
 
-Practical bring-up docs:
+Practical local bring-up:
 
-- [docs/docker-compose.onyx-ollama-mcp.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/docker-compose.onyx-ollama-mcp.yml) - sample local stack
-- [docs/onyx-ollama-integration-checklist.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/onyx-ollama-integration-checklist.md) - phased validation checklist
-- [docker-compose.onyx.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.onyx.yml) - root-level compose override for layering `ollama` and `pos-mcp-server` onto the main backend stack so an official Onyx Docker deployment can connect to them
+- [docker-compose.mcp.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.mcp.yml) - root-level compose override for layering `ollama` and `pos-mcp-server` onto the main backend stack
 
-The root override now expects a local `pos-mcp-server` jar build and uses this module's [Dockerfile](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/Dockerfile).
+The root override expects a local `pos-mcp-server` jar build and uses this module's [Dockerfile](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/Dockerfile).
 
 Operationally, the expected flow is:
 
-- start `ollama` and `pos-mcp-server` from this repo
-- install and start Onyx using its official Docker flow
-- use the generated Onyx deployment under `onyx_data/deployment`
-- log into the local Onyx instance and configure Ollama plus MCP connectivity there
+- start the backend stack from this repo
+- start `ollama` and `pos-mcp-server` with [docker-compose.mcp.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.mcp.yml)
+- connect MCP clients directly to `pos-mcp-server`
 
 ## Phase 2 (Wave MCP-2) — Delivery Summary
 

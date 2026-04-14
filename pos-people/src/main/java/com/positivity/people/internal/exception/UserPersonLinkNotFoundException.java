@@ -4,8 +4,8 @@ import java.util.UUID;
 
 public class UserPersonLinkNotFoundException extends RuntimeException {
 
-	public UserPersonLinkNotFoundException(UUID userId) {
-		super("No person link found for user: " + userId);
-	}
+    public UserPersonLinkNotFoundException(UUID userId) {
+        super("No person link found for user: " + userId);
+    }
 
 }

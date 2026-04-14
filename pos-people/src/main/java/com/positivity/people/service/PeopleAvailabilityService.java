@@ -9,16 +9,16 @@ import java.util.UUID;
 
 public interface PeopleAvailabilityService {
 
-	@NonNull List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date);
+    @NonNull List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date);
 
-	/**
-	 * Resolve the current authenticated user's primary location ID. Uses the security
-	 * context to identify the user, translates to personId, and returns their primary
-	 * active staffing location.
-	 * @return primary location UUID for the current user
-	 * @throws jakarta.persistence.EntityNotFoundException if user context is missing or
-	 * no active assignment exists
-	 */
-	@NonNull UUID resolveCurrentUserPrimaryLocationId();
+    /**
+     * Resolve the current authenticated user's primary location ID. Uses the security
+     * context to identify the user, translates to personId, and returns their primary
+     * active staffing location.
+     * @return primary location UUID for the current user
+     * @throws jakarta.persistence.EntityNotFoundException if user context is missing or
+     * no active assignment exists
+     */
+    @NonNull UUID resolveCurrentUserPrimaryLocationId();
 
 }

@@ -10,18 +10,18 @@ import java.util.UUID;
 @Builder
 public class PersonResponse {
 
-	private UUID id;
+    private UUID id;
 
-	private String firstName;
+    private String firstName;
 
-	private String lastName;
+    private String lastName;
 
-	private String primaryEmail;
+    private String primaryEmail;
 
-	private String secondaryEmail;
+    private String secondaryEmail;
 
-	private List<String> phoneNumbers;
+    private List<String> phoneNumbers;
 
-	private String username;
+    private String username;
 
 }

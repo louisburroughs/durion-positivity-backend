@@ -16,19 +16,19 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Resolve person request with weighted matching inputs")
 public class ResolvePersonRequest {
 
-	@Schema(description = "Email used for matching", example = "jane.smith@example.com")
-	private String email;
+    @Schema(description = "Email used for matching", example = "jane.smith@example.com")
+    private String email;
 
-	@Schema(description = "Phone number used for matching", example = "+1-555-123-4567")
-	private String phone;
+    @Schema(description = "Phone number used for matching", example = "+1-555-123-4567")
+    private String phone;
 
-	@Schema(description = "Last name used for matching", example = "Smith")
-	private String lastName;
+    @Schema(description = "Last name used for matching", example = "Smith")
+    private String lastName;
 
-	@Schema(description = "First name used for matching", example = "Jane")
-	private String firstName;
+    @Schema(description = "First name used for matching", example = "Jane")
+    private String firstName;
 
-	@Schema(description = "Optional score threshold override", example = "30")
-	private Integer threshold;
+    @Schema(description = "Optional score threshold override", example = "30")
+    private Integer threshold;
 
 }

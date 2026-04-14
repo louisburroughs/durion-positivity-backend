@@ -2,15 +2,15 @@
 
 ## Status
 
-ACCEPTED — replaces the Onyx-based architecture defined in [llm-tool-orchestration-spec.md](llm-tool-orchestration-spec.md).
+ACCEPTED — replaces the earlier external-agent orchestration proposal.
 
 ## Problem Statement
 
-The Onyx architecture delegates LLM orchestration to a monolithic external agent platform. This creates three blockers for the Durion POS use case:
+The previous external-agent architecture delegated LLM orchestration to a monolithic platform. This creates three blockers for the Durion POS use case:
 
-1. **Per-role tool isolation** — Each user role (Cashier, Manager, Admin, Supplier) needs a distinct tool set. Onyx has no native mechanism for per-session tool filtering based on the caller's RBAC role.
-2. **Session-scoped agent caching** — Expensive resources (model connections, tool registries, chat memory) should be created once per user and reused across multiple chat sessions. Onyx's session model does not map to this requirement.
-3. **Operational simplicity** — Onyx introduces a large operational dependency (its own Postgres, Redis, background workers, migration scripts) for functionality that LangChain4j provides as library-level primitives inside the existing Spring Boot process.
+1. **Per-role tool isolation** — Each user role (Cashier, Manager, Admin, Supplier) needs a distinct tool set. The previous approach had no native mechanism for per-session tool filtering based on the caller's RBAC role.
+2. **Session-scoped agent caching** — Expensive resources (model connections, tool registries, chat memory) should be created once per user and reused across multiple chat sessions. The previous session model did not map to this requirement.
+3. **Operational simplicity** — The previous approach introduced a large operational dependency (its own Postgres, Redis, background workers, migration scripts) for functionality that LangChain4j provides as library-level primitives inside the existing Spring Boot process.
 
 ## Proposed Architecture
 
@@ -56,10 +56,10 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 | PostgreSQL | Tool registry, RAG embeddings, audit, chat memory | Existing shared instance |
 | Exa | Web search API | External SaaS |
 
-### What Onyx Handled → What Replaces It
+### What The Previous External Platform Handled → What Replaces It
 
-| Onyx Responsibility | LangChain4j Replacement |
-|---------------------|------------------------|
+| Previous Responsibility | LangChain4j Replacement |
+|-------------------------|------------------------|
 | Prompt construction | `AiServices` interface with system message provider |
 | Tool-use planning | LangChain4j tool-calling protocol (model-driven) |
 | Conversation memory | `MessageWindowChatMemory` (token-limited, per-session) |
@@ -81,7 +81,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 | `SystemPrompt` + `LlmApiConfig` CRUD | `internal/entity/` + controllers | **Keep** — prompt and model config management |
 | SSE transport + `McpAsyncServer` | `internal/config/McpServerConfiguration` | **Keep** — external MCP clients can still connect |
 | `LlmApiProperties` | `internal/config/` | **Evolve** — extend for Ollama-specific settings |
-| Onyx integration docs / compose | `docs/onyx-*`, `docker-compose.onyx.yml` | **Archive** |
+| Local MCP/Ollama compose override | `docker-compose.mcp.yml` | **Keep** |
 | `internal/llm/` (empty) | — | **Replace** with LangChain4j orchestration |
 | `internal/orchestration/` (empty) | — | **Replace** with SessionAgentManager |
 
@@ -637,7 +637,7 @@ All roles also get: **ExaWebSearchTool** (always) + **RAG retriever** (always).
 
 ## Docker Compose Changes
 
-Replace the Onyx service definition in `docker-compose.onyx.yml`:
+Use the local MCP/Ollama compose override in `docker-compose.mcp.yml`:
 
 ```yaml
 services:
@@ -670,7 +670,7 @@ services:
       - pos-network
 ```
 
-Onyx services, volumes, and network references are removed.
+Only `pos-mcp-server` and `ollama` are layered in this override.
 
 ---
 
@@ -730,7 +730,7 @@ Onyx services, volumes, and network references are removed.
 - [x] Add Flyway migration for pgvector extension
 - [x] Update `McpChatController` to route through `SessionAgentManager`
 - [x] Add Ollama Cloud config properties to `application.yml`
-- [x] Update `docker-compose.onyx.yml` to remove Onyx refs
+- [x] Update `docker-compose.mcp.yml` to keep only the local MCP/Ollama stack
 - [x] Verify end-to-end: user message → tool call → response
 
 ### Phase 2 — Tool Registry + Role Gating
@@ -772,8 +772,6 @@ Onyx services, volumes, and network references are removed.
 
 | Document | Disposition |
 |----------|-------------|
-| [llm-tool-orchestration-spec.md](llm-tool-orchestration-spec.md) | **Superseded** — Onyx architecture replaced by LangChain4j |
-| [onyx-ollama-integration-checklist.md](onyx-ollama-integration-checklist.md) | **Superseded** — Onyx deployment steps no longer apply |
 | [tool-registry-implementation.md](tool-registry-implementation.md) | **Still valid** — implementation patterns carry forward into `ToolRegistry` |
 | [tool-registry-plan.md](tool-registry-plan.md) | **Still valid** — phased plan aligns with Phases 2–4 above |
 | [domain-facade-tools.md](domain-facade-tools.md) | **Still valid** — facade tool catalog is the source of truth for tool definitions |

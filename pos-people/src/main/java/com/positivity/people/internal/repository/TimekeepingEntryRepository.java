@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TimekeepingEntryRepository extends JpaRepository<TimekeepingEntry, UUID> {
 
-	boolean existsByTenantIdAndSourceSystemAndSourceSessionId(UUID tenantId, String sourceSystem, UUID sourceSessionId);
+    boolean existsByTenantIdAndSourceSystemAndSourceSessionId(UUID tenantId, String sourceSystem, UUID sourceSessionId);
 
 }

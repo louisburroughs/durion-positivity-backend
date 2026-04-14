@@ -9,85 +9,85 @@ import java.util.UUID;
 @Schema(description = "Request to create a time entry adjustment")
 public class TimeEntryAdjustmentRequest {
 
-	@NotNull(message = "timeEntryId is required")
-	@Schema(description = "Time entry identifier to adjust", example = "123e4567-e89b-12d3-a456-426614174000",
-			requiredMode = Schema.RequiredMode.REQUIRED)
-	private UUID timeEntryId;
+    @NotNull(message = "timeEntryId is required")
+    @Schema(description = "Time entry identifier to adjust", example = "123e4567-e89b-12d3-a456-426614174000",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private UUID timeEntryId;
 
-	@NotBlank(message = "reasonCode is required")
-	@Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK",
-			requiredMode = Schema.RequiredMode.REQUIRED)
-	private String reasonCode;
+    @NotBlank(message = "reasonCode is required")
+    @Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String reasonCode;
 
-	@Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break")
-	private String notes;
+    @Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break")
+    private String notes;
 
-	@Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00-05:00")
-	private OffsetDateTime proposedStartAt;
+    @Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00-05:00")
+    private OffsetDateTime proposedStartAt;
 
-	@Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00-05:00")
-	private OffsetDateTime proposedEndAt;
+    @Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00-05:00")
+    private OffsetDateTime proposedEndAt;
 
-	@Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30")
-	private Integer minutesDelta;
+    @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30")
+    private Integer minutesDelta;
 
-	@Schema(description = "User creating the adjustment request", example = "employee-456")
-	private String createdBy;
+    @Schema(description = "User creating the adjustment request", example = "employee-456")
+    private String createdBy;
 
-	public UUID getTimeEntryId() {
-		return timeEntryId;
-	}
+    public UUID getTimeEntryId() {
+        return timeEntryId;
+    }
 
-	public void setTimeEntryId(UUID timeEntryId) {
-		this.timeEntryId = timeEntryId;
-	}
+    public void setTimeEntryId(UUID timeEntryId) {
+        this.timeEntryId = timeEntryId;
+    }
 
-	public String getReasonCode() {
-		return reasonCode;
-	}
+    public String getReasonCode() {
+        return reasonCode;
+    }
 
-	public void setReasonCode(String reasonCode) {
-		this.reasonCode = reasonCode;
-	}
+    public void setReasonCode(String reasonCode) {
+        this.reasonCode = reasonCode;
+    }
 
-	public String getNotes() {
-		return notes;
-	}
+    public String getNotes() {
+        return notes;
+    }
 
-	public void setNotes(String notes) {
-		this.notes = notes;
-	}
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
 
-	public OffsetDateTime getProposedStartAt() {
-		return proposedStartAt;
-	}
+    public OffsetDateTime getProposedStartAt() {
+        return proposedStartAt;
+    }
 
-	public void setProposedStartAt(OffsetDateTime proposedStartAt) {
-		this.proposedStartAt = proposedStartAt;
-	}
+    public void setProposedStartAt(OffsetDateTime proposedStartAt) {
+        this.proposedStartAt = proposedStartAt;
+    }
 
-	public OffsetDateTime getProposedEndAt() {
-		return proposedEndAt;
-	}
+    public OffsetDateTime getProposedEndAt() {
+        return proposedEndAt;
+    }
 
-	public void setProposedEndAt(OffsetDateTime proposedEndAt) {
-		this.proposedEndAt = proposedEndAt;
-	}
+    public void setProposedEndAt(OffsetDateTime proposedEndAt) {
+        this.proposedEndAt = proposedEndAt;
+    }
 
-	public Integer getMinutesDelta() {
-		return minutesDelta;
-	}
+    public Integer getMinutesDelta() {
+        return minutesDelta;
+    }
 
-	public void setMinutesDelta(Integer minutesDelta) {
-		this.minutesDelta = minutesDelta;
-	}
+    public void setMinutesDelta(Integer minutesDelta) {
+        this.minutesDelta = minutesDelta;
+    }
 
-	public String getCreatedBy() {
-		return createdBy;
-	}
+    public String getCreatedBy() {
+        return createdBy;
+    }
 
-	public void setCreatedBy(String createdBy) {
-		this.createdBy = createdBy;
-	}
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
 
 }

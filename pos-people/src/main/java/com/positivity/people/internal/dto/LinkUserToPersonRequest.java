@@ -12,19 +12,19 @@ import java.util.UUID;
 @AllArgsConstructor
 public class LinkUserToPersonRequest {
 
-	@NotNull(message = "userId is required")
-	private UUID userId;
+    @NotNull(message = "userId is required")
+    private UUID userId;
 
-	@NotNull(message = "personId is required")
-	private UUID personId;
+    @NotNull(message = "personId is required")
+    private UUID personId;
 
-	private String linkType = "PRIMARY";
+    private String linkType = "PRIMARY";
 
-	private String notes;
+    private String notes;
 
-	public LinkUserToPersonRequest(UUID userId, UUID personId) {
-		this.userId = userId;
-		this.personId = personId;
-	}
+    public LinkUserToPersonRequest(UUID userId, UUID personId) {
+        this.userId = userId;
+        this.personId = personId;
+    }
 
 }

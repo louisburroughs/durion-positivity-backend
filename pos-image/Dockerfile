@@ -10,7 +10,8 @@ ARG JAVA_OPTS
 ENV JAVA_OPTS=$JAVA_OPTS
 ENV OTEL_RESOURCE_ATTRIBUTES="service.name=DURION-POSITIVITY-BACKEND,service.namespace=durion-group,deployment.environment=pre-production"
 ENV OTEL_SERVICE_NAME=pos-image
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+ARG OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_EXPORTER_OTLP_ENDPOINT
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # Optional: Set OTEL_EXPORTER_OTLP_HEADERS at runtime if your OTLP endpoint requires authentication
 # Default endpoint (otel-collector:4318) does not require authentication

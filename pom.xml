@@ -298,6 +298,9 @@
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
 		<springdoc-openapi-maven-plugin.version>1.5</springdoc-openapi-maven-plugin.version>
+		<maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+		<checkstyle.version>10.21.4</checkstyle.version>
+		<spotbugs-maven-plugin.version>4.9.8.1</spotbugs-maven-plugin.version>
 		<sonar.organization>louisburroughs</sonar.organization>
 		<!-- Test runtime tuning -->
 		<tests.forkCount>1</tests.forkCount>
@@ -334,6 +337,16 @@
 					<groupId>org.jacoco</groupId>
 					<artifactId>jacoco-maven-plugin</artifactId>
 					<version>${jacoco-maven-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-checkstyle-plugin</artifactId>
+					<version>${maven-checkstyle-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>com.github.spotbugs</groupId>
+					<artifactId>spotbugs-maven-plugin</artifactId>
+					<version>${spotbugs-maven-plugin.version}</version>
 				</plugin>
 			</plugins>
 		</pluginManagement>
@@ -411,6 +424,33 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<dependencies>
+					<dependency>
+						<groupId>com.puppycrawl.tools</groupId>
+						<artifactId>checkstyle</artifactId>
+						<version>${checkstyle.version}</version>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<configLocation>${maven.multiModuleProjectDirectory}/build-tools/checkstyle/checkstyle.xml</configLocation>
+					<consoleOutput>true</consoleOutput>
+					<failsOnError>true</failsOnError>
+					<linkXRef>false</linkXRef>
+					<includeTestSourceDirectory>false</includeTestSourceDirectory>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>com.github.spotbugs</groupId>
+				<artifactId>spotbugs-maven-plugin</artifactId>
+				<configuration>
+					<threshold>High</threshold>
+					<effort>Default</effort>
+					<xmlOutput>false</xmlOutput>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

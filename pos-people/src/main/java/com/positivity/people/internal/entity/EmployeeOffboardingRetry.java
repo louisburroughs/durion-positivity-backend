@@ -31,45 +31,45 @@ import lombok.Setter;
 @Setter
 public class EmployeeOffboardingRetry {
 
-	@Id
-	@GeneratedValue
-	@UUIDv7Id
-	@Column(columnDefinition = "UUID")
-	private UUID id;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "employee_id", nullable = false)
-	private Person employee;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "employee_id", nullable = false)
+    private Person employee;
 
-	public UUID getEmployeeId() {
-		return employee != null ? employee.getId() : null;
-	}
+    public UUID getEmployeeId() {
+        return employee != null ? employee.getId() : null;
+    }
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "assignment_policy", nullable = false)
-	private AssignmentTerminationPolicy assignmentPolicy;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_policy", nullable = false)
+    private AssignmentTerminationPolicy assignmentPolicy;
 
-	@Column(name = "disable_reason")
-	private String disableReason;
+    @Column(name = "disable_reason")
+    private String disableReason;
 
-	@Column(name = "actor_id", nullable = false)
-	private String actorId;
+    @Column(name = "actor_id", nullable = false)
+    private String actorId;
 
-	@Column(name = "failure_reason", nullable = false)
-	private String failureReason;
+    @Column(name = "failure_reason", nullable = false)
+    private String failureReason;
 
-	@Column(name = "attempts", nullable = false)
-	private int attempts;
+    @Column(name = "attempts", nullable = false)
+    private int attempts;
 
-	@Column(name = "next_attempt_at", nullable = false)
-	private Instant nextAttemptAt;
+    @Column(name = "next_attempt_at", nullable = false)
+    private Instant nextAttemptAt;
 
-	@CreatedDate
-	@Column(name = "created_at", nullable = false)
-	private Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
 
-	@LastModifiedDate
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
 }

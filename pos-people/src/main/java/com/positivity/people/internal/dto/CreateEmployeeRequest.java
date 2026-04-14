@@ -12,35 +12,35 @@ import java.time.LocalDate;
 @Data
 public class CreateEmployeeRequest {
 
-	@NotBlank(message = "legalName is required")
-	private String legalName;
+    @NotBlank(message = "legalName is required")
+    private String legalName;
 
-	private String preferredName;
+    private String preferredName;
 
-	@NotBlank(message = "employeeNumber is required")
-	private String employeeNumber;
+    @NotBlank(message = "employeeNumber is required")
+    private String employeeNumber;
 
-	@NotNull(message = "status is required")
-	private EmployeeStatus status;
+    @NotNull(message = "status is required")
+    private EmployeeStatus status;
 
-	@NotNull(message = "hireDate is required")
-	private LocalDate hireDate;
+    @NotNull(message = "hireDate is required")
+    private LocalDate hireDate;
 
-	private LocalDate terminationDate;
+    private LocalDate terminationDate;
 
-	@Valid
-	private EmployeeContactInfoDto contactInfo;
+    @Valid
+    private EmployeeContactInfoDto contactInfo;
 
-	/**
-	 * Defines the policy for handling duplicate employee records during creation.
-	 * Defaults to STRICT, which will reject the request if a potential duplicate is
-	 * detected. Other options may include LENIENT (allow creation with a warning) or
-	 * IGNORE (proceed without checks).
-	 */
-	private DuplicatePolicy duplicatePolicy = DuplicatePolicy.STRICT;
+    /**
+     * Defines the policy for handling duplicate employee records during creation.
+     * Defaults to STRICT, which will reject the request if a potential duplicate is
+     * detected. Other options may include LENIENT (allow creation with a warning) or
+     * IGNORE (proceed without checks).
+     */
+    private DuplicatePolicy duplicatePolicy = DuplicatePolicy.STRICT;
 
-	public void setDuplicatePolicy(DuplicatePolicy duplicatePolicy) {
-		this.duplicatePolicy = duplicatePolicy == null ? DuplicatePolicy.STRICT : duplicatePolicy;
-	}
+    public void setDuplicatePolicy(DuplicatePolicy duplicatePolicy) {
+        this.duplicatePolicy = duplicatePolicy == null ? DuplicatePolicy.STRICT : duplicatePolicy;
+    }
 
 }

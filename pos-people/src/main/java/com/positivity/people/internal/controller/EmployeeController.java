@@ -31,60 +31,60 @@ import java.util.UUID;
 @Tag(name = "Employee API", description = "Employee profile and offboarding operations")
 public class EmployeeController {
 
-	private final EmployeeService employeeService;
+    private final EmployeeService employeeService;
 
-	@PostMapping
-	@EmitEvent(id = "PEOPLE_EMPLOYEE_CREATE", apiVersion = "1")
-	@Operation(summary = "Create employee profile",
-			description = "Creates a new employee profile with identity, employment, and role-related attributes.")
-	@ApiResponse(responseCode = "201", description = "Employee created")
-	@ApiResponse(responseCode = "400", description = "Invalid request")
-	@ApiResponse(responseCode = "409", description = "Duplicate employee")
-	@ApiResponse(responseCode = "422", description = "Semantic validation failure")
-	@PreAuthorize("hasAuthority('people:employee:create')")
-	public ResponseEntity<EmployeeProfileDto> createEmployee(
-			@Valid @RequestBody @NonNull CreateEmployeeRequest request) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.createEmployee(request));
-	}
+    @PostMapping
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_CREATE", apiVersion = "1")
+    @Operation(summary = "Create employee profile",
+            description = "Creates a new employee profile with identity, employment, and role-related attributes.")
+    @ApiResponse(responseCode = "201", description = "Employee created")
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "409", description = "Duplicate employee")
+    @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @PreAuthorize("hasAuthority('people:employee:create')")
+    public ResponseEntity<EmployeeProfileDto> createEmployee(
+            @Valid @RequestBody @NonNull CreateEmployeeRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.createEmployee(request));
+    }
 
-	@PutMapping("/{employeeId}")
-	@EmitEvent(id = "PEOPLE_EMPLOYEE_UPDATE", apiVersion = "1")
-	@Operation(summary = "Update employee profile",
-			description = "Updates an existing employee profile using the provided employee ID.")
-	@ApiResponse(responseCode = "200", description = "Employee updated")
-	@ApiResponse(responseCode = "400", description = "Invalid request")
-	@ApiResponse(responseCode = "404", description = "Employee not found")
-	@ApiResponse(responseCode = "409", description = "Duplicate employee")
-	@ApiResponse(responseCode = "422", description = "Semantic validation failure")
-	@PreAuthorize("hasAuthority('people:employee:edit')")
-	public ResponseEntity<EmployeeProfileDto> updateEmployee(@PathVariable UUID employeeId,
-			@Valid @RequestBody @NonNull UpdateEmployeeRequest request) {
-		return ResponseEntity.ok(employeeService.updateEmployee(employeeId, request));
-	}
+    @PutMapping("/{employeeId}")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_UPDATE", apiVersion = "1")
+    @Operation(summary = "Update employee profile",
+            description = "Updates an existing employee profile using the provided employee ID.")
+    @ApiResponse(responseCode = "200", description = "Employee updated")
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "404", description = "Employee not found")
+    @ApiResponse(responseCode = "409", description = "Duplicate employee")
+    @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @PreAuthorize("hasAuthority('people:employee:edit')")
+    public ResponseEntity<EmployeeProfileDto> updateEmployee(@PathVariable UUID employeeId,
+            @Valid @RequestBody @NonNull UpdateEmployeeRequest request) {
+        return ResponseEntity.ok(employeeService.updateEmployee(employeeId, request));
+    }
 
-	@GetMapping("/{employeeId}")
-	@EmitEvent(id = "PEOPLE_EMPLOYEE_GET", apiVersion = "1")
-	@Operation(summary = "Get employee profile",
-			description = "Retrieves an employee profile by employee ID.")
-	@ApiResponse(responseCode = "200", description = "Employee found")
-	@ApiResponse(responseCode = "404", description = "Employee not found")
-	@PreAuthorize("hasAuthority('people:employee:view')")
-	public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
-		return ResponseEntity.ok(employeeService.getEmployee(employeeId));
-	}
+    @GetMapping("/{employeeId}")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_GET", apiVersion = "1")
+    @Operation(summary = "Get employee profile",
+            description = "Retrieves an employee profile by employee ID.")
+    @ApiResponse(responseCode = "200", description = "Employee found")
+    @ApiResponse(responseCode = "404", description = "Employee not found")
+    @PreAuthorize("hasAuthority('people:employee:view')")
+    public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
+        return ResponseEntity.ok(employeeService.getEmployee(employeeId));
+    }
 
-	@PostMapping("/{employeeId}/disable")
-	@EmitEvent(id = "PEOPLE_EMPLOYEE_DISABLE", apiVersion = "1")
-	@Operation(summary = "Disable employee profile",
-			description = "Disables an employee profile and records optional disable metadata.")
-	@ApiResponse(responseCode = "200", description = "Employee disabled")
-	@ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
-	@ApiResponse(responseCode = "404", description = "Employee not found")
-	@PreAuthorize("hasAuthority('people:employee:deactivate')")
-	public ResponseEntity<EmployeeProfileDto> disableEmployee(@PathVariable UUID employeeId,
-			@RequestBody(required = false) DisableEmployeeRequestDto request) {
-		DisableEmployeeRequestDto resolved = request != null ? request : new DisableEmployeeRequestDto();
-		return ResponseEntity.ok(employeeService.disableEmployee(employeeId, resolved));
-	}
+    @PostMapping("/{employeeId}/disable")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_DISABLE", apiVersion = "1")
+    @Operation(summary = "Disable employee profile",
+            description = "Disables an employee profile and records optional disable metadata.")
+    @ApiResponse(responseCode = "200", description = "Employee disabled")
+    @ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
+    @ApiResponse(responseCode = "404", description = "Employee not found")
+    @PreAuthorize("hasAuthority('people:employee:deactivate')")
+    public ResponseEntity<EmployeeProfileDto> disableEmployee(@PathVariable UUID employeeId,
+            @RequestBody(required = false) DisableEmployeeRequestDto request) {
+        DisableEmployeeRequestDto resolved = request != null ? request : new DisableEmployeeRequestDto();
+        return ResponseEntity.ok(employeeService.disableEmployee(employeeId, resolved));
+    }
 
 }

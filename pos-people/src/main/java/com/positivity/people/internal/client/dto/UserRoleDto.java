@@ -14,16 +14,16 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UserRoleDto {
 
-	private String userId;
+    private String userId;
 
-	private String roleCode;
+    private String roleCode;
 
-	private UUID locationId;
+    private UUID locationId;
 
-	private LocalDate startDate;
+    private LocalDate startDate;
 
-	private LocalDate endDate;
+    private LocalDate endDate;
 
-	private Boolean active;
+    private Boolean active;
 
 }

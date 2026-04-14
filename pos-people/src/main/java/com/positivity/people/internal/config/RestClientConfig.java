@@ -10,40 +10,40 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class RestClientConfig {
 
-	@Bean
-	public RestClient securityServiceRestClient(RestClient.Builder builder,
-			@Value("${pos.security-service.base-url:http://pos-security-service:8086}") String securityServiceBaseUrl,
-			@Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
-			@Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
-		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-		factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-		factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+    @Bean
+    public RestClient securityServiceRestClient(RestClient.Builder builder,
+            @Value("${pos.security-service.base-url:http://pos-security-service:8086}") String securityServiceBaseUrl,
+            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-		return builder.requestFactory(factory).baseUrl(securityServiceBaseUrl).build();
-	}
+        return builder.requestFactory(factory).baseUrl(securityServiceBaseUrl).build();
+    }
 
-	@Bean
-	public RestClient workexecRestClient(RestClient.Builder builder,
-			@Value("${pos.workexec.base-url:http://workorder:8087}") String workexecBaseUrl,
-			@Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
-			@Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
-		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-		factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-		factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+    @Bean
+    public RestClient workexecRestClient(RestClient.Builder builder,
+            @Value("${pos.workexec.base-url:http://workorder:8087}") String workexecBaseUrl,
+            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-		return builder.requestFactory(factory).baseUrl(workexecBaseUrl).build();
-	}
+        return builder.requestFactory(factory).baseUrl(workexecBaseUrl).build();
+    }
 
-	@Bean
-	public RestClient locationServiceRestClient(RestClient.Builder builder,
-			@Value("${pos.location-service.base-url:http://pos-location:8084}") String locationServiceBaseUrl,
-			@Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
-			@Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
-		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-		factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-		factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+    @Bean
+    public RestClient locationServiceRestClient(RestClient.Builder builder,
+            @Value("${pos.location-service.base-url:http://pos-location:8084}") String locationServiceBaseUrl,
+            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-		return builder.requestFactory(factory).baseUrl(locationServiceBaseUrl).build();
-	}
+        return builder.requestFactory(factory).baseUrl(locationServiceBaseUrl).build();
+    }
 
 }

@@ -10,18 +10,18 @@ import java.util.UUID;
 @Builder
 public class UserPersonLinkResponse {
 
-	private UUID linkId;
+    private UUID linkId;
 
-	private UUID userId;
+    private UUID userId;
 
-	private UUID personId;
+    private UUID personId;
 
-	private String linkType;
+    private String linkType;
 
-	private Instant createdAt;
+    private Instant createdAt;
 
-	private String createdBy;
+    private String createdBy;
 
-	private String notes;
+    private String notes;
 
 }

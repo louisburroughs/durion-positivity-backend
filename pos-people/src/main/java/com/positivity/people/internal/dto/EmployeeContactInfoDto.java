@@ -5,16 +5,16 @@ import lombok.Data;
 @Data
 public class EmployeeContactInfoDto {
 
-	private String primaryEmail;
+    private String primaryEmail;
 
-	private String primaryPhone;
+    private String primaryPhone;
 
-	private String secondaryEmail;
+    private String secondaryEmail;
 
-	private String secondaryPhone;
+    private String secondaryPhone;
 
-	private EmployeeAddressDto address;
+    private EmployeeAddressDto address;
 
-	private EmployeeEmergencyContactDto emergencyContact;
+    private EmployeeEmergencyContactDto emergencyContact;
 
 }

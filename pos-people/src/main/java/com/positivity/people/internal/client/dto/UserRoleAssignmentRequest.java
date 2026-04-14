@@ -15,16 +15,16 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UserRoleAssignmentRequest {
 
-	private UUID userId;
+    private UUID userId;
 
-	private String roleCode;
+    private String roleCode;
 
-	private Set<UUID> locationIds;
+    private Set<UUID> locationIds;
 
-	private UUID locationId;
+    private UUID locationId;
 
-	private LocalDateTime startDate;
+    private LocalDateTime startDate;
 
-	private LocalDateTime endDate;
+    private LocalDateTime endDate;
 
 }

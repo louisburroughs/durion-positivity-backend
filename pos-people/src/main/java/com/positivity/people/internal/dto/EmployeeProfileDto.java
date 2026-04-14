@@ -13,24 +13,24 @@ import java.util.UUID;
 @Builder
 public class EmployeeProfileDto {
 
-	private UUID id;
+    private UUID id;
 
-	private String legalName;
+    private String legalName;
 
-	private String preferredName;
+    private String preferredName;
 
-	private String employeeNumber;
+    private String employeeNumber;
 
-	private EmployeeStatus status;
+    private EmployeeStatus status;
 
-	private LocalDate hireDate;
+    private LocalDate hireDate;
 
-	private LocalDate terminationDate;
+    private LocalDate terminationDate;
 
-	private EmployeeContactInfoDto contactInfo;
+    private EmployeeContactInfoDto contactInfo;
 
-	private Instant statusEffectiveAt;
+    private Instant statusEffectiveAt;
 
-	private List<String> warnings;
+    private List<String> warnings;
 
 }

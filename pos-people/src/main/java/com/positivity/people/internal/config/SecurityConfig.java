@@ -23,6 +23,6 @@ import org.springframework.context.annotation.Import;
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
 
-	// Gateway-based authentication is configured by GatewaySecurityConfig
+    // Gateway-based authentication is configured by GatewaySecurityConfig
 
 }

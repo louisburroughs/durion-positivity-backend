@@ -34,7 +34,7 @@ Complete and harden the in-progress profile migration so backend modules consist
 
 - Update `.env.example` default `SPRING_PROFILES_ACTIVE` from `local` to `dev` and update profile comment text.
 - Update remaining script/readme language still saying "local profile" when it now means `dev`.
-- Keep existing `alpha` defaults for MCP/Onyx compose wiring and `@Profile("alpha")` usage in mcp-server classes.
+- Keep existing `alpha` defaults for MCP/Ollama compose wiring and `@Profile("alpha")` usage in mcp-server classes.
 
 ### 5. Document the final canonical profile contract
 

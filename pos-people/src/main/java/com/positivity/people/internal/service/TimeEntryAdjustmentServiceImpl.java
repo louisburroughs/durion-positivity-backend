@@ -21,127 +21,127 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentService {
 
-	private final Clock clock;
+    private final Clock clock;
 
-	private final TimeEntryAdjustmentRepository adjustmentRepository;
+    private final TimeEntryAdjustmentRepository adjustmentRepository;
 
-	private final TimeEntryAuditRepository auditRepository;
+    private final TimeEntryAuditRepository auditRepository;
 
-	private final TimeEntryRepository timeEntryRepository;
+    private final TimeEntryRepository timeEntryRepository;
 
-	public TimeEntryAdjustmentServiceImpl(TimeEntryAdjustmentRepository adjustmentRepository,
-			TimeEntryAuditRepository auditRepository, TimeEntryRepository timeEntryRepository, Clock clock) {
-		this.clock = clock;
-		this.adjustmentRepository = adjustmentRepository;
-		this.auditRepository = auditRepository;
-		this.timeEntryRepository = timeEntryRepository;
-	}
+    public TimeEntryAdjustmentServiceImpl(TimeEntryAdjustmentRepository adjustmentRepository,
+            TimeEntryAuditRepository auditRepository, TimeEntryRepository timeEntryRepository, Clock clock) {
+        this.clock = clock;
+        this.adjustmentRepository = adjustmentRepository;
+        this.auditRepository = auditRepository;
+        this.timeEntryRepository = timeEntryRepository;
+    }
 
-	@Override
-	@Transactional
-	@NonNull
-	public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
-		if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
-			throw new IllegalArgumentException("reasonCode is required");
-		}
+    @Override
+    @Transactional
+    @NonNull
+    public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
+        if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
+            throw new IllegalArgumentException("reasonCode is required");
+        }
 
-		if (request.getTimeEntryId() == null) {
-			throw new IllegalArgumentException("timeEntryId is required");
-		}
+        if (request.getTimeEntryId() == null) {
+            throw new IllegalArgumentException("timeEntryId is required");
+        }
 
-		Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
-				.findById(request.getTimeEntryId());
-		if (entryOptional.isEmpty()) {
-			throw new NotFoundException("Time entry not found");
-		}
-		com.positivity.people.internal.entity.TimeEntry entry = entryOptional.get();
-		if (entry.getStatus() != com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL) {
-			throw new IllegalStateException("Adjustments can only be created for entries in PENDING_APPROVAL status");
-		}
+        Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
+                .findById(request.getTimeEntryId());
+        if (entryOptional.isEmpty()) {
+            throw new NotFoundException("Time entry not found");
+        }
+        com.positivity.people.internal.entity.TimeEntry entry = entryOptional.get();
+        if (entry.getStatus() != com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Adjustments can only be created for entries in PENDING_APPROVAL status");
+        }
 
-		boolean hasProposedTimes = request.getProposedStartAt() != null || request.getProposedEndAt() != null;
-		boolean hasMinutesDelta = request.getMinutesDelta() != null;
-		if (!(hasProposedTimes ^ hasMinutesDelta)) {
-			throw new IllegalArgumentException(
-					"Provide either both proposedStartAt and proposedEndAt, OR minutesDelta (exactly one)");
-		}
+        boolean hasProposedTimes = request.getProposedStartAt() != null || request.getProposedEndAt() != null;
+        boolean hasMinutesDelta = request.getMinutesDelta() != null;
+        if (!(hasProposedTimes ^ hasMinutesDelta)) {
+            throw new IllegalArgumentException(
+                    "Provide either both proposedStartAt and proposedEndAt, OR minutesDelta (exactly one)");
+        }
 
-		if (hasProposedTimes && (request.getProposedStartAt() == null || request.getProposedEndAt() == null)) {
-			throw new IllegalArgumentException("Both proposedStartAt and proposedEndAt must be provided together");
-		}
+        if (hasProposedTimes && (request.getProposedStartAt() == null || request.getProposedEndAt() == null)) {
+            throw new IllegalArgumentException("Both proposedStartAt and proposedEndAt must be provided together");
+        }
 
-		com.positivity.people.internal.entity.TimeEntryAdjustment adjustment = new com.positivity.people.internal.entity.TimeEntryAdjustment();
-		adjustment.setTimeEntry(entry);
-		adjustment.setReasonCode(request.getReasonCode());
-		adjustment.setNotes(request.getNotes());
-		if (request.getProposedStartAt() != null) {
-			adjustment.setProposedStartAt(request.getProposedStartAt().toInstant());
-		}
-		if (request.getProposedEndAt() != null) {
-			adjustment.setProposedEndAt(request.getProposedEndAt().toInstant());
-		}
-		adjustment.setMinutesDelta(request.getMinutesDelta());
-		adjustment.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
-		adjustment.setCreatedBy(request.getCreatedBy());
-		adjustment.setCreatedAt(Instant.now(clock));
+        com.positivity.people.internal.entity.TimeEntryAdjustment adjustment = new com.positivity.people.internal.entity.TimeEntryAdjustment();
+        adjustment.setTimeEntry(entry);
+        adjustment.setReasonCode(request.getReasonCode());
+        adjustment.setNotes(request.getNotes());
+        if (request.getProposedStartAt() != null) {
+            adjustment.setProposedStartAt(request.getProposedStartAt().toInstant());
+        }
+        if (request.getProposedEndAt() != null) {
+            adjustment.setProposedEndAt(request.getProposedEndAt().toInstant());
+        }
+        adjustment.setMinutesDelta(request.getMinutesDelta());
+        adjustment.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
+        adjustment.setCreatedBy(request.getCreatedBy());
+        adjustment.setCreatedAt(Instant.now(clock));
 
-		com.positivity.people.internal.entity.TimeEntryAdjustment saved = adjustmentRepository.save(adjustment);
-		return new TimeEntryAdjustmentResponse(saved.getAdjustmentId(), true, "created");
-	}
+        com.positivity.people.internal.entity.TimeEntryAdjustment saved = adjustmentRepository.save(adjustment);
+        return new TimeEntryAdjustmentResponse(saved.getAdjustmentId(), true, "created");
+    }
 
-	@Override
-	@Transactional(readOnly = true)
-	@NonNull
-	public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
-		return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream().map(this::toDto).toList();
-	}
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
+        return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream().map(this::toDto).toList();
+    }
 
-	@Override
-	@Transactional
-	public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, String correlationId) {
-		Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
-				.findById(adjustmentId);
-		if (opt.isEmpty()) {
-			throw new NotFoundException("Adjustment not found: " + adjustmentId);
-		}
-		com.positivity.people.internal.entity.TimeEntryAdjustment adj = opt.get();
+    @Override
+    @Transactional
+    public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, String correlationId) {
+        Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
+                .findById(adjustmentId);
+        if (opt.isEmpty()) {
+            throw new NotFoundException("Adjustment not found: " + adjustmentId);
+        }
+        com.positivity.people.internal.entity.TimeEntryAdjustment adj = opt.get();
 
-		adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
-		adj.setDecidedBy(approverUserId);
-		adj.setDecidedAt(Instant.now(clock));
-		adjustmentRepository.save(adj);
+        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
+        adj.setDecidedBy(approverUserId);
+        adj.setDecidedAt(Instant.now(clock));
+        adjustmentRepository.save(adj);
 
-		try {
-			TimeEntryAudit audit = new TimeEntryAudit();
-			audit.setTimeEntryId(adj.getTimeEntryId().toString());
-			audit.setAction("ADJUSTMENT_APPROVED");
-			audit.setActorId(approverUserId);
-			audit.setCorrelationId(correlationId);
-			audit.setDetails("Adjustment approved");
-			auditRepository.save(audit);
-		} catch (Exception ignore) {
-			// Audit logging failure should not prevent adjustment approval flow.
-		}
+        try {
+            TimeEntryAudit audit = new TimeEntryAudit();
+            audit.setTimeEntryId(adj.getTimeEntryId().toString());
+            audit.setAction("ADJUSTMENT_APPROVED");
+            audit.setActorId(approverUserId);
+            audit.setCorrelationId(correlationId);
+            audit.setDetails("Adjustment approved");
+            auditRepository.save(audit);
+        } catch (Exception ignore) {
+            // Audit logging failure should not prevent adjustment approval flow.
+        }
 
-		return true;
-	}
+        return true;
+    }
 
-	private com.positivity.people.internal.dto.TimeEntryAdjustment toDto(
-			com.positivity.people.internal.entity.TimeEntryAdjustment adjustment) {
-		com.positivity.people.internal.dto.TimeEntryAdjustment dto = new com.positivity.people.internal.dto.TimeEntryAdjustment();
-		dto.setAdjustmentId(adjustment.getAdjustmentId());
-		dto.setTimeEntryId(adjustment.getTimeEntryId());
-		dto.setReasonCode(adjustment.getReasonCode());
-		dto.setNotes(adjustment.getNotes());
-		dto.setProposedStartAt(adjustment.getProposedStartAt());
-		dto.setProposedEndAt(adjustment.getProposedEndAt());
-		dto.setMinutesDelta(adjustment.getMinutesDelta());
-		dto.setStatus(adjustment.getStatus());
-		dto.setCreatedBy(adjustment.getCreatedBy());
-		dto.setCreatedAt(adjustment.getCreatedAt());
-		dto.setDecidedBy(adjustment.getDecidedBy());
-		dto.setDecidedAt(adjustment.getDecidedAt());
-		return dto;
-	}
+    private com.positivity.people.internal.dto.TimeEntryAdjustment toDto(
+            com.positivity.people.internal.entity.TimeEntryAdjustment adjustment) {
+        com.positivity.people.internal.dto.TimeEntryAdjustment dto = new com.positivity.people.internal.dto.TimeEntryAdjustment();
+        dto.setAdjustmentId(adjustment.getAdjustmentId());
+        dto.setTimeEntryId(adjustment.getTimeEntryId());
+        dto.setReasonCode(adjustment.getReasonCode());
+        dto.setNotes(adjustment.getNotes());
+        dto.setProposedStartAt(adjustment.getProposedStartAt());
+        dto.setProposedEndAt(adjustment.getProposedEndAt());
+        dto.setMinutesDelta(adjustment.getMinutesDelta());
+        dto.setStatus(adjustment.getStatus());
+        dto.setCreatedBy(adjustment.getCreatedBy());
+        dto.setCreatedAt(adjustment.getCreatedAt());
+        dto.setDecidedBy(adjustment.getDecidedBy());
+        dto.setDecidedAt(adjustment.getDecidedAt());
+        return dto;
+    }
 
 }
