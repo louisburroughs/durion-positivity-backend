@@ -1,8 +1,8 @@
 -- Create missing workorder-domain tables for Flyway/entity parity.
 CREATE TABLE IF NOT EXISTS approval_configuration (
   id UUID PRIMARY KEY,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   location_id UUID,
   customer_id UUID,
   approval_method VARCHAR(255) DEFAULT 'CLICK_CONFIRM',
@@ -13,16 +13,16 @@ CREATE TABLE IF NOT EXISTS approval_configuration (
 );
 CREATE TABLE IF NOT EXISTS customer (
   id UUID PRIMARY KEY,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   name VARCHAR(255),
   email VARCHAR(255),
   phone VARCHAR(255)
 );
 CREATE TABLE IF NOT EXISTS vehicle (
   id UUID PRIMARY KEY,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   vin VARCHAR(255),
   make VARCHAR(255),
   model VARCHAR(255),
@@ -32,8 +32,8 @@ CREATE TABLE IF NOT EXISTS vehicle (
 );
 CREATE TABLE IF NOT EXISTS estimate_sequence (
   id UUID PRIMARY KEY,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   last_sequence_number BIGINT NOT NULL UNIQUE,
   version BIGINT
 );
@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS change_request (
   id UUID PRIMARY KEY,
   workorder_id UUID NOT NULL,
   requested_by_user_id VARCHAR(255) NOT NULL,
-  requested_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  requested_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   status VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
   is_emergency_exception BOOLEAN NOT NULL DEFAULT FALSE,
@@ -51,15 +51,15 @@ CREATE TABLE IF NOT EXISTS change_request (
   approval_note TEXT,
   is_approval_gated BOOLEAN NOT NULL DEFAULT TRUE,
   supplemental_estimate_pdf_id BIGINT,
-  approved_at TIMESTAMP,
+  approved_at TIMESTAMPTZ,
   approved_by VARCHAR(255),
-  declined_at TIMESTAMP,
+  declined_at TIMESTAMPTZ,
   CONSTRAINT fk_change_request_workorder FOREIGN KEY (workorder_id) REFERENCES workorder(id)
 );
 CREATE TABLE IF NOT EXISTS workorder_service (
   id UUID PRIMARY KEY,
-  updated_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
   work_order_id UUID,
   service_entity_id UUID,
   technician_id UUID,

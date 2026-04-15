@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate
   flyway:
-    out-of-order: true
+    out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
   cloud:
     discovery:
       enabled: true

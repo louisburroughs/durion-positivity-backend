@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS person (
   legal_name VARCHAR(255),
   preferred_name VARCHAR(255),
   employee_number VARCHAR(255),
-  status VARCHAR(50),
+  status VARCHAR(255),
   hire_date DATE,
   termination_date DATE,
   contact_info_json TEXT,
