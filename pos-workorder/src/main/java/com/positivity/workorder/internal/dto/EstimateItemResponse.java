@@ -84,8 +84,8 @@ public class EstimateItemResponse {
                 .taxCode(entity.getTaxCode())
                 .productId(entity.getProductId())
                 .serviceId(entity.getServiceId())
-                .createdAt(LocalDateTime.ofInstant(entity.getCreatedAt(), ZoneOffset.UTC))
-                .updatedAt(LocalDateTime.ofInstant(entity.getUpdatedAt(), ZoneOffset.UTC))
+                .createdAt(entity.getCreatedAt() != null ? LocalDateTime.ofInstant(entity.getCreatedAt(), ZoneOffset.UTC) : null)
+                .updatedAt(entity.getUpdatedAt() != null ? LocalDateTime.ofInstant(entity.getUpdatedAt(), ZoneOffset.UTC) : null)
                 .build();
     }
 }

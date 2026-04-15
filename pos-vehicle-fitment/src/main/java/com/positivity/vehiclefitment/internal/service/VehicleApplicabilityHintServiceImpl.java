@@ -230,8 +230,8 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
         HintResponse response = new HintResponse();
         response.setHintId(hint.getHintId().toString());
         response.setProductId(String.valueOf(hint.getProductId()));
-        response.setCreatedAt(LocalDateTime.ofInstant(hint.getCreatedAt(), ZoneOffset.UTC));
-        response.setUpdatedAt(LocalDateTime.ofInstant(hint.getUpdatedAt(), ZoneOffset.UTC));
+        response.setCreatedAt(hint.getCreatedAt() != null ? LocalDateTime.ofInstant(hint.getCreatedAt(), ZoneOffset.UTC) : null);
+        response.setUpdatedAt(hint.getUpdatedAt() != null ? LocalDateTime.ofInstant(hint.getUpdatedAt(), ZoneOffset.UTC) : null);
         response.setCreatedBy(hint.getCreatedBy());
         response.setUpdatedBy(hint.getUpdatedBy());
 
