@@ -1,6 +1,6 @@
--- Create the location table before V3 which creates indexes on it.
--- NOTE: Columns added by V3/V6/V7/V8 are pre-included here; those migrations
---       use ADD COLUMN IF NOT EXISTS and will safely no-op on existing columns.
+-- Create the location table before V3 which creates indexes on pre-existing columns here.
+-- NOTE: Columns added by V6/V7/V8 are pre-included; those migrations use ADD COLUMN IF NOT EXISTS
+--       and will safely no-op. V3 creates indexes on columns defined in this migration.
 -- FK constraints to storage_location (V5) and location_type (V10) are in V11.
 CREATE TABLE IF NOT EXISTS location (
   id UUID PRIMARY KEY,
