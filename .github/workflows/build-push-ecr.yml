@@ -186,13 +186,26 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: service-jars
-          path: .
+          path: downloaded-jars
 
       - name: Restore service JAR
         run: |
           set -euo pipefail
           mkdir -p "${{ matrix.service }}/target"
-          cp "artifact-jars/${{ matrix.service }}/target/"*.jar "${{ matrix.service }}/target/"
+          JAR_PATH="$(
+            find downloaded-jars -type f \
+              -path "*/${{ matrix.service }}/target/*.jar" \
+              ! -name '*.jar.original' \
+              | head -n 1
+          )"
+
+          if [[ -z "${JAR_PATH}" ]]; then
+            echo "Could not locate a staged JAR for ${{ matrix.service }}"
+            find downloaded-jars -maxdepth 4 -print | sort
+            exit 1
+          fi
+
+          cp "${JAR_PATH}" "${{ matrix.service }}/target/"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

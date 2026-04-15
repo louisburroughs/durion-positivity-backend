@@ -161,7 +161,7 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     public PostingCategoryListResponse listPostingCategories(
             int page, int size, @NonNull String sort, Boolean isActive) {
         if (log.isInfoEnabled()) {
-            log.info("Listing posting categories: page={}, size={}, isActive={}", page, size, isActive);
+            log.info("Listing posting categories:");
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
