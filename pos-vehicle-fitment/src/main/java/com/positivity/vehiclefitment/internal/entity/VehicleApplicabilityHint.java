@@ -2,7 +2,7 @@ package com.positivity.vehiclefitment.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -39,11 +39,11 @@ public class VehicleApplicabilityHint {
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @LastModifiedDate
     @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Column
     private String createdBy;

@@ -475,7 +475,7 @@ class WipServiceImplTest {
                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"))
                 .status(status)
-                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
     }
 
@@ -486,7 +486,7 @@ class WipServiceImplTest {
                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000999"))
                 .status(WorkorderStatus.AWAITING_PARTS)
-                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
     }
 

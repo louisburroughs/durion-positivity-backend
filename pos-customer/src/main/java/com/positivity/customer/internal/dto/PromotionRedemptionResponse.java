@@ -3,6 +3,7 @@ package com.positivity.customer.internal.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.positivity.customer.internal.enums.RedemptionStatus;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -27,5 +28,5 @@ public class PromotionRedemptionResponse {
     private Boolean recordedOverLimit;
     private RedemptionStatus status;
     private LocalDateTime redemptionTimestamp;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }

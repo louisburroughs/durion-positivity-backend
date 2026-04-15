@@ -2,7 +2,7 @@ package com.positivity.vehiclefitment.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -39,14 +39,14 @@ public class HintResponse {
             requiredMode = Schema.RequiredMode.REQUIRED,
             example = "2026-03-05T14:10:00")
     @NotNull
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Schema(
             description = "Hint last update timestamp",
             requiredMode = Schema.RequiredMode.REQUIRED,
             example = "2026-03-05T14:12:00")
     @NotNull
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Schema(description = "User or system identity that created the hint", example = "tech.ops@durion.local")
     private String createdBy;

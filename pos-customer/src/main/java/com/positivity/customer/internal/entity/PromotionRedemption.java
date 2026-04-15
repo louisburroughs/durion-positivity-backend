@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Getter;
@@ -75,5 +76,5 @@ public class PromotionRedemption {
 
     @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }

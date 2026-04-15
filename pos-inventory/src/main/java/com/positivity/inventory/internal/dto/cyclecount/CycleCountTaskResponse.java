@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
 import com.positivity.inventory.internal.enums.TaskStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +26,6 @@ public class CycleCountTaskResponse {
     private TaskStatus status;
     private UUID latestCountEntryId;
     private Integer countEntriesCount;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

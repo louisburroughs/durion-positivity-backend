@@ -519,7 +519,7 @@ class WorkorderInvoiceServiceTest {
                 .estimate(new Estimate(estimateId))
                 .approvalId(approvalId)
                 .status(WorkorderStatus.COMPLETED)
-                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .completedAt(Instant.now(TEST_CLOCK))
                 .build();
     }
