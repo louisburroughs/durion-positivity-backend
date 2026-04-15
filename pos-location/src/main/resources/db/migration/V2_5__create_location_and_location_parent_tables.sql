@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS location (
   normalized_name VARCHAR(255),
   code VARCHAR(255) UNIQUE,
   status VARCHAR(255),
-  created_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ,
   hr_location_id VARCHAR(255),
   timezone VARCHAR(255),
