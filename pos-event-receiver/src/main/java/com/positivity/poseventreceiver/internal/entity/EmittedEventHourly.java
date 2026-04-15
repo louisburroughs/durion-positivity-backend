@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -35,7 +36,7 @@ public class EmittedEventHourly {
     private long eventCount;
 
     @Column(name = "avg_elapsed_ms")
-    private double avgElapsedMs;
+    private BigDecimal avgElapsedMs;
 
     @Column(name = "p95_elapsed_ms")
     private double p95ElapsedMs;
