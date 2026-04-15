@@ -2,16 +2,16 @@ CREATE TABLE IF NOT EXISTS manufacturer (
   id UUID PRIMARY KEY,
   name VARCHAR(255),
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
 );
 CREATE TABLE IF NOT EXISTS make (
   id UUID PRIMARY KEY,
   name VARCHAR(255),
   manufacturer_id UUID,
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_make_manufacturer FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id)
 );
 CREATE TABLE IF NOT EXISTS model (
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS model (
   name VARCHAR(255),
   make_id UUID,
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_model_make FOREIGN KEY (make_id) REFERENCES make(id)
 );
 CREATE TABLE IF NOT EXISTS vehicle_type (
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS vehicle_type (
   vehicle_type_name VARCHAR(255),
   vehicle_type_id VARCHAR(255),
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_vehicle_type_make FOREIGN KEY (make_id) REFERENCES make(id)
 );
 CREATE TABLE IF NOT EXISTS vehicle_variable (
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS vehicle_variable (
   name VARCHAR(255),
   description VARCHAR(255),
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
 );
 CREATE TABLE IF NOT EXISTS vehicle_variable_value (
   id UUID PRIMARY KEY,
@@ -47,15 +47,15 @@ CREATE TABLE IF NOT EXISTS vehicle_variable_value (
   variable_value VARCHAR(255),
   value_id VARCHAR(255),
   cache_timestamp TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_vehicle_variable_value_variable FOREIGN KEY (variable_id) REFERENCES vehicle_variable(id)
 );
 CREATE TABLE IF NOT EXISTS vehicle_applicability_hints (
   hint_id UUID PRIMARY KEY,
   product_id UUID NOT NULL,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   created_by VARCHAR(255),
   updated_by VARCHAR(255)
 );
@@ -64,8 +64,8 @@ CREATE TABLE IF NOT EXISTS fitment_tags (
   tag_type VARCHAR(255) NOT NULL,
   tag_value VARCHAR(255) NOT NULL,
   hint_id UUID NOT NULL,
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_fitment_tags_hint FOREIGN KEY (hint_id) REFERENCES vehicle_applicability_hints(hint_id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS part_fitment_entity (
@@ -79,8 +79,8 @@ CREATE TABLE IF NOT EXISTS part_fitment_entity (
   engine_type VARCHAR(255),
   submodel VARCHAR(255),
   notes VARCHAR(255),
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_part_fitment_manufacturer FOREIGN KEY (vehicle_manufacturer_id) REFERENCES manufacturer(id),
   CONSTRAINT fk_part_fitment_make FOREIGN KEY (vehicle_make_id) REFERENCES make(id),
   CONSTRAINT fk_part_fitment_model FOREIGN KEY (vehicle_model_id) REFERENCES model(id),

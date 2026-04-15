@@ -79,8 +79,8 @@ CREATE TABLE IF NOT EXISTS promotion_eligibility_rule (
     rule_combination VARCHAR(10),
     created_by VARCHAR(255),
     updated_by VARCHAR(255),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
     CONSTRAINT fk_promotion_eligibility_rule_promotion
         FOREIGN KEY (promotion_id) REFERENCES promotion_offer(promotion_offer_id)
 );
