@@ -1,6 +1,8 @@
 package com.positivity.customer.internal.dto;
 
 import com.positivity.customer.internal.entity.PromotionRedemption;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.jspecify.annotations.NonNull;
 
 public final class PromotionRedemptionMapper {
@@ -21,6 +23,6 @@ public final class PromotionRedemptionMapper {
                 redemption.getRecordedOverLimit(),
                 redemption.getStatus(),
                 redemption.getRedemptionTimestamp(),
-                redemption.getCreatedAt());
+                LocalDateTime.ofInstant(redemption.getCreatedAt(), ZoneOffset.UTC));
     }
 }

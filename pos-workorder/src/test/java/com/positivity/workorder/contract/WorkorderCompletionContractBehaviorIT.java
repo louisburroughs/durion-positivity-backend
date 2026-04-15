@@ -335,7 +335,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 .workorder(workorder)
                 .requestedByUserId(SYSTEM_USER_ID)
                 .requestedAt(LocalDateTime.now(TEST_CLOCK))
-                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                 .description("Pending advisor approval before completion")
                 .isApprovalGated(true)

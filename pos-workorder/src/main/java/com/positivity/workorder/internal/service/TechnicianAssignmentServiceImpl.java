@@ -92,8 +92,6 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 .assignedAt(now)
                 .notes(notes)
                 .current(true)
-                .createdAt(now)
-                .updatedAt(now)
                 .build();
 
         TechnicianAssignment saved = assignmentRepository.save(assignment);
@@ -169,8 +167,6 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 .notes(notes)
                 .reassignmentReason(reason)
                 .current(true)
-                .createdAt(now)
-                .updatedAt(now)
                 .build();
 
         TechnicianAssignment saved = assignmentRepository.save(newAssignment);

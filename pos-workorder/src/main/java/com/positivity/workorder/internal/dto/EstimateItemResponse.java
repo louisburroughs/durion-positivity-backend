@@ -5,6 +5,7 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -83,8 +84,8 @@ public class EstimateItemResponse {
                 .taxCode(entity.getTaxCode())
                 .productId(entity.getProductId())
                 .serviceId(entity.getServiceId())
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
+                .createdAt(LocalDateTime.ofInstant(entity.getCreatedAt(), ZoneOffset.UTC))
+                .updatedAt(LocalDateTime.ofInstant(entity.getUpdatedAt(), ZoneOffset.UTC))
                 .build();
     }
 }

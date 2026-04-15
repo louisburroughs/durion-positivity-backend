@@ -44,12 +44,12 @@ for module_dir in pos-*; do
   for file in "${migration_files[@]}"; do
     base="$(basename "$file")"
 
-    if [[ ! "$base" =~ ^(V[0-9]+__[A-Za-z0-9_]+|R__[A-Za-z0-9_]+)\.sql$ ]]; then
+    if [[ ! "$base" =~ ^(V[0-9]+(_[0-9]+)*__[A-Za-z0-9_]+|R__[A-Za-z0-9_]+)\.sql$ ]]; then
       echo "ERROR: $module_name migration filename invalid: $base"
       errors=$((errors + 1))
     fi
 
-    if [[ "$base" =~ ^V([0-9]+)__ ]]; then
+    if [[ "$base" =~ ^V([0-9]+(_[0-9]+)*)__ ]]; then
       version="${BASH_REMATCH[1]}"
       if [[ -n "${version_seen[$version]:-}" ]]; then
         echo "ERROR: $module_name has duplicate migration version V$version: ${version_seen[$version]} and $base"

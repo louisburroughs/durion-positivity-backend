@@ -23,6 +23,7 @@ import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.service.CycleCountServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +42,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CycleCountServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Instant TASK_CREATED_AT = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant TASK_UPDATED_AT = Instant.parse("2026-01-02T12:00:00Z");
 
     @Mock
     private CycleCountTaskRepository taskRepository;
@@ -222,6 +225,12 @@ class CycleCountServiceImplTest {
 
         assertThat(response.getTaskId()).isEqualTo(taskId);
         assertThat(response.getAuditorId()).isEqualTo("auditor-1");
+        assertThat(response.getCreatedAt())
+                .isNotNull()
+                .isEqualTo(LocalDateTime.ofInstant(TASK_CREATED_AT, ZoneOffset.UTC));
+        assertThat(response.getUpdatedAt())
+                .isNotNull()
+                .isEqualTo(LocalDateTime.ofInstant(TASK_UPDATED_AT, ZoneOffset.UTC));
     }
 
     @Test
@@ -295,6 +304,8 @@ class CycleCountServiceImplTest {
                 .countEntriesCount(countEntriesCount)
                 .latestCountEntryId(latestEntryId)
                 .status(TaskStatus.ASSIGNED)
+                .createdAt(TASK_CREATED_AT)
+                .updatedAt(TASK_UPDATED_AT)
                 .build();
     }
 

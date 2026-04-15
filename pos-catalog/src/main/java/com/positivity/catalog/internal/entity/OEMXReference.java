@@ -9,6 +9,7 @@ import lombok.Setter;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@Table(name = "oemxreference")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter

@@ -7,6 +7,8 @@ import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -228,8 +230,8 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
         HintResponse response = new HintResponse();
         response.setHintId(hint.getHintId().toString());
         response.setProductId(String.valueOf(hint.getProductId()));
-        response.setCreatedAt(hint.getCreatedAt());
-        response.setUpdatedAt(hint.getUpdatedAt());
+        response.setCreatedAt(LocalDateTime.ofInstant(hint.getCreatedAt(), ZoneOffset.UTC));
+        response.setUpdatedAt(LocalDateTime.ofInstant(hint.getUpdatedAt(), ZoneOffset.UTC));
         response.setCreatedBy(hint.getCreatedBy());
         response.setUpdatedBy(hint.getUpdatedBy());
 
