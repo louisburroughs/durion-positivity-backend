@@ -303,6 +303,7 @@
 		<spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
 		<palantir-java-format.version>2.90.0</palantir-java-format.version>
 		<spotbugs-maven-plugin.version>4.9.8.1</spotbugs-maven-plugin.version>
+		<sonar-maven-plugin.version>5.5.0.6356</sonar-maven-plugin.version>
 		<sonar.organization>louisburroughs</sonar.organization>
 		<!-- Test runtime tuning -->
 		<tests.forkCount>1</tests.forkCount>
@@ -354,6 +355,11 @@
 					<groupId>com.github.spotbugs</groupId>
 					<artifactId>spotbugs-maven-plugin</artifactId>
 					<version>${spotbugs-maven-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.sonarsource.scanner.maven</groupId>
+					<artifactId>sonar-maven-plugin</artifactId>
+					<version>${sonar-maven-plugin.version}</version>
 				</plugin>
 			</plugins>
 		</pluginManagement>

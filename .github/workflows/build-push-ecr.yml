@@ -7,6 +7,7 @@ on:
       - "pos-*/**"
       - "pom.xml"
       - "docker-compose.yml"
+      - "postgres/**"
       - "deployment/alpha/docker-compose.prod.yml"
       - ".github/workflows/build-push-ecr.yml"
   workflow_dispatch:
@@ -81,7 +82,7 @@ jobs:
 
           CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)"
 
-          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|deployment/alpha/docker-compose\.prod\.yml|\.github/workflows/build-push-ecr\.yml)$'; then
+          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|postgres/.*|deployment/alpha/docker-compose\.prod\.yml|\.github/workflows/build-push-ecr\.yml)$'; then
             SERVICES_JSON="${ALL_SERVICES_JSON}"
             MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
             echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
@@ -326,13 +327,14 @@ jobs:
         run: |
           aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
           aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
+          aws s3 cp postgres/init-databases.sql s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql
 
       - name: Pull compose files on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml"]}' \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql"]}' \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \

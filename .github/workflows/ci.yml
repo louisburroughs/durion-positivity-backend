@@ -28,6 +28,7 @@ env:
   JAVA_DISTRIBUTION: "temurin"
   MAVEN_OPTS: -Xmx3072m
   DOCKER_BUILDKIT: 1
+  SONAR_MAVEN_PLUGIN_VERSION: "5.5.0.6356"
 
 jobs:
   detect-test-modules:
@@ -377,7 +378,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          ./mvnw test-compile sonar:sonar -DskipTests -DskipITs \
+          ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar -DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
