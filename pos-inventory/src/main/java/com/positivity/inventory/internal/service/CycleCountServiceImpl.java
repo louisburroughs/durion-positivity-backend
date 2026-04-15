@@ -17,6 +17,8 @@ import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.service.CycleCountService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -310,6 +312,8 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .status(task.getStatus())
                 .latestCountEntryId(task.getLatestCountEntryId())
                 .countEntriesCount(task.getCountEntriesCount())
+                .createdAt(LocalDateTime.ofInstant(task.getCreatedAt(), ZoneOffset.UTC))
+                .updatedAt(LocalDateTime.ofInstant(task.getUpdatedAt(), ZoneOffset.UTC))
                 .build();
     }
 

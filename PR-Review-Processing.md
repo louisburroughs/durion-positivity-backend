@@ -223,4 +223,96 @@ None. The branch is clean and all findings are resolved.
 Before merging, the reviewer may wish to:
 1. Confirm `SPRING_FLYWAY_OUT_OF_ORDER=true` is set in the alpha environment's deploy config before this PR is applied (so the V2_5/V5_5 out-of-order migrations actually run on already-migrated alpha DBs).
 2. After alpha migration is confirmed successful, consider setting `SPRING_FLYWAY_OUT_OF_ORDER=false` in alpha to restore strict migration order enforcement.
+### 2026-04-15T14:00:00Z | Orchestrator — New Review Finding
+
+**Objective**: Address newly identified API contract regression in PR #616: DTO objects (`createdAt`/`updatedAt`) were changed from `LocalDateTime` to `Instant` as part of the LocalDateTime→Instant entity migration. This breaks the existing JSON API contract. DTOs must be reverted to `LocalDateTime` while entities keep `Instant`.
+
+**Track**: Backend
+
+**Finding** — HIGH (API contract regression) | coder | no prior PR comment thread
+
+| # | File | Change Required |
+|---|------|----------------|
+| F1 | `pos-workorder/src/main/java/com/positivity/workorder/internal/dto/EstimateItemResponse.java` | Change `createdAt`/`updatedAt` from `Instant` → `LocalDateTime`; update `fromEntity()` with `LocalDateTime.ofInstant(..., ZoneOffset.UTC)` conversion; swap import |
+| F2 | `pos-vehicle-fitment/src/main/java/com/positivity/vehiclefitment/internal/dto/HintResponse.java` | Change `createdAt`/`updatedAt` from `Instant` → `LocalDateTime`; swap import |
+| F3 | `pos-vehicle-fitment/src/main/java/com/positivity/vehiclefitment/internal/service/VehicleApplicabilityHintServiceImpl.java` | In `mapToResponse()`, convert `hint.getCreatedAt()` and `hint.getUpdatedAt()` using `LocalDateTime.ofInstant(...)` |
+| F4 | `pos-inventory/src/main/java/com/positivity/inventory/internal/dto/cyclecount/CycleCountTaskResponse.java` | Change `createdAt`/`updatedAt` from `Instant` → `LocalDateTime`; swap import |
+| F5 | `pos-customer/src/main/java/com/positivity/customer/internal/dto/PromotionRedemptionResponse.java` | Change `createdAt` from `Instant` → `LocalDateTime`; remove `Instant` import (already has LocalDateTime) |
+| F6 | `pos-customer/src/main/java/com/positivity/customer/internal/dto/PromotionRedemptionMapper.java` | Convert `redemption.getCreatedAt()` → `LocalDateTime.ofInstant(redemption.getCreatedAt(), ZoneOffset.UTC)`; add `LocalDateTime` + `ZoneOffset` imports |
+
+**Remediation Plan**:
+- Step 1: Delegate all 6 file changes to `PR Fix Coder`
+- Step 2: Verify compilation with `./mvnw compile -pl pos-workorder,pos-vehicle-fitment,pos-inventory,pos-customer -am`
+- Step 3: Delegate to `PR Code Reviewer` for verdict
+- Step 4: Write final summary
+
+**Validation**: accepted
+
+## Final Summary — Cycle 2
+
+- **PR analyzed**: #616 `anvil/flyway-orphan-migrations` — https://github.com/louisburroughs/durion-positivity-backend/pull/616
+- **Review run timestamp (UTC)**: 2026-04-15T14:30:00Z
+- **Review track**: Backend
+- **Processing log**: `PR-Review-Processing.md`
+
+### Evidence Sources Used
+- PR diff and changed files (branch `anvil/flyway-orphan-migrations` vs `main`)
+- Previous PR review outputs (already in processing file — Flyway migration findings)
+- Codebase grep: all `internal/dto/**` files for `Instant`/`LocalDateTime` usage
+- Entity files confirmed: `EstimateItem.java`, `VehicleApplicabilityHint.java`, `CycleCountTask.java`, `PromotionRedemption.java`
+- Mapper files: `EstimateItemResponse.fromEntity()`, `VehicleApplicabilityHintServiceImpl.mapToResponse()`, `PromotionRedemptionMapper.toResponse()`, `CycleCountServiceImpl.toTaskResponse()`
+
+### Findings by Severity
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| F1–F6 | HIGH | API contract regression: 4 response DTOs had `createdAt`/`updatedAt` changed from `LocalDateTime` to `Instant`, breaking the JSON serialization contract | FIXED |
+| PRCR-001 | MEDIUM | Pre-existing: `CycleCountServiceImpl.toTaskResponse()` never populated `createdAt`/`updatedAt` fields, always returning `null` | FIXED |
+
+### Code Fixes Completed
+
+| File | Change |
+|------|--------|
+| `pos-workorder/.../dto/EstimateItemResponse.java` | Reverted `createdAt`/`updatedAt` to `LocalDateTime`; `fromEntity()` converts `Instant` via `ZoneOffset.UTC` |
+| `pos-vehicle-fitment/.../dto/HintResponse.java` | Reverted `createdAt`/`updatedAt` to `LocalDateTime` |
+| `pos-vehicle-fitment/.../service/VehicleApplicabilityHintServiceImpl.java` | `mapToResponse()` converts entity `Instant` → DTO `LocalDateTime` via `ZoneOffset.UTC` |
+| `pos-inventory/.../dto/cyclecount/CycleCountTaskResponse.java` | Reverted `createdAt`/`updatedAt` to `LocalDateTime` |
+| `pos-customer/.../dto/PromotionRedemptionResponse.java` | Reverted `createdAt` to `LocalDateTime` |
+| `pos-customer/.../dto/PromotionRedemptionMapper.java` | Converts entity `Instant` → DTO `LocalDateTime` via `ZoneOffset.UTC` |
+| `pos-inventory/.../service/CycleCountServiceImpl.java` | Added `createdAt`/`updatedAt` population to `toTaskResponse()` builder (PRCR-001) |
+
+### Test Fixes Completed
+
+| File | Change |
+|------|--------|
+| `pos-workorder/.../contract/TechnicianAssignmentContractBehaviorIT.java` | Fixed entity builder calls (lines 372, 405, 418): converted `LocalDateTime.now().minusHours(n)` → `.toInstant(ZoneOffset.UTC)` for entity `Instant` fields |
+| `pos-inventory/.../service/CycleCountServiceImplTest.java` | Added `TASK_CREATED_AT`/`TASK_UPDATED_AT` constants to fixture, asserts `createdAt`/`updatedAt` are non-null and match expected `LocalDateTime.ofInstant(...)` conversion |
+
+### PR Comment Thread Coverage
+
+| Thread ID | Status | Note |
+|-----------|--------|------|
+| r3086028728 | Previously addressed | Flyway out-of-order env var — addressed in prior review cycle |
+| r3086028756 | Previously addressed | VARCHAR length mismatch — addressed in prior review cycle |
+| r3086028770 | Previously addressed | Addressed in prior review cycle |
+| r3086028786 | Previously addressed | Addressed in prior review cycle |
+| (DTO regression) | N/A — no existing thread | New finding from this review cycle; no PR comment thread to reply to |
+
+### Final Verification Status
+
+- **Production compile**: `./mvnw compile -pl pos-workorder,pos-vehicle-fitment,pos-inventory,pos-customer -am` — ✅ BUILD SUCCESS
+- **Test compile**: `./mvnw test-compile -pl pos-workorder,pos-vehicle-fitment,pos-inventory,pos-customer -am` — ✅ BUILD SUCCESS
+- **CycleCountServiceImplTest**: `Tests run: 11, Failures: 0, Errors: 0` — ✅ PASS
+- **Code Reviewer Verdict**: `PASS`
+
+### Unresolved Blockers
+
+None.
+
+### Architecture Compliance
+
+- Entity `createdAt`/`updatedAt` fields: `Instant` (correct for internal JPA storage)
+- DTO `createdAt`/`updatedAt` fields: `LocalDateTime` (restored; preserves pre-existing JSON API contract)
+- Conversion layer: `LocalDateTime.ofInstant(instant, ZoneOffset.UTC)` at mapper/factory boundaries
+- Pre-production policy: no deprecated APIs introduced; no backward-compatibility shims
 

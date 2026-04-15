@@ -4,7 +4,8 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,10 +63,10 @@ public class EstimateItemResponse {
     private UUID serviceId;
 
     @Schema(description = "Record creation timestamp")
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
     @Schema(description = "Record last update timestamp")
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
 
     /**
      * Convert entity to response DTO.
@@ -83,8 +84,8 @@ public class EstimateItemResponse {
                 .taxCode(entity.getTaxCode())
                 .productId(entity.getProductId())
                 .serviceId(entity.getServiceId())
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
+                .createdAt(LocalDateTime.ofInstant(entity.getCreatedAt(), ZoneOffset.UTC))
+                .updatedAt(LocalDateTime.ofInstant(entity.getUpdatedAt(), ZoneOffset.UTC))
                 .build();
     }
 }

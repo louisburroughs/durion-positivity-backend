@@ -369,8 +369,8 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .assignedAt(now.minusHours(2))
                 .notes("Initial assignment")
                 .current(true)
-                .createdAt(now.minusHours(2))
-                .updatedAt(now.minusHours(2))
+                .createdAt(now.minusHours(2).toInstant(ZoneOffset.UTC))
+                .updatedAt(now.minusHours(2).toInstant(ZoneOffset.UTC))
                 .build();
         assignmentRepository.save(assignment);
 
@@ -402,8 +402,8 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .reassignmentReason("Technician called out sick")
                 .notes("First assignment")
                 .current(false)
-                .createdAt(now.minusDays(2))
-                .updatedAt(now.minusDays(1))
+                .createdAt(now.minusDays(2).toInstant(ZoneOffset.UTC))
+                .updatedAt(now.minusDays(1).toInstant(ZoneOffset.UTC))
                 .build();
         assignmentRepository.save(firstAssignment);
 
@@ -415,8 +415,8 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .assignedAt(now.minusDays(1))
                 .notes("Reassigned to available technician")
                 .current(true)
-                .createdAt(now.minusDays(1))
-                .updatedAt(now.minusDays(1))
+                .createdAt(now.minusDays(1).toInstant(ZoneOffset.UTC))
+                .updatedAt(now.minusDays(1).toInstant(ZoneOffset.UTC))
                 .build();
         assignmentRepository.save(currentAssignment);
 
