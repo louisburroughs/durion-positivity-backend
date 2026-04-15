@@ -95,14 +95,13 @@ public class TechnicianAssignment {
     @Builder.Default
     private Boolean current = true;
 
-    // Audit fields
+    // Audit fields — populated by Spring Data AuditingEntityListener; must not be @NonNull
+    // to avoid Lombok null checks firing before @PrePersist wires them in.
     @CreatedDate
-    @NonNull
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     @LastModifiedDate
-    @NonNull
     @Column(nullable = false)
     private Instant updatedAt;
 

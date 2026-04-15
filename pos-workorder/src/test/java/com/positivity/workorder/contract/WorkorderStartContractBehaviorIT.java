@@ -193,8 +193,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         // The most recent transition should be to WORK_IN_PROGRESS
         Map<String, Object> newestTransition = transitions.get(0);
-        assertThat(newestTransition).containsEntry("toStatus", "WORK_IN_PROGRESS");
-        assertThat(newestTransition).containsEntry("fromStatus", "APPROVED");
+        assertThat(newestTransition).containsEntry("toStatus", "WORK_IN_PROGRESS").containsEntry("fromStatus", "APPROVED");
 
         // Verify each transition has required fields
         for (Map<String, Object> transition : transitions) {
@@ -216,7 +215,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         UUID workorderId = seedApprovedWorkorder();
 
         // Start the workorder (this should create a snapshot)
-        Map<String, Object> startRequest = Map.of("userId", SYSTEM_USER_ID.toString(), "reason", "Starting work");
+        Map<String, Object> startRequest = Map.of("userId", SYSTEM_USER_ID, "reason", "Starting work");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

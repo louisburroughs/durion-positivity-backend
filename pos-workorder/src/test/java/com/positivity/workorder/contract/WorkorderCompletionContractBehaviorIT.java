@@ -101,7 +101,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         seedPartItem(workorderId, WorkorderItemStatus.CANCELLED, new BigDecimal("30.00"));
 
         Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(), "completionNotes", "All required repair operations completed");
+                "userId", SYSTEM_USER_ID, "completionNotes", "All required repair operations completed");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -175,7 +175,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
 
         Map<String, Object> request =
-                Map.of("userId", SYSTEM_USER_ID.toString(), "completionNotes", "Attempt completion with open items");
+                Map.of("userId", SYSTEM_USER_ID, "completionNotes", "Attempt completion with open items");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -195,7 +195,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
     void reopenWorkorder_ShouldRequireReason() {
         UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
 
-        Map<String, Object> request = Map.of("userId", SYSTEM_USER_ID.toString(), "reopenReason", "   ");
+        Map<String, Object> request = Map.of("userId", SYSTEM_USER_ID, "reopenReason", "   ");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -213,7 +213,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
 
         Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(), "reopenReason", "Correcting part quantity before invoicing");
+                "userId", SYSTEM_USER_ID, "reopenReason", "Correcting part quantity before invoicing");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -248,7 +248,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
 
         Map<String, Object> request =
-                Map.of("userId", SYSTEM_USER_ID.toString(), "reopenReason", "Attempting invalid reopen");
+                Map.of("userId", SYSTEM_USER_ID, "reopenReason", "Attempting invalid reopen");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

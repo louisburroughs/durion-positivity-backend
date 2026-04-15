@@ -87,7 +87,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // When: Assign a technician to the workorder
         Map<String, Object> assignRequest = Map.of(
                 "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID.toString(),
+                "assignedByUserId", SYSTEM_USER_ID,
                 "notes", "Assigned to senior tech for brake system work");
 
         givenWithGatewayAuth()
@@ -102,7 +102,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("technicianId", equalTo(testTechnicianId1.toString()))
                 .body("assignedAt", notNullValue())
-                .body("assignedBy", equalTo(SYSTEM_USER_ID.toString()))
+                .body("assignedBy", equalTo(SYSTEM_USER_ID))
                 .body("status", equalTo("ASSIGNED"))
                 .body("message", containsString("successfully"));
 
@@ -118,7 +118,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         TechnicianAssignment assignment = assignments.get(0);
         assertThat(assignment.getTechnicianId()).isEqualTo(testTechnicianId1);
         assertThat(assignment.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID.toString());
+        assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID);
         assertThat(assignment.getCurrent()).isTrue();
         assertThat(assignment.getUnassignedAt()).isNull();
         assertThat(assignment.getNotes()).isEqualTo("Assigned to senior tech for brake system work");
@@ -143,7 +143,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 "newTechnicianId",
                 testTechnicianId2.toString(),
                 "reassignedByUserId",
-                SYSTEM_USER_ID.toString(),
+                SYSTEM_USER_ID,
                 "reason",
                 "Original technician unavailable, reassigning to available tech",
                 "notes",
@@ -165,7 +165,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .body("previousTechnicianId", anyOf(equalTo(previousTechId.toString()), nullValue()))
                 .body("reassignmentReason", equalTo("Original technician unavailable, reassigning to available tech"))
                 .body("reassignedAt", notNullValue())
-                .body("reassignedBy", equalTo(SYSTEM_USER_ID.toString()))
+                .body("reassignedBy", equalTo(SYSTEM_USER_ID))
                 .body("message", containsString("successfully"));
 
         // Then: Verify new assignment is current
@@ -215,7 +215,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         // Then: Verify history is ordered newest-first
         List<TechnicianAssignment> history = assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
-        assertThat(history.size()).isGreaterThanOrEqualTo(2);
+        assertThat(history).hasSizeGreaterThanOrEqualTo(2);
 
         // Verify most recent is first
         LocalDateTime previousTimestamp = history.get(0).getAssignedAt();
@@ -239,7 +239,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // When: Attempt to assign a technician
         Map<String, Object> assignRequest = Map.of(
                 "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID.toString(),
+                "assignedByUserId", SYSTEM_USER_ID,
                 "notes", "Attempting to assign to completed workorder");
 
         givenWithGatewayAuth()
@@ -272,7 +272,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // When: Attempt to reassign
         Map<String, Object> reassignRequest = Map.of(
                 "newTechnicianId", testTechnicianId1.toString(),
-                "reassignedByUserId", SYSTEM_USER_ID.toString(),
+                "reassignedByUserId", SYSTEM_USER_ID,
                 "reason", "Attempting reassignment without existing assignment");
 
         givenWithGatewayAuth()
@@ -365,7 +365,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         TechnicianAssignment assignment = TechnicianAssignment.builder()
                 .workorder(new Workorder(workorderId))
                 .technicianId(testTechnicianId1)
-                .assignedBy(SYSTEM_USER_ID.toString())
+                .assignedBy(SYSTEM_USER_ID)
                 .assignedAt(now.minusHours(2))
                 .notes("Initial assignment")
                 .current(true)
@@ -396,7 +396,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
                 .workorder(new Workorder(workorderId))
                 .technicianId(testTechnicianId1)
-                .assignedBy(SYSTEM_USER_ID.toString())
+                .assignedBy(SYSTEM_USER_ID)
                 .assignedAt(now.minusDays(2))
                 .unassignedAt(now.minusDays(1))
                 .reassignmentReason("Technician called out sick")
@@ -411,7 +411,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         TechnicianAssignment currentAssignment = TechnicianAssignment.builder()
                 .workorder(new Workorder(workorderId))
                 .technicianId(testTechnicianId2)
-                .assignedBy(SYSTEM_USER_ID.toString())
+                .assignedBy(SYSTEM_USER_ID)
                 .assignedAt(now.minusDays(1))
                 .notes("Reassigned to available technician")
                 .current(true)

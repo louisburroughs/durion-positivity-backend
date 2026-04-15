@@ -83,8 +83,7 @@ public class Workorder {
 
     // Approval-related fields
     private Instant approvedAt;
-    // private String approvedBy;
-
+  
     // Customer signature capture for approval
     @Column(length = 100000)
     private String signatureData; // Base64-encoded signature image

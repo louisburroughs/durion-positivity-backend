@@ -50,7 +50,7 @@ public final class TechnicianAssignmentMapper {
                 .workorderId(newAssignment.getWorkorderId().toString())
                 .technicianId(newAssignment.getTechnicianId().toString())
                 .assignedAt(newAssignment.getAssignedAt())
-                .assignedBy(newAssignment.getAssignedBy().toString())
+                .assignedBy(newAssignment.getAssignedBy())
                 .previousTechnicianId(previousTechnicianId != null ? previousTechnicianId.toString() : null)
                 .status(workorderStatus.name())
                 .reassignmentReason(reason)

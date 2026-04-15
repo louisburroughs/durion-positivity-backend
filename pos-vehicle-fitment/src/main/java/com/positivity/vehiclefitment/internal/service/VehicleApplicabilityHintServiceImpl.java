@@ -180,7 +180,7 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
                 if (!matchesTagValue(tagType, hintValue, attribute.getValue())) {
                     return false;
                 }
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 log.warn("Unknown tag type: {}", attribute.getKey());
             }
         }
@@ -217,7 +217,7 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
                 int singleYear = Integer.parseInt(rangeValue.trim());
                 return year == singleYear;
             }
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             log.warn("Invalid year format: range={}, value={}", rangeValue, yearValue);
             return false;
         }
