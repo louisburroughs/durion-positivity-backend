@@ -1,14 +1,17 @@
--- Create the location table (referenced by ALTER migrations V3, V6, V7, V8).
+-- Create the location table before V3 which creates indexes on it.
+-- NOTE: Columns added by V3/V6/V7/V8 are pre-included here; those migrations
+--       use ADD COLUMN IF NOT EXISTS and will safely no-op on existing columns.
+-- FK constraints to storage_location (V5) and location_type (V10) are in V11.
 CREATE TABLE IF NOT EXISTS location (
   id UUID PRIMARY KEY,
   name VARCHAR(255),
   normalized_name VARCHAR(255),
   code VARCHAR(255) UNIQUE,
-  status VARCHAR(255),
-  created_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(50),
+  created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
   hr_location_id VARCHAR(255),
-  timezone VARCHAR(255),
+  timezone VARCHAR(100),
   operating_hours TEXT,
   holiday_closures TEXT,
   check_in_buffer_minutes INTEGER,
@@ -26,12 +29,9 @@ CREATE TABLE IF NOT EXISTS location (
   mailing_address VARCHAR(255),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   location_type_id UUID,
-  responsible_person_id BIGINT,
-  CONSTRAINT fk_location_staging FOREIGN KEY (default_staging_location_id) REFERENCES storage_location(id),
-  CONSTRAINT fk_location_quarantine FOREIGN KEY (default_quarantine_location_id) REFERENCES storage_location(id),
-  CONSTRAINT fk_location_type FOREIGN KEY (location_type_id) REFERENCES location_type(id)
+  responsible_person_id BIGINT
 );
--- Create the location_parent join table with unique constraints.
+-- Create the location_parent join table (FKs to location are safe - same migration).
 CREATE TABLE IF NOT EXISTS location_parent (
   id UUID PRIMARY KEY,
   parent_id UUID,
