@@ -19,6 +19,90 @@ Validates migration hygiene rules across `pos-*` modules.
 - Non-test runtime configs using `ddl-auto: update` for Flyway-managed modules
 - Migration filenames not matching `V<integer>__<description>.sql` or `R__<description>.sql`
 
+### `inventory-flyway-modules.sh` - Baseline Reset Inventory
+
+Inventories Flyway-managed modules and summarizes the inputs needed for a
+collapsed-baseline reset.
+
+**Usage:**
+```bash
+./inventory-flyway-modules.sh
+./inventory-flyway-modules.sh --format tsv
+```
+
+**Includes:**
+- module name
+- compose database name
+- versioned vs repeatable migration counts
+- first and last versioned migration file
+- H2 migration layout (`split`, `nested`, `none`)
+- whether a custom `FlywayConfig` exists
+- detected extension usage (`timescaledb`, `pgvector`)
+- rough count of parity/gap-style migrations
+
+### `emit-pos-accounting-baseline.sh` - Scratch Schema Emitter
+
+Bootstraps `pos-accounting` against a disposable Postgres database with Flyway
+disabled and Hibernate schema creation enabled, then dumps the emitted schema to
+a host file for baseline curation.
+
+**Usage:**
+```bash
+./emit-pos-accounting-baseline.sh
+```
+
+**Default behavior:**
+- recreates `pos_accounting_baseline_tmp` inside Docker container `pos-accounting-baseline-pg`
+- starts `pos-accounting` with the required local-only overrides
+- waits for core tables to appear
+- dumps schema to `/tmp/pos_accounting_baseline_emitted.sql`
+
+**Useful overrides:**
+- `POSTGRES_CONTAINER`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `HOST_DB_PORT`
+- `SCRATCH_DB`
+- `EMITTED_SCHEMA_OUTPUT`
+- `BOOTSTRAP_LOG`
+
+### `compare-schema-tables.py` - Table-Aware Schema Diff
+
+Compares two schema SQL files by table name instead of raw line order.
+Useful when diffing `pg_dump` output against a hand-written baseline file.
+
+**Usage:**
+```bash
+./compare-schema-tables.py left.sql right.sql
+./compare-schema-tables.py left.sql right.sql --summary-only
+./compare-schema-tables.py left.sql right.sql --tables accounting_event vendor_bill
+```
+
+**What it does:**
+- groups `CREATE TABLE`, `ALTER TABLE`, and `CREATE INDEX` statements by table
+- normalizes whitespace and schema qualifiers
+- prints a per-table unified diff instead of a file-order diff
+
+### `build-pos-accounting-baseline-from-dump.py` - Dump To Flyway Baseline
+
+Transforms emitted `pg_dump` schema output for `pos-accounting` into a
+Flyway-ready baseline SQL file while leaving repeatable seed/data scripts
+separate.
+
+**Usage:**
+```bash
+./build-pos-accounting-baseline-from-dump.py
+./build-pos-accounting-baseline-from-dump.py /tmp/pos_accounting_baseline_emitted.sql
+./build-pos-accounting-baseline-from-dump.py input.sql output.sql
+```
+
+**Default behavior:**
+- reads `/tmp/pos_accounting_baseline_emitted.sql`
+- keeps `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE INDEX`, `ALTER TABLE`, and `ALTER SEQUENCE`
+- drops `pg_dump` noise such as `SET`, ownership, grants, comments, and `setval`
+- writes the cleaned result to
+  `pos-accounting/src/main/resources/db/baseline-reset/V1__baseline_accounting_schema.sql`
+
 **Temporary rollout note:**
 - `ddl-auto: update` currently emits a warning by default (non-blocking).
 - Set `ENFORCE_DDL_AUTO_UPDATE_CHECK=true` to make it fail the script again.
