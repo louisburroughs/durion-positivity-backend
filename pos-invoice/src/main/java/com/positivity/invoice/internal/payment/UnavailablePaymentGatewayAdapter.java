@@ -4,8 +4,6 @@ import com.positivity.invoice.internal.exception.PaymentGatewayException;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 /**
  * Default fallback adapter that keeps the invoice service bootable when no real
@@ -14,8 +12,6 @@ import org.springframework.stereotype.Component;
  * <p>A concrete adapter should replace this bean via {@link PaymentGatewayPort}
  * when gateway connectivity is implemented for the environment.</p>
  */
-@Component
-@ConditionalOnMissingBean(PaymentGatewayPort.class)
 public class UnavailablePaymentGatewayAdapter implements PaymentGatewayPort {
 
     private static final Logger log = LoggerFactory.getLogger(UnavailablePaymentGatewayAdapter.class);

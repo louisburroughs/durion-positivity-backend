@@ -83,69 +83,68 @@ VALUES ('fe5bd0c2-6c4b-9929-0f3f-00099be619d5'::uuid, 'far southern fringe beyon
 ON CONFLICT (name) DO NOTHING;
 
 -- Capabilities
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('7df8046a-3862-e521-e888-e509c7c5483d'::uuid, 'ALIGNMENT', 'Wheel Alignment', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('7df8046a-3862-e521-e888-e509c7c5483d'::uuid, 'ALIGNMENT', 'Wheel Alignment', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('a8892380-c066-9e4d-6982-5e918c78514d'::uuid, 'OIL_CHANGE', 'Oil Change', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('a8892380-c066-9e4d-6982-5e918c78514d'::uuid, 'OIL_CHANGE', 'Oil Change', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('6cff0034-9829-8b80-390b-8e4e450af6a7'::uuid, 'BRAKE_SERVICE', 'Brake Inspection & Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('6cff0034-9829-8b80-390b-8e4e450af6a7'::uuid, 'BRAKE_SERVICE', 'Brake Inspection & Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('4060148a-347e-d792-efe9-9039d14e6eb8'::uuid, 'TIRE_SERVICE', 'Tire Mounting, Balancing & Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('4060148a-347e-d792-efe9-9039d14e6eb8'::uuid, 'TIRE_SERVICE', 'Tire Mounting, Balancing & Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('a9efb56b-f6ed-bfc5-ed83-ba4d18af4004'::uuid, 'SUSPENSION', 'Suspension & Steering Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('a9efb56b-f6ed-bfc5-ed83-ba4d18af4004'::uuid, 'SUSPENSION', 'Suspension & Steering Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('98eba49d-cadd-5a65-3d13-23f7a5680ba1'::uuid, 'ENGINE_DIAGNOSTICS', 'Engine Diagnostics', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('98eba49d-cadd-5a65-3d13-23f7a5680ba1'::uuid, 'ENGINE_DIAGNOSTICS', 'Engine Diagnostics', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('ad052aad-ed59-3c73-4c15-d2ed99e61a55'::uuid, 'TRANSMISSION', 'Transmission Service & Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('ad052aad-ed59-3c73-4c15-d2ed99e61a55'::uuid, 'TRANSMISSION', 'Transmission Service & Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('3a1664e4-ca49-6cc7-d3af-05eb51df69b7'::uuid, 'ELECTRICAL', 'Electrical System Diagnostics & Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('3a1664e4-ca49-6cc7-d3af-05eb51df69b7'::uuid, 'ELECTRICAL', 'Electrical System Diagnostics & Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('ffff4f59-d51c-1836-687e-3d1d5cb3920e'::uuid, 'COOLING_SYSTEM', 'Cooling System Service', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('ffff4f59-d51c-1836-687e-3d1d5cb3920e'::uuid, 'COOLING_SYSTEM', 'Cooling System Service', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('62275182-7bba-64d8-1f34-e4613697b1b4'::uuid, 'FUEL_SYSTEM', 'Fuel System Service & Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('62275182-7bba-64d8-1f34-e4613697b1b4'::uuid, 'FUEL_SYSTEM', 'Fuel System Service & Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('65f6cb13-b7df-108e-e0d4-ca099e0a5a94'::uuid, 'EXHAUST', 'Exhaust & Emissions Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('65f6cb13-b7df-108e-e0d4-ca099e0a5a94'::uuid, 'EXHAUST', 'Exhaust & Emissions Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('5bad5d98-25fd-95c2-243e-5428a1d259bf'::uuid, 'AC_SERVICE', 'HVAC / A/C Service', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('5bad5d98-25fd-95c2-243e-5428a1d259bf'::uuid, 'AC_SERVICE', 'HVAC / A/C Service', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('d8ecc105-5b4e-ec9e-3149-b17eda00c60d'::uuid, 'DOT_INSPECTION', 'DOT Inspection', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('d8ecc105-5b4e-ec9e-3149-b17eda00c60d'::uuid, 'DOT_INSPECTION', 'DOT Inspection', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('92890323-55d9-c743-1b8c-97e97fe3a5ee'::uuid, 'PM_SERVICE', 'Preventive Maintenance Service', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('92890323-55d9-c743-1b8c-97e97fe3a5ee'::uuid, 'PM_SERVICE', 'Preventive Maintenance Service', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('b68be185-41af-51d9-55c1-c83d8ab3f0bb'::uuid, 'HYDRAULICS', 'Hydraulic System Repair', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('b68be185-41af-51d9-55c1-c83d8ab3f0bb'::uuid, 'HYDRAULICS', 'Hydraulic System Repair', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('b00d8687-e7a5-4759-48db-65f5ff07f5d9'::uuid, 'DRIVELINE', 'Driveline & Differential Service', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('b00d8687-e7a5-4759-48db-65f5ff07f5d9'::uuid, 'DRIVELINE', 'Driveline & Differential Service', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('438caf70-bb2f-bbb9-9339-47525996b449'::uuid, 'CLUTCH', 'Clutch Repair & Replacement', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('438caf70-bb2f-bbb9-9339-47525996b449'::uuid, 'CLUTCH', 'Clutch Repair & Replacement', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('2db24f4e-042c-6e71-63bb-e7f238c3ab5d'::uuid, 'BATTERY', 'Battery Testing & Replacement', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('2db24f4e-042c-6e71-63bb-e7f238c3ab5d'::uuid, 'BATTERY', 'Battery Testing & Replacement', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('9e9d62f9-87b0-d003-4468-781421418e43'::uuid, 'TRAILER_REPAIR', 'Trailer Repair & Maintenance', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('9e9d62f9-87b0-d003-4468-781421418e43'::uuid, 'TRAILER_REPAIR', 'Trailer Repair & Maintenance', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO service_location_capabilities (id, code, name, active)
-VALUES ('498845ee-8f3a-e131-3bba-e1f1a0b53091'::uuid, 'ROADSIDE_SERVICE', 'Emergency Roadside Service', TRUE)
+INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
+VALUES ('498845ee-8f3a-e131-3bba-e1f1a0b53091'::uuid, 'ROADSIDE_SERVICE', 'Emergency Roadside Service', TRUE, NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
 
 -- Travel buffer policies
 INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
 VALUES ('407617dd-f4f6-fec6-50e4-4221bdf102c8'::uuid, 'Default 15m', 'MINUTES', 15, NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
-
