@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS estimate
+    ADD COLUMN IF NOT EXISTS approval_notes VARCHAR(1000);
