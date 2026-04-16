@@ -5,7 +5,7 @@ spring:
     username: sa
     password: ""
   flyway:
-    locations: classpath:db/migration/h2
+    locations: classpath:db/h2-migration
   jpa:
     hibernate:
       ddl-auto: validate

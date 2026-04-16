@@ -7,6 +7,7 @@ MCP server for Durion Positivity. Discovers backend services via Eureka, registe
 Flyway manages runtime schema for this module.
 
 - Baseline migration: `src/main/resources/db/migration/V1__baseline_mcp_schema.sql`
+- H2-only migrations: `src/main/resources/db/h2-migration/`
 - Runtime JPA mode: `spring.jpa.hibernate.ddl-auto=validate` (`dev`, `alpha`, `prod`)
 
 ## Runtime configuration

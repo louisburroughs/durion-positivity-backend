@@ -4,7 +4,7 @@ spring:
   jackson:
     default-property-inclusion: non_null
   flyway:
-    locations: classpath:db/migration/h2
+    locations: classpath:db/h2-migration
 mcp:
   server:
     base-url: http://localhost:${server.port}
