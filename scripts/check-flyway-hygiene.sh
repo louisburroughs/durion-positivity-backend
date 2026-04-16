@@ -30,8 +30,8 @@ for module_dir in pos-*; do
   modules_with_migrations=$((modules_with_migrations + 1))
   module_name="$(basename "$module_dir")"
 
-  if ! has_pattern '<artifactId>flyway-core</artifactId>' "$module_dir/pom.xml"; then
-    echo "ERROR: $module_name has db/migration files but missing flyway-core dependency"
+  if ! has_pattern '<artifactId>(spring-boot-starter-flyway|flyway-core)</artifactId>' "$module_dir/pom.xml"; then
+    echo "ERROR: $module_name has db/migration files but missing Flyway dependency (expected spring-boot-starter-flyway or flyway-core)"
     errors=$((errors + 1))
   fi
 
