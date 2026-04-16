@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS permissions (
     action VARCHAR(50) NOT NULL,
     registered_at TIMESTAMP WITH TIME ZONE NOT NULL,
     registered_by_service VARCHAR(100) NOT NULL,
-    version VARCHAR(255) NOT NULL
+    version VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
