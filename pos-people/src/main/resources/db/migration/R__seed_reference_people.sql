@@ -45,32 +45,45 @@ BEGIN
     IF to_regclass('public.person') IS NOT NULL
        AND to_regclass('public.location') IS NOT NULL
        AND EXISTS (SELECT 1 FROM person WHERE id = '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid)
-       AND EXISTS (SELECT 1 FROM location WHERE id = 'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid)
     THEN
-        INSERT INTO person_location_assignment (
-            id,
-            person_id,
-            location_id,
-            role,
-            is_primary,
-            status,
-            effective_from,
-            created_at,
-            updated_at,
-            created_by
-        )
-        VALUES (
-            '39462b92-de5d-5744-79f0-e0ae6dea1940'::uuid,
-            '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
-            'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid,
-            'MANAGER',
-            TRUE,
-            'ACTIVE',
-            CURRENT_DATE,
-            NOW(),
-            NOW(),
-            'seed-generator'
-        )
-        ON CONFLICT (id) DO NOTHING;
+        IF EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = 'location'
+        ) THEN
+            EXECUTE $sql$
+                INSERT INTO person_location_assignment (
+                    id,
+                    person_id,
+                    location_id,
+                    role,
+                    is_primary,
+                    status,
+                    effective_from,
+                    created_at,
+                    updated_at,
+                    created_by
+                )
+                SELECT
+                    '39462b92-de5d-5744-79f0-e0ae6dea1940'::uuid,
+                    '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
+                    'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid,
+                    'MANAGER',
+                    TRUE,
+                    'ACTIVE',
+                    CURRENT_DATE,
+                    NOW(),
+                    NOW(),
+                    'seed-generator'
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM public.location
+                    WHERE id = 'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid
+                )
+                ON CONFLICT (id) DO NOTHING
+            $sql$;
+        END IF;
     END IF;
 END $$;

@@ -25,6 +25,11 @@ langchain4j:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       timeout: 30s
+    streaming-chat-model:
+      base-url: ${OLLAMA_BASE_URL}
+      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      temperature: 0.2
+      timeout: 60s
 
 eureka:
   client:
