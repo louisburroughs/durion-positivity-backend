@@ -342,11 +342,13 @@ jobs:
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
 
       - name: Deploy backend services on alpha host
+        env:
+          SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ github.sha }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ github.sha }}'\"]}" \
             --timeout-seconds 900 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
