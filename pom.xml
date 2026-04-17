@@ -246,6 +246,7 @@
 		<module>pos-api-gateway</module>
 		<module>pos-service-discovery</module>
 		<module>pos-mcp-server</module>
+		<module>pos-coverage-aggregate</module>
 	</modules>
 	<url>https://your.project.url/</url>
 	<licenses>

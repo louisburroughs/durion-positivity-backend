@@ -57,6 +57,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 - **Security Service (`pos-security-service`)**: System of record for identities, roles, permissions, and assignments. Issues JWTs and owns role/permission lifecycle.
 - **Domain Services**: Independent `pos-*` modules packaging business logic (e.g., `pos-order` for checkout flows, `pos-inventory` for stock management).
 - **Core Services**: Foundational modules like `pos-service-discovery` (if applicable) and shared libraries.
+- **Coverage Aggregation (`pos-coverage-aggregate`)**: Reactor-only Maven module that produces the full JaCoCo XML report used by authoritative SonarCloud runs on `main` and nightly CI.
 
 ## Technology Stack
 
@@ -91,6 +92,7 @@ durion-positivity-backend/
 ├── pos-inventory/          # Stock tracking & reservations
 ├── pos-customer/           # Customer profiles & loyalty
 ├── pos-catalog/            # Product catalog & definitions
+├── pos-coverage-aggregate/ # Aggregate JaCoCo XML for full Sonar analysis
 └── ... (other pos-* modules)
 ```
 
