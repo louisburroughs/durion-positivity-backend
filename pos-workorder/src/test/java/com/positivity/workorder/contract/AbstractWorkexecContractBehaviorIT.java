@@ -82,13 +82,13 @@ abstract class AbstractWorkexecContractBehaviorIT {
                         if (userIdHeader != null && !userIdHeader.isBlank()) {
                             try {
                                 userId = UUID.fromString(userIdHeader);
-                            } catch (IllegalArgumentException ignored) {
+                            } catch (IllegalArgumentException _) {
                                 userId = TEST_USER_ID;
                             }
                         }
 
-                        var authentication =
-                                new UsernamePasswordAuthenticationToken(TEST_USERNAME, null, TEST_AUTHORITIES);
+                        var authentication = new UsernamePasswordAuthenticationToken(TEST_USERNAME, null,
+                                TEST_AUTHORITIES);
                         authentication.setDetails(Map.of(
                                 GatewaySecurityConstants.DETAIL_USER_ID, userId,
                                 GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));

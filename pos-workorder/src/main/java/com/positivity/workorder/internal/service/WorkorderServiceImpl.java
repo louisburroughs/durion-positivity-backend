@@ -151,8 +151,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
-        Optional<UUID> existingWorkorderId =
-                idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
+        Optional<UUID> existingWorkorderId = idempotencyService
+                .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
         if (existingWorkorderId.isPresent()) {
             log.info(
                     "Idempotent request detected for key {}; returning existing workorder {}",
@@ -174,7 +174,7 @@ public class WorkorderServiceImpl implements WorkorderService {
             // try/catch
             TransactionAspectSupport.currentTransactionStatus().flush();
             return created;
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException _) {
             // Race condition: another request already registered this key
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
 
@@ -267,21 +267,21 @@ public class WorkorderServiceImpl implements WorkorderService {
         for (EstimateItem estimateItem : estimateItems) {
             if (estimateItem.getItemType() == EstimateItemType.LABOR) {
                 // Create WorkorderServiceLine for LABOR items
-                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService =
-                        com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
-                                .workOrder(workorder)
-                                .description(estimateItem.getDescription())
-                                .quantity(estimateItem.getQuantity())
-                                .unitPrice(estimateItem.getUnitPrice())
-                                .lineTotal(estimateItem.getLineTotal())
-                                .taxCode(estimateItem.getTaxCode())
-                                .originEstimateItem(estimateItem)
-                                .serviceEntityId(estimateItem.getServiceId())
-                                .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
-                                .declined(false)
-                                .isEmergencySafety(false)
-                                .photoNotPossible(false)
-                                .build();
+                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService = com.positivity.workorder.internal.entity.WorkorderServiceLine
+                        .builder()
+                        .workOrder(workorder)
+                        .description(estimateItem.getDescription())
+                        .quantity(estimateItem.getQuantity())
+                        .unitPrice(estimateItem.getUnitPrice())
+                        .lineTotal(estimateItem.getLineTotal())
+                        .taxCode(estimateItem.getTaxCode())
+                        .originEstimateItem(estimateItem)
+                        .serviceEntityId(estimateItem.getServiceId())
+                        .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
+                        .declined(false)
+                        .isEmergencySafety(false)
+                        .photoNotPossible(false)
+                        .build();
 
                 laborItems.add(workorderService);
 
@@ -627,10 +627,8 @@ public class WorkorderServiceImpl implements WorkorderService {
             return;
         }
 
-        String oldLocationId =
-                workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
-        String oldResourceId =
-                workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldLocationId = workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
+        String oldResourceId = workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
         String oldMechanicIds = workorder.getMechanicIds();
 
         AssignmentUpdatePayload payload = event.getPayload();
@@ -766,7 +764,7 @@ public class WorkorderServiceImpl implements WorkorderService {
             return Collections.emptyList();
         }
         return java.util.Arrays.stream(
-                        mechanicIds.replace("[", "").replace("]", "").split(","))
+                mechanicIds.replace("[", "").replace("]", "").split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(value -> value.replace("\"", ""))
