@@ -1,8 +1,11 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.util.HashSet;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -20,14 +23,26 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
 
     @Override
     public UserDetails loadUserByUsername(@NonNull String username) throws UsernameNotFoundException {
         User user = userRepository
                 .findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-        Set<GrantedAuthority> authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
+        Set<String> effectiveRoles = new HashSet<>(user.getRoles().stream()
+                .map(role -> role.getName())
+                .collect(Collectors.toSet()));
+        var effectiveAssignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+        List<String> assignedRoles = effectiveAssignments == null
+                ? List.of()
+                : effectiveAssignments.stream()
+                        .map(assignment -> assignment.getRole().getName())
+                        .toList();
+        effectiveRoles.addAll(assignedRoles);
+
+        Set<GrantedAuthority> authorities = effectiveRoles.stream()
+                .map(roleName -> new SimpleGrantedAuthority("ROLE_" + roleName))
                 .collect(Collectors.toSet());
         var delegate = new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
