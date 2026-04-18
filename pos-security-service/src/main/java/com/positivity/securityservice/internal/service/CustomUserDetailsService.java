@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -31,7 +32,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
         Set<String> effectiveRoles = new HashSet<>(user.getRoles().stream()
-                .map(role -> role.getName())
+                .map(Role::getName)
                 .collect(Collectors.toSet()));
         var effectiveAssignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
         List<String> assignedRoles = effectiveAssignments == null
