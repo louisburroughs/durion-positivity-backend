@@ -11,10 +11,12 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -182,7 +184,24 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         return Arrays.stream(authoritiesHeader.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
+                .flatMap(this::expandAuthority)
+                .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
+    }
+
+    private Stream<String> expandAuthority(String authority) {
+        if (!authority.startsWith(GatewaySecurityConstants.PERMISSION_PREFIX)) {
+            return Stream.of(authority);
+        }
+
+        String plainPermission = authority.substring(GatewaySecurityConstants.PERMISSION_PREFIX.length());
+        if (plainPermission.isBlank()) {
+            return Stream.of(authority);
+        }
+
+        // Preserve the raw gateway authority and the canonical plain permission
+        // string expected by existing @PreAuthorize checks in downstream services.
+        return new LinkedHashSet<>(List.of(authority, plainPermission)).stream();
     }
 }
