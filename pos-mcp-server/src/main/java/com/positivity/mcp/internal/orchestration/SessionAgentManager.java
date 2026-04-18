@@ -162,6 +162,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maxResults(5)
                 .minScore(0.7)
                 .build();
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
 
         // 4. Build per-session chat memory
         var chatMemory = MessageWindowChatMemory.withMaxMessages(memoryMaxMessages);
@@ -170,7 +172,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         return AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)
-                .contentRetriever(contentRetriever)
+                .contentRetriever(resilientContentRetriever)
                 .chatMemory(chatMemory)
                 .build();
     }

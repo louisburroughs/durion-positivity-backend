@@ -16,4 +16,6 @@
 
 The most important practical difference is this: `SessionAgentManager` is for “wait, then get the whole answer,” while `StreamingSessionAgentManager` is for “start sending tokens immediately as they’re generated.”
 
+Both chat paths now wrap their RAG retriever with a resilience guard. If the embedding model or vector retrieval path is unavailable at runtime, chat continues without retrieved context instead of failing the whole request.
+
 The most important implementation difference is the tool set mismatch. The non-streaming path guarantees `InventoryFacadeTool` and `OrderFacadeTool`, but the streaming path currently does not. If that was not intentional, it’s a likely parity bug.

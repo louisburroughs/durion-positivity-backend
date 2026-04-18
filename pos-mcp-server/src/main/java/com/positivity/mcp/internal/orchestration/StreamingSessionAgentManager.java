@@ -152,13 +152,15 @@ public class StreamingSessionAgentManager
                 .maxResults(5)
                 .minScore(0.7)
                 .build();
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
 
         var chatMemory = MessageWindowChatMemory.withMaxMessages(memoryMaxMessages);
 
         return AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
-                .contentRetriever(contentRetriever)
+                .contentRetriever(resilientContentRetriever)
                 .chatMemory(chatMemory)
                 .build();
     }

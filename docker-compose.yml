@@ -438,6 +438,7 @@ services:
       POS_MCP_DB_NAME: pos_mcp
       POS_MCP_DB_USER: ${SPRING_DATASOURCE_USERNAME}
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      <<: [*pos-security-client-env, *pos-events-client-env]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       # From inside the container, reach Ollama by Compose service name, not localhost.
       OLLAMA_BASE_URL: http://ollama:11434
@@ -452,6 +453,10 @@ services:
       postgres:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+      pos-event-receiver:
         condition: service_healthy
       ollama:
         condition: service_healthy
