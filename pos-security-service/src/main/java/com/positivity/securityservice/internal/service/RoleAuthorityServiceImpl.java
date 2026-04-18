@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 @Service
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 public class RoleAuthorityServiceImpl implements RoleAuthorityService {
+    private static final String MCP_CHAT_EXECUTE = "mcp:chat:execute";
 
     /**
      * Expand roles to authorities, including ROLE_* and domain permission strings.
@@ -61,7 +62,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> csrAuthorities() {
-        return new HashSet<>(List.of(
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of(
                 // Party
                 "crm:party:view",
                 "crm:party:search",
@@ -82,6 +84,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 // Integration monitoring (read-only)
                 "crm:processing_log:view",
                 "crm:suspense:view"));
+        return authorities;
     }
 
     private Set<String> fleetManagerAuthorities() {
@@ -116,7 +119,9 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> managerAuthorities() {
-        return new HashSet<>(List.of("security:role:view", "security:role:assign", "security:permission:view"));
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of("security:role:view", "security:role:assign", "security:permission:view"));
+        return authorities;
     }
 
     private Set<String> adminSecurityAuthorities() {
@@ -146,7 +151,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     // ============================================================================
 
     private Set<String> glAnalystAuthorities() {
-        return new HashSet<>(List.of(
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of(
                 // GL Account view
                 "accounting:coa:view",
                 "accounting:coa:create",
@@ -166,6 +172,11 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "accounting:events:submit",
                 // AP
                 "accounting:ap:view"));
+        return authorities;
+    }
+
+    private Set<String> interactiveChatAuthorities() {
+        return new HashSet<>(Set.of(MCP_CHAT_EXECUTE));
     }
 
     private Set<String> apClerkAuthorities() {
