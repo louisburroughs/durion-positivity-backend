@@ -51,8 +51,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 // Load current technician assignment
                 TechnicianAssignment currentAssignment = technicianAssignmentRepository
                                 .findByWorkorder_IdAndCurrentTrue(workorderId)
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "No current technician assignment for workorder: " + workorderId));
+                                .orElse(null);
 
                 // Calculate capability flags
                 WorkorderCapabilities capabilities = calculateCapabilities(userAuthorities);
@@ -92,8 +91,10 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                                 .isInProgress(isInProgress)
                                 .isCompleted(isCompleted)
                                 .startedAt(null) // Will be populated from state transitions if available
-                                .assignedTechnicianId(currentAssignment.getTechnicianId())
-                                .assignedTechnicianName("Technician-" + currentAssignment.getTechnicianId())
+                                .assignedTechnicianId(currentAssignment != null ? currentAssignment.getTechnicianId() : null)
+                                .assignedTechnicianName(currentAssignment != null
+                                                ? "Technician-" + currentAssignment.getTechnicianId()
+                                                : null)
                                 .services(serviceResponses)
                                 .parts(partResponses)
                                 .capabilities(capabilities);
