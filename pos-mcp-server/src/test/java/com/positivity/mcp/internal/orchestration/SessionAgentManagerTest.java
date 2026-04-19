@@ -2,20 +2,34 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.SystemPromptService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +78,9 @@ class SessionAgentManagerTest {
     private ToolRegistry toolRegistry;
 
     @Mock
+    private ToolRegistryService toolRegistryService;
+
+    @Mock
     private SystemPromptService systemPromptService;
 
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
@@ -78,8 +95,14 @@ class SessionAgentManagerTest {
     void setUp() {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForRole(anyString())).thenAnswer(inv -> new ArrayList<>());
+        lenient()
+                .when(toolRegistry.resolveToolsForRole(anyString(), anyCollection()))
+                .thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        lenient()
+                .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(List.of());
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
         orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
@@ -91,13 +114,16 @@ class SessionAgentManagerTest {
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
+                toolRegistryService,
                 null,
                 systemPromptService,
                 30,
                 500,
                 50,
+                5,
                 100);
         clearInvocations(toolRegistry);
+        clearInvocations(toolRegistryService);
     }
 
     @Test
@@ -152,5 +178,49 @@ class SessionAgentManagerTest {
 
         PosAssistant after = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         assertThat(after).isSameAs(before);
+    }
+
+    @Test
+    @DisplayName("chat with greeting uses simple no-tool model path")
+    void chat_withGreeting_usesSimpleModelPath() {
+        when(chatModel.chat(org.mockito.ArgumentMatchers.<List<ChatMessage>>any()))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Hello!"))
+                        .build());
+
+        String response = manager.chat("user-1", "ROLE_ADMIN", "hello");
+
+        assertThat(response).isEqualTo("Hello!");
+        verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
+    }
+
+    @Test
+    @DisplayName("chat with business request narrows role tools per message")
+    void chat_withBusinessRequest_narrowsRoleToolsPerMessage() {
+        ToolMetadata inventoryTool = new ToolMetadata(
+                UUID.randomUUID(),
+                "inventoryFacadeTool",
+                "Inventory",
+                "Inventory availability",
+                "inventory",
+                1.0,
+                "low",
+                200,
+                true,
+                "inventoryFacadeTool");
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(List.of(inventoryTool));
+        when(toolRegistry.resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool")))
+                .thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(chatModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Stock found"))
+                        .build());
+
+        String response = manager.chat("user-1", "ROLE_ADMIN", "check stock for sku ABC");
+
+        assertThat(response).isEqualTo("Stock found");
+        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
+        verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool"));
     }
 }

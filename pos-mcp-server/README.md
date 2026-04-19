@@ -200,6 +200,7 @@ If you are extending or testing registry logic, ensure test fixtures provide the
 - Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). The endpoint persists a short-lived ingestion job and responds with `202 Accepted`; bounded background workers chunk, embed, and inject content into the `mcp_document_embedding` pgvector RAG store. Supplying a stable metadata `document_id` makes ingestion replace prior chunks for that document instead of appending duplicates. Job status is available at `GET /v1/mcp/documents/jobs/{jobId}`.
 - RAG schema ownership: Flyway owns the pgvector document table and index. `RagConfiguration` defaults `mcp.rag.create-table=false`; only enable it intentionally for ad hoc environments that do not run migrations.
 - Timing logs: MCP startup and chat paths now log elapsed time for OpenAPI fetch/parse, MCP tool add, tool embedding initialization, role-agent prebuild/cold builds, RAG retrieval, and document embedding/storage.
+- Chat latency controls: obvious greetings and basic conversation are routed through a direct no-tool/no-RAG model path. Business requests use per-message tool narrowing before building the LangChain4j agent, controlled by `mcp.agent.candidate-tool-limit` (default `5`), and emit completion timing logs for the simple or agent path.
 
 ## Phase 5 — Streaming SSE and model fallback
 
@@ -216,6 +217,7 @@ mcp.tuning.enabled=true
 mcp.tuning.cron=0 0 2 * * ?
 mcp.rag.create-table=false
 mcp.rag.ingestion.max-concurrency=2
+mcp.agent.candidate-tool-limit=5
 mcp.model.fallback.enabled=false
 mcp.model.fallback.secondary-model-name=${OLLAMA_FALLBACK_MODEL:mistral:7b}
 ```

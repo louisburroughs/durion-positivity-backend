@@ -59,4 +59,19 @@ class ToolRegistryTest {
 
         assertThat(secondCall).hasSize(1); // registry still holds only the original tool
     }
+
+    @Test
+    @DisplayName("resolveToolsForRole with selected tool names matches bean-style class names")
+    void resolveToolsForRole_withSelectedNames_matchesBeanStyleClassNames() {
+        InventoryFacadeToolStub inventoryTool = new InventoryFacadeToolStub();
+        Object otherTool = new Object();
+        when(loader.loadRoleToolMappings()).thenReturn(Map.of("TECH", List.of(inventoryTool, otherTool)));
+        ToolRegistry registry = new ToolRegistry(loader);
+
+        List<Object> result = registry.resolveToolsForRole("TECH", List.of("inventoryFacadeToolStub"));
+
+        assertThat(result).containsExactly(inventoryTool);
+    }
+
+    private static final class InventoryFacadeToolStub {}
 }

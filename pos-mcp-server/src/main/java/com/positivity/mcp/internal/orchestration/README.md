@@ -20,6 +20,6 @@ Both chat paths now wrap their RAG retriever with a resilience guard and timing 
 
 Both managers prebuild role-level LangChain4j assistant proxies during startup from the DB-backed `ToolRegistry`. The proxies are safe to share by role because chat memory is provided separately through `ChatMemoryProvider` and keyed by `userId::role`. Agent build and prebuild duration are logged so cold-start registration cost is visible.
 
-Tool selection uses `ToolSelectionSupport` so DB-backed role tools and fallback tools cannot register the same LangChain4j tool name twice. If a fallback tool is already included by the user's role, the role-specific instance wins and the fallback duplicate is skipped.
+The synchronous path first classifies obvious greetings/basic conversation and routes them directly to `ChatModel` without RAG or tools. Business requests narrow DB-backed role tools per message before building a cached agent for that selected tool set. Tool selection uses `ToolSelectionSupport` so DB-backed role tools and fallback tools cannot register the same LangChain4j tool name twice. If a fallback tool is already included by the user's role, the role-specific instance wins and the fallback duplicate is skipped.
 
 The remaining implementation difference is the tool set mismatch. The non-streaming path can add `InventoryFacadeTool` and `OrderFacadeTool` as fallbacks, but the streaming path currently does not. If that was not intentional, it’s a likely parity gap.
