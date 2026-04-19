@@ -92,6 +92,10 @@ Operationally, the expected flow is:
   - `OLLAMA_STREAMING_CHAT_TIMEOUT` (default `180s`)
   - `OLLAMA_EMBEDDING_TIMEOUT` (default `30s`)
   - `OLLAMA_FALLBACK_TIMEOUT` (default `180s`)
+- optionally tune RAG document chunking in `.env`:
+  - `MCP_RAG_CHUNKING_ENABLED` (default `true`)
+  - `MCP_RAG_MAX_SEGMENT_SIZE` (default `2000`)
+  - `MCP_RAG_MAX_OVERLAP_SIZE` (default `200`)
 
 ## Phase 2 (Wave MCP-2) — Delivery Summary
 
@@ -162,6 +166,8 @@ If you are extending or testing registry logic, ensure test fixtures provide the
   - Permission: `mcp:document:ingest`
   - Event: `MCP_DOCUMENT_INGEST`
   - Behavior: validates request payload and ingests document content + optional metadata into the RAG vector store
+  - Chunking: enabled by default via `mcp.rag.chunking.*`; each chunk keeps original metadata plus `document_id`, `chunk_index`, and `chunk_count`
+  - Re-ingest: when metadata includes `document_id`, existing chunks with that `document_id` are removed before the replacement chunks are stored
   - Response: `201 Created`
 
 - `POST /v1/mcp/chat/stream`
@@ -184,7 +190,7 @@ If you are extending or testing registry logic, ensure test fixtures provide the
   performanceScore = 0.6 × successRate + 0.3 × (1 - min(avgLatency/2000, 1)) - 0.2 × fallbackRate
 
   The updated priority uses exponential smoothing: `newPriority = currentPriority × 0.7 + performanceScore × 0.3`, clamped to the range [0.1, 1.0].
-- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`.
+- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is chunked, embedded, injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`. Supplying a stable metadata `document_id` makes ingestion replace prior chunks for that document instead of appending duplicates.
 
 ## Phase 5 — Streaming SSE and model fallback
 

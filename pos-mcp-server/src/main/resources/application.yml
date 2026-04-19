@@ -22,6 +22,10 @@ mcp:
     table-name: mcp_document_embedding
     dimension: 768
     index-type: ivfflat
+    chunking:
+      enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
+      max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}
+      max-overlap-size: ${MCP_RAG_MAX_OVERLAP_SIZE:200}
   agent:
     cache-ttl-minutes: 30
     max-cached-agents: 500

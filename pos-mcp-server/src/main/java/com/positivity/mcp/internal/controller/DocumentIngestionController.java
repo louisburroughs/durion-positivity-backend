@@ -39,7 +39,7 @@ public class DocumentIngestionController {
     @Schema(
             name = "DocumentIngestionRequest",
             description = "Document ingestion payload",
-            example = "{\"content\":\"sample\",\"metadata\":{\"source\":\"manual\"}}")
+            example = "{\"content\":\"sample\",\"metadata\":{\"document_id\":\"policy-123\",\"source\":\"manual\"}}")
     public record DocumentIngestionRequest(
             @NotBlank @NonNull String content,
 
