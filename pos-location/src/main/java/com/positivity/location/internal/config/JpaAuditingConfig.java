@@ -18,12 +18,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 public class JpaAuditingConfig {
 
     @Bean
-    Clock auditingClock() {
-        return Clock.systemUTC();
-    }
-
-    @Bean
-    DateTimeProvider auditingDateTimeProvider(Clock auditingClock) {
-        return () -> Optional.of(Instant.now(auditingClock));
+    DateTimeProvider auditingDateTimeProvider(Clock clock) {
+        return () -> Optional.of(Instant.now(clock));
     }
 }

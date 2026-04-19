@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -19,7 +20,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -136,7 +136,7 @@ public class GLAccount implements Persistable<UUID> {
     @PrePersist
     protected void onCreate() {
         if (this.activationDate == null) {
-            this.activationDate = LocalDateTime.now(Clock.systemUTC());
+            this.activationDate = TimeSource.localDateTime();
         }
     }
 
@@ -171,7 +171,7 @@ public class GLAccount implements Persistable<UUID> {
      */
     @Transient
     public String getDerivedStatus() {
-        LocalDateTime today = LocalDateTime.now(Clock.systemUTC());
+        LocalDateTime today = TimeSource.localDateTime();
 
         if (activationDate != null && activationDate.isAfter(today)) {
             return "NOT_YET_ACTIVE";

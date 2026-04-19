@@ -2,8 +2,8 @@ package com.positivity.securityservice.internal.entity;
 
 import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -109,20 +109,20 @@ public class RoleAssignment {
     @PrePersist
     protected void onCreate() {
         if (effectiveStartDate == null) {
-            effectiveStartDate = LocalDateTime.now(Clock.systemUTC());
+            effectiveStartDate = TimeSource.localDateTime();
         }
     }
 
     @PreUpdate
     protected void onUpdate() {
-        lastModifiedAt = Instant.now(Clock.systemUTC());
+        lastModifiedAt = TimeSource.instant();
     }
 
     /**
      * Check if this assignment is currently effective based on effective dates
      */
     public boolean isEffective() {
-        LocalDateTime now = LocalDateTime.now(Clock.systemUTC());
+        LocalDateTime now = TimeSource.localDateTime();
         boolean afterStart = !now.isBefore(effectiveStartDate);
         boolean beforeEnd = effectiveEndDate == null || !now.isAfter(effectiveEndDate);
         return afterStart && beforeEnd;
@@ -149,7 +149,7 @@ public class RoleAssignment {
         this.effectiveEndDate = effectiveEndDate;
         // Automatically update revokedAt when effectiveEndDate is set
         if (effectiveEndDate != null) {
-            this.revokedAt = Instant.now(Clock.systemUTC());
+            this.revokedAt = TimeSource.instant();
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,7 +15,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -91,7 +91,7 @@ public class WorkOrderPartSubstitution {
     @PrePersist
     public void prePersist() {
         if (selectedAt == null) {
-            selectedAt = Instant.now(Clock.systemUTC());
+            selectedAt = TimeSource.instant();
         }
     }
 

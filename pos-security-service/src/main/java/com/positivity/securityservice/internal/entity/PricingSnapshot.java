@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -9,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -58,7 +58,7 @@ public class PricingSnapshot {
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
-            timestamp = Instant.now(Clock.systemUTC());
+            timestamp = TimeSource.instant();
         }
     }
 }

@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -13,7 +14,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -76,9 +76,9 @@ public class AccountingEvent {
             sourceSystem = "POS_ACCOUNTING_API";
         }
         if (transactionDate == null) {
-            transactionDate = LocalDateTime.now(Clock.systemUTC());
+            transactionDate = TimeSource.localDateTime();
         }
-        this.receivedAt = Instant.now(Clock.systemUTC());
+        this.receivedAt = TimeSource.instant();
     }
 
     @Column(name = "event_type", length = 100, nullable = false)

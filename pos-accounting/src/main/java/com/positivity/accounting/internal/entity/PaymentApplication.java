@@ -4,9 +4,9 @@ import static jakarta.persistence.FetchType.LAZY;
 
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
@@ -60,7 +60,7 @@ public class PaymentApplication {
     @PrePersist
     public void onPrePersist() {
         if (applicationTimestamp == null) {
-            applicationTimestamp = Instant.now(Clock.systemUTC());
+            applicationTimestamp = TimeSource.instant();
         }
     }
 

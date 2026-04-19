@@ -1,8 +1,8 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -88,7 +88,7 @@ public class ApprovalRecord {
     @PrePersist
     protected void prePersist() {
         if (actionTimestamp == null) {
-            actionTimestamp = Instant.now(Clock.systemUTC());
+            actionTimestamp = TimeSource.instant();
         }
     }
 }

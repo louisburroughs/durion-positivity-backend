@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -12,7 +13,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -108,7 +108,7 @@ public class TechnicianAssignment {
     @PrePersist
     public void prePersist() {
         if (assignedAt == null) {
-            assignedAt = LocalDateTime.now(Clock.systemUTC());
+            assignedAt = TimeSource.localDateTime();
         }
         if (current == null) {
             current = true;

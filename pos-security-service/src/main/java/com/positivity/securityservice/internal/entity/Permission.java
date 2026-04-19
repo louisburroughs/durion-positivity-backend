@@ -1,8 +1,8 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Data;
@@ -101,7 +101,7 @@ public class Permission {
     @PrePersist
     protected void onCreate() {
         if (registeredAt == null) {
-            registeredAt = Instant.now(Clock.systemUTC());
+            registeredAt = TimeSource.instant();
         }
     }
 

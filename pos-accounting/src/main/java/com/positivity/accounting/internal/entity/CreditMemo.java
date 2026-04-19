@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -14,7 +15,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -109,10 +109,10 @@ public class CreditMemo {
     @PrePersist
     protected void onCreate() {
         if (creationTimestamp == null) {
-            creationTimestamp = Instant.now(Clock.systemUTC());
+            creationTimestamp = TimeSource.instant();
         }
         if (status == CreditMemoStatus.POSTED && postedTimestamp == null) {
-            postedTimestamp = Instant.now(Clock.systemUTC());
+            postedTimestamp = TimeSource.instant();
         }
     }
 

@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Bean;
  * No manual configuration needed in consumer applications—just add pos-events
  * to the classpath and this auto-configuration will activate automatically.
  */
-@AutoConfiguration
+@AutoConfiguration(after = TimeConfig.class)
 @RequiredArgsConstructor
 public class PosEventsApplication {
 
