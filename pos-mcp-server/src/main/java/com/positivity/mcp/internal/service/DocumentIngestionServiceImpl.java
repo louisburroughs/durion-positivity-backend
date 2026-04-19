@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 @Profile("!test")
 public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
+    private static final String DOCUMENT_ID = "document_id";
+
     private static final Logger LOGGER = LoggerFactory.getLogger(DocumentIngestionServiceImpl.class);
 
     private final PgVectorEmbeddingStore embeddingStore;
@@ -43,13 +45,13 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         this.embeddingModel = embeddingModel;
         this.chunkingEnabled = chunkingEnabled;
         int sanitizedMaxSegmentSize = Math.max(1, maxSegmentSize);
-        int sanitizedMaxOverlapSize = Math.max(0, Math.min(maxOverlapSize, sanitizedMaxSegmentSize - 1));
+        int sanitizedMaxOverlapSize = Math.clamp(maxOverlapSize, 0, sanitizedMaxSegmentSize - 1);
         this.documentSplitter = DocumentSplitters.recursive(sanitizedMaxSegmentSize, sanitizedMaxOverlapSize);
     }
 
     @Override
     public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
-        Object providedDocumentId = metadata.get("document_id");
+        Object providedDocumentId = metadata.get(DOCUMENT_ID);
         boolean replaceExisting = providedDocumentId instanceof String documentIdValue && !documentIdValue.isBlank();
         String documentId = replaceExisting ? ((String) providedDocumentId).trim() : UUID.randomUUID().toString();
 
@@ -62,7 +64,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         }
 
         if (replaceExisting) {
-            embeddingStore.removeAll(metadataKey("document_id").isEqualTo(documentId));
+            embeddingStore.removeAll(metadataKey(DOCUMENT_ID).isEqualTo(documentId));
         }
         embeddingStore.addAll(embeddings, segments);
     }
@@ -85,15 +87,16 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
     private @NonNull List<TextSegment> segments(
             @NonNull String content, @NonNull Map<String, Object> metadata, @NonNull String documentId) {
-        Metadata documentMetadata = Metadata.from(metadata).put("document_id", documentId);
+        Metadata documentMetadata = Metadata.from(metadata).put(DOCUMENT_ID, documentId);
         Document document = Document.from(content, documentMetadata);
-        List<TextSegment> rawSegments = chunkingEnabled ? documentSplitter.split(document) : List.of(document.toTextSegment());
+        List<TextSegment> rawSegments = chunkingEnabled ? documentSplitter.split(document)
+                : List.of(document.toTextSegment());
         List<TextSegment> enrichedSegments = new ArrayList<>(rawSegments.size());
         for (int index = 0; index < rawSegments.size(); index++) {
             TextSegment segment = rawSegments.get(index);
             Metadata segmentMetadata = segment.metadata()
                     .copy()
-                    .put("document_id", documentId)
+                    .put(DOCUMENT_ID, documentId)
                     .put("chunk_index", index)
                     .put("chunk_count", rawSegments.size());
             enrichedSegments.add(TextSegment.from(segment.text(), segmentMetadata));
