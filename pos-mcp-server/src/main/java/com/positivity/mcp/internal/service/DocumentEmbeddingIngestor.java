@@ -89,13 +89,10 @@ public class DocumentEmbeddingIngestor {
                     elapsedMs(totalStartNanos));
             return segments.size();
         } catch (RuntimeException exception) {
-            LOGGER.warn(
-                    "RAG document ingestion failed documentId={} replaceExisting={} totalMs={}",
-                    documentId,
-                    replaceExisting,
-                    elapsedMs(totalStartNanos),
+            throw new IllegalStateException(
+                    "RAG document ingestion failed documentId=%s replaceExisting=%s totalMs=%d"
+                            .formatted(documentId, replaceExisting, elapsedMs(totalStartNanos)),
                     exception);
-            throw exception;
         }
     }
 
