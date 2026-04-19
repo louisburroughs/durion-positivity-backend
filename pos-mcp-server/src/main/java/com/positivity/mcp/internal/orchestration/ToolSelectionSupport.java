@@ -12,7 +12,8 @@ import org.springframework.util.ClassUtils;
 
 final class ToolSelectionSupport {
 
-    private ToolSelectionSupport() {}
+    private ToolSelectionSupport() {
+    }
 
     static @NonNull List<Object> mergeWithoutDuplicateToolNames(
             @NonNull Collection<Object> roleTools, @NonNull Object... fallbackTools) {

@@ -165,10 +165,16 @@ If you are extending or testing registry logic, ensure test fixtures provide the
 - `POST /v1/mcp/documents`
   - Permission: `mcp:document:ingest`
   - Event: `MCP_DOCUMENT_INGEST`
-  - Behavior: validates request payload and ingests document content + optional metadata into the RAG vector store
+  - Behavior: validates request payload and queues document content + optional metadata for asynchronous ingestion into the RAG vector store
   - Chunking: enabled by default via `mcp.rag.chunking.*`; each chunk keeps original metadata plus `document_id`, `chunk_index`, and `chunk_count`
   - Re-ingest: when metadata includes `document_id`, existing chunks with that `document_id` are removed before the replacement chunks are stored
-  - Response: `201 Created`
+  - Response: `202 Accepted` with `jobId`, `documentId`, `status`, timestamps, and a `Location` header pointing to `/v1/mcp/documents/jobs/{jobId}`
+
+- `GET /v1/mcp/documents/jobs/{jobId}`
+  - Permission: `mcp:document:ingest`
+  - Behavior: returns the asynchronous RAG ingestion job status
+  - Status values: `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+  - Response: `200 OK` when found, `404 Not Found` when the job id is unknown
 
 - `POST /v1/mcp/chat/stream`
   - Permission: `mcp:chat:stream`
@@ -190,7 +196,7 @@ If you are extending or testing registry logic, ensure test fixtures provide the
   performanceScore = 0.6 × successRate + 0.3 × (1 - min(avgLatency/2000, 1)) - 0.2 × fallbackRate
 
   The updated priority uses exponential smoothing: `newPriority = currentPriority × 0.7 + performanceScore × 0.3`, clamped to the range [0.1, 1.0].
-- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is chunked, embedded, injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`. Supplying a stable metadata `document_id` makes ingestion replace prior chunks for that document instead of appending duplicates.
+- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). The endpoint persists a short-lived ingestion job and responds with `202 Accepted`; background workers chunk, embed, and inject content into the `mcp_document_embedding` pgvector RAG store. Supplying a stable metadata `document_id` makes ingestion replace prior chunks for that document instead of appending duplicates. Job status is available at `GET /v1/mcp/documents/jobs/{jobId}`.
 
 ## Phase 5 — Streaming SSE and model fallback
 

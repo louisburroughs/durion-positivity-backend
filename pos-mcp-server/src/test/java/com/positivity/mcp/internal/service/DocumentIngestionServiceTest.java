@@ -25,13 +25,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link DocumentIngestionServiceImpl}.
+ * Unit tests for {@link DocumentEmbeddingIngestor}.
  *
  * <p>
  * The implementation is {@code @Profile("!test")} and is instantiated
  * directly. The public
- * {@link com.positivity.mcp.service.DocumentIngestionService}
- * interface is used to call the service under test.
+ * The ingestor is instantiated directly so the slow embedding/store mechanics
+ * stay covered separately from asynchronous job orchestration.
  */
 @ExtendWith(MockitoExtension.class)
 class DocumentIngestionServiceTest {
@@ -42,13 +42,13 @@ class DocumentIngestionServiceTest {
     @Mock
     private EmbeddingModel embeddingModel;
 
-    private DocumentIngestionServiceImpl service;
+    private DocumentEmbeddingIngestor service;
 
     private static final float[] VECTOR = {0.1f, 0.2f, 0.3f};
 
     @BeforeEach
     void setUp() {
-        service = new DocumentIngestionServiceImpl(embeddingStore, embeddingModel, false, 2000, 200);
+        service = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, false, 2000, 200);
     }
 
     @Test
@@ -59,7 +59,8 @@ class DocumentIngestionServiceTest {
         service.ingestDocument("some text", Map.of("source", "test"));
 
         verify(embeddingModel, times(1))
-                .embedAll(argThat(segments -> segments.size() == 1 && segments.get(0).text().equals("some text")));
+                .embedAll(argThat(segments ->
+                        segments.size() == 1 && segments.get(0).text().equals("some text")));
         verify(embeddingStore, times(1)).addAll(any(), any());
     }
 
@@ -116,7 +117,7 @@ class DocumentIngestionServiceTest {
     @Test
     @DisplayName("ingestDocument chunks long content and enriches each chunk with document metadata")
     void ingestDocument_chunkingEnabled_splitsAndEnrichesMetadata() {
-        service = new DocumentIngestionServiceImpl(embeddingStore, embeddingModel, true, 40, 5);
+        service = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 40, 5);
         mockEmbeddingsForAnySegments();
 
         service.ingestDocument(
@@ -131,13 +132,17 @@ class DocumentIngestionServiceTest {
 
         org.assertj.core.api.Assertions.assertThat(segments).hasSizeGreaterThan(1);
         for (int index = 0; index < segments.size(); index++) {
-            org.assertj.core.api.Assertions.assertThat(segments.get(index).metadata().getString("document_id"))
+            org.assertj.core.api.Assertions.assertThat(
+                            segments.get(index).metadata().getString("document_id"))
                     .isEqualTo("policy-1");
-            org.assertj.core.api.Assertions.assertThat(segments.get(index).metadata().getString("source"))
+            org.assertj.core.api.Assertions.assertThat(
+                            segments.get(index).metadata().getString("source"))
                     .isEqualTo("manual");
-            org.assertj.core.api.Assertions.assertThat(segments.get(index).metadata().getInteger("chunk_index"))
+            org.assertj.core.api.Assertions.assertThat(
+                            segments.get(index).metadata().getInteger("chunk_index"))
                     .isEqualTo(index);
-            org.assertj.core.api.Assertions.assertThat(segments.get(index).metadata().getInteger("chunk_count"))
+            org.assertj.core.api.Assertions.assertThat(
+                            segments.get(index).metadata().getInteger("chunk_count"))
                     .isEqualTo(segments.size());
         }
     }
@@ -164,7 +169,8 @@ class DocumentIngestionServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<TextSegment>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
         verify(embeddingStore).addAll(any(), segmentsCaptor.capture());
-        org.assertj.core.api.Assertions.assertThat(segmentsCaptor.getValue().get(0).metadata().getString("document_id"))
+        org.assertj.core.api.Assertions.assertThat(
+                        segmentsCaptor.getValue().get(0).metadata().getString("document_id"))
                 .isNotBlank();
     }
 
@@ -176,9 +182,8 @@ class DocumentIngestionServiceTest {
     }
 
     private static Response<List<Embedding>> embeddingsFor(List<TextSegment> segments) {
-        return Response.from(segments.stream()
-                .map(ignored -> Embedding.from(VECTOR))
-                .toList());
+        return Response.from(
+                segments.stream().map(ignored -> Embedding.from(VECTOR)).toList());
     }
 
     private static boolean containsText(List<TextSegment> segments, String text) {
