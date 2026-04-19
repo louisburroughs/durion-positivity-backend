@@ -7,6 +7,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
+import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -33,8 +34,10 @@ public class StreamingSessionAgentManager
         implements StreamingAgentOrchestrationService, StreamingSessionAgentCacheMetrics {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
+    private static final String MEMORY_KEY_SEPARATOR = "::";
 
-    private final Cache<String, CachedStreamingAgent> agentCache;
+    private final Cache<String, StreamingPosAssistant> roleAgentCache;
+    private final Cache<String, ChatMemory> chatMemoryCache;
     private final Cache<String, AtomicInteger> requestCountCache;
     private final StreamingChatModel streamingChatModel;
     private final EmbeddingModel embeddingModel;
@@ -72,18 +75,13 @@ public class StreamingSessionAgentManager
                 .maximumSize(sanitizedMaxCachedAgents)
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.agentCache = Caffeine.newBuilder()
+        this.chatMemoryCache = Caffeine.newBuilder()
                 .maximumSize(sanitizedMaxCachedAgents)
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
-                .removalListener(
-                        (String userId,
-                                CachedStreamingAgent ignored,
-                                com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
-                            if (userId != null) {
-                                requestCountCache.invalidate(userId);
-                            }
-                        })
                 .build();
+        this.roleAgentCache =
+                Caffeine.newBuilder().maximumSize(sanitizedMaxCachedAgents).build();
+        prebuildRoleAgents();
     }
 
     @Override
@@ -99,7 +97,8 @@ public class StreamingSessionAgentManager
         String roleContext = "Current user role: " + role;
         long startMs = System.currentTimeMillis();
 
-        return Flux.<String>create(emitter -> streamTokens(agent, message, roleContext, emitter))
+        String memoryId = memoryKey(userId, role);
+        return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, roleContext, emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     if (toolAuditService != null) {
@@ -121,28 +120,21 @@ public class StreamingSessionAgentManager
 
     @Override
     public void evict(@NonNull String userId) {
-        agentCache.invalidate(userId);
+        chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(userId + MEMORY_KEY_SEPARATOR));
+        requestCountCache.invalidate(userId);
     }
 
     @Override
     public long getCacheSize() {
-        return agentCache.estimatedSize();
+        return roleAgentCache.estimatedSize();
     }
 
     private @NonNull StreamingPosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
-        CachedStreamingAgent cached = agentCache.getIfPresent(userId);
-        if (cached != null && role.equals(cached.role())) {
-            return cached.agent();
-        }
-        if (cached != null) {
-            agentCache.invalidate(userId);
-        }
-        StreamingPosAssistant agent = buildAgent(role);
-        agentCache.put(userId, new CachedStreamingAgent(role, agent));
-        return agent;
+        return roleAgentCache.get(role, this::buildAgent);
     }
 
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
+        long startNanos = System.nanoTime();
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
                 toolRegistry.resolveToolsForRole(role), exaWebSearchTool);
 
@@ -155,22 +147,24 @@ public class StreamingSessionAgentManager
         ContentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
 
-        var chatMemory = MessageWindowChatMemory.withMaxMessages(memoryMaxMessages);
-
-        return AiServices.builder(StreamingPosAssistant.class)
+        StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .chatMemory(chatMemory)
+                .chatMemoryProvider(this::chatMemoryFor)
                 .build();
+        LOGGER.info(
+                "Built MCP streaming role agent role={} tools={} in {} ms", role, tools.size(), elapsedMs(startNanos));
+        return agent;
     }
 
     private void streamTokens(
             @NonNull StreamingPosAssistant agent,
+            @NonNull String memoryId,
             @NonNull String message,
             @NonNull String roleContext,
             @NonNull FluxSink<String> emitter) {
-        agent.chat(message, roleContext)
+        agent.chat(memoryId, message, roleContext)
                 .onPartialResponse(token -> {
                     if (!emitter.isCancelled()) {
                         emitter.next(token);
@@ -181,6 +175,30 @@ public class StreamingSessionAgentManager
                 .start();
     }
 
-    private record CachedStreamingAgent(
-            @NonNull String role, @NonNull StreamingPosAssistant agent) {}
+    private void prebuildRoleAgents() {
+        long startNanos = System.nanoTime();
+        int prebuilt = 0;
+        for (String role : toolRegistry.preloadableRoles()) {
+            try {
+                roleAgentCache.put(role, buildAgent(role));
+                prebuilt++;
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Failed to prebuild MCP streaming role agent role={}", role, exception);
+            }
+        }
+        LOGGER.info("Prebuilt {} MCP streaming role agents in {} ms", prebuilt, elapsedMs(startNanos));
+    }
+
+    private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
+        return chatMemoryCache.get(
+                String.valueOf(memoryId), ignored -> MessageWindowChatMemory.withMaxMessages(memoryMaxMessages));
+    }
+
+    private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
+        return userId + MEMORY_KEY_SEPARATOR + role;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
 }

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
@@ -15,5 +16,5 @@ public interface PosAssistant {
       Never fabricate data.
       {{roleContext}}
       """)
-    String chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
+    String chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
 }

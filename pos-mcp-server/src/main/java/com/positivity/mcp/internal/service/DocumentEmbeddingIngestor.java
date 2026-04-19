@@ -49,24 +49,54 @@ public class DocumentEmbeddingIngestor {
     }
 
     public int ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
+        long totalStartNanos = System.nanoTime();
         Object providedDocumentId = metadata.get(DOCUMENT_ID);
         boolean replaceExisting = providedDocumentId instanceof String documentIdValue && !documentIdValue.isBlank();
         String documentId = replaceExisting
                 ? ((String) providedDocumentId).trim()
                 : UUID.randomUUID().toString();
 
-        List<TextSegment> segments = segments(content, metadata, documentId);
-        List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-        if (embeddings.size() != segments.size()) {
-            throw new IllegalStateException("Embedding count does not match segment count: embeddings=%d, segments=%d"
-                    .formatted(embeddings.size(), segments.size()));
-        }
+        try {
+            List<TextSegment> segments = segments(content, metadata, documentId);
+            long embeddingStartNanos = System.nanoTime();
+            List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+            LOGGER.info(
+                    "Embedded RAG document {} with {} segments in {} ms",
+                    documentId,
+                    segments.size(),
+                    elapsedMs(embeddingStartNanos));
+            if (embeddings.size() != segments.size()) {
+                throw new IllegalStateException(
+                        "Embedding count does not match segment count: embeddings=%d, segments=%d"
+                                .formatted(embeddings.size(), segments.size()));
+            }
 
-        if (replaceExisting) {
-            embeddingStore.removeAll(metadataKey(DOCUMENT_ID).isEqualTo(documentId));
+            long storeStartNanos = System.nanoTime();
+            if (replaceExisting) {
+                embeddingStore.removeAll(metadataKey(DOCUMENT_ID).isEqualTo(documentId));
+            }
+            embeddingStore.addAll(embeddings, segments);
+            LOGGER.info(
+                    "Stored RAG document {} with {} segments in {} ms",
+                    documentId,
+                    segments.size(),
+                    elapsedMs(storeStartNanos));
+            LOGGER.info(
+                    "Completed RAG document ingestion documentId={} segments={} replaceExisting={} totalMs={}",
+                    documentId,
+                    segments.size(),
+                    replaceExisting,
+                    elapsedMs(totalStartNanos));
+            return segments.size();
+        } catch (RuntimeException exception) {
+            LOGGER.warn(
+                    "RAG document ingestion failed documentId={} replaceExisting={} totalMs={}",
+                    documentId,
+                    replaceExisting,
+                    elapsedMs(totalStartNanos),
+                    exception);
+            throw exception;
         }
-        embeddingStore.addAll(embeddings, segments);
-        return segments.size();
     }
 
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
@@ -101,5 +131,9 @@ public class DocumentEmbeddingIngestor {
             enrichedSegments.add(TextSegment.from(segment.text(), segmentMetadata));
         }
         return enrichedSegments;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
     }
 }

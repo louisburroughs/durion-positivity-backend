@@ -12,8 +12,7 @@ import org.springframework.util.ClassUtils;
 
 final class ToolSelectionSupport {
 
-    private ToolSelectionSupport() {
-    }
+    private ToolSelectionSupport() {}
 
     static @NonNull List<Object> mergeWithoutDuplicateToolNames(
             @NonNull Collection<Object> roleTools, @NonNull Object... fallbackTools) {
@@ -31,9 +30,7 @@ final class ToolSelectionSupport {
     }
 
     private static void addIfNoDuplicateToolName(
-            @NonNull List<Object> selected,
-            @NonNull Set<String> selectedToolNames,
-            @NonNull Object tool) {
+            @NonNull List<Object> selected, @NonNull Set<String> selectedToolNames, @NonNull Object tool) {
         Set<String> toolNames = toolNames(tool);
         if (toolNames.stream().noneMatch(selectedToolNames::contains)) {
             selected.add(tool);

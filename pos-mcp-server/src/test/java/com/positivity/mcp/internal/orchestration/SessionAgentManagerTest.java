@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.when;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -14,6 +15,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,6 +79,7 @@ class SessionAgentManagerTest {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
         when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
         orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
@@ -94,6 +97,7 @@ class SessionAgentManagerTest {
                 500,
                 50,
                 100);
+        clearInvocations(toolRegistry);
     }
 
     @Test
@@ -106,12 +110,12 @@ class SessionAgentManagerTest {
     }
 
     @Test
-    @DisplayName("getOrCreateAgent returns distinct proxy instances for different userIds")
-    void getOrCreateAgent_returnsDifferentInstancesForDifferentUsers() {
-        PosAssistant forUser1 = manager.getOrCreateAgent("user-1", "TECH");
-        PosAssistant forUser2 = manager.getOrCreateAgent("user-2", "TECH");
+    @DisplayName("getOrCreateAgent reuses the prebuilt role proxy for different userIds")
+    void getOrCreateAgent_reusesRoleProxyForDifferentUsers() {
+        PosAssistant forUser1 = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+        PosAssistant forUser2 = manager.getOrCreateAgent("user-2", "ROLE_CASHIER");
 
-        assertThat(forUser1).isNotSameAs(forUser2);
+        assertThat(forUser1).isSameAs(forUser2);
     }
 
     @Test
@@ -126,29 +130,27 @@ class SessionAgentManagerTest {
     @Test
     @DisplayName("getOrCreateAgent skips fallback tools already resolved for the role")
     void getOrCreateAgent_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveToolsForRole("ROLE_MANAGER"))
+        when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(inventoryFacadeTool)));
 
-        PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_MANAGER");
+        PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_DUPLICATE");
 
         assertThat(agent).isNotNull();
     }
 
     @Test
-    @DisplayName("evict removes the user entry from cache so next call creates a fresh agent")
-    void evict_causesNewAgentToBeCreatedOnNextCall() {
-        PosAssistant before = manager.getOrCreateAgent("user-1", "TECH");
+    @DisplayName("evict leaves prebuilt role agent cached")
+    void evict_leavesPrebuiltRoleAgentCached() {
+        PosAssistant before = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         manager.evict("user-1");
 
-        // Verify Caffeine cache is empty after invalidation
         @SuppressWarnings("unchecked")
-        Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(manager, "agentCache");
+        Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(manager, "roleAgentCache");
         assertThat(cache).isNotNull();
         cache.cleanUp();
-        assertThat(cache.estimatedSize()).isZero();
+        assertThat(cache.estimatedSize()).isPositive();
 
-        // And the next call builds a brand-new proxy
-        PosAssistant after = manager.getOrCreateAgent("user-1", "TECH");
-        assertThat(after).isNotSameAs(before);
+        PosAssistant after = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+        assertThat(after).isSameAs(before);
     }
 }

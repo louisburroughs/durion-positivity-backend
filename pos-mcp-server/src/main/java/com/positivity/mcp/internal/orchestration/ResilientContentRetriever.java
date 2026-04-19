@@ -26,15 +26,27 @@ final class ResilientContentRetriever implements ContentRetriever {
 
     @Override
     public @NonNull List<Content> retrieve(@NonNull Query query) {
+        long startNanos = System.nanoTime();
         try {
-            return delegate.retrieve(query);
+            List<Content> content = delegate.retrieve(query);
+            LOGGER.info(
+                    "RAG retrieval {} returned {} content items in {} ms",
+                    retrieverName,
+                    content.size(),
+                    elapsedMs(startNanos));
+            return content;
         } catch (RuntimeException exception) {
             LOGGER.warn(
-                    "RAG retrieval disabled for query because {} failed: {}",
+                    "RAG retrieval disabled for query because {} failed after {} ms: {}",
                     retrieverName,
+                    elapsedMs(startNanos),
                     exception.getMessage(),
                     exception);
             return List.of();
         }
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
     }
 }

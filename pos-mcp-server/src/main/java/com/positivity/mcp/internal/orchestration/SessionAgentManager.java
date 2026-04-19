@@ -10,6 +10,7 @@ import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import com.positivity.mcp.service.SystemPromptService;
+import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -33,8 +34,10 @@ import org.springframework.stereotype.Component;
 public class SessionAgentManager implements AgentOrchestrationService, SessionAgentCacheMetrics {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
+    private static final String MEMORY_KEY_SEPARATOR = "::";
 
-    private final Cache<String, CachedAgent> agentCache;
+    private final Cache<String, PosAssistant> roleAgentCache;
+    private final Cache<String, ChatMemory> chatMemoryCache;
     private final Cache<String, AtomicInteger> requestCountCache;
     private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
@@ -82,35 +85,22 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.agentCache = Caffeine.newBuilder()
-                .maximumSize(maxCachedAgents)
+        this.chatMemoryCache = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
-                .removalListener(
-                        (String userId, CachedAgent ignored, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
-                            if (userId != null) {
-                                requestCountCache.invalidate(userId);
-                            }
-                        })
                 .build();
+        this.roleAgentCache =
+                Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
+        prebuildRoleAgents();
     }
 
     /**
-     * Returns a cached agent for the user, creating one if absent.
-     * The agent is role-aware: its tool set is determined by the user's role.
-     * Multiple chat sessions for the same user reuse this agent instance.
+     * Returns a cached role agent, creating one if absent. User-specific
+     * conversation state is resolved later by the chat memory provider.
      */
     @NonNull
     PosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
-        CachedAgent cached = agentCache.getIfPresent(userId);
-        if (cached != null && role.equals(cached.role())) {
-            return cached.agent();
-        }
-        if (cached != null) {
-            agentCache.invalidate(userId);
-        }
-        PosAssistant agent = buildAgent(role);
-        agentCache.put(userId, new CachedAgent(role, agent));
-        return agent;
+        return roleAgentCache.get(role, this::buildAgent);
     }
 
     @Override
@@ -126,7 +116,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         try {
             PosAssistant agent = getOrCreateAgent(userId, role);
             String roleContext = "Current user role: " + role;
-            String response = agent.chat(message, roleContext);
+            String response = agent.chat(memoryKey(userId, role), message, roleContext);
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
             if (toolAuditService != null) {
                 toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
@@ -143,10 +133,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     @Override
     public long getCacheSize() {
-        return agentCache.estimatedSize();
+        return roleAgentCache.estimatedSize();
     }
 
     private PosAssistant buildAgent(@NonNull String role) {
+        long startNanos = System.nanoTime();
         // 1. Resolve role-specific tools and append fallback tools without
         // registering duplicate @Tool method names.
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
@@ -162,26 +153,51 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         ContentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
 
-        // 3. Build per-session chat memory
-        var chatMemory = MessageWindowChatMemory.withMaxMessages(memoryMaxMessages);
-
-        // 4. Assemble AiServices proxy
-        return AiServices.builder(PosAssistant.class)
+        // 3. Assemble AiServices proxy. Chat memory remains per user+role through
+        // the provider, so role-level agent prebuilds do not share conversations.
+        PosAssistant agent = AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .chatMemory(chatMemory)
+                .chatMemoryProvider(this::chatMemoryFor)
                 .build();
+        LOGGER.info("Built MCP role agent role={} tools={} in {} ms", role, tools.size(), elapsedMs(startNanos));
+        return agent;
     }
 
     /**
-     * Evicts a user's cached agent. Call when role changes or on explicit logout.
+     * Evicts a user's conversation state and rate counter. Role agents remain cached.
      */
     @Override
     public void evict(@NonNull String userId) {
-        agentCache.invalidate(userId);
+        chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(userId + MEMORY_KEY_SEPARATOR));
+        requestCountCache.invalidate(userId);
     }
 
-    private record CachedAgent(
-            @NonNull String role, @NonNull PosAssistant agent) {}
+    private void prebuildRoleAgents() {
+        long startNanos = System.nanoTime();
+        int prebuilt = 0;
+        for (String role : toolRegistry.preloadableRoles()) {
+            try {
+                roleAgentCache.put(role, buildAgent(role));
+                prebuilt++;
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Failed to prebuild MCP role agent role={}", role, exception);
+            }
+        }
+        LOGGER.info("Prebuilt {} MCP role agents in {} ms", prebuilt, elapsedMs(startNanos));
+    }
+
+    private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
+        return chatMemoryCache.get(
+                String.valueOf(memoryId), ignored -> MessageWindowChatMemory.withMaxMessages(memoryMaxMessages));
+    }
+
+    private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
+        return userId + MEMORY_KEY_SEPARATOR + role;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
 }

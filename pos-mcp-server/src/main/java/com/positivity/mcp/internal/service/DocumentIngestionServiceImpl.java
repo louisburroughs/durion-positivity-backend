@@ -64,6 +64,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
         DocumentIngestionJobEntity saved = jobRepository.save(job);
         DocumentIngestionJob acceptedJob = toJob(saved);
+        LOGGER.info("Queued RAG document ingestion job {} for document {}", saved.getId(), documentId);
         documentIngestionExecutor.execute(() -> processJob(saved.getId()));
         return acceptedJob;
     }
@@ -94,6 +95,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     }
 
     private void processJob(@NonNull UUID jobId) {
+        long startNanos = System.nanoTime();
         Optional<DocumentIngestionJobEntity> maybeJob = jobRepository.findById(jobId);
         if (maybeJob.isEmpty()) {
             LOGGER.warn("RAG document ingestion job {} disappeared before processing", jobId);
@@ -106,8 +108,18 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
             Map<String, Object> metadata = deserializeMetadata(job.getMetadataJson());
             int chunkCount = documentEmbeddingIngestor.ingestDocument(job.getContent(), metadata);
             markSucceeded(job, chunkCount);
+            LOGGER.info(
+                    "RAG document ingestion job {} succeeded for document {} in {} ms",
+                    jobId,
+                    job.getDocumentId(),
+                    elapsedMs(startNanos));
         } catch (Exception exception) {
             markFailed(job, exception);
+            LOGGER.warn(
+                    "RAG document ingestion job {} failed for document {} after {} ms",
+                    jobId,
+                    job.getDocumentId(),
+                    elapsedMs(startNanos));
         }
     }
 
@@ -185,5 +197,9 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
                 entity.getCompletedAt(),
                 entity.getChunkCount(),
                 entity.getErrorMessage());
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
     }
 }

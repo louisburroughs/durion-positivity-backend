@@ -41,6 +41,7 @@ public class OpenApiDocumentFetcher {
         }
         URI baseUri = instance.get().getUri();
         URI apiDocUri = baseUri.resolve(properties.openApiPath());
+        long fetchStartNanos = System.nanoTime();
 
         return webClient
                 .get()
@@ -48,7 +49,13 @@ public class OpenApiDocumentFetcher {
                 .retrieve()
                 .bodyToMono(String.class)
                 .timeout(properties.discoveryTimeout())
-                .map(this::deserialize)
+                .doOnNext(raw -> log.info(
+                        "Fetched OpenAPI for service {} from {} in {} ms ({} bytes)",
+                        serviceId,
+                        apiDocUri,
+                        elapsedMs(fetchStartNanos),
+                        raw.length()))
+                .map(raw -> deserialize(serviceId, raw))
                 .flatMap(result -> {
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
@@ -73,13 +80,20 @@ public class OpenApiDocumentFetcher {
         return Optional.of(instances.getFirst());
     }
 
-    private SwaggerParseResult deserialize(@NonNull String raw) {
+    private SwaggerParseResult deserialize(@NonNull String serviceId, @NonNull String raw) {
+        long parseStartNanos = System.nanoTime();
         var parser = new OpenAPIV3Parser();
         var options = new ParseOptions();
         options.setResolve(true);
         options.setResolveFully(true);
-        return parser.readContents(raw, null, options);
+        SwaggerParseResult result = parser.readContents(raw, null, options);
+        log.info("Parsed OpenAPI for service {} in {} ms", serviceId, elapsedMs(parseStartNanos));
+        return result;
     }
 
     public record DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi) {}
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
 }

@@ -4,6 +4,8 @@ import com.positivity.mcp.internal.service.ToolRegistryLoader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 
@@ -27,5 +29,9 @@ public class ToolRegistry {
     public @NonNull List<Object> resolveToolsForRole(@NonNull String role) {
         List<Object> tools = roleToolMap.getOrDefault(role, List.of());
         return new ArrayList<>(tools);
+    }
+
+    public @NonNull Set<String> preloadableRoles() {
+        return new TreeSet<>(roleToolMap.keySet());
     }
 }

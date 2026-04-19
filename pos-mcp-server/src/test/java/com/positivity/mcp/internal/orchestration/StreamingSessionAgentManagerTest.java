@@ -2,7 +2,8 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,6 +69,7 @@ class StreamingSessionAgentManagerTest {
         // Return a fresh mutable list each invocation so buildAgent mutations don't
         // bleed
         when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         manager = new StreamingSessionAgentManager(
                 streamingChatModel,
@@ -79,6 +82,7 @@ class StreamingSessionAgentManagerTest {
                 500,
                 50,
                 100);
+        clearInvocations(toolRegistry);
     }
 
     @Test
@@ -95,9 +99,7 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat("user-1", "ROLE_CASHIER", "first message");
         manager.streamChat("user-1", "ROLE_CASHIER", "second message");
 
-        // buildAgent calls toolRegistry.resolveToolsForRole; cache hit means only one
-        // call
-        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
     }
 
     @Test
@@ -107,8 +109,7 @@ class StreamingSessionAgentManagerTest {
         manager.evict("user-1");
         manager.streamChat("user-1", "ROLE_CASHIER", "after evict");
 
-        // Agent was rebuilt after eviction: resolveToolsForRole called twice
-        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
     }
 
     @Test
@@ -117,17 +118,17 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat("user-1", "ROLE_CASHIER", "first");
         manager.streamChat("user-1", "ROLE_MANAGER", "second");
 
-        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
-        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_MANAGER");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_MANAGER");
     }
 
     @Test
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveToolsForRole("ROLE_MANAGER"))
+        when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(exaWebSearchTool)));
 
-        Flux<String> result = manager.streamChat("user-with-role-tool", "ROLE_MANAGER", "hello");
+        Flux<String> result = manager.streamChat("user-with-role-tool", "ROLE_DUPLICATE", "hello");
 
         assertThat(result).isNotNull();
     }
