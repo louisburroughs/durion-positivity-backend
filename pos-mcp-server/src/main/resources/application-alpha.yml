@@ -30,16 +30,16 @@ langchain4j:
       base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
       temperature: 0.2
-      timeout: 60s
+      timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
       base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-      timeout: 30s
+      timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
       base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
       temperature: 0.2
-      timeout: 60s
+      timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 mcp:
   rag:

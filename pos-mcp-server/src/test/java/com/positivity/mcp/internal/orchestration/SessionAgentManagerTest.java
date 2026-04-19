@@ -13,6 +13,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -120,6 +121,17 @@ class SessionAgentManagerTest {
         PosAssistant afterRoleChange = manager.getOrCreateAgent("user-1", "MANAGER");
 
         assertThat(afterRoleChange).isNotSameAs(original);
+    }
+
+    @Test
+    @DisplayName("getOrCreateAgent skips fallback tools already resolved for the role")
+    void getOrCreateAgent_skipsDuplicateFallbackTool() {
+        when(toolRegistry.resolveToolsForRole("ROLE_MANAGER"))
+                .thenAnswer(inv -> new ArrayList<>(List.of(inventoryFacadeTool)));
+
+        PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_MANAGER");
+
+        assertThat(agent).isNotNull();
     }
 
     @Test

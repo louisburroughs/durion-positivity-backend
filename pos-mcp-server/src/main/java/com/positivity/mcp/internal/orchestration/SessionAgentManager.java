@@ -147,15 +147,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private PosAssistant buildAgent(@NonNull String role) {
-        // 1. Resolve role-specific tools
-        List<Object> tools = toolRegistry.resolveToolsForRole(role);
+        // 1. Resolve role-specific tools and append fallback tools without
+        // registering duplicate @Tool method names.
+        List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
+                toolRegistry.resolveToolsForRole(role), exaWebSearchTool, inventoryFacadeTool, orderFacadeTool);
 
-        // 2. Always include Exa web search and Phase 1 facade tools
-        tools.add(exaWebSearchTool);
-        tools.add(inventoryFacadeTool);
-        tools.add(orderFacadeTool);
-
-        // 3. Build RAG content retriever
+        // 2. Build RAG content retriever
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
@@ -165,10 +162,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         ContentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
 
-        // 4. Build per-session chat memory
+        // 3. Build per-session chat memory
         var chatMemory = MessageWindowChatMemory.withMaxMessages(memoryMaxMessages);
 
-        // 5. Assemble AiServices proxy
+        // 4. Assemble AiServices proxy
         return AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)

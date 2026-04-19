@@ -87,6 +87,11 @@ Operationally, the expected flow is:
 - connect MCP clients directly to `pos-mcp-server`
 - use the built-in `ollama` service for local chat and embedding model calls
 - optionally override `OLLAMA_CHAT_MODEL`, `OLLAMA_EMBEDDING_MODEL`, and `OLLAMA_FALLBACK_MODEL` in `.env`
+- optionally override Ollama client timeouts in `.env`:
+  - `OLLAMA_CHAT_TIMEOUT` (default `180s`)
+  - `OLLAMA_STREAMING_CHAT_TIMEOUT` (default `180s`)
+  - `OLLAMA_EMBEDDING_TIMEOUT` (default `30s`)
+  - `OLLAMA_FALLBACK_TIMEOUT` (default `180s`)
 
 ## Phase 2 (Wave MCP-2) — Delivery Summary
 

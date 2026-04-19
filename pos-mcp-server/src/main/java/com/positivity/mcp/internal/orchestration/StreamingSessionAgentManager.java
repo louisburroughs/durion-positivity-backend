@@ -143,8 +143,8 @@ public class StreamingSessionAgentManager
     }
 
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
-        List<Object> tools = toolRegistry.resolveToolsForRole(role);
-        tools.add(exaWebSearchTool);
+        List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
+                toolRegistry.resolveToolsForRole(role), exaWebSearchTool);
 
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
