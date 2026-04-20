@@ -58,14 +58,14 @@ public class BulkLoadJob {
     @Column(name = "total_rows")
     private Long totalRows;
 
-    @Column(name = "processed_rows")
-    private Long processedRows;
+    @Column(name = "processed_rows", nullable = false)
+    private Long processedRows = 0L;
 
-    @Column(name = "success_count")
-    private Long successCount;
+    @Column(name = "success_count", nullable = false)
+    private Long successCount = 0L;
 
-    @Column(name = "failure_count")
-    private Long failureCount;
+    @Column(name = "failure_count", nullable = false)
+    private Long failureCount = 0L;
 
     @Column(name = "started_at")
     private Instant startedAt;
