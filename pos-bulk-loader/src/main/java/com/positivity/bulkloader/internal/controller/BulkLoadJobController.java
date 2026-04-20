@@ -54,7 +54,8 @@ public class BulkLoadJobController {
     @ApiResponse(responseCode = "200", description = "Job found")
     @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<BulkLoadJobResponse> getJob(@PathVariable @NonNull UUID jobId) {
-        return ResponseEntity.ok(bulkLoadJobService.getJob(jobId));
+        String operatorId = currentOperatorId();
+        return ResponseEntity.ok(bulkLoadJobService.getJob(jobId, operatorId));
     }
 
     @GetMapping

@@ -4,6 +4,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import java.time.Instant;
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     private static final List<JobStatus> ACTIVE_STATUSES = List.of(
-            JobStatus.UPLOADING, JobStatus.DETECTING, JobStatus.MAPPING_REVIEW, JobStatus.DEDUP, JobStatus.PROCESSING);
+            JobStatus.CREATED, JobStatus.UPLOADING, JobStatus.DETECTING, JobStatus.MAPPING_REVIEW, JobStatus.DEDUP, JobStatus.PROCESSING);
 
     private final BulkLoadJobRepository jobRepository;
 
@@ -54,8 +55,8 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     @Override
     @Transactional(readOnly = true)
-    public BulkLoadJobResponse getJob(@NonNull UUID jobId) {
-        return toResponse(findOrThrow(jobId));
+    public BulkLoadJobResponse getJob(@NonNull UUID jobId, @NonNull String operatorId) {
+        return toResponse(findByIdAndOperatorOrThrow(jobId, operatorId));
     }
 
     @Override
@@ -69,7 +70,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     public BulkLoadJobResponse cancelJob(@NonNull UUID jobId, @NonNull String operatorId) {
         BulkLoadJob job = findOrThrow(jobId);
         if (!job.getOperatorId().equals(operatorId)) {
-            throw new IllegalArgumentException("Job does not belong to operator");
+            throw new JobOwnershipViolationException(jobId.toString());
         }
         if (job.getStatus() == JobStatus.COMPLETED || job.getStatus() == JobStatus.CANCELLED) {
             throw new IllegalStateException("Job is already in terminal state: " + job.getStatus());
@@ -84,7 +85,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId) {
         BulkLoadJob job = findOrThrow(jobId);
         if (!job.getOperatorId().equals(operatorId)) {
-            throw new IllegalArgumentException("Job does not belong to operator");
+            throw new JobOwnershipViolationException(jobId.toString());
         }
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now());
@@ -94,6 +95,12 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     private BulkLoadJob findOrThrow(UUID jobId) {
         return jobRepository
                 .findById(jobId)
+                .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
+    }
+
+    private BulkLoadJob findByIdAndOperatorOrThrow(UUID jobId, String operatorId) {
+        return jobRepository
+                .findByIdAndOperatorId(jobId, operatorId)
                 .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
     }
 

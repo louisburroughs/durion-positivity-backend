@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -36,7 +38,8 @@ public class ColumnMappingController {
     @Operation(summary = "Get proposed column mappings for a job")
     @ApiResponse(responseCode = "200", description = "Mappings returned")
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
-        return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId));
+        String operatorId = currentOperatorId();
+        return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId, operatorId));
     }
 
     @PutMapping("/{jobId}/mappings")
@@ -46,6 +49,17 @@ public class ColumnMappingController {
     @ApiResponse(responseCode = "200", description = "Mappings approved")
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(
             @PathVariable @NonNull UUID jobId, @Valid @RequestBody @NonNull ColumnMappingApproveRequest request) {
-        return ResponseEntity.ok(columnMappingService.approveMappings(jobId, request));
+        String operatorId = currentOperatorId();
+        return ResponseEntity.ok(columnMappingService.approveMappings(jobId, operatorId, request));
+    }
+
+    private String currentOperatorId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new IllegalStateException("Authenticated operator is required");
+        }
+        return authentication.getName();
     }
 }

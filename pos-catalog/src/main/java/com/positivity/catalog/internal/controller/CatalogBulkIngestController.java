@@ -76,6 +76,14 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     }
 
     private ProductCreateRequestDto toProductCreateRequest(@NonNull CatalogBulkIngestRecord record) {
+        // Wave 1: price, categoryName, and subcategoryName are not yet supported by the catalog service
+        // (ProductCreateRequestDto has no price or category-name fields in this wave).
+        // These fields will be wired in a future wave once catalog pricing and category-by-name
+        // resolution are available.
+        if (record.getPrice() != null || record.getCategoryName() != null || record.getSubcategoryName() != null) {
+            log.warn(
+                    "CatalogBulkIngestController: price/categoryName/subcategoryName are ignored in Wave 1 — not yet supported by catalog service");
+        }
         ProductCreateRequestDto request = new ProductCreateRequestDto();
         request.setSku(record.getSku());
         request.setUpc(record.getUpc());

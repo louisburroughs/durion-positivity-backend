@@ -9,8 +9,8 @@ import org.jspecify.annotations.NonNull;
 public interface ColumnMappingService {
 
     @NonNull
-    List<ColumnMappingResponse> getMappingsForJob(@NonNull UUID jobId);
+    List<ColumnMappingResponse> getMappingsForJob(@NonNull UUID jobId, @NonNull String operatorId);
 
     @NonNull
-    List<ColumnMappingResponse> approveMappings(@NonNull UUID jobId, @NonNull ColumnMappingApproveRequest request);
+    List<ColumnMappingResponse> approveMappings(@NonNull UUID jobId, @NonNull String operatorId, @NonNull ColumnMappingApproveRequest request);
 }

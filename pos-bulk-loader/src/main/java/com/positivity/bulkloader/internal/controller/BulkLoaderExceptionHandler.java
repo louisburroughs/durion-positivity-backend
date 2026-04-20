@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.controller;
 
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import java.util.NoSuchElementException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 @Slf4j
 public class BulkLoaderExceptionHandler {
+
+    @ExceptionHandler(JobOwnershipViolationException.class)
+    public ProblemDetail handleOwnershipViolation(JobOwnershipViolationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Access denied");
+    }
 
     @ExceptionHandler(NoSuchElementException.class)
     public ProblemDetail handleNotFound(NoSuchElementException ex) {

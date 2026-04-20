@@ -16,6 +16,8 @@ public interface BulkLoadJobRepository extends JpaRepository<BulkLoadJob, UUID> 
 
     Page<BulkLoadJob> findByOperatorId(@NonNull String operatorId, @NonNull Pageable pageable);
 
+    Optional<BulkLoadJob> findByIdAndOperatorId(@NonNull UUID id, @NonNull String operatorId);
+
     Optional<BulkLoadJob> findByOperatorIdAndStatusIn(@NonNull String operatorId, @NonNull List<JobStatus> statuses);
 
     long countByOperatorIdAndStatusIn(@NonNull String operatorId, @NonNull List<JobStatus> statuses);
