@@ -102,12 +102,9 @@ public class BatchConfiguration {
 
     @Bean
     public ItemWriter<CatalogProductRecord> catalogBulkIngestWriter(RestClient.Builder restClientBuilder) {
-        restClientBuilder.baseUrl(catalogBaseUrl).build();
-        return items -> {
-            log.info("Attempted to write {} catalog records to bulk-ingest endpoint at {}", items.size(),
-                    catalogBaseUrl);
-            throw new UnsupportedOperationException(
-                    "catalogBulkIngestWriter is not implemented: no call to the catalog bulk-ingest endpoint is currently made");
-        };
+        throw new IllegalStateException(
+                "catalogBulkIngestWriter is not implemented. "
+                        + "The catalog bulk load step is intentionally disabled until bulk-ingest endpoint "
+                        + "integration is provided for base URL: " + catalogBaseUrl);
     }
 }

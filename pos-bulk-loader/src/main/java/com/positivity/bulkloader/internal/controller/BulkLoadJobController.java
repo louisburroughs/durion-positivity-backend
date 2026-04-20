@@ -52,6 +52,7 @@ public class BulkLoadJobController {
     @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
     @Operation(summary = "Get a bulk load job by ID")
     @ApiResponse(responseCode = "200", description = "Job found")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<BulkLoadJobResponse> getJob(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();

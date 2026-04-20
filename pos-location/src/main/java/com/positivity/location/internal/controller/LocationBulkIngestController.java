@@ -57,7 +57,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest location record at row {}: {}", i, exception.getMessage());
+                log.warn("Failed to ingest location record at row {}: {}", i, exception.getMessage(), exception);
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .success(false)

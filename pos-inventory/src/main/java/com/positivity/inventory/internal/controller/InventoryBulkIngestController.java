@@ -88,11 +88,16 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     }
 
     private String resolveActorUserId(@NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {
+        // Prefer request.operatorId when provided so bulk-loader service-account calls
+        // correctly attribute to the human operator that initiated the import.
+        if (request.getOperatorId() != null && !request.getOperatorId().isBlank()) {
+            return request.getOperatorId();
+        }
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getName() != null && !auth.getName().isBlank()) {
             return auth.getName();
         }
-        return firstNonBlank(request.getOperatorId(), "system");
+        return "system";
     }
 
     private String firstNonBlank(String primary, String fallback) {

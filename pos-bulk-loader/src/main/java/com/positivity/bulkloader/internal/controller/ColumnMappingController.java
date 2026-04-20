@@ -37,6 +37,7 @@ public class ColumnMappingController {
     @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
     @Operation(summary = "Get proposed column mappings for a job")
     @ApiResponse(responseCode = "200", description = "Mappings returned")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId, operatorId));
@@ -47,6 +48,7 @@ public class ColumnMappingController {
     @EmitEvent(id = "BULK_LOADER_MAPPING_APPROVE", apiVersion = "1")
     @Operation(summary = "Approve and finalize column mappings for a job")
     @ApiResponse(responseCode = "200", description = "Mappings approved")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(
             @PathVariable @NonNull UUID jobId, @Valid @RequestBody @NonNull ColumnMappingApproveRequest request) {
         String operatorId = currentOperatorId();
