@@ -1,9 +1,10 @@
 package com.positivity.bulkloader.internal.entity;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -24,6 +25,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class BulkLoadColumnMapping {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
@@ -48,9 +51,6 @@ public class BulkLoadColumnMapping {
 
     @PrePersist
     protected void onCreate() {
-        if (this.id == null) {
-            this.id = UuidCreator.getTimeOrderedEpoch();
-        }
         if (this.overriddenByUser == null) {
             this.overriddenByUser = false;
         }
