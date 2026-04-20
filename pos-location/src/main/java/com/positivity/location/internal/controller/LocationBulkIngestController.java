@@ -47,9 +47,9 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
         int failureCount = 0;
 
         for (int i = 0; i < request.getRecords().size(); i++) {
-            LocationBulkIngestRecord record = request.getRecords().get(i);
+            LocationBulkIngestRecord ingestRecord = request.getRecords().get(i);
             try {
-                var created = locationService.createLocation(toLocationRequest(record));
+                var created = locationService.createLocation(toLocationRequest(ingestRecord));
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(created.getId())
@@ -76,19 +76,19 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                 .build();
     }
 
-    private LocationRequestDTO toLocationRequest(@NonNull LocationBulkIngestRecord record) {
+    private LocationRequestDTO toLocationRequest(@NonNull LocationBulkIngestRecord ingestRecord) {
         LocationRequestDTO request = new LocationRequestDTO();
-        request.setName(record.getName());
-        request.setCode(record.getCode());
-        request.setAddressLine1(record.getAddressLine1());
-        request.setAddressLine2(record.getAddressLine2());
-        request.setCity(record.getCity());
-        request.setState(record.getStateOrProvince());
-        request.setPostalCode(record.getPostalCode());
-        request.setCountry(record.getCountryCode());
-        request.setActive(record.getActive() == null ? Boolean.TRUE : record.getActive());
+        request.setName(ingestRecord.getName());
+        request.setCode(ingestRecord.getCode());
+        request.setAddressLine1(ingestRecord.getAddressLine1());
+        request.setAddressLine2(ingestRecord.getAddressLine2());
+        request.setCity(ingestRecord.getCity());
+        request.setState(ingestRecord.getStateOrProvince());
+        request.setPostalCode(ingestRecord.getPostalCode());
+        request.setCountry(ingestRecord.getCountryCode());
+        request.setActive(ingestRecord.getActive() == null ? Boolean.TRUE : ingestRecord.getActive());
         request.setType(LocationTypeDTO.builder()
-                .name(firstNonBlank(record.getLocationTypeName(), DEFAULT_LOCATION_TYPE_NAME))
+                .name(firstNonBlank(ingestRecord.getLocationTypeName(), DEFAULT_LOCATION_TYPE_NAME))
                 .build());
         return request;
     }

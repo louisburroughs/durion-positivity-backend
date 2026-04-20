@@ -28,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(CatalogBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class CatalogBulkIngestControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");

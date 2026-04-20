@@ -22,20 +22,28 @@ import com.tngtech.archunit.lang.ArchRule;
 @AnalyzeClasses(packages = "com.positivity.bulkloader", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
+        private static final String INTERNAL_CONTROLLER_PACKAGE = "..internal.controller..";
+        private static final String INTERNAL_REPOSITORY_PACKAGE = "..internal.repository..";
+        private static final String SERVICE_PACKAGE = "..service..";
+
+        private ArchitectureTest() {
+                // Utility class
+        }
+
     @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
-            .resideInAPackage("..internal.controller..")
+            .resideInAPackage(INTERNAL_CONTROLLER_PACKAGE)
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.repository..")
+            .resideInAPackage(INTERNAL_REPOSITORY_PACKAGE)
             .allowEmptyShould(true)
             .because("controllers must go through service layer");
 
     @ArchTest
     static final ArchRule controllers_should_not_access_entities_directly = noClasses()
             .that()
-            .resideInAPackage("..internal.controller..")
+            .resideInAPackage(INTERNAL_CONTROLLER_PACKAGE)
             .should()
             .dependOnClassesThat()
             .resideInAPackage("..internal.entity..")
@@ -45,10 +53,10 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule services_should_not_depend_on_controllers = noClasses()
             .that()
-            .resideInAPackage("..service..")
+            .resideInAPackage(SERVICE_PACKAGE)
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.controller..")
+            .resideInAPackage(INTERNAL_CONTROLLER_PACKAGE)
             .allowEmptyShould(true)
             .because("services should not depend on web layer");
 
@@ -58,17 +66,17 @@ public class ArchitectureTest {
             .resideInAPackage("..internal.entity..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..service..")
+            .resideInAPackage(SERVICE_PACKAGE)
             .allowEmptyShould(true)
             .because("entities should be independent of business logic");
 
     @ArchTest
     static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
             .that()
-            .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+            .resideOutsideOfPackages(SERVICE_PACKAGE, INTERNAL_REPOSITORY_PACKAGE, "..internal.config..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.repository..")
+            .resideInAPackage(INTERNAL_REPOSITORY_PACKAGE)
             .allowEmptyShould(true)
             .because("repositories should only be accessed from service layer");
 

@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.service;
 import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.service.ContentDetectionService;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -16,6 +17,9 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class RuleBasedContentDetectionServiceImpl implements ContentDetectionService {
 
+    private static final String PRICE_FIELD = "price";
+    private static final String QUANTITY_FIELD = "quantity";
+
     private static final Map<DomainType, Set<String>> DOMAIN_HEADER_SYNONYMS = Map.of(
             DomainType.CATALOG_PRODUCT,
             Set.of(
@@ -24,13 +28,13 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     "product",
                     "description",
                     "category",
-                    "price",
+                        PRICE_FIELD,
                     "name",
                     "manufacturer",
                     "part_number",
                     "weight"),
             DomainType.INVENTORY_STOCK_COUNT,
-            Set.of("sku", "quantity", "qty", "stock", "on_hand", "location_code", "bin", "unit_cost", "warehouse"),
+                    Set.of("sku", QUANTITY_FIELD, "qty", "stock", "on_hand", "location_code", "bin", "unit_cost", "warehouse"),
             DomainType.LOCATION,
             Set.of(
                     "location",
@@ -46,7 +50,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
 
     @Override
     public ContentDetectionResult detect(@NonNull List<String> columnHeaders, @NonNull List<List<String>> sampleRows) {
-        Map<DomainType, Integer> scores = new HashMap<>();
+        Map<DomainType, Integer> scores = new EnumMap<>(DomainType.class);
         for (DomainType domain : DomainType.values()) {
             Set<String> synonyms = DOMAIN_HEADER_SYNONYMS.get(domain);
             if (synonyms == null) {
@@ -101,7 +105,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "sku", "item_number", "item_no", "part_no" -> "sku";
                     case "upc", "barcode", "ean" -> "upc";
                     case "name", "item_name", "product_name", "description" -> "name";
-                    case "price", "list_price", "retail_price" -> "price";
+                    case PRICE_FIELD, "list_price", "retail_price" -> PRICE_FIELD;
                     case "category", "category_name" -> "categoryName";
                     case "subcategory", "subcategory_name" -> "subcategoryName";
                     default -> null;
@@ -109,7 +113,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
             case INVENTORY_STOCK_COUNT ->
                 switch (normalized) {
                     case "sku", "item_number", "part_no" -> "sku";
-                    case "qty", "quantity", "on_hand", "quantity_on_hand" -> "quantity";
+                    case "qty", QUANTITY_FIELD, "on_hand", "quantity_on_hand" -> QUANTITY_FIELD;
                     case "reason_code", "reason" -> "reasonCode";
                     case "uom", "unit_of_measure" -> "unitOfMeasure";
                     default -> null;

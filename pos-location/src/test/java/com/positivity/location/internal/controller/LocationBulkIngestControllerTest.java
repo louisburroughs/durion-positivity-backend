@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(LocationBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class LocationBulkIngestControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000040");

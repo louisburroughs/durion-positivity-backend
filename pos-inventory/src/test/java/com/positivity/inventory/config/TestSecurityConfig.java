@@ -43,7 +43,7 @@ public class TestSecurityConfig {
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
         http.csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
@@ -55,7 +55,7 @@ public class TestSecurityConfig {
     @SuppressWarnings("java:S1874")
     public UserDetailsService testUserDetailsService() {
         var user = User.withUsername("test-user")
-                .password("{noop}test")
+                .password("{noop}local-test-password-9xA7")
                 .authorities(TEST_AUTHORITIES)
                 .build();
         return new InMemoryUserDetailsManager(user);

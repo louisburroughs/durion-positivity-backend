@@ -20,7 +20,7 @@ import org.springframework.batch.infrastructure.item.file.mapping.BeanWrapperFie
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.PathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestClient;
 
@@ -53,7 +53,8 @@ public class BatchConfiguration {
             ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor,
             ItemWriter<CatalogProductRecord> catalogBulkIngestWriter) {
         return new StepBuilder("catalogBulkLoadStep", jobRepository)
-                .<CatalogProductRecord, CatalogProductRecord>chunk(500, transactionManager)
+            .<CatalogProductRecord, CatalogProductRecord>chunk(500)
+            .transactionManager(transactionManager)
                 .reader(catalogCsvReader)
                 .processor(catalogItemProcessor)
                 .writer(catalogBulkIngestWriter)
@@ -80,7 +81,7 @@ public class BatchConfiguration {
         mapper.setTargetType(CatalogProductRecord.class);
         return new FlatFileItemReaderBuilder<CatalogProductRecord>()
                 .name("catalogCsvReader")
-                .resource(new PathResource(resolved))
+            .resource(new FileSystemResource(resolved))
                 .delimited()
                 .names("sku", "upc", "name", "description", "categoryName", "subcategoryName", "price")
                 .fieldSetMapper(mapper)

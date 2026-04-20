@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings({"java:S100", "java:S1192"})
 class BulkLoadJobServiceImplTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");

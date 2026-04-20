@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(ReviewQueueController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
+@SuppressWarnings({"java:S6813", "java:S100"})
 class ReviewQueueControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000014");

@@ -155,7 +155,7 @@ pos-catalog:
 
 ### Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                    External Clients / Frontend                │
 └──────────────────────────────────────────────────────────────┘
@@ -370,7 +370,7 @@ if (!response.ok) {
 
 ### JDBC Connection String
 
-```
+```text
 jdbc:postgresql://postgres:5432/${POSTGRES_DB}
 ```
 

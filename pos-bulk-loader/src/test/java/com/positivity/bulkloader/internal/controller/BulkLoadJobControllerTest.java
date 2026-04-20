@@ -31,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(BulkLoadJobController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class BulkLoadJobControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
@@ -136,7 +137,7 @@ class BulkLoadJobControllerTest {
 
     @Test
     void getJob_crossOperator_returns404() throws Exception {
-        when(bulkLoadJobService.getJob(eq(JOB_ID), eq("operator-b")))
+                when(bulkLoadJobService.getJob(JOB_ID, "operator-b"))
                 .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
 
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)

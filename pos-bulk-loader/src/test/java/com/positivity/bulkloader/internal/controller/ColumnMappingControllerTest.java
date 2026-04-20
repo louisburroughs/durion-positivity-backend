@@ -30,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(ColumnMappingController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class ColumnMappingControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000012");
@@ -78,7 +79,7 @@ class ColumnMappingControllerTest {
 
     @Test
     void getMappings_byNonOwner_returns403() throws Exception {
-        when(columnMappingService.getMappingsForJob(eq(JOB_ID), eq("other-operator")))
+                when(columnMappingService.getMappingsForJob(JOB_ID, "other-operator"))
                 .thenThrow(new JobOwnershipViolationException(JOB_ID.toString()));
 
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)

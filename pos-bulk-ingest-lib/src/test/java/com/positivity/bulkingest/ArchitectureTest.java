@@ -16,6 +16,10 @@ import com.tngtech.archunit.lang.ArchRule;
 @AnalyzeClasses(packages = "com.positivity.bulkingest", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
+        private ArchitectureTest() {
+                // Utility class
+        }
+
     @ArchTest
     static final ArchRule library_should_not_import_spring_security = noClasses()
             .that()
