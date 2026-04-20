@@ -59,12 +59,12 @@ done
 
 ### Operational Targets
 
-| Metric | Target |
-|--------|--------|
-| Availability | 99.9% during business hours |
-| Response Time | < 500ms for core APIs |
-| RTO | 4 hours |
-| RPO | 1 hour |
+| Metric        | Target                      |
+| ------------- | --------------------------- |
+| Availability  | 99.9% during business hours |
+| Response Time | < 500ms for core APIs       |
+| RTO           | 4 hours                     |
+| RPO           | 1 hour                      |
 
 ---
 
@@ -101,12 +101,12 @@ annotations:
 
 ### Dashboard Access
 
-| Dashboard | URL | Credentials |
-|-----------|-----|-------------|
-| Grafana | <http://localhost:3000> | admin/admin |
-| Jaeger | <http://localhost:16686> | - |
-| Prometheus | <http://localhost:9090> | - |
-| Eureka | <http://localhost:8761> | - |
+| Dashboard  | URL                      | Credentials |
+| ---------- | ------------------------ | ----------- |
+| Grafana    | <http://localhost:3000>  | admin/admin |
+| Jaeger     | <http://localhost:16686> | -           |
+| Prometheus | <http://localhost:9090>  | -           |
+| Eureka     | <http://localhost:8761>  | -           |
 
 ---
 
@@ -268,12 +268,12 @@ GET /api/roles/assignments/user/123
 
 Format: `domain:resource:action` (snake_case, lowercase)
 
-| Domain | Resource | Action | Full Permission |
-|--------|----------|--------|-----------------|
-| crm | party | view | `crm:party:view` |
+| Domain    | Resource   | Action  | Full Permission                |
+| --------- | ---------- | ------- | ------------------------------ |
+| crm       | party      | view    | `crm:party:view`               |
 | inventory | adjustment | approve | `inventory:adjustment:approve` |
-| order | shipment | cancel | `order:shipment:cancel` |
-| security | role | assign | `security:role:assign` |
+| order     | shipment   | cancel  | `order:shipment:cancel`        |
+| security  | role       | assign  | `security:role:assign`         |
 
 ---
 

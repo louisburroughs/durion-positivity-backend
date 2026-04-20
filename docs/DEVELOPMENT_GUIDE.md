@@ -155,14 +155,15 @@ The `pos-dependencies` module manages internal artifact versions:
 
 The backend uses four canonical environment/build profiles:
 
-| Profile | Activation | Primary Purpose | Intended Environment |
-|----------|-------------|------------------|----------------------|
-| `openapi` | Maven profile (`-Popenapi`) | Generate module `openapi.yaml` using `spring-boot:start/stop` and `springdoc-openapi:generate` | Build-time only |
-| `dev` | Spring runtime profile (`--spring.profiles.active=dev`) | Local developer runtime with H2 and minimal laptop-friendly defaults | Developer workstation |
-| `alpha` | Spring runtime profile (`--spring.profiles.active=alpha`) | Near-production runtime defaults for EC2 alpha environment | AWS EC2 alpha |
-| `prod` | Spring runtime profile (`--spring.profiles.active=prod`) | Production runtime configuration (env-driven; intentionally minimal while production is being finalized) | Production |
+| Profile   | Activation                                                | Primary Purpose                                                                                          | Intended Environment  |
+| --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------- |
+| `openapi` | Maven profile (`-Popenapi`)                               | Generate module `openapi.yaml` using `spring-boot:start/stop` and `springdoc-openapi:generate`           | Build-time only       |
+| `dev`     | Spring runtime profile (`--spring.profiles.active=dev`)   | Local developer runtime with H2 and minimal laptop-friendly defaults                                     | Developer workstation |
+| `alpha`   | Spring runtime profile (`--spring.profiles.active=alpha`) | Near-production runtime defaults for EC2 alpha environment                                               | AWS EC2 alpha         |
+| `prod`    | Spring runtime profile (`--spring.profiles.active=prod`)  | Production runtime configuration (env-driven; intentionally minimal while production is being finalized) | Production            |
 
 Migration note:
+
 - Legacy profile names are retired: `local` is replaced by `dev`, and `preprod` is replaced by `alpha`.
 
 ---
@@ -232,12 +233,12 @@ curl http://localhost:8093/v3/api-docs.yaml > openapi.yaml
 
 ### Access Points (When Running)
 
-| Endpoint | URL |
-|----------|-----|
-| Swagger UI | `http://localhost:{port}/swagger-ui/index.html` |
-| OpenAPI JSON | `http://localhost:{port}/v3/api-docs` |
-| OpenAPI YAML | `http://localhost:{port}/v3/api-docs.yaml` |
-| Health Check | `http://localhost:{port}/actuator/health` |
+| Endpoint     | URL                                             |
+| ------------ | ----------------------------------------------- |
+| Swagger UI   | `http://localhost:{port}/swagger-ui/index.html` |
+| OpenAPI JSON | `http://localhost:{port}/v3/api-docs`           |
+| OpenAPI YAML | `http://localhost:{port}/v3/api-docs.yaml`      |
+| Health Check | `http://localhost:{port}/actuator/health`       |
 
 ### Controller Annotations
 
@@ -397,12 +398,12 @@ public final class OrderEventTypes {
 
 **Threshold Presets:**
 
-| Preset | p50 | p95 | p99 | Use Case |
-|--------|-----|-----|-----|----------|
-| `fastRead` | 50ms | 200ms | 500ms | Simple GET/list |
-| `search` | 100ms | 500ms | 1s | Search/filter |
-| `write` | 200ms | 1s | 3s | POST/PUT/DELETE |
-| `approval` | 500ms | 2s | 5s | Workflow approval |
+| Preset     | p50   | p95   | p99   | Use Case          |
+| ---------- | ----- | ----- | ----- | ----------------- |
+| `fastRead` | 50ms  | 200ms | 500ms | Simple GET/list   |
+| `search`   | 100ms | 500ms | 1s    | Search/filter     |
+| `write`    | 200ms | 1s    | 3s    | POST/PUT/DELETE   |
+| `approval` | 500ms | 2s    | 5s    | Workflow approval |
 
 ### Auto-Configuration
 
@@ -426,7 +427,7 @@ The library uses Spring Boot auto-configuration — no manual setup required. Co
 
 **Deferred (Future Work):**
 
-- ⏳ Jackson 3.0 code migration (tools.jackson.* group ID)
+- ⏳ Jackson 3.0 code migration (tools.jackson.\* group ID)
 - ⏳ Spring Security 7.0 refactoring
 
 ### Critical Version Enforcement
