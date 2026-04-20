@@ -281,16 +281,24 @@ public enum PermissionCode {
     NLTI__AUDIT__READ(223, "nlti:audit:read"),
     MCP__DOCUMENT__INGEST(224, "mcp:document:ingest"),
     MCP__CHAT__STREAM(225, "mcp:chat:stream"),
-    MCP__CHAT__EXECUTE(226, "mcp:chat:execute");
+    MCP__CHAT__EXECUTE(226, "mcp:chat:execute"),
+
+    // ── Catalog (batch 2) ────────────────────────────────────────────────────
+    CATALOG__SUPPLIER_COST__READ(227, "catalog:supplier_cost:read"),
+    CATALOG__SUPPLIER_COST__WRITE(228, "catalog:supplier_cost:write"),
+    CATALOG__MSRP__READ(229, "catalog:msrp:read"),
+    CATALOG__MSRP__WRITE(230, "catalog:msrp:write"),
+    CATALOG__PRICE_BOOK__READ(231, "catalog:price_book:read"),
+    CATALOG__PRICE_BOOK__WRITE(232, "catalog:price_book:write");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 3;
+    public static final int CATALOG_VERSION = 4;
 
-    private static final Map<String, PermissionCode> BY_CODE =
-            Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
+    private static final Map<String, PermissionCode> BY_CODE = Stream.of(values())
+            .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
 
     private final int bitIndex;
     private final String code;

@@ -37,15 +37,9 @@ public class SupplierItemCostController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
     @Operation(summary = "Create supplier cost structure")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Created",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = SupplierItemCostDto.class)))
+    @ApiResponse(responseCode = "201", description = "Created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid payload")
     @ApiResponse(responseCode = "409", description = "Duplicate supplier and item combination")
     @EmitEvent(id = "CATALOG_SUPPLIER_COST_CREATE", apiVersion = "1")
@@ -55,30 +49,18 @@ public class SupplierItemCostController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('catalog:supplier_cost:read')")
     @Operation(summary = "Get supplier cost structure")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Found",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = SupplierItemCostDto.class)))
+    @ApiResponse(responseCode = "200", description = "Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "404", description = "Not found")
     public ResponseEntity<SupplierItemCostDto> getCostStructure(@Parameter(required = true) @PathVariable UUID id) {
         return ResponseEntity.ok(supplierItemCostService.getCostStructure(id));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
     @Operation(summary = "Update supplier cost structure")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Updated",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = SupplierItemCostDto.class)))
+    @ApiResponse(responseCode = "200", description = "Updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "404", description = "Not found")
     @EmitEvent(id = "CATALOG_SUPPLIER_COST_UPDATE", apiVersion = "1")
     public ResponseEntity<SupplierItemCostDto> updateCostStructure(
@@ -88,7 +70,7 @@ public class SupplierItemCostController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
     @Operation(summary = "Delete supplier cost structure")
     @ApiResponse(responseCode = "204", description = "Deleted")
     @ApiResponse(responseCode = "404", description = "Not found")
