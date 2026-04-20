@@ -53,7 +53,7 @@ class FileUploadControllerTest {
                                 .id(JOB_ID)
                                 .operatorId("test-operator")
                                 .build();
-                when(bulkLoadJobService.getJob(JOB_ID)).thenReturn(jobResponse);
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(jobResponse);
                 when(fileStorageService.store(eq(JOB_ID), any(), any(), anyLong())).thenReturn("/uploads/products.csv");
 
                 mockMvc.perform(multipart("/v1/bulk-jobs/{jobId}/upload", JOB_ID).file(file))
@@ -63,13 +63,13 @@ class FileUploadControllerTest {
         }
 
         @Test
-        @WithMockUser(username = "anon-user")
         void uploadFile_withoutExecuteAuthority_returns403() throws Exception {
                 MockMultipartFile file = new MockMultipartFile("file", "products.csv", "text/csv",
                                 "sku,name\nABC-001,Widget".getBytes());
 
                 mockMvc.perform(multipart("/v1/bulk-jobs/{jobId}/upload", JOB_ID)
-                                .file(file))
+                                .file(file)
+                                .header("X-Authorities", "BULK_IMPORT_READ"))
                                 .andExpect(status().isForbidden());
         }
 
@@ -85,7 +85,7 @@ class FileUploadControllerTest {
                                 .status(JobStatus.PROCESSING)
                                 .build();
 
-                when(bulkLoadJobService.getJob(JOB_ID)).thenReturn(response);
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
 
                 mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID))
                                 .andExpect(status().isOk())

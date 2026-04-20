@@ -12,6 +12,7 @@ import com.positivity.bulkloader.config.TestSecurityConfig;
 import com.positivity.bulkloader.internal.dto.ColumnMappingApproveRequest;
 import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;
 import com.positivity.bulkloader.internal.dto.ColumnMappingUpdateRequest;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.service.ColumnMappingService;
 import java.util.List;
 import java.util.UUID;
@@ -57,7 +58,7 @@ class ColumnMappingControllerTest {
                 .overriddenByUser(false)
                 .build();
 
-        when(columnMappingService.getMappingsForJob(JOB_ID)).thenReturn(List.of(mapping));
+        when(columnMappingService.getMappingsForJob(eq(JOB_ID), any())).thenReturn(List.of(mapping));
 
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID))
                 .andExpect(status().isOk())
@@ -70,6 +71,19 @@ class ColumnMappingControllerTest {
     void getMappings_withoutReadAuthority_returns403() throws Exception {
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)
                         .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                .andExpect(status().isForbidden());
+    }
+
+    // ─── GET /v1/bulk-jobs/{jobId}/mappings — non-owner 403 ───────────────────
+
+    @Test
+    void getMappings_byNonOwner_returns403() throws Exception {
+        when(columnMappingService.getMappingsForJob(eq(JOB_ID), eq("other-operator")))
+                .thenThrow(new JobOwnershipViolationException(JOB_ID.toString()));
+
+        mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)
+                        .header("X-User", "other-operator")
+                        .header("X-Authorities", "BULK_IMPORT_READ"))
                 .andExpect(status().isForbidden());
     }
 
@@ -94,7 +108,7 @@ class ColumnMappingControllerTest {
                 .overriddenByUser(true)
                 .build();
 
-        when(columnMappingService.approveMappings(eq(JOB_ID), any())).thenReturn(List.of(saved));
+        when(columnMappingService.approveMappings(eq(JOB_ID), any(), any())).thenReturn(List.of(saved));
 
         mockMvc.perform(put("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)
                         .contentType(MediaType.APPLICATION_JSON)

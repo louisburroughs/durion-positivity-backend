@@ -13,6 +13,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -107,7 +108,7 @@ class BulkLoadJobControllerTest {
                 .status(JobStatus.UPLOADING)
                 .build();
 
-        when(bulkLoadJobService.getJob(JOB_ID)).thenReturn(response);
+        when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
 
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID))
                 .andExpect(status().isOk())
@@ -118,7 +119,7 @@ class BulkLoadJobControllerTest {
     @Test
     @WithMockUser(authorities = "BULK_IMPORT_READ")
     void getJob_whenNotFound_returns404() throws Exception {
-        when(bulkLoadJobService.getJob(JOB_ID))
+        when(bulkLoadJobService.getJob(eq(JOB_ID), any()))
                 .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
 
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)).andExpect(status().isNotFound());
@@ -129,6 +130,19 @@ class BulkLoadJobControllerTest {
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)
                         .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
                 .andExpect(status().isForbidden());
+    }
+
+    // ─── GET /v1/bulk-jobs/{jobId} — cross-operator 404 ──────────────────────
+
+    @Test
+    void getJob_crossOperator_returns404() throws Exception {
+        when(bulkLoadJobService.getJob(eq(JOB_ID), eq("operator-b")))
+                .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
+
+        mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)
+                        .header("X-User", "operator-b")
+                        .header("X-Authorities", "BULK_IMPORT_READ"))
+                .andExpect(status().isNotFound());
     }
 
     // ─── POST /v1/bulk-jobs/{jobId}/cancel ───────────────────────────────────
@@ -147,5 +161,18 @@ class BulkLoadJobControllerTest {
         mockMvc.perform(post("/v1/bulk-jobs/{jobId}/cancel", JOB_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    // ─── POST /v1/bulk-jobs/{jobId}/cancel — non-owner 403 ───────────────────
+
+    @Test
+    void cancelJob_byNonOwner_returns403() throws Exception {
+        when(bulkLoadJobService.cancelJob(JOB_ID, "other-operator"))
+                .thenThrow(new JobOwnershipViolationException(JOB_ID.toString()));
+
+        mockMvc.perform(post("/v1/bulk-jobs/{jobId}/cancel", JOB_ID)
+                        .header("X-User", "other-operator")
+                        .header("X-Authorities", "BULK_IMPORT_EXECUTE"))
+                .andExpect(status().isForbidden());
     }
 }

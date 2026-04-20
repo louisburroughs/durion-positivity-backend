@@ -109,9 +109,9 @@ class BulkLoadJobServiceImplTest {
     void getJob_whenFound_returnsResponse() {
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
 
-        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.findByIdAndOperatorId(JOB_ID, OPERATOR_ID)).thenReturn(Optional.of(job));
 
-        BulkLoadJobResponse response = service.getJob(JOB_ID);
+        BulkLoadJobResponse response = service.getJob(JOB_ID, OPERATOR_ID);
 
         assertThat(response.getId()).isEqualTo(JOB_ID);
         assertThat(response.getStatus()).isEqualTo(JobStatus.CREATED);
@@ -119,9 +119,9 @@ class BulkLoadJobServiceImplTest {
 
     @Test
     void getJob_whenNotFound_throwsNoSuchElement() {
-        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.empty());
+        when(jobRepository.findByIdAndOperatorId(JOB_ID, OPERATOR_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getJob(JOB_ID))
+        assertThatThrownBy(() -> service.getJob(JOB_ID, OPERATOR_ID))
                 .isInstanceOf(NoSuchElementException.class)
                 .hasMessageContaining(JOB_ID.toString());
     }
