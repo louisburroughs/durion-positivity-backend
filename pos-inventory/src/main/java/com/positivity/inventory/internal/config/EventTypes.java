@@ -154,6 +154,8 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "INVENTORY_SHORTAGE_RESOLVE",
                                 "Resolve inventory shortage with substitute or backorder options")
+                        .build(),
+                EventTypeRegistration.write("INVENTORY_BULK_INGEST", "Bulk ingest inventory stock counts")
                         .build());
     }
 }

@@ -105,6 +105,8 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_DEACTIVATE", "Deactivate price book rule")
                         .build(),
                 EventTypeRegistration.fastRead("CATALOG_PRICE_BOOK_RESOLVE_PRICE", "Resolve effective price")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_BULK_INGEST", "Bulk ingest catalog products")
                         .build());
     }
 }
