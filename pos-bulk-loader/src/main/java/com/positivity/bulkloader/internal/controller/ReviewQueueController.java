@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,9 +39,7 @@ public class ReviewQueueController {
     @ApiResponse(responseCode = "200", description = "Audit records returned")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<AuditRecordResponse>> getAuditRecords(@PathVariable @NonNull UUID jobId) {
-        if (isNotOwner(jobId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
+        bulkLoadJobService.getJob(jobId, currentOperatorId());
         return ResponseEntity.ok(reviewQueueService.getAuditRecords(jobId));
     }
 
@@ -52,20 +49,12 @@ public class ReviewQueueController {
     @ApiResponse(responseCode = "200", description = "CSV error report downloaded")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<Resource> downloadErrorReport(@PathVariable @NonNull UUID jobId) {
-        if (isNotOwner(jobId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
+        bulkLoadJobService.getJob(jobId, currentOperatorId());
         Resource report = reviewQueueService.generateErrorReport(jobId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"error-report-" + jobId + ".csv\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(report);
-    }
-
-    private boolean isNotOwner(UUID jobId) {
-        String operatorId = currentOperatorId();
-        var job = bulkLoadJobService.getJob(jobId);
-        return !job.getOperatorId().equals(operatorId);
     }
 
     private String currentOperatorId() {

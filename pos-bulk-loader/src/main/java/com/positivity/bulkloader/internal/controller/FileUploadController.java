@@ -43,7 +43,7 @@ public class FileUploadController {
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
-        BulkLoadJobResponse existingJob = bulkLoadJobService.getJob(jobId, operatorId);
+        bulkLoadJobService.getJob(jobId, operatorId);
         String originalFileName = file.getOriginalFilename() == null ? "upload.csv" : file.getOriginalFilename();
         String storagePath = fileStorageService.store(jobId, originalFileName, file.getInputStream(), file.getSize());
         FileUploadResponse response = FileUploadResponse.builder()

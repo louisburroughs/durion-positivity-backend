@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,12 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         job.setDomainType(request.getDomainType());
         job.setStatus(JobStatus.CREATED);
 
-        BulkLoadJob saved = jobRepository.save(job);
+        BulkLoadJob saved;
+        try {
+            saved = jobRepository.save(job);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalStateException("Operator already has an active bulk load job in progress", ex);
+        }
         log.info(
                 "Created bulk load job {} for operator {} domain {}",
                 saved.getId(),

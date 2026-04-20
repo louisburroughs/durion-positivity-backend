@@ -5,7 +5,7 @@ Bulk import orchestrator service for Durion POS. Provides CSV file upload, colum
 ## Module Overview
 
 - **Service Name**: `POS-BULK-LOADER`
-- **Port**: `8090` (fixed)
+- **Port**: `8090` (default, overridable via `SERVER_PORT`)
 - **Database**: `pos_bulk_loader_db` (PostgreSQL)
 - **Eureka**: Registers with service discovery
 - **Gateway Route**: `/bulk-loader/**` → `lb://POS-BULK-LOADER` (StripPrefix=1)
@@ -123,7 +123,7 @@ java -jar pos-bulk-loader/target/pos-bulk-loader-*.jar --spring.profiles.active=
 
 | Property | Default | Description |
 | -------- | ------- | ----------- |
-| `server.port` | `8090` | Fixed service port |
+| `server.port` | `8090` | Default service port (overridable via `SERVER_PORT`) |
 | `spring.datasource.url` | `jdbc:postgresql://localhost:5432/pos_bulk_loader_db` | Database URL |
 | `spring.batch.job.enabled` | `false` | Auto-start jobs (disabled for API-driven execution) |
 | `spring.flyway.enabled` | `true` | Flyway migrations enabled |
