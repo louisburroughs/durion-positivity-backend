@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(CatalogBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
-@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
+@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
 class CatalogBulkIngestControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
@@ -53,7 +53,7 @@ class CatalogBulkIngestControllerTest {
     // ─── POST /v1/catalog/bulk-ingest — 200 OK ───────────────────────────────
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_EDIT", "ROLE_CATALOG_VIEW"})
+    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT", "ROLE_CATALOG_VIEW" })
     void bulkIngest_validRequest_returns200WithResults() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");
@@ -71,8 +71,8 @@ class CatalogBulkIngestControllerTest {
         when(productMasterDataService.createProduct(any())).thenReturn(productDto);
 
         mockMvc.perform(post("/v1/catalog/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(1))
@@ -80,7 +80,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_EDIT"})
+    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("BAD-001");
@@ -94,8 +94,8 @@ class CatalogBulkIngestControllerTest {
         when(productMasterDataService.createProduct(any())).thenThrow(new IllegalArgumentException("Duplicate SKU"));
 
         mockMvc.perform(post("/v1/catalog/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
@@ -103,7 +103,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_EDIT"})
+    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
     void bulkIngest_emptyRecords_returns400() throws Exception {
         BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
         request.setJobId(JOB_ID);
@@ -111,13 +111,13 @@ class CatalogBulkIngestControllerTest {
         request.setRecords(List.of()); // @NotEmpty constraint
 
         mockMvc.perform(post("/v1/catalog/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_EDIT"})
+    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
     void bulkIngest_missingJobId_returns400() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");
@@ -129,8 +129,8 @@ class CatalogBulkIngestControllerTest {
         request.setRecords(List.of(catalogRecord));
 
         mockMvc.perform(post("/v1/catalog/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 }

@@ -32,8 +32,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Profile("test")
 public class TestSecurityConfig {
 
-    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES =
-            List.of(new SimpleGrantedAuthority("BULK_IMPORT_EXECUTE"), new SimpleGrantedAuthority("BULK_IMPORT_READ"));
+    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List
+            .of(new SimpleGrantedAuthority("BULK_IMPORT_EXECUTE"), new SimpleGrantedAuthority("BULK_IMPORT_READ"));
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary

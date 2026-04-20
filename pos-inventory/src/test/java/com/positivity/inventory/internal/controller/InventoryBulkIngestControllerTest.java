@@ -26,87 +26,87 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(InventoryBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
-@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
+@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
 class InventoryBulkIngestControllerTest {
 
-    private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000030");
-    private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000031");
-    private static final UUID ADJUSTMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000032");
+        private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000030");
+        private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000031");
+        private static final UUID ADJUSTMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000032");
 
-    @Autowired
-    MockMvc mockMvc;
+        @Autowired
+        MockMvc mockMvc;
 
-    @Autowired
-    ObjectMapper objectMapper;
+        @Autowired
+        ObjectMapper objectMapper;
 
-    @MockitoBean
-    java.time.Clock clock;
+        @MockitoBean
+        java.time.Clock clock;
 
-    @MockitoBean
-    StockMovementService stockMovementService;
+        @MockitoBean
+        StockMovementService stockMovementService;
 
-    // ─── POST /v1/inventory/bulk-ingest — 200 OK ─────────────────────────────
+        // ─── POST /v1/inventory/bulk-ingest — 200 OK ─────────────────────────────
 
-    @Test
-    void bulkIngest_validRequest_returns200WithResults() throws Exception {
-        InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
-        invRecord.setSku("PART-001");
-        invRecord.setQuantity(10);
-        invRecord.setLocationId(LOCATION_ID);
+        @Test
+        void bulkIngest_validRequest_returns200WithResults() throws Exception {
+                InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
+                invRecord.setSku("PART-001");
+                invRecord.setQuantity(10);
+                invRecord.setLocationId(LOCATION_ID);
 
-        BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
-        request.setJobId(JOB_ID);
-        request.setLocationId(LOCATION_ID);
-        request.setRecords(List.of(invRecord));
+                BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
+                request.setJobId(JOB_ID);
+                request.setLocationId(LOCATION_ID);
+                request.setRecords(List.of(invRecord));
 
-        AdjustmentRequestResponse adjustmentResponse = AdjustmentRequestResponse.builder()
-                .adjustmentRequestId(ADJUSTMENT_ID)
-                .build();
+                AdjustmentRequestResponse adjustmentResponse = AdjustmentRequestResponse.builder()
+                                .adjustmentRequestId(ADJUSTMENT_ID)
+                                .build();
 
-        when(stockMovementService.createAdjustmentRequest(any(), any())).thenReturn(adjustmentResponse);
+                when(stockMovementService.createAdjustmentRequest(any(), any())).thenReturn(adjustmentResponse);
 
-        mockMvc.perform(post("/v1/inventory/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalSubmitted").value(1))
-                .andExpect(jsonPath("$.successCount").value(1))
-                .andExpect(jsonPath("$.failureCount").value(0));
-    }
+                mockMvc.perform(post("/v1/inventory/bulk-ingest")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.totalSubmitted").value(1))
+                                .andExpect(jsonPath("$.successCount").value(1))
+                                .andExpect(jsonPath("$.failureCount").value(0));
+        }
 
-    @Test
-    void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
-        InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
-        invRecord.setSku("BAD-001");
-        invRecord.setQuantity(5);
+        @Test
+        void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
+                InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
+                invRecord.setSku("BAD-001");
+                invRecord.setQuantity(5);
 
-        BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
-        request.setJobId(JOB_ID);
-        request.setLocationId(LOCATION_ID);
-        request.setRecords(List.of(invRecord));
+                BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
+                request.setJobId(JOB_ID);
+                request.setLocationId(LOCATION_ID);
+                request.setRecords(List.of(invRecord));
 
-        when(stockMovementService.createAdjustmentRequest(any(), any()))
-                .thenThrow(new IllegalArgumentException("Unknown SKU"));
+                when(stockMovementService.createAdjustmentRequest(any(), any()))
+                                .thenThrow(new IllegalArgumentException("Unknown SKU"));
 
-        mockMvc.perform(post("/v1/inventory/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalSubmitted").value(1))
-                .andExpect(jsonPath("$.successCount").value(0))
-                .andExpect(jsonPath("$.failureCount").value(1));
-    }
+                mockMvc.perform(post("/v1/inventory/bulk-ingest")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.totalSubmitted").value(1))
+                                .andExpect(jsonPath("$.successCount").value(0))
+                                .andExpect(jsonPath("$.failureCount").value(1));
+        }
 
-    @Test
-    void bulkIngest_emptyRecords_returns400() throws Exception {
-        BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
-        request.setJobId(JOB_ID);
-        request.setLocationId(LOCATION_ID);
-        request.setRecords(List.of()); // @NotEmpty constraint
+        @Test
+        void bulkIngest_emptyRecords_returns400() throws Exception {
+                BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
+                request.setJobId(JOB_ID);
+                request.setLocationId(LOCATION_ID);
+                request.setRecords(List.of()); // @NotEmpty constraint
 
-        mockMvc.perform(post("/v1/inventory/bulk-ingest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+                mockMvc.perform(post("/v1/inventory/bulk-ingest")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
 }

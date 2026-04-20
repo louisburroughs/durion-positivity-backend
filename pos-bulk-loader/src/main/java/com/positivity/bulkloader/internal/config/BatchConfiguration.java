@@ -53,8 +53,8 @@ public class BatchConfiguration {
             ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor,
             ItemWriter<CatalogProductRecord> catalogBulkIngestWriter) {
         return new StepBuilder("catalogBulkLoadStep", jobRepository)
-            .<CatalogProductRecord, CatalogProductRecord>chunk(500)
-            .transactionManager(transactionManager)
+                .<CatalogProductRecord, CatalogProductRecord>chunk(500)
+                .transactionManager(transactionManager)
                 .reader(catalogCsvReader)
                 .processor(catalogItemProcessor)
                 .writer(catalogBulkIngestWriter)
@@ -81,7 +81,7 @@ public class BatchConfiguration {
         mapper.setTargetType(CatalogProductRecord.class);
         return new FlatFileItemReaderBuilder<CatalogProductRecord>()
                 .name("catalogCsvReader")
-            .resource(new FileSystemResource(resolved))
+                .resource(new FileSystemResource(resolved))
                 .delimited()
                 .names("sku", "upc", "name", "description", "categoryName", "subcategoryName", "price")
                 .fieldSetMapper(mapper)

@@ -17,7 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.Resource;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({"java:S100", "java:S1192"})
+@SuppressWarnings({ "java:S100", "java:S1192" })
 class ReviewQueueServiceImplTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
