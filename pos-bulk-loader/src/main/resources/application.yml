@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_bulk_loader_db
     username: ${SPRING_DATASOURCE_USERNAME:positivity}
-    password: ${SPRING_DATASOURCE_PASSWORD:your_secure_password_here}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:

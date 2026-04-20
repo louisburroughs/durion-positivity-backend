@@ -84,18 +84,16 @@ Spring Batch metadata tables are created via Flyway migration `V2__init_spring_b
 
 ### Flyway Migrations
 
-- **V1__init_bulk_loader_schema.sql**: Domain tables (`bulk_load_job`, `job_file_upload`, `column_mapping`, `row_audit`, `review_queue_record`)
+- **V1__init_bulk_loader_schema.sql**: Domain tables (`bulk_load_job`, `bulk_load_record_audit`, `bulk_load_column_mapping`)
 - **V2__init_spring_batch_schema.sql**: Spring Batch metadata tables
 
 ### Domain Tables
 
 | Table | Purpose |
 | ----- | ------- |
-| `bulk_load_job` | Job metadata (domain, status, created_by, created_at) |
-| `job_file_upload` | Uploaded CSV file metadata and storage location |
-| `column_mapping` | CSV column → domain field mappings |
-| `row_audit` | Per-row processing audit trail |
-| `review_queue_record` | Failed records awaiting operator review |
+| `bulk_load_job` | Job metadata (domain, status, operator_id, location_id, file statistics) |
+| `bulk_load_record_audit` | Per-row processing audit trail (review status, reason codes, original/corrected values) |
+| `bulk_load_column_mapping` | CSV column → domain field mappings with confidence scores |
 
 ## Running Locally
 
@@ -137,6 +135,6 @@ This service depends on domain-specific bulk ingest endpoints provided by:
 
 - **pos-catalog**: `/v1/catalog/bulk-ingest` (via `pos-bulk-ingest-lib`)
 - **pos-inventory**: `/v1/inventory/bulk-ingest` (via `pos-bulk-ingest-lib`)
-- **pos-location**: `/v1/location/bulk-ingest` (via `pos-bulk-ingest-lib`)
+- **pos-location**: `/v1/locations/bulk-ingest` (via `pos-bulk-ingest-lib`)
 
 See [pos-bulk-ingest-lib/README.md](../pos-bulk-ingest-lib/README.md) for contract details.

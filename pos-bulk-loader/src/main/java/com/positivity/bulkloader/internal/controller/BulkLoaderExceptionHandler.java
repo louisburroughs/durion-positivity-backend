@@ -32,6 +32,9 @@ public class BulkLoaderExceptionHandler {
         String detail = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .reduce("", (a, b) -> a.isEmpty() ? b : a + "; " + b);
+        if (detail.isBlank()) {
+            detail = "Validation failed";
+        }
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
     }
 }

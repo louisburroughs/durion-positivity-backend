@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,6 +34,7 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     private final StockMovementService stockMovementService;
 
     @Override
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {

@@ -55,17 +55,36 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Pr
     @Override
     protected BulkIngestResponse processRecords(BulkIngestRequest<ProductImportDto> request) {
         List<BulkIngestResult> results = new ArrayList<>();
+        int successCount = 0;
+        int failureCount = 0;
 
-        for (ProductImportDto dto : request.getRecords()) {
+        for (int i = 0; i < request.getRecords().size(); i++) {
+            ProductImportDto dto = request.getRecords().get(i);
             try {
-                productService.createProduct(dto);
-                results.add(BulkIngestResult.success(dto.getId()));
+            var created = productService.createProduct(dto);
+                results.add(BulkIngestResult.builder()
+                        .rowIndex(i)
+                .entityId(created.getId())
+                        .success(true)
+                        .build());
+                successCount++;
             } catch (Exception e) {
-                results.add(BulkIngestResult.failure(dto.getId(), e.getMessage()));
+                results.add(BulkIngestResult.builder()
+                        .rowIndex(i)
+                        .success(false)
+                        .errorCode("CATALOG_INGEST_FAILED")
+                        .errorMessage(e.getMessage())
+                        .build());
+                failureCount++;
             }
         }
 
-        return new BulkIngestResponse(results);
+        return BulkIngestResponse.builder()
+                .totalSubmitted(request.getRecords().size())
+                .successCount(successCount)
+                .failureCount(failureCount)
+                .results(results)
+                .build();
     }
 }
 ```
@@ -91,39 +110,45 @@ public class ProductImportDto {
 
 ```java
 public class BulkIngestRequest<T> {
-    private List<T> records;      // batch of records to process
-    private String batchId;       // optional batch identifier
+    @NotNull
+    private UUID jobId;
 
-    // getters/setters
+    @NotNull
+    private UUID locationId;
+
+    @NotEmpty
+    private List<T> records;
+
+    private String operatorId;
+
+    // Lombok @Data generates getters/setters
 }
 ```
 
 ### BulkIngestResult
 
 ```java
+@Data
+@Builder
 public class BulkIngestResult {
-    private String recordId;      // identifier from input record
-    private boolean success;      // true if processed successfully
-    private String errorMessage;  // error detail if success=false
-
-    // factory methods
-    public static BulkIngestResult success(String recordId) { ... }
-    public static BulkIngestResult failure(String recordId, String error) { ... }
+    private int rowIndex;
+    private UUID entityId;      // nullable for failed rows
+    private boolean success;
+    private String errorCode;
+    private String errorMessage;
 }
 ```
 
 ### BulkIngestResponse
 
 ```java
+@Data
+@Builder
 public class BulkIngestResponse {
-    private List<BulkIngestResult> results;
-    private int totalCount;
+    private int totalSubmitted;
     private int successCount;
     private int failureCount;
-
-    public BulkIngestResponse(List<BulkIngestResult> results) {
-        // auto-calculates counts
-    }
+    private List<BulkIngestResult> results;
 }
 ```
 

@@ -36,6 +36,9 @@ public class BatchConfiguration {
     @Value("${pos.catalog.base-url:http://localhost:8082}")
     private String catalogBaseUrl;
 
+    @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}")
+    private String storageRoot;
+
     @Bean
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
         return new JobBuilder("catalogBulkLoadJob", jobRepository)
@@ -64,11 +67,17 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<CatalogProductRecord> catalogCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
+        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
+        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
+        if (!resolved.startsWith(base)) {
+            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
+        }
+
         BeanWrapperFieldSetMapper<CatalogProductRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(CatalogProductRecord.class);
         return new FlatFileItemReaderBuilder<CatalogProductRecord>()
                 .name("catalogCsvReader")
-                .resource(new PathResource("/tmp/bulk-loader/" + storagePath))
+                .resource(new PathResource(resolved))
                 .delimited()
                 .names("sku", "upc", "name", "description", "categoryName", "subcategoryName", "price")
                 .fieldSetMapper(mapper)
@@ -90,12 +99,11 @@ public class BatchConfiguration {
 
     @Bean
     public ItemWriter<CatalogProductRecord> catalogBulkIngestWriter(RestClient.Builder restClientBuilder) {
-        RestClient catalogClient = restClientBuilder.baseUrl(catalogBaseUrl).build();
+        restClientBuilder.baseUrl(catalogBaseUrl).build();
         return items -> {
-            log.info("Writing {} catalog records to bulk-ingest endpoint", items.size());
-            if (catalogClient == null) {
-                throw new IllegalStateException("Catalog client must be initialized");
-            }
+            log.info("Attempted to write {} catalog records to bulk-ingest endpoint at {}", items.size(), catalogBaseUrl);
+            throw new UnsupportedOperationException(
+                    "catalogBulkIngestWriter is not implemented: no call to the catalog bulk-ingest endpoint is currently made");
         };
     }
 }

@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +32,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     private final ProductMasterDataService productMasterDataService;
 
     @Override
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @EmitEvent(id = "CATALOG_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<CatalogBulkIngestRecord> request) {

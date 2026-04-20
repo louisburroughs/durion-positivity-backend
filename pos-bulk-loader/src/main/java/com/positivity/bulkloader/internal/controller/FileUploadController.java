@@ -3,7 +3,6 @@ package com.positivity.bulkloader.internal.controller;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.dto.FileUploadResponse;
 import com.positivity.bulkloader.service.BulkLoadJobService;
-import com.positivity.bulkloader.service.ContentDetectionService;
 import com.positivity.bulkloader.service.FileStorageService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,7 +33,6 @@ public class FileUploadController {
 
     private final BulkLoadJobService bulkLoadJobService;
     private final FileStorageService fileStorageService;
-    private final ContentDetectionService contentDetectionService;
 
     @PostMapping("/{jobId}/upload")
     @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
@@ -59,9 +57,6 @@ public class FileUploadController {
                 operatorId,
                 originalFileName,
                 file.getSize());
-        if (contentDetectionService == null) {
-            log.debug("Content detection service not available");
-        }
         return ResponseEntity.ok(response);
     }
 

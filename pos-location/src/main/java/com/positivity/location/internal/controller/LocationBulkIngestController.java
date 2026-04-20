@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +33,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
     private final LocationService locationService;
 
     @Override
+    @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<LocationBulkIngestRecord> request) {
