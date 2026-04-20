@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.bulkloader.config.TestSecurityConfig;
 import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
 import com.positivity.bulkloader.internal.enums.ReviewStatus;
+import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ReviewQueueService;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +33,9 @@ class ReviewQueueControllerTest {
 
     @Autowired
     MockMvc mockMvc;
+
+    @MockitoBean
+    BulkLoadJobService bulkLoadJobService;
 
     @MockitoBean
     ReviewQueueService reviewQueueService;
@@ -61,7 +65,7 @@ class ReviewQueueControllerTest {
     @Test
     void getAuditRecords_withoutReadAuthority_returns403() throws Exception {
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/audit", JOB_ID)
-                        .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
                 .andExpect(status().isForbidden());
     }
 
@@ -76,13 +80,13 @@ class ReviewQueueControllerTest {
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/error-report", JOB_ID))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
-                                "Content-Disposition", "attachment; filename=\"error-report-" + JOB_ID + ".csv\""));
+                        "Content-Disposition", "attachment; filename=\"error-report-" + JOB_ID + ".csv\""));
     }
 
     @Test
     void downloadErrorReport_withoutReadAuthority_returns403() throws Exception {
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}/error-report", JOB_ID)
-                        .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
                 .andExpect(status().isForbidden());
     }
 }
