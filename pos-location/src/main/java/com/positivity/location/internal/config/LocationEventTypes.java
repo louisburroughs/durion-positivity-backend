@@ -109,6 +109,10 @@ public final class LocationEventTypes {
                     "LOCATION_SITE_DEFAULTS_GET", "Get site default storage locations")
             .build();
 
+    public static final EventTypeRegistration LOCATION_BULK_INGEST = EventTypeRegistration.write(
+                    "LOCATION_BULK_INGEST", "Bulk ingest locations")
+            .build();
+
     /**
      * Returns all event types for registration with the event service.
      *
@@ -143,6 +147,7 @@ public final class LocationEventTypes {
                 LOCATION_STORAGE_LOCATION_UPDATE,
                 // Site Defaults events
                 LOCATION_SITE_DEFAULTS_PUT,
-                LOCATION_SITE_DEFAULTS_GET);
+                LOCATION_SITE_DEFAULTS_GET,
+                LOCATION_BULK_INGEST);
     }
 }
