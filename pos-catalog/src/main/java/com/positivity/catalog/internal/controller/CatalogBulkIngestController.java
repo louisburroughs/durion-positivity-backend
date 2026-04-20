@@ -46,9 +46,9 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
         int failureCount = 0;
 
         for (int i = 0; i < request.getRecords().size(); i++) {
-            CatalogBulkIngestRecord record = request.getRecords().get(i);
+            CatalogBulkIngestRecord ingestRecord = request.getRecords().get(i);
             try {
-                var created = productMasterDataService.createProduct(toProductCreateRequest(record));
+                var created = productMasterDataService.createProduct(toProductCreateRequest(ingestRecord));
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(created.getId())
@@ -75,22 +75,26 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
                 .build();
     }
 
-    private ProductCreateRequestDto toProductCreateRequest(@NonNull CatalogBulkIngestRecord record) {
-        // Wave 1: price, categoryName, and subcategoryName are not yet supported by the catalog service
+    private ProductCreateRequestDto toProductCreateRequest(@NonNull CatalogBulkIngestRecord ingestRecord) {
+        // Wave 1: price, categoryName, and subcategoryName are not yet supported by the
+        // catalog service
         // (ProductCreateRequestDto has no price or category-name fields in this wave).
-        // These fields will be wired in a future wave once catalog pricing and category-by-name
+        // These fields will be wired in a future wave once catalog pricing and
+        // category-by-name
         // resolution are available.
-        if (record.getPrice() != null || record.getCategoryName() != null || record.getSubcategoryName() != null) {
+        if (ingestRecord.getPrice() != null
+                || ingestRecord.getCategoryName() != null
+                || ingestRecord.getSubcategoryName() != null) {
             log.warn(
                     "CatalogBulkIngestController: price/categoryName/subcategoryName are ignored in Wave 1 — not yet supported by catalog service");
         }
         ProductCreateRequestDto request = new ProductCreateRequestDto();
-        request.setSku(record.getSku());
-        request.setUpc(record.getUpc());
-        request.setName(record.getName());
-        request.setDescription(firstNonBlank(record.getDescription(), record.getName()));
+        request.setSku(ingestRecord.getSku());
+        request.setUpc(ingestRecord.getUpc());
+        request.setName(ingestRecord.getName());
+        request.setDescription(firstNonBlank(ingestRecord.getDescription(), ingestRecord.getName()));
         request.setUnitOfMeasure(DEFAULT_UNIT_OF_MEASURE);
-        request.setMpn(firstNonBlank(record.getSku(), record.getName()));
+        request.setMpn(firstNonBlank(ingestRecord.getSku(), ingestRecord.getName()));
         return request;
     }
 

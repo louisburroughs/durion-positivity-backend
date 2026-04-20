@@ -29,7 +29,7 @@ public class CatalogLoaderStrategy implements DomainLoaderStrategy<CatalogProduc
         if (priceStr != null && !priceStr.isBlank()) {
             try {
                 catalogProduct.setPrice(new BigDecimal(priceStr.replaceAll("[^0-9.]", "")));
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException _) {
                 // Validation flow handles malformed values.
             }
         }

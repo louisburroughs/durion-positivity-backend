@@ -49,15 +49,17 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
         String actorUserId = resolveActorUserId(request);
 
         for (int i = 0; i < request.getRecords().size(); i++) {
-            InventoryBulkIngestRecord record = request.getRecords().get(i);
+            InventoryBulkIngestRecord ingestRecord = request.getRecords().get(i);
             try {
-                UUID locationId = record.getLocationId() == null ? request.getLocationId() : record.getLocationId();
+                UUID locationId = ingestRecord.getLocationId() == null
+                        ? request.getLocationId()
+                        : ingestRecord.getLocationId();
                 CreateAdjustmentRequestDto adjustmentRequest = CreateAdjustmentRequestDto.builder()
-                        .productSku(record.getSku())
+                        .productSku(ingestRecord.getSku())
                         .locationId(locationId)
-                        .quantity(record.getQuantity())
-                        .reasonCode(firstNonBlank(record.getReasonCode(), DEFAULT_REASON_CODE))
-                        .unitOfMeasure(record.getUnitOfMeasure())
+                        .quantity(ingestRecord.getQuantity())
+                        .reasonCode(firstNonBlank(ingestRecord.getReasonCode(), DEFAULT_REASON_CODE))
+                        .unitOfMeasure(ingestRecord.getUnitOfMeasure())
                         .build();
 
                 var created = stockMovementService.createAdjustmentRequest(adjustmentRequest, actorUserId);
