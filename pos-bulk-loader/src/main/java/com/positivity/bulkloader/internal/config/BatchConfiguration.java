@@ -67,6 +67,9 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<CatalogProductRecord> catalogCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
+        }
         java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
         java.nio.file.Path resolved = base.resolve(storagePath).normalize();
         if (!resolved.startsWith(base)) {
@@ -101,7 +104,8 @@ public class BatchConfiguration {
     public ItemWriter<CatalogProductRecord> catalogBulkIngestWriter(RestClient.Builder restClientBuilder) {
         restClientBuilder.baseUrl(catalogBaseUrl).build();
         return items -> {
-            log.info("Attempted to write {} catalog records to bulk-ingest endpoint at {}", items.size(), catalogBaseUrl);
+            log.info("Attempted to write {} catalog records to bulk-ingest endpoint at {}", items.size(),
+                    catalogBaseUrl);
             throw new UnsupportedOperationException(
                     "catalogBulkIngestWriter is not implemented: no call to the catalog bulk-ingest endpoint is currently made");
         };

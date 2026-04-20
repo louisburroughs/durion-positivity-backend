@@ -55,6 +55,9 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
             int score = 0;
             for (String header : columnHeaders) {
                 String normalized = header.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "_");
+                if (normalized.isEmpty()) {
+                    continue;
+                }
                 if (synonyms.stream().anyMatch(s -> normalized.contains(s) || s.contains(normalized))) {
                     score++;
                 }
@@ -106,21 +109,22 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
             case INVENTORY_STOCK_COUNT ->
                 switch (normalized) {
                     case "sku", "item_number", "part_no" -> "sku";
-                    case "qty", "quantity", "on_hand", "quantity_on_hand" -> "quantityOnHand";
-                    case "location_code", "store_code", "branch_code" -> "locationCode";
-                    case "unit_cost", "cost" -> "unitCost";
+                    case "qty", "quantity", "on_hand", "quantity_on_hand" -> "quantity";
+                    case "reason_code", "reason" -> "reasonCode";
+                    case "uom", "unit_of_measure" -> "unitOfMeasure";
                     default -> null;
                 };
             case LOCATION ->
                 switch (normalized) {
                     case "name", "store_name", "location_name" -> "name";
                     case "code", "store_code", "location_code" -> "code";
-                    case "address", "street", "street_address" -> "address";
+                    case "address", "street", "street_address" -> "addressLine1";
                     case "city" -> "city";
-                    case "state" -> "state";
-                    case "zip", "zip_code", "postal_code" -> "zip";
-                    case "timezone", "time_zone" -> "timezone";
-                    case "type", "store_type", "location_type" -> "type";
+                    case "state", "state_or_province", "province" -> "stateOrProvince";
+                    case "zip", "zip_code", "postal_code" -> "postalCode";
+                    case "country", "country_code" -> "countryCode";
+                    case "phone", "phone_number", "telephone" -> "phoneNumber";
+                    case "type", "store_type", "location_type" -> "locationTypeName";
                     default -> null;
                 };
             default -> null;

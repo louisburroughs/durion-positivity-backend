@@ -81,8 +81,11 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     @Override
     @Transactional
-    public void startProcessing(@NonNull UUID jobId) {
+    public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId) {
         BulkLoadJob job = findOrThrow(jobId);
+        if (!job.getOperatorId().equals(operatorId)) {
+            throw new IllegalArgumentException("Job does not belong to operator");
+        }
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now());
         jobRepository.save(job);

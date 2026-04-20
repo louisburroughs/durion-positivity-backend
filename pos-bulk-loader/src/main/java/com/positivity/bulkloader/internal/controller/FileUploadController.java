@@ -13,6 +13,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -43,6 +44,10 @@ public class FileUploadController {
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
+        BulkLoadJobResponse existingJob = bulkLoadJobService.getJob(jobId);
+        if (!existingJob.getOperatorId().equals(operatorId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String originalFileName = file.getOriginalFilename() == null ? "upload.csv" : file.getOriginalFilename();
         String storagePath = fileStorageService.store(jobId, originalFileName, file.getInputStream(), file.getSize());
         FileUploadResponse response = FileUploadResponse.builder()
@@ -68,7 +73,7 @@ public class FileUploadController {
     @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
-        bulkLoadJobService.startProcessing(jobId);
+        bulkLoadJobService.startProcessing(jobId, operatorId);
         log.info("Bulk load job processing started: jobId={}, operatorId={}", jobId, operatorId);
         return ResponseEntity.ok(bulkLoadJobService.getJob(jobId));
     }
