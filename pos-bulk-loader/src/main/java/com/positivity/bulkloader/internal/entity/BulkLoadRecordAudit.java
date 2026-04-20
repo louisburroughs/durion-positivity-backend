@@ -1,7 +1,7 @@
 package com.positivity.bulkloader.internal.entity;
 
-import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;

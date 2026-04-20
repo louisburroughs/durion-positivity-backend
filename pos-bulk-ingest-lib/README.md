@@ -55,7 +55,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Pr
     @Override
     protected BulkIngestResponse processRecords(BulkIngestRequest<ProductImportDto> request) {
         List<BulkIngestResult> results = new ArrayList<>();
-        
+
         for (ProductImportDto dto : request.getRecords()) {
             try {
                 productService.createProduct(dto);
@@ -64,7 +64,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Pr
                 results.add(BulkIngestResult.failure(dto.getId(), e.getMessage()));
             }
         }
-        
+
         return new BulkIngestResponse(results);
     }
 }
@@ -80,7 +80,7 @@ public class ProductImportDto {
     private String name;
     private String sku;
     private BigDecimal price;
-    
+
     // getters/setters
 }
 ```
@@ -93,7 +93,7 @@ public class ProductImportDto {
 public class BulkIngestRequest<T> {
     private List<T> records;      // batch of records to process
     private String batchId;       // optional batch identifier
-    
+
     // getters/setters
 }
 ```
@@ -105,7 +105,7 @@ public class BulkIngestResult {
     private String recordId;      // identifier from input record
     private boolean success;      // true if processed successfully
     private String errorMessage;  // error detail if success=false
-    
+
     // factory methods
     public static BulkIngestResult success(String recordId) { ... }
     public static BulkIngestResult failure(String recordId, String error) { ... }
@@ -120,7 +120,7 @@ public class BulkIngestResponse {
     private int totalCount;
     private int successCount;
     private int failureCount;
-    
+
     public BulkIngestResponse(List<BulkIngestResult> results) {
         // auto-calculates counts
     }

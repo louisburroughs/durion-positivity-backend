@@ -63,7 +63,7 @@ public class CatalogExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, "BUSINESS_RULE_VIOLATION", ex.getMessage(), correlationId);
     }
 
-    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    @ExceptionHandler({ ObjectOptimisticLockingFailureException.class, OptimisticLockException.class })
     public ResponseEntity<ApiError> handleConflict(RuntimeException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return buildResponse(
