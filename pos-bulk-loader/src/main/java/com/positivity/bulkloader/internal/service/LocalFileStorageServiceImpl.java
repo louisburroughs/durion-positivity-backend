@@ -20,7 +20,8 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
 
     private final Path storageRoot;
 
-    public LocalFileStorageServiceImpl(@Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath) {
+    public LocalFileStorageServiceImpl(
+            @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath) {
         this.storageRoot = Paths.get(storageRootPath);
         try {
             Files.createDirectories(this.storageRoot);

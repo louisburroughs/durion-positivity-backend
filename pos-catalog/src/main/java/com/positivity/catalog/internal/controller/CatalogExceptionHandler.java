@@ -16,6 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -36,6 +37,17 @@ public class CatalogExceptionHandler {
     public ResponseEntity<ApiError> handleForbidden(CatalogForbiddenOperationException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return buildResponse(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), correlationId);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
+                .orElse("Validation failed");
+        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, correlationId);
     }
 
     @ExceptionHandler(CatalogValidationException.class)

@@ -8,7 +8,6 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
 import com.positivity.inventory.service.StockMovementService;
-import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -18,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -86,8 +86,11 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     }
 
     private String resolveActorUserId(@NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {
-        return SecurityContextHelper.getCurrentUsername()
-                .orElseGet(() -> firstNonBlank(request.getOperatorId(), "system"));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getName() != null && !auth.getName().isBlank()) {
+            return auth.getName();
+        }
+        return firstNonBlank(request.getOperatorId(), "system");
     }
 
     private String firstNonBlank(String primary, String fallback) {

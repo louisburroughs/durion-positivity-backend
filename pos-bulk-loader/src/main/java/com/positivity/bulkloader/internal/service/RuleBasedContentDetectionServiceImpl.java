@@ -32,7 +32,17 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
             DomainType.INVENTORY_STOCK_COUNT,
             Set.of("sku", "quantity", "qty", "stock", "on_hand", "location_code", "bin", "unit_cost", "warehouse"),
             DomainType.LOCATION,
-            Set.of("location", "store", "branch", "address", "city", "state", "zip", "timezone", "code", "operating_hours"));
+            Set.of(
+                    "location",
+                    "store",
+                    "branch",
+                    "address",
+                    "city",
+                    "state",
+                    "zip",
+                    "timezone",
+                    "code",
+                    "operating_hours"));
 
     @Override
     public ContentDetectionResult detect(@NonNull List<String> columnHeaders, @NonNull List<List<String>> sampleRows) {
@@ -83,33 +93,36 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
 
     private String inferTargetField(String normalized, DomainType domain) {
         return switch (domain) {
-            case CATALOG_PRODUCT -> switch (normalized) {
-                case "sku", "item_number", "item_no", "part_no" -> "sku";
-                case "upc", "barcode", "ean" -> "upc";
-                case "name", "item_name", "product_name", "description" -> "name";
-                case "price", "list_price", "retail_price" -> "price";
-                case "category", "category_name" -> "categoryName";
-                case "subcategory", "subcategory_name" -> "subcategoryName";
-                default -> null;
-            };
-            case INVENTORY_STOCK_COUNT -> switch (normalized) {
-                case "sku", "item_number", "part_no" -> "sku";
-                case "qty", "quantity", "on_hand", "quantity_on_hand" -> "quantityOnHand";
-                case "location_code", "store_code", "branch_code" -> "locationCode";
-                case "unit_cost", "cost" -> "unitCost";
-                default -> null;
-            };
-            case LOCATION -> switch (normalized) {
-                case "name", "store_name", "location_name" -> "name";
-                case "code", "store_code", "location_code" -> "code";
-                case "address", "street", "street_address" -> "address";
-                case "city" -> "city";
-                case "state" -> "state";
-                case "zip", "zip_code", "postal_code" -> "zip";
-                case "timezone", "time_zone" -> "timezone";
-                case "type", "store_type", "location_type" -> "type";
-                default -> null;
-            };
+            case CATALOG_PRODUCT ->
+                switch (normalized) {
+                    case "sku", "item_number", "item_no", "part_no" -> "sku";
+                    case "upc", "barcode", "ean" -> "upc";
+                    case "name", "item_name", "product_name", "description" -> "name";
+                    case "price", "list_price", "retail_price" -> "price";
+                    case "category", "category_name" -> "categoryName";
+                    case "subcategory", "subcategory_name" -> "subcategoryName";
+                    default -> null;
+                };
+            case INVENTORY_STOCK_COUNT ->
+                switch (normalized) {
+                    case "sku", "item_number", "part_no" -> "sku";
+                    case "qty", "quantity", "on_hand", "quantity_on_hand" -> "quantityOnHand";
+                    case "location_code", "store_code", "branch_code" -> "locationCode";
+                    case "unit_cost", "cost" -> "unitCost";
+                    default -> null;
+                };
+            case LOCATION ->
+                switch (normalized) {
+                    case "name", "store_name", "location_name" -> "name";
+                    case "code", "store_code", "location_code" -> "code";
+                    case "address", "street", "street_address" -> "address";
+                    case "city" -> "city";
+                    case "state" -> "state";
+                    case "zip", "zip_code", "postal_code" -> "zip";
+                    case "timezone", "time_zone" -> "timezone";
+                    case "type", "store_type", "location_type" -> "type";
+                    default -> null;
+                };
             default -> null;
         };
     }

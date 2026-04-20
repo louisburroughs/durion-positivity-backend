@@ -4,10 +4,10 @@ import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
 import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import com.positivity.bulkloader.service.ReviewQueueService;
-import java.io.UncheckedIOException;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -51,8 +51,7 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
             return new ByteArrayResource(baos.toByteArray());
         } catch (Exception e) {
             throw new UncheckedIOException(
-                    "Failed to generate error report for job " + jobId,
-                    new java.io.IOException(e));
+                    "Failed to generate error report for job " + jobId, new java.io.IOException(e));
         }
     }
 

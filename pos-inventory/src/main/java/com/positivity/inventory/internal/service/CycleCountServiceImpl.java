@@ -312,8 +312,14 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .status(task.getStatus())
                 .latestCountEntryId(task.getLatestCountEntryId())
                 .countEntriesCount(task.getCountEntriesCount())
-                .createdAt(task.getCreatedAt() != null ? LocalDateTime.ofInstant(task.getCreatedAt(), ZoneOffset.UTC) : null)
-                .updatedAt(task.getUpdatedAt() != null ? LocalDateTime.ofInstant(task.getUpdatedAt(), ZoneOffset.UTC) : null)
+                .createdAt(
+                        task.getCreatedAt() != null
+                                ? LocalDateTime.ofInstant(task.getCreatedAt(), ZoneOffset.UTC)
+                                : null)
+                .updatedAt(
+                        task.getUpdatedAt() != null
+                                ? LocalDateTime.ofInstant(task.getUpdatedAt(), ZoneOffset.UTC)
+                                : null)
                 .build();
     }
 

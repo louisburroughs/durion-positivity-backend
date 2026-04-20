@@ -20,7 +20,7 @@ public class CostTierDto {
     private Integer maxQuantity;
 
     @NotNull
-    @Positive
+    @Positive(message = "must be positive.")
     @Schema(description = "Per-unit cost for this quantity range", example = "5.00")
     private BigDecimal unitCost;
 }

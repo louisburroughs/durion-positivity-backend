@@ -24,11 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     private static final List<JobStatus> ACTIVE_STATUSES = List.of(
-            JobStatus.UPLOADING,
-            JobStatus.DETECTING,
-            JobStatus.MAPPING_REVIEW,
-            JobStatus.DEDUP,
-            JobStatus.PROCESSING);
+            JobStatus.UPLOADING, JobStatus.DETECTING, JobStatus.MAPPING_REVIEW, JobStatus.DEDUP, JobStatus.PROCESSING);
 
     private final BulkLoadJobRepository jobRepository;
 
@@ -48,7 +44,11 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         job.setStatus(JobStatus.CREATED);
 
         BulkLoadJob saved = jobRepository.save(job);
-        log.info("Created bulk load job {} for operator {} domain {}", saved.getId(), operatorId, request.getDomainType());
+        log.info(
+                "Created bulk load job {} for operator {} domain {}",
+                saved.getId(),
+                operatorId,
+                request.getDomainType());
         return toResponse(saved);
     }
 
