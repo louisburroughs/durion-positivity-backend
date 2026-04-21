@@ -126,10 +126,11 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
+        <!-- H2 Database: test scope only — not bundled into production or alpha artifacts -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
 
         <!-- JSON Processing -->
@@ -245,6 +246,14 @@
     <profiles>
         <profile>
             <id>openapi</id>
+            <dependencies>
+                <!-- H2 promoted to runtime so spring-boot:start can connect to the in-memory DB -->
+                <dependency>
+                    <groupId>com.h2database</groupId>
+                    <artifactId>h2</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
             <build>
                 <plugins>
                     <plugin>
