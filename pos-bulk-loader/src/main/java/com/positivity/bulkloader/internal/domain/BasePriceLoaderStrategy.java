@@ -34,9 +34,10 @@ public class BasePriceLoaderStrategy implements DomainLoaderStrategy<BasePriceRe
     if (item.getMsrp() == null || item.getMsrp().isBlank()) {
       errors.add("msrp is required");
     }
-    if (item.getCurrency() == null || item.getCurrency().isBlank()) {
+    String trimmedCurrency = item.getCurrency() == null ? null : item.getCurrency().trim();
+    if (trimmedCurrency == null || trimmedCurrency.isBlank()) {
       errors.add("currency is required");
-    } else if (item.getCurrency().length() != 3) {
+    } else if (trimmedCurrency.length() != 3) {
       errors.add("currency must be exactly 3 characters");
     }
     if (item.getEffectiveFrom() == null || item.getEffectiveFrom().isBlank()) {

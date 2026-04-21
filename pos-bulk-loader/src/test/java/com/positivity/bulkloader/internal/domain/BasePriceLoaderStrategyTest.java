@@ -95,6 +95,16 @@ class BasePriceLoaderStrategyTest {
     assertThat(errors).anyMatch(e -> e.contains("currency"));
   }
 
+  @Test
+  void validate_passesWhenCurrencyHasTrailingWhitespace() {
+    BasePriceRecord record = validRecord();
+    record.setCurrency("USD ");
+
+    List<String> errors = strategy.validate(record);
+
+    assertThat(errors).noneMatch(e -> e.contains("currency"));
+  }
+
   // ─── getDomainType ────────────────────────────────────────────────────────
 
   @Test

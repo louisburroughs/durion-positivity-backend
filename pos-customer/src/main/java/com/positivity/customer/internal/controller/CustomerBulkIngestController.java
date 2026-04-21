@@ -6,6 +6,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CustomerBulkIngestRecord;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PersonService;
@@ -52,7 +53,7 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
       if (auth != null && StringUtils.hasText(auth.getName())) {
         userId = UUID.fromString(auth.getName());
       }
-    } catch (IllegalArgumentException e) {
+    } catch (IllegalArgumentException _) {
       log.warn("Unable to parse userId from authentication principal; audit actor will be null");
     }
 
@@ -67,6 +68,21 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
         createPersonRequest.setFirstName(ingestRecord.getFirstName());
         createPersonRequest.setLastName(ingestRecord.getLastName());
         createPersonRequest.setPreferredContactMethod(resolvePreferredContactMethod(ingestRecord));
+        if (StringUtils.hasText(ingestRecord.getEmail())) {
+          createPersonRequest.setEmails(List.of(
+              CreatePersonRequest.EmailInput.builder()
+                  .value(ingestRecord.getEmail())
+                  .isPrimary(true)
+                  .build()));
+        }
+        if (StringUtils.hasText(ingestRecord.getPhoneNumber())) {
+          createPersonRequest.setPhones(List.of(
+              CreatePersonRequest.PhoneInput.builder()
+                  .value(ingestRecord.getPhoneNumber())
+                  .type(ContactPointType.PHONE_MOBILE)
+                  .isPrimary(true)
+                  .build()));
+        }
 
         var created = personService.createPerson(createPersonRequest, userId);
         results.add(BulkIngestResult.builder()
