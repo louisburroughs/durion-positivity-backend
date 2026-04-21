@@ -9,6 +9,7 @@ import com.positivity.customer.internal.dto.CustomerBulkIngestRecord;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.customer.service.PersonService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,8 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,13 +47,16 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
   @Override
   protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<CustomerBulkIngestRecord> request) {
     UUID userId = null;
-    try {
-      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-      if (auth != null && StringUtils.hasText(auth.getName())) {
-        userId = UUID.fromString(auth.getName());
+    if (StringUtils.hasText(request.getOperatorId())) {
+      try {
+        userId = UUID.fromString(request.getOperatorId());
+      } catch (IllegalArgumentException _) {
+        log.warn("operatorId '{}' is not a valid UUID; falling back to security context",
+            request.getOperatorId());
       }
-    } catch (IllegalArgumentException _) {
-      log.warn("Unable to parse userId from authentication principal; audit actor will be null");
+    }
+    if (userId == null) {
+      userId = SecurityContextHelper.getCurrentUserIdAsUuid().orElse(null);
     }
 
     List<BulkIngestResult> results = new ArrayList<>();

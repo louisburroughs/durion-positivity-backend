@@ -117,7 +117,7 @@ public final class EventTypes {
                                                 .write("CRM_RELATIONSHIP_DEACTIVATE", "Deactivate a party relationship")
                                                 .build(),
 
-                                // CrmSnapshotController - 2 events (Story #99)
+                                // CrmSnapshotController - 3 events (Story #99)
                                 EventTypeRegistration.fastRead(
                                                 "CRM_SNAPSHOT_PARTY_RETRIEVE",
                                                 "Retrieve comprehensive CRM snapshot for a party")

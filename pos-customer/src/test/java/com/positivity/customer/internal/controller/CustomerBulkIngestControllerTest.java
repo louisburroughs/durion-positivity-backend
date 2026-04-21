@@ -140,4 +140,32 @@ class CustomerBulkIngestControllerTest {
     assertThat(captured.getPhones().get(0).getType()).isEqualTo(ContactPointType.PHONE_MOBILE);
     assertThat(captured.getPhones().get(0).isPrimary()).isTrue();
   }
+
+  @Test
+  void bulkIngest_usesOperatorIdAsUserId_whenPresent() throws Exception {
+    CustomerBulkIngestRecord ingestRecord = new CustomerBulkIngestRecord();
+    ingestRecord.setFirstName("Bob");
+    ingestRecord.setLastName("Builder");
+
+    BulkIngestRequest<CustomerBulkIngestRecord> request = new BulkIngestRequest<>();
+    request.setJobId(JOB_ID);
+    request.setLocationId(LOCATION_ID);
+    request.setOperatorId("00000000-0000-0000-0000-000000000099");
+    request.setRecords(List.of(ingestRecord));
+
+    CreatePersonResponse personResponse = CreatePersonResponse.builder()
+        .personId(PERSON_ID)
+        .build();
+
+    when(personService.createPerson(any(), any())).thenReturn(personResponse);
+
+    mockMvc.perform(post("/v1/customer/bulk-ingest")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk());
+
+    ArgumentCaptor<UUID> uuidCaptor = ArgumentCaptor.forClass(UUID.class);
+    verify(personService).createPerson(any(), uuidCaptor.capture());
+    assertThat(uuidCaptor.getValue()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000099"));
+  }
 }

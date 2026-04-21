@@ -1,5 +1,6 @@
 package com.positivity.customer.config;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -7,6 +8,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -72,6 +75,9 @@ public class WebMvcTestSecurityConfig {
               .toList();
 
       var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
+      authentication.setDetails(Map.of(
+          GatewaySecurityConstants.DETAIL_USER_ID, UUID.fromString("00000000-0000-0000-0000-000000000001"),
+          GatewaySecurityConstants.DETAIL_USERNAME, "testuser"));
       SecurityContextHolder.getContext().setAuthentication(authentication);
       filterChain.doFilter(request, response);
     }
