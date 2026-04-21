@@ -8,6 +8,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RoleAuthorityServiceTest {
+    private static final String MCP_CHAT_EXECUTE = "mcp:chat:execute";
 
     private final RoleAuthorityServiceImpl roleAuthorityService = new RoleAuthorityServiceImpl();
 
@@ -18,14 +19,15 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_ADMIN")
                 .contains("crm:party:view")
-                .contains("accounting:posting_rules:archive");
+                .contains("accounting:posting_rules:archive")
+                .contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
     void expandRolesToAuthorities_handlesPrefixedAndBlankRoles() {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("ROLE_CSR", " "));
 
-        assertThat(authorities).contains("ROLE_CSR").contains("crm:party:view");
+        assertThat(authorities).contains("ROLE_CSR").contains("crm:party:view").contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
@@ -52,7 +54,8 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_FLEET_MANAGER")
                 .contains("crm:vehicle:create")
-                .contains("crm:party:view");
+                .contains("crm:party:view")
+                .contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
@@ -62,7 +65,8 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_GL_ANALYST")
                 .contains("accounting:je:view")
-                .contains("accounting:coa:view");
+                .contains("accounting:coa:view")
+                .contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
@@ -72,7 +76,8 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_AP_CLERK")
                 .contains("accounting:ap:approve")
-                .contains("accounting:je:view");
+                .contains("accounting:je:view")
+                .contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
@@ -82,14 +87,34 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_ACCOUNTANT")
                 .contains("accounting:je:post")
-                .contains("accounting:coa:deactivate");
+                .contains("accounting:coa:deactivate")
+                .contains(MCP_CHAT_EXECUTE);
     }
 
     @Test
     void expandRolesToAuthorities_controllerIncludesArchivePermission() {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("CONTROLLER"));
 
-        assertThat(authorities).contains("ROLE_CONTROLLER").contains("accounting:posting_rules:archive");
+        assertThat(authorities)
+                .contains("ROLE_CONTROLLER")
+                .contains("accounting:posting_rules:archive")
+                .contains(MCP_CHAT_EXECUTE);
+    }
+
+    @Test
+    void expandRolesToAuthorities_knownBusinessRolesIncludeChatExecutePermission() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of(
+                "ADMIN",
+                "CSR",
+                "FLEET_MANAGER",
+                "MANAGER",
+                "GENERAL_MANAGER",
+                "GL_ANALYST",
+                "AP_CLERK",
+                "ACCOUNTANT",
+                "CONTROLLER"));
+
+        assertThat(authorities).contains(MCP_CHAT_EXECUTE);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
@@ -9,12 +10,12 @@ public interface StreamingPosAssistant {
 
     @SystemMessage("""
       You are a POS assistant for Durion Positivity.
-      Use the provided tools to answer questions about inventory, orders,
-      customers, pricing, and other POS operations.
-      Always verify information using tools before answering.
+      Use the provided tools when answering questions that require current
+      inventory, order, customer, pricing, or other POS business data.
+      For general conversation, answer directly without using tools.
       If you cannot find the answer, say so clearly.
       Never fabricate data.
       {{roleContext}}
       """)
-    TokenStream chat(@UserMessage String userMessage, @V("roleContext") String roleContext);
+    TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
 }

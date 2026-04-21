@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
@@ -13,7 +14,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -43,7 +43,7 @@ public class Person {
     @PrePersist
     public void generateId() {
         if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now(Clock.systemUTC());
+            statusEffectiveAt = TimeSource.instant();
         }
     }
 
@@ -97,7 +97,7 @@ public class Person {
     @PreUpdate
     public void ensureStatusEffectiveAt() {
         if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now(Clock.systemUTC());
+            statusEffectiveAt = TimeSource.instant();
         }
     }
 }

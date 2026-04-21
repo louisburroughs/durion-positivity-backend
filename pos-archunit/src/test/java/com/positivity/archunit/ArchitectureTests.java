@@ -15,6 +15,7 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -50,6 +51,15 @@ class ArchitectureTests {
                     boolean supportedOwner = input.getTargetOwner().isEquivalentTo(Instant.class)
                             || input.getTargetOwner().isEquivalentTo(LocalDateTime.class);
                     return supportedOwner
+                            && input.getTarget().getRawParameterTypes().isEmpty();
+                }
+            };
+    private static final DescribedPredicate<JavaCall<?>> CLOCK_SYSTEM_UTC_CALLS =
+            new DescribedPredicate<>("call Clock.systemUTC()") {
+                @Override
+                public boolean test(JavaCall<?> input) {
+                    return "systemUTC".equals(input.getName())
+                            && input.getTargetOwner().isEquivalentTo(Clock.class)
                             && input.getTarget().getRawParameterTypes().isEmpty();
                 }
             };
@@ -250,6 +260,19 @@ class ArchitectureTests {
                 .should()
                 .callMethodWhere(NO_ARG_NOW_CALLS)
                 .because("time access must use explicit Clock injection or explicit Clock argument");
+
+        rule.check(allClasses);
+    }
+
+    @Test
+    void productionCodeShouldNotCallClockSystemUtcOutsideSharedTimeInfrastructure() {
+        ArchRule rule = noClasses()
+                .that()
+                .resideOutsideOfPackages("com.positivity.time..", "com.positivity.events..")
+                .should()
+                .callMethodWhere(CLOCK_SYSTEM_UTC_CALLS)
+                .because(
+                        "application time must flow through shared Clock/TimeSource so the accelerated profile can replace it");
 
         rule.check(allClasses);
     }

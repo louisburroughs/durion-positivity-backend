@@ -4,7 +4,9 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.UserService;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -113,7 +116,7 @@ public class UserServiceImpl implements UserService {
         return UserDto.builder()
                 .id(user.getId())
                 .username(user.getUsername())
-                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .roles(resolveEffectiveRoleNames(user))
                 .personId(user.getPersonId())
                 .build();
     }
@@ -123,7 +126,19 @@ public class UserServiceImpl implements UserService {
                 .id(user.getId())
                 .username(user.getUsername())
                 .passwordHash(user.getPassword())
-                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .roles(resolveEffectiveRoleNames(user))
                 .build();
+    }
+
+    private Set<String> resolveEffectiveRoleNames(User user) {
+        Set<String> roleNames = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
+        List<RoleAssignment> assignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+        if (assignments != null) {
+            roleNames.addAll(assignments.stream()
+                    .map(RoleAssignment::getRole)
+                    .map(Role::getName)
+                    .collect(Collectors.toSet()));
+        }
+        return roleNames;
     }
 }

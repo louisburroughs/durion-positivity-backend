@@ -63,6 +63,11 @@ public final class GatewaySecurityConstants {
      */
     public static final String ROLE_PREFIX = "ROLE_";
 
+    /**
+     * Prefix used by the gateway when forwarding bitset-decoded permissions.
+     */
+    public static final String PERMISSION_PREFIX = "PERM_";
+
     /** Primary JWT claim key for stable user identifier. */
     public static final String CLAIM_UID = "uid";
 

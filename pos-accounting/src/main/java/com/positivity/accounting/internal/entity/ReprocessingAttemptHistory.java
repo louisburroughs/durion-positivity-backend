@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -15,7 +16,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -67,7 +67,7 @@ public class ReprocessingAttemptHistory {
     @PrePersist
     public void onPrePersist() {
         if (attemptedAt == null) {
-            attemptedAt = Instant.now(Clock.systemUTC());
+            attemptedAt = TimeSource.instant();
         }
     }
 

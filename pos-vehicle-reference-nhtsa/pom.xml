@@ -60,6 +60,10 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-events</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.github.f4b6a3</groupId>
             <artifactId>uuid-creator</artifactId>
         </dependency>

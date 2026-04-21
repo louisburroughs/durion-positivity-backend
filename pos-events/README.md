@@ -16,6 +16,7 @@ pos-events enables microservices to emit domain events asynchronously without in
 
 **This module provides only:**
 - ✅ Annotation-driven event emission (`@EmitEvent`)
+- ✅ Shared profile-aware application time (`Clock`, `ScaledClock`, `TimeSource`)
 - ✅ Auto-configuration for Spring Boot
 - ✅ Event publishing via Spring's `ApplicationEventPublisher`
 
@@ -81,6 +82,31 @@ public class SomeComponent {
 }
 ```
 
+### Shared Application Time
+`pos-events` also owns the shared backend `Clock` auto-configuration. Consumer
+modules should inject `Clock` for service/config code instead of declaring local
+default `Clock.systemUTC()` beans.
+
+Default behavior:
+
+```java
+@Service
+public class SomeService {
+    private final Clock clock;
+
+    public SomeService(Clock clock) {
+        this.clock = clock;
+    }
+}
+```
+
+When the Spring profile `accelerated` is active, the shared `Clock` bean is a
+`ScaledClock`. Otherwise, the shared bean is `Clock.systemUTC()`.
+
+For entity lifecycle methods or other non-injectable code, use
+`TimeSource.instant()` or `TimeSource.localDateTime()` so timestamps still follow
+the active application clock.
+
 ## Usage in Consumer Modules
 
 ### 1. Add pos-events Dependency
@@ -105,7 +131,25 @@ Registering bean: emitEventAspect
 Registering bean: emitEventProxyFactory
 ```
 
-### 3. Annotate Business Methods
+### 3. Configure Accelerated Time
+
+Activate accelerated time with the Spring profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev,accelerated
+```
+
+Optional properties:
+
+```properties
+pos.time.accelerated.scale=1000.0
+pos.time.accelerated.zone=UTC
+```
+
+`scale` must be a finite positive number. `zone` must be a valid Java
+`ZoneId`, such as `UTC` or `America/New_York`.
+
+### 4. Annotate Business Methods
 
 ```java
 @Service
@@ -125,7 +169,7 @@ public class WorkorderService {
 }
 ```
 
-### 4. Listen to Events (Optional)
+### 5. Listen to Events (Optional)
 
 If another module wants to consume emitted events:
 
@@ -152,6 +196,9 @@ The following modules currently use pos-events:
 | pos-workorder | `@EmitEvent` | Track workorder lifecycle events |
 | pos-catalog | `@EmitEvent` | Track catalog updates and product changes |
 | pos-vehicle-fitment | `@EventListener` | Audit fitment compatibility checks |
+| pos-image | `Clock` | Shared application/auditing time |
+| pos-vehicle-reference-carapi | `Clock` | Shared application/auditing time |
+| pos-vehicle-reference-nhtsa | `Clock` | Shared application/auditing time |
 | pos-event-receiver | `@EventListener` | Centralized event log collection |
 | pos-archunit | Test scope | Validate event emission architecture |
 
@@ -163,6 +210,8 @@ The following modules currently use pos-events:
 2. **Post-Execution Emission**: After successful method execution, an `EventEmitted` record is created and published
 3. **Spring Event Mechanism**: Events are published via `ApplicationEventPublisher` (standard Spring mechanism)
 4. **Async Consumption**: Listeners consume events asynchronously via `@EventListener` (non-blocking)
+5. **Shared Time Auto-Configuration**: `TimeConfig` creates exactly one
+   application `Clock`, using `ScaledClock` only under the `accelerated` profile.
 
 ### Package Structure
 
@@ -171,9 +220,15 @@ com.positivity.events/
 ├── EmitEvent.java              (public: annotation)
 ├── EventEmitted.java           (public: event record)
 ├── PosEventsApplication.java   (public: auto-configuration)
+├── TimeConfig.java             (public: Clock auto-configuration)
 ├── EmitEventAspect.java        (internal: aspect implementation)
 ├── EmitEventProxy.java         (internal: proxy logic)
 └── EmitEventProxyFactory.java  (public: factory bean)
+
+com.positivity.time/
+├── ScaledClock.java            (public: accelerated Clock implementation)
+├── MetricTime.java             (public: metric time helper)
+└── TimeSource.java             (public: static bridge to active Clock)
 ```
 
 **Public API** (consumed by other modules):
@@ -181,6 +236,8 @@ com.positivity.events/
 - `EventEmitted` record
 - `EmitEventProxyFactory` bean
 - `PosEventsApplication` (auto-configuration, transparent to consumers)
+- `TimeConfig` (auto-configuration, transparent to consumers)
+- `ScaledClock`, `MetricTime`, and `TimeSource`
 
 **Internal Implementation** (implementation details):
 - `EmitEventAspect` (aspect interceptor)

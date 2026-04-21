@@ -16,12 +16,13 @@ public class RagConfiguration {
     public PgVectorEmbeddingStore embeddingStore(
             @NonNull DataSource dataSource,
             @Value("${mcp.rag.table-name:mcp_document_embedding}") String tableName,
-            @Value("${mcp.rag.dimension:768}") int dimension) {
+            @Value("${mcp.rag.dimension:768}") int dimension,
+            @Value("${mcp.rag.create-table:false}") boolean createTable) {
         return PgVectorEmbeddingStore.datasourceBuilder()
                 .datasource(dataSource)
                 .table(tableName)
                 .dimension(dimension)
-                .createTable(true)
+                .createTable(createTable)
                 .build();
     }
 }

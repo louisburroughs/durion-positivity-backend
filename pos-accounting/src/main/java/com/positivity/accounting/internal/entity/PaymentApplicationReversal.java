@@ -1,9 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
@@ -52,7 +52,7 @@ public class PaymentApplicationReversal {
     @PrePersist
     public void onPrePersist() {
         if (reversedAt == null) {
-            reversedAt = Instant.now(Clock.systemUTC());
+            reversedAt = TimeSource.instant();
         }
     }
 

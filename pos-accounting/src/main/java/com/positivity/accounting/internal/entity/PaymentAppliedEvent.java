@@ -2,9 +2,9 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -69,7 +69,7 @@ public class PaymentAppliedEvent {
         this.paymentAmount = paymentAmount;
         this.invoiceTotal = invoiceTotal;
         this.status = status;
-        this.timestamp = Instant.now(Clock.systemUTC());
+        this.timestamp = TimeSource.instant();
         this.idempotencyKey = idempotencyKey;
     }
 }

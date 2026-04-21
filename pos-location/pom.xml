@@ -56,6 +56,7 @@
         </dependency>
 
         <!-- H2 Database -->
+        <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -123,6 +124,11 @@
             <artifactId>pos-security-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-bulk-ingest-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Testing -->
         <dependency>
@@ -133,6 +139,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

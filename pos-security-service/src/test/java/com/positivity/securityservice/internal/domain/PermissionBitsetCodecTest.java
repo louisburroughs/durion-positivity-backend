@@ -52,7 +52,7 @@ class PermissionBitsetCodecTest {
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
                 PermissionCode.MCP__CHAT__EXECUTE // bit 226
-                );
+        );
         String encoded = PermissionBitsetCodec.encode(perms);
         assertThat(encoded).doesNotContain("=").matches("[A-Za-z0-9_-]*");
     }
@@ -97,8 +97,8 @@ class PermissionBitsetCodecTest {
         // catalog
         Set<PermissionCode> all = EnumSet.allOf(PermissionCode.class);
         String encoded = PermissionBitsetCodec.encode(all);
-        Set<PermissionCode> decoded =
-                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
+                PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(all);
     }
 
@@ -110,10 +110,10 @@ class PermissionBitsetCodecTest {
                 PermissionCode.SECURITY__ROLE__VIEW, // bit 138
                 PermissionCode.SECURITY__PERMISSION__VIEW, // bit 143
                 PermissionCode.WORKORDER__ESTIMATE__APPROVE // bit 188
-                );
+        );
         String encoded = PermissionBitsetCodec.encode(subset);
-        Set<PermissionCode> decoded =
-                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
+                PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(subset);
     }
 
@@ -123,8 +123,8 @@ class PermissionBitsetCodecTest {
         // Issue PERM-003: bit 11 (catalog:product:view)
         Set<PermissionCode> single = Set.of(PermissionCode.CATALOG__PRODUCT__VIEW);
         String encoded = PermissionBitsetCodec.encode(single);
-        Set<PermissionCode> decoded =
-                PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
+                PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(single);
     }
 
@@ -147,7 +147,8 @@ class PermissionBitsetCodecTest {
         Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
 
         // Only the known permission should be present; bit 227 must be silently ignored
-        assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW);
+        assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW,
+                PermissionCode.CATALOG__SUPPLIER_COST__READ);
     }
 
     // -------------------------------------------------------------------------
@@ -161,7 +162,7 @@ class PermissionBitsetCodecTest {
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
                 PermissionCode.CATALOG__PRODUCT__VIEW // bit 11
-                );
+        );
         String encoded = PermissionBitsetCodec.encode(perms);
         assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, 99))
                 .isInstanceOf(IllegalArgumentException.class)

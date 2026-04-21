@@ -16,12 +16,13 @@ public class ModelFallbackConfiguration {
     @Bean("fallbackChatModel")
     public @NonNull ChatModel fallbackChatModel(
             @Value("${OLLAMA_BASE_URL:http://localhost:11434}") @NonNull String baseUrl,
-            @Value("${mcp.model.fallback.secondary-model-name:mistral:7b}") @NonNull String modelName) {
+            @Value("${mcp.model.fallback.secondary-model-name:mistral:7b}") @NonNull String modelName,
+            @Value("${mcp.model.fallback.timeout:180s}") @NonNull Duration timeout) {
         return OllamaChatModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .temperature(0.2)
-                .timeout(Duration.ofSeconds(60))
+                .timeout(timeout)
                 .build();
     }
 }

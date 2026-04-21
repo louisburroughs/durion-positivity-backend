@@ -46,6 +46,12 @@ spring:
                 - Path=/inventory/**
               filters:
                 - StripPrefix=1
+            - id: bulk-loader
+              uri: lb://POS-BULK-LOADER
+              predicates:
+                - Path=/bulk-loader/**
+              filters:
+                - StripPrefix=1
             - id: invoice
               uri: lb://INVOICE
               predicates:

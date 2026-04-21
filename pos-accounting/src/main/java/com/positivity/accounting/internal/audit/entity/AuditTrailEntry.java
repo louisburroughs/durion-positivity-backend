@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -18,7 +19,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -63,7 +63,7 @@ public class AuditTrailEntry {
     @PrePersist
     public void onPrePersist() {
         if (timestamp == null) {
-            timestamp = Instant.now(Clock.systemUTC());
+            timestamp = TimeSource.instant();
         }
         if (accountingStatus == null) {
             accountingStatus = AccountingStatus.PENDING_POSTING;

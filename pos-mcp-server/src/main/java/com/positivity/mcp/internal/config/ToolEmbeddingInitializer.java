@@ -30,26 +30,34 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        long totalStartNanos = System.nanoTime();
         String query = "SELECT id, description FROM mcp_tool WHERE embedding IS NULL";
         List<ToolDescriptionRow> rows = jdbcTemplate.query(
                 query,
                 (resultSet, rowNum) -> new ToolDescriptionRow(
                         resultSet.getObject("id", UUID.class), resultSet.getString("description")));
 
+        LOGGER.info("Tool embedding initialization found {} tools missing embeddings", rows.size());
         int populated = 0;
         for (ToolDescriptionRow row : rows) {
+            long rowStartNanos = System.nanoTime();
             try {
                 float[] vector =
                         embeddingModel.embed(row.description()).content().vector();
                 jdbcTemplate.update(
                         "UPDATE mcp_tool SET embedding = ?::vector WHERE id = ?", toVectorPGobject(vector), row.id());
                 populated++;
+                LOGGER.info("Populated embedding for tool {} in {} ms", row.id(), elapsedMs(rowStartNanos));
             } catch (Exception exception) {
-                LOGGER.warn("Failed to populate embedding for tool {}", row.id(), exception);
+                LOGGER.warn(
+                        "Failed to populate embedding for tool {} after {} ms",
+                        row.id(),
+                        elapsedMs(rowStartNanos),
+                        exception);
             }
         }
 
-        LOGGER.info("Populated embeddings for {} tools", populated);
+        LOGGER.info("Populated embeddings for {} tools in {} ms", populated, elapsedMs(totalStartNanos));
     }
 
     private static PGobject toVectorPGobject(float[] embedding) {
@@ -74,4 +82,8 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
 
     private record ToolDescriptionRow(
             @NonNull UUID id, @NonNull String description) {}
+
+    private static long elapsedMs(long startNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
 }

@@ -2,16 +2,22 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.service.DocumentIngestionJob;
+import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
+import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,16 +36,29 @@ public class DocumentIngestionController {
     @PostMapping("/documents")
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
     @EmitEvent(id = "MCP_DOCUMENT_INGEST", apiVersion = "1")
-    @Operation(summary = "Ingest a document into the RAG vector store")
-    public ResponseEntity<Void> ingestDocument(@RequestBody @Valid @NonNull DocumentIngestionRequest request) {
-        documentIngestionService.ingestDocument(request.content(), request.metadata());
-        return ResponseEntity.created(URI.create("/v1/mcp/documents")).build();
+    @Operation(summary = "Queue a document for ingestion into the RAG vector store")
+    public ResponseEntity<DocumentIngestionJobResponse> ingestDocument(
+            @RequestBody @Valid @NonNull DocumentIngestionRequest request) {
+        DocumentIngestionJob job = documentIngestionService.submitDocument(request.content(), request.metadata());
+        URI location = URI.create("/v1/mcp/documents/jobs/" + job.jobId());
+        return ResponseEntity.accepted().location(location).body(DocumentIngestionJobResponse.from(job));
+    }
+
+    @GetMapping("/documents/jobs/{jobId}")
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
+    @Operation(summary = "Get RAG document ingestion job status")
+    public ResponseEntity<DocumentIngestionJobResponse> getIngestionJob(@PathVariable @NonNull UUID jobId) {
+        return documentIngestionService
+                .getIngestionJob(jobId)
+                .map(DocumentIngestionJobResponse::from)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Schema(
             name = "DocumentIngestionRequest",
             description = "Document ingestion payload",
-            example = "{\"content\":\"sample\",\"metadata\":{\"source\":\"manual\"}}")
+            example = "{\"content\":\"sample\",\"metadata\":{\"document_id\":\"policy-123\",\"source\":\"manual\"}}")
     public record DocumentIngestionRequest(
             @NotBlank @NonNull String content,
 
@@ -49,6 +68,32 @@ public class DocumentIngestionController {
             if (metadata == null) {
                 metadata = Map.of();
             }
+        }
+    }
+
+    @Schema(name = "DocumentIngestionJobResponse", description = "Asynchronous document ingestion job status")
+    public record DocumentIngestionJobResponse(
+            @NonNull UUID jobId,
+            @NonNull String documentId,
+            @NonNull DocumentIngestionJobStatus status,
+            @NonNull OffsetDateTime createdAt,
+            @NonNull OffsetDateTime updatedAt,
+            OffsetDateTime startedAt,
+            OffsetDateTime completedAt,
+            Integer chunkCount,
+            String errorMessage) {
+
+        static @NonNull DocumentIngestionJobResponse from(@NonNull DocumentIngestionJob job) {
+            return new DocumentIngestionJobResponse(
+                    job.jobId(),
+                    job.documentId(),
+                    job.status(),
+                    job.createdAt(),
+                    job.updatedAt(),
+                    job.startedAt(),
+                    job.completedAt(),
+                    job.chunkCount(),
+                    job.errorMessage());
         }
     }
 }

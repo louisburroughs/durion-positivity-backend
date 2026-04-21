@@ -87,6 +87,16 @@ Operationally, the expected flow is:
 - connect MCP clients directly to `pos-mcp-server`
 - use the built-in `ollama` service for local chat and embedding model calls
 - optionally override `OLLAMA_CHAT_MODEL`, `OLLAMA_EMBEDDING_MODEL`, and `OLLAMA_FALLBACK_MODEL` in `.env`
+- optionally override Ollama client timeouts in `.env`:
+  - `OLLAMA_CHAT_TIMEOUT` (default `180s`)
+  - `OLLAMA_STREAMING_CHAT_TIMEOUT` (default `180s`)
+  - `OLLAMA_EMBEDDING_TIMEOUT` (default `30s`)
+  - `OLLAMA_FALLBACK_TIMEOUT` (default `180s`)
+- optionally tune RAG document chunking in `.env`:
+  - `MCP_RAG_CHUNKING_ENABLED` (default `true`)
+  - `MCP_RAG_MAX_SEGMENT_SIZE` (default `2000`)
+  - `MCP_RAG_MAX_OVERLAP_SIZE` (default `200`)
+  - `MCP_RAG_INGESTION_MAX_CONCURRENCY` (default `2`) bounds concurrent background document embedding jobs so Ollama is not saturated by job resume or bursts
 
 ## Phase 2 (Wave MCP-2) — Delivery Summary
 
@@ -156,8 +166,16 @@ If you are extending or testing registry logic, ensure test fixtures provide the
 - `POST /v1/mcp/documents`
   - Permission: `mcp:document:ingest`
   - Event: `MCP_DOCUMENT_INGEST`
-  - Behavior: validates request payload and ingests document content + optional metadata into the RAG vector store
-  - Response: `201 Created`
+  - Behavior: validates request payload and queues document content + optional metadata for asynchronous ingestion into the RAG vector store
+  - Chunking: enabled by default via `mcp.rag.chunking.*`; each chunk keeps original metadata plus `document_id`, `chunk_index`, and `chunk_count`
+  - Re-ingest: when metadata includes `document_id`, existing chunks with that `document_id` are removed before the replacement chunks are stored
+  - Response: `202 Accepted` with `jobId`, `documentId`, `status`, timestamps, and a `Location` header pointing to `/v1/mcp/documents/jobs/{jobId}`
+
+- `GET /v1/mcp/documents/jobs/{jobId}`
+  - Permission: `mcp:document:ingest`
+  - Behavior: returns the asynchronous RAG ingestion job status
+  - Status values: `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+  - Response: `200 OK` when found, `404 Not Found` when the job id is unknown
 
 - `POST /v1/mcp/chat/stream`
   - Permission: `mcp:chat:stream`
@@ -179,11 +197,15 @@ If you are extending or testing registry logic, ensure test fixtures provide the
   performanceScore = 0.6 × successRate + 0.3 × (1 - min(avgLatency/2000, 1)) - 0.2 × fallbackRate
 
   The updated priority uses exponential smoothing: `newPriority = currentPriority × 0.7 + performanceScore × 0.3`, clamped to the range [0.1, 1.0].
-- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`.
+- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). The endpoint persists a short-lived ingestion job and responds with `202 Accepted`; bounded background workers chunk, embed, and inject content into the `mcp_document_embedding` pgvector RAG store. Supplying a stable metadata `document_id` makes ingestion replace prior chunks for that document instead of appending duplicates. Job status is available at `GET /v1/mcp/documents/jobs/{jobId}`.
+- RAG schema ownership: Flyway owns the pgvector document table and index. `RagConfiguration` defaults `mcp.rag.create-table=false`; only enable it intentionally for ad hoc environments that do not run migrations.
+- Timing logs: MCP startup and chat paths now log elapsed time for OpenAPI fetch/parse, MCP tool add, tool embedding initialization, role-agent prebuild/cold builds, RAG retrieval, and document embedding/storage.
+- Chat latency controls: obvious greetings and basic conversation are routed through a direct no-tool/no-RAG model path. Business requests use per-message tool narrowing before building the LangChain4j agent, controlled by `mcp.agent.candidate-tool-limit` (default `5`), and emit completion timing logs for the simple or agent path.
 
 ## Phase 5 — Streaming SSE and model fallback
 
 - Streaming agents: `StreamingPosAssistant` / `StreamingSessionAgentManager` provide a LangChain4j `TokenStream`-backed per-user agent cache. The streaming orchestration exposes `POST /v1/mcp/chat/stream` (permission `mcp:chat:stream`) and produces `text/event-stream` SSE responses.
+- Agent prebuild: standard and streaming session managers prebuild role-level LangChain4j assistant proxies from the DB-backed role tool registry at startup and record build times. Chat memory is still isolated per `userId::role` via `ChatMemoryProvider`.
 - Model fallback: `ModelFallbackConfiguration` (`@ConditionalOnProperty: mcp.model.fallback.enabled=true`) configures an optional secondary Ollama model. The secondary model name is controlled by `mcp.model.fallback.secondary-model-name` (default `mistral:7b`).
 
 ## Configuration knobs (additions for Phases 3–5)
@@ -193,6 +215,9 @@ Add the following to your `application.yml` or environment overrides to enable t
 ```yaml
 mcp.tuning.enabled=true
 mcp.tuning.cron=0 0 2 * * ?
+mcp.rag.create-table=false
+mcp.rag.ingestion.max-concurrency=2
+mcp.agent.candidate-tool-limit=5
 mcp.model.fallback.enabled=false
 mcp.model.fallback.secondary-model-name=${OLLAMA_FALLBACK_MODEL:mistral:7b}
 ```

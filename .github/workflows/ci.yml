@@ -336,11 +336,11 @@ jobs:
         if: vars.ENABLE_DOCKERHUB_PUSH != 'true'
         run: echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to publish from this workflow."
 
-  code-quality-pr:
-    name: PR Code Quality Analysis
+  code-quality:
+    name: Incremental Code Quality Analysis
     runs-on: ubuntu-latest
     needs: [unit-tests]
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'schedule'
 
     steps:
       - name: Checkout code
@@ -393,7 +393,7 @@ jobs:
   code-quality-full:
     name: Full Coverage SonarCloud Analysis
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'schedule'
 
     steps:
       - name: Checkout code
@@ -530,8 +530,9 @@ jobs:
         docker-build,
         docker-build-matrix,
         code-quality,
+        code-quality-full,
       ]
-    if: always()
+    if: always() && github.event_name != 'schedule'
 
     steps:
       - name: Check build status

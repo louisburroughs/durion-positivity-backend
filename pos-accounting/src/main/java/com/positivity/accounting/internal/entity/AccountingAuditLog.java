@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -9,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -58,7 +58,7 @@ public class AccountingAuditLog {
 
     @PrePersist
     public void onPrePersist() {
-        this.timestamp = Instant.now(Clock.systemUTC());
+        this.timestamp = TimeSource.instant();
     }
 
     @Column(name = "entity_type", length = 50, nullable = false)

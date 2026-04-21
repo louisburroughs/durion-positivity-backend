@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,7 +16,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -85,7 +85,7 @@ public class WorkorderSnapshot {
     @PrePersist
     protected void prePersist() {
         if (capturedAt == null) {
-            capturedAt = Instant.now(Clock.systemUTC());
+            capturedAt = TimeSource.instant();
         }
     }
 }

@@ -87,6 +87,7 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -165,6 +166,11 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-bulk-ingest-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

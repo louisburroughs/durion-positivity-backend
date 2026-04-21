@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the vehicle fitment module.
-     * Total: 4 event types.
+     * Total: 5 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -34,6 +34,10 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "FITMENT_PRODUCTS_FILTER",
                                 "Filter products by vehicle attributes to find matching products")
+                        .build(),
+                EventTypeRegistration.write(
+                                "VEHICLE_FITMENT_BULK_INGEST",
+                                "Bulk ingest vehicle fitment records")
                         .build());
     }
 }

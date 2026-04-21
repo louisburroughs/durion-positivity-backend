@@ -22,6 +22,10 @@ mcp:
     table-name: mcp_document_embedding
     dimension: 768
     index-type: ivfflat
+    chunking:
+      enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
+      max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}
+      max-overlap-size: ${MCP_RAG_MAX_OVERLAP_SIZE:200}
   agent:
     cache-ttl-minutes: 30
     max-cached-agents: 500
@@ -33,6 +37,7 @@ mcp:
     fallback:
       enabled: false
       secondary-model-name: ${OLLAMA_FALLBACK_MODEL:mistral:7b}
+      timeout: ${OLLAMA_FALLBACK_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 langchain4j:
   ollama:
@@ -40,11 +45,11 @@ langchain4j:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
       temperature: 0.2
-      timeout: 60s
+      timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-      timeout: 30s
+      timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 
 exa:
   api-key: ${EXA_API_KEY:}

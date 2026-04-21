@@ -4,8 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +41,9 @@ class CustomUserDetailsServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private RoleAssignmentRepository roleAssignmentRepository;
 
     @InjectMocks
     private CustomUserDetailsService sut;
@@ -247,6 +255,27 @@ class CustomUserDetailsServiceTest {
             assertThat(principal.getUsername()).isEqualTo("delegatetest");
             assertThat(principal.getPassword()).isEqualTo("{noop}password");
             assertThat(principal.getAuthorities()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("T19: effective role assignments contribute ROLE_* authorities")
+        void t19_effectiveRoleAssignmentsContributeAuthorities() {
+            User entity = entityWithDefaults("admin.alpha");
+            Role role = new Role();
+            role.setName("ADMIN");
+            RoleAssignment assignment = new RoleAssignment();
+            assignment.setUser(entity);
+            assignment.setRole(role);
+            assignment.setEffectiveStartDate(LocalDateTime.now());
+
+            when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(entity));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(entity)).thenReturn(List.of(assignment));
+
+            UserDetails principal = sut.loadUserByUsername("admin.alpha");
+
+            assertThat(principal.getAuthorities())
+                    .extracting("authority")
+                    .contains("ROLE_ADMIN");
         }
     }
 

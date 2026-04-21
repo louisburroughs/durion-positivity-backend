@@ -10,12 +10,15 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.UserServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +45,9 @@ class UserServiceTest {
 
     @Mock
     private RoleRepository roleRepository;
+
+    @Mock
+    private RoleAssignmentRepository roleAssignmentRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -119,6 +125,27 @@ class UserServiceTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().getUsername()).isEqualTo("alice");
+    }
+
+    @Test
+    void getUserByUsername_includesEffectiveRoleAssignments() {
+        User user = new User();
+        user.setUsername("admin.alpha");
+        user.setPassword("hashed");
+        Role role = new Role();
+        role.setName("ADMIN");
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK));
+
+        when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(user));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+
+        Optional<UserAuthContext> result = userService.getUserByUsername("admin.alpha");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getRoles()).contains("ADMIN");
     }
 
     @Test

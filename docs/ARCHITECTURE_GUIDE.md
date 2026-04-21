@@ -35,6 +35,7 @@ The backend implements a **dynamic port strategy** for development flexibility a
 | ----------- | ------ | ------------- | ------- |
 | API Gateway | 8080 | All | Single external entry point |
 | Eureka Server | 8761 | Dev/local | Service registry |
+| Bulk Loader | 8090 | Dev/local | Bulk import orchestration |
 | Management (Actuator) | Internal-only | Prod | Health, metrics, prometheus |
 
 ### Dynamic Ports (Ephemeral)
@@ -154,7 +155,7 @@ pos-catalog:
 
 ### Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                    External Clients / Frontend                │
 └──────────────────────────────────────────────────────────────┘
@@ -369,7 +370,7 @@ if (!response.ok) {
 
 ### JDBC Connection String
 
-```
+```text
 jdbc:postgresql://postgres:5432/${POSTGRES_DB}
 ```
 

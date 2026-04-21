@@ -198,7 +198,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
             @NonNull UUID postingCategoryId, int page, int size, @NonNull String sort, Boolean isActive) {
 
         if (log.isInfoEnabled()) {
-            log.info("Listing mapping keys: page={}, size={}, isActive={}", page, size, isActive);
+            log.info("Listing mapping keys");
         }
 
         // Validate category exists
@@ -218,8 +218,8 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                     pageable);
         } else {
             keyPage = mappingKeyRepository.findAll(
-                    (root, query, cb) ->
-                            cb.equal(root.get("postingCategory").get("postingCategoryId"), postingCategoryId),
+                    (root, query, cb) -> cb.equal(root.get("postingCategory").get("postingCategoryId"),
+                            postingCategoryId),
                     pageable);
         }
 

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -17,7 +18,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -160,7 +160,7 @@ public class Estimate {
      * Check if estimate can be reopened (transitioned from declined to draft).
      */
     public boolean canReopen(int configuredExpiryDays) {
-        return canReopen(configuredExpiryDays, LocalDateTime.now(Clock.systemUTC()));
+        return canReopen(configuredExpiryDays, TimeSource.localDateTime());
     }
 
     /**

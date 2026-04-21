@@ -1,7 +1,6 @@
 package com.positivity.shopmanager.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
-import java.time.Clock;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,10 +44,5 @@ public class SecurityConfig {
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return builder.requestFactory(factory).build();
-    }
-
-    @Bean
-    public Clock clock() {
-        return Clock.systemUTC();
     }
 }

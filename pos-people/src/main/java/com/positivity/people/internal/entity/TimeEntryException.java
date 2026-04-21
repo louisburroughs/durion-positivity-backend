@@ -3,10 +3,10 @@ package com.positivity.people.internal.entity;
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -69,7 +69,7 @@ public class TimeEntryException {
     @PrePersist
     public void generateIdAndTimestamp() {
         if (detectedAt == null) {
-            detectedAt = Instant.now(Clock.systemUTC());
+            detectedAt = TimeSource.instant();
         }
     }
 
