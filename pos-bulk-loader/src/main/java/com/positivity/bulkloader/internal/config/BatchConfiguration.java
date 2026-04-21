@@ -154,15 +154,16 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<CatalogProductRecord> request = buildBulkIngestRequest(context, operatorId,
+            BulkIngestRequest<CatalogProductRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
                     new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
                         .uri("/v1/catalog/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "catalog:product:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -254,15 +255,16 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<CustomerPersonRecord> request = buildBulkIngestRequest(context, operatorId,
+            BulkIngestRequest<CustomerPersonRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
                     new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
                         .uri("/v1/customer/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "crm:party:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -353,15 +355,16 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<PersonRecord> request = buildBulkIngestRequest(context, operatorId,
+            BulkIngestRequest<PersonRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
                     new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
                         .uri("/v1/people/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "people:employee:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -452,15 +455,16 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<BasePriceRecord> request = buildBulkIngestRequest(context, operatorId,
+            BulkIngestRequest<BasePriceRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
                     new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
                         .uri("/v1/price/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "pricing:base_price:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -562,15 +566,17 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
             List<VehicleWriterPayload> payloads = mapVehiclePayloads(chunk.getItems());
-            BulkIngestRequest<VehicleWriterPayload> request = buildBulkIngestRequest(context, operatorId, payloads);
+            BulkIngestRequest<VehicleWriterPayload> request = buildBulkIngestRequest(context, sanitizedOperatorId,
+                    payloads);
 
             try {
                 client.post()
                         .uri("/v1/vehicles/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "vehicle-inventory:registry:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -671,15 +677,17 @@ public class BatchConfiguration {
             if (context == null) {
                 return;
             }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
             List<FitmentWriterPayload> payloads = mapFitmentPayloads(chunk.getItems());
-            BulkIngestRequest<FitmentWriterPayload> request = buildBulkIngestRequest(context, operatorId, payloads);
+            BulkIngestRequest<FitmentWriterPayload> request = buildBulkIngestRequest(context, sanitizedOperatorId,
+                    payloads);
 
             try {
                 client.post()
                         .uri("/v1/fitments/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "vehicle-fitment:hint:create")
-                        .header(HEADER_USER, sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER))
+                    .header(HEADER_USER, sanitizedOperatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()

@@ -146,7 +146,8 @@ class PermissionBitsetCodecTest {
 
         Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
 
-        // Both known permissions should be present; truly out-of-range bits beyond the catalog max would be silently ignored
+        // Both known permissions should be present; truly out-of-range bits beyond the
+        // catalog max would be silently ignored
         assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW,
                 PermissionCode.CATALOG__SUPPLIER_COST__READ);
     }

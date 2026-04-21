@@ -89,89 +89,94 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     private Manufacturer resolveManufacturer(String name) {
-        if (!StringUtils.hasText(name)) {
+        String normalized = name != null ? name.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
             return null;
         }
-        List<Manufacturer> existing = manufacturerRepository.findAllByNameIgnoreCase(name);
+        List<Manufacturer> existing = manufacturerRepository.findAllByNameIgnoreCase(normalized);
         if (!existing.isEmpty()) {
             return existing.getFirst();
         }
         Manufacturer entity = new Manufacturer();
-        entity.setName(name);
+        entity.setName(normalized);
         try {
             return manufacturerRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
-            return manufacturerRepository.findAllByNameIgnoreCase(name).stream().findFirst()
-                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + name));
+            return manufacturerRepository.findAllByNameIgnoreCase(normalized).stream().findFirst().orElseThrow(
+                    () -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + normalized));
         }
     }
 
     private Make resolveMake(String name, Manufacturer manufacturer) {
-        if (!StringUtils.hasText(name)) {
+        String normalized = name != null ? name.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
             return null;
         }
         Optional<Make> found = manufacturer != null
-                ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), name)
-                : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(name);
+                ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
+                : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized);
         if (found.isPresent()) {
             return found.get();
         }
         Make entity = new Make();
-        entity.setName(name);
+        entity.setName(normalized);
         entity.setManufacturer(manufacturer);
         try {
             return makeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (manufacturer != null
-                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), name)
-                    : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(name))
-                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + name));
+                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
+                    : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized))
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + normalized));
         }
     }
 
     private Model resolveModel(String name, Make make) {
-        if (!StringUtils.hasText(name)) {
+        String normalized = name != null ? name.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
             return null;
         }
         Optional<Model> found = make != null
-                ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), name)
-                : modelRepository.findByMakeIsNullAndNameIgnoreCase(name);
+                ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), normalized)
+                : modelRepository.findByMakeIsNullAndNameIgnoreCase(normalized);
         if (found.isPresent()) {
             return found.get();
         }
         Model entity = new Model();
-        entity.setName(name);
+        entity.setName(normalized);
         entity.setMake(make);
         try {
             return modelRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
-                    ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), name)
-                    : modelRepository.findByMakeIsNullAndNameIgnoreCase(name))
-                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on model: " + name));
+                    ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), normalized)
+                    : modelRepository.findByMakeIsNullAndNameIgnoreCase(normalized))
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on model: " + normalized));
         }
     }
 
     private VehicleType resolveVehicleType(String name, Make make) {
-        if (!StringUtils.hasText(name)) {
+        String normalized = name != null ? name.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
             return null;
         }
         Optional<VehicleType> found = make != null
-                ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), name)
-                : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(name);
+                ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), normalized)
+                : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(normalized);
         if (found.isPresent()) {
             return found.get();
         }
         VehicleType entity = new VehicleType();
-        entity.setVehicleTypeName(name);
+        entity.setVehicleTypeName(normalized);
         entity.setMake(make);
         try {
             return vehicleTypeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
-                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), name)
-                    : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(name))
-                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on vehicleType: " + name));
+                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), normalized)
+                    : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(normalized))
+                    .orElseThrow(
+                            () -> new VehicleFitmentException("Concurrent insert race on vehicleType: " + normalized));
         }
     }
 
