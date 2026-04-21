@@ -32,7 +32,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     private final ProductMasterDataService productMasterDataService;
 
     @Override
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasAuthority('catalog:product:create')")
     @EmitEvent(id = "CATALOG_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<CatalogBulkIngestRecord> request) {

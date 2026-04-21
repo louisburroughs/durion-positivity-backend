@@ -53,7 +53,7 @@ class CatalogBulkIngestControllerTest {
     // ─── POST /v1/catalog/bulk-ingest — 200 OK ───────────────────────────────
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT", "ROLE_CATALOG_VIEW" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_validRequest_returns200WithResults() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");
@@ -80,7 +80,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("BAD-001");
@@ -103,7 +103,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_emptyRecords_returns400() throws Exception {
         BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
         request.setJobId(JOB_ID);
@@ -117,7 +117,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_missingJobId_returns400() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");

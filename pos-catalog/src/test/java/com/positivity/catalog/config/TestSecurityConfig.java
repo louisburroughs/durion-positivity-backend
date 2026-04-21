@@ -35,7 +35,8 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("ROLE_ADMIN"),
             new SimpleGrantedAuthority("ROLE_CATALOG_VIEW"),
             new SimpleGrantedAuthority("ROLE_CATALOG_EDIT"),
-            new SimpleGrantedAuthority("ROLE_CATALOG_DELETE"));
+            new SimpleGrantedAuthority("ROLE_CATALOG_DELETE"),
+            new SimpleGrantedAuthority("catalog:product:create"));
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
