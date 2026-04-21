@@ -138,3 +138,19 @@ This service depends on domain-specific bulk ingest endpoints provided by:
 - **pos-location**: `/v1/locations/bulk-ingest` (via `pos-bulk-ingest-lib`)
 
 See [pos-bulk-ingest-lib/README.md](../pos-bulk-ingest-lib/README.md) for contract details.
+
+## Supported Domain Types (Wave 1..3)
+
+- `CATALOG`
+- `INVENTORY`
+- `LOCATION`
+- `VEHICLE`  ← added in Wave 3 (writes to pos-vehicle-inventory `/v1/vehicles/bulk-ingest`)
+- `VEHICLE_FITMENT`  ← added in Wave 3 (writes to pos-vehicle-fitment `/v1/fitments/bulk-ingest`)
+
+## New Wave 3: Vehicle bulk-ingest
+
+- Job: `vehicleBulkLoadJob` — implemented and wired; validates `VehicleBulkRecord` rows and POSTs bulk-ingest payloads to `pos-vehicle-inventory` at `/v1/vehicles/bulk-ingest`.
+- Job: `vehicleFitmentBulkLoadJob` — implemented and wired; validates `VehicleFitmentRecord` rows and POSTs bulk-ingest payloads to `pos-vehicle-fitment` at `/v1/fitments/bulk-ingest`.
+- Records are validated by `VehicleLoaderStrategy` and `VehicleFitmentLoaderStrategy` before the outbound bulk-ingest call.
+
+Permissions: service calls target endpoints that require domain-specific create permissions (see target module README for exact scopes).

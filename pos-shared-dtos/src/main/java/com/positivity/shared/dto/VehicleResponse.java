@@ -63,6 +63,12 @@ public class VehicleResponse {
     @Schema(description = "Last update timestamp (UTC).", example = "2026-02-27T13:00:00Z")
     private Instant updatedAt;
 
+    @Schema(description = "Username of the actor who created this record.", example = "jsmith")
+    private String createdBy;
+
+    @Schema(description = "Username of the actor who last modified this record.", example = "jsmith")
+    private String updatedBy;
+
     @Schema(description = "Optimistic lock version.", example = "1")
     private Long version;
 }

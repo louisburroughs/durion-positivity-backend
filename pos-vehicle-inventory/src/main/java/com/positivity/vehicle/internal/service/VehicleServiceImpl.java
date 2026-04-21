@@ -164,6 +164,8 @@ public class VehicleServiceImpl implements VehicleService {
                 .isActive(vehicle.getIsActive())
                 .createdAt(vehicle.getCreatedAt())
                 .updatedAt(vehicle.getUpdatedAt())
+                .createdBy(vehicle.getCreatedBy())
+                .updatedBy(vehicle.getUpdatedBy())
                 .version(vehicle.getVersion())
                 .build();
     }

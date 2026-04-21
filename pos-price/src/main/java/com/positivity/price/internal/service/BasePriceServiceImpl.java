@@ -23,7 +23,7 @@ public class BasePriceServiceImpl implements BasePriceService {
       @NonNull String currency,
       @NonNull Instant effectiveFrom) {
     ProductBasePrice basePrice = repository.findById(productId)
-      .orElse(new ProductBasePrice());
+        .orElse(new ProductBasePrice());
     basePrice.setProductId(productId);
     basePrice.setMsrp(msrp);
     basePrice.setCurrency(currency);

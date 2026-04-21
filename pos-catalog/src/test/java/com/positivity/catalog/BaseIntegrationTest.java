@@ -67,6 +67,13 @@ public abstract class BaseIntegrationTest {
             "ROLE_CATALOG_VIEW",
             "ROLE_CATALOG_EDIT",
             "ROLE_CATALOG_DELETE",
+            "catalog:product:create",
+            "catalog:price_book:read",
+            "catalog:price_book:write",
+            "catalog:supplier_cost:read",
+            "catalog:supplier_cost:write",
+            "catalog:msrp:read",
+            "catalog:msrp:write",
             "product:lifecycle:update",
             "product:lifecycle:override_discontinued");
 

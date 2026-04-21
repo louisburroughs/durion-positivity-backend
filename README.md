@@ -1,231 +1,401 @@
 # Durion Positivity Backend
 
-The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 25** and **Spring Boot 4.0.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
+A domain-driven, event-sourced **Point of Sale (POS)** platform built as a suite of 35+ independent microservices. Each service owns its own database schema, API contract, and event streams. Communication is either synchronous REST (via the API gateway) or asynchronous (via Kafka and the internal event bus).
 
-This repository works in tandem with Durion frontend applications and is governed by the workspace-level policies in the [Durion](../durion/README.md) root repository.
+---
 
-## Architecture
+## Table of Contents
 
-The backend follows a domain-driven microservices architecture. Each bounded context (Accounting, Inventory, Order, etc.) is an independent service with its own database schema, API contract, and event streams.
+- [Durion Positivity Backend](#durion-positivity-backend)
+  - [Table of Contents](#table-of-contents)
+  - [Architecture Overview](#architecture-overview)
+  - [Service Catalog](#service-catalog)
+    - [Infrastructure](#infrastructure)
+    - [Domain Services](#domain-services)
+    - [Shared Libraries (not deployed)](#shared-libraries-not-deployed)
+  - [Technology Stack](#technology-stack)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Build](#build)
+    - [Run Locally](#run-locally)
+  - [API \& Authentication](#api--authentication)
+    - [Authentication](#authentication)
+    - [API Versioning](#api-versioning)
+    - [Identity Headers (injected by gateway)](#identity-headers-injected-by-gateway)
+    - [Error Envelope](#error-envelope)
+  - [Observability](#observability)
+  - [Configuration Reference](#configuration-reference)
+  - [Project Structure](#project-structure)
+  - [CI/CD](#cicd)
+  - [Contributing](#contributing)
+  - [Further Reading](#further-reading)
 
-### Conceptual Diagram
+---
 
-```ascii
-+-------------------+      +-------------------+      +-------------------+
-|                   |      |                   |      |                   |
-|   Subscriber A    |      |   Subscriber B    |      |    Durion UI      |
-| (Experience Layer)|      | (Experience Layer)|      |  (Frontend Apps)  |
-|                   |      |                   |      |                   |
-+-------------------+      +-------------------+      +-------------------+
-        |                           |                           |
-        |                           |                           |
-        v                           v                           v
-+-----------------------------------------------------------------------+
-|                       API Gateway (Spring Cloud Gateway)              |
-|          - Routing, Load Balancing, JWT Validation, Route Control     |
-+-----------------------------------------------------------------------+
-        |                                       |
-        |                                       |
-        v                                       v
-+-------------------+                   +-------------------+
-|                   |                   |                   |
-|  Security Service |                   |   Metrics Service |
-| (OAuth2/JWT AuthN)|<--------------->|    (Telemetry)    |
-|                   |                   |                   |
-+-------------------+                   +-------------------+
-        ^                                       ^
-        |                                       | (Async Communication)
-        | (Service Registration)                |
-        |                                       |
-+-----------------------------------------------------------------------+
-|                       Service Discovery                               |
-+-----------------------------------------------------------------------+
-        ^                       ^                       ^
-        |                       |                       |
-        |                       |                       |
-+-------------------+   +-------------------+   +-------------------+
-|   pos-inventory   |   |     pos-order     |   |   pos-accounting  |
-|   - Spring Boot   |   |   - Spring Boot   |   |   - Spring Boot   |
-|   - PostgreSQL    |   |   - PostgreSQL    |   |   - PostgreSQL    |
-|   - REST APIs     |   |   - REST APIs     |   |   - REST APIs     |
-+-------------------+   +-------------------+   +-------------------+
+## Architecture Overview
+
+```
+                         ┌───────────────────────────────┐
+                         │         External Clients        │
+                         └──────────────┬────────────────┘
+                                        │ HTTPS :8080
+                         ┌──────────────▼────────────────┐
+                         │         pos-api-gateway         │
+                         │  JWT validation · routing       │
+                         │  X-API-Version header rewrite   │
+                         │  permission bitset injection    │
+                         └──────────────┬────────────────┘
+                                        │ lb:// (Eureka)
+          ┌─────────────────────────────┼──────────────────────────┐
+          │                             │                            │
+  ┌───────▼──────┐           ┌──────────▼─────────┐      ┌─────────▼──────┐
+  │ pos-security │           │  Domain Services    │      │ pos-event-     │
+  │   -service   │           │  (see catalog below)│      │   receiver     │
+  │ JWT issuer   │           │  (dynamic ports,    │      │ (event hub)    │
+  │ RBAC         │           │   registered in     │      │                │
+  └──────────────┘           │   Eureka @ :8761)   │      └────────────────┘
+                             └─────────────────────┘
 ```
 
-### Key Components
+Key architectural decisions:
 
-- **API Gateway (`pos-api-gateway`)**: The single entry point for all client requests. Handles routing, cross-cutting concerns (CORS, headers), and initial request validation.
-- **Security Service (`pos-security-service`)**: System of record for identities, roles, permissions, and assignments. Issues JWTs and owns role/permission lifecycle.
-- **Domain Services**: Independent `pos-*` modules packaging business logic (e.g., `pos-order` for checkout flows, `pos-inventory` for stock management).
-- **Core Services**: Foundational modules like `pos-service-discovery` (if applicable) and shared libraries.
-- **Coverage Aggregation (`pos-coverage-aggregate`)**: Reactor-only Maven module that produces the full JaCoCo XML report used by authoritative SonarCloud runs on `main` and nightly CI.
+- **API Gateway is the security boundary.** All JWT validation and permission bitset decoding happens there. Downstream services trust the injected `X-Authorities` / `X-User-Id` headers.
+- **Database per service.** Services hold only IDs to data owned by other services; no cross-service foreign keys.
+- **API versioning via header.** Clients send `X-API-Version: N`; the gateway rewrites the path to `/{domain}/vN/...` before forwarding.
+- **UUID v7** is used for all primary keys (time-ordered, globally unique; see `docs/UUID_V7_MIGRATION.md`).
+- **Event emission via AOP.** Services annotate methods with `@EmitEvent`; the `pos-events` library publishes to `pos-event-receiver` asynchronously.
+
+---
+
+## Service Catalog
+
+### Infrastructure
+
+| Service | Default Port | Role |
+|---|---|---|
+| `pos-api-gateway` | **8080** | External entry point; JWT auth, routing, API versioning |
+| `pos-service-discovery` | **8761** | Eureka registry |
+| `pos-security-service` | dynamic | JWT issuer, OAuth2, role/permission lifecycle |
+| `pos-event-receiver` | internal | Event aggregation hub (shared-secret auth, not public) |
+
+### Domain Services
+
+| Service | Domain | Key Responsibilities |
+|---|---|---|
+| `pos-customer` | CRM / Party | Accounts (commercial & person), contacts, vehicles, promotions, bulk ingest |
+| `pos-order` | Orders | Sales order lifecycle, price overrides, cancellation |
+| `pos-inventory` | Stock | Movements, returns, shortages, reservations |
+| `pos-accounting` | Finance | GL posting, ledger, financial reporting, Stripe payments |
+| `pos-catalog` | Products | Product definitions, catalog master data |
+| `pos-invoice` | Invoicing | Invoice generation and delivery |
+| `pos-workorder` | Work Orders | Work order processing (Kafka-driven) |
+| `pos-tax` | Tax | External tax passthrough + configurable test mode |
+| `pos-price` | Pricing | Dynamic pricing calculations |
+| `pos-location` | Locations | Multi-store location management |
+| `pos-people` | Employees | Employee profiles and assignments |
+| `pos-shop-manager` | Operations | Shop-level management |
+| `pos-vehicle-inventory` | Vehicle Stock | Vehicle stock tracking (Kafka listener) |
+| `pos-vehicle-fitment` | Fitment | Part-to-vehicle compatibility data |
+| `pos-vehicle-reference-carapi` | Ref Data | CarAPI integration for vehicle lookups |
+| `pos-vehicle-reference-nhtsa` | Ref Data | NHTSA integration for vehicle lookups |
+| `pos-image` | Images | Product and asset image storage/retrieval |
+| `pos-documents` | Documents | Document generation and storage |
+| `pos-bulk-loader` | Batch | Spring Batch bulk import orchestration |
+| `pos-mcp-server` | AI | Model Context Protocol server (LangChain4j + Ollama) |
+
+### Shared Libraries (not deployed)
+
+| Library | Purpose |
+|---|---|
+| `pos-events` | AOP-based `@EmitEvent` annotation and event publishing |
+| `pos-shared-dtos` | Shared request/response/error DTOs (`ApiError`, `InvoiceGenerationRequest`, etc.) |
+| `pos-security-common` | Shared security utilities |
+| `pos-tax-common` | Shared tax DTOs and enums |
+| `pos-bulk-ingest-lib` | Bulk import support library |
+| `pos-document-helper` | Document generation helpers |
+| `pos-dependencies` | Internal BOM for dependency version management |
+| `pos-archunit` | ArchUnit architecture test rules |
+
+---
 
 ## Technology Stack
 
-- **Language**: Java 25
-- **Framework**: Spring Boot 4.0.x
-- **Build System**: Maven (via `./mvnw` wrapper)
-- **Database**: PostgreSQL (Each service owns its own schema/database)
-- **Infrastructure**: Docker & Docker Compose (for local development)
+| Layer | Technology |
+|---|---|
+| Language | Java 25 (Eclipse Temurin 25.0.2-tem) |
+| Framework | Spring Boot 4.0.5 |
+| Service mesh | Spring Cloud 2025.1.1 (Gateway, Eureka) |
+| Build | Maven 3.8.1+ (wrapper included) |
+| Database | PostgreSQL 16 + TimescaleDB |
+| ORM / migrations | Spring Data JPA · Hibernate · Flyway |
+| Messaging | Apache Kafka (Spring Kafka) |
+| Security | Spring Security · JJWT HS256 |
+| Caching | Caffeine |
+| Observability | Micrometer · Prometheus · Grafana · OpenTelemetry · Jaeger |
+| AI / ML | LangChain4j · Ollama · pgvector |
+| Payments | Stripe SDK |
+| Testing | JUnit 5 · Mockito · Testcontainers · RestAssured · ArchUnit |
+| Code quality | Spotless · Checkstyle · SpotBugs · SonarCloud · JaCoCo |
 
-## Container Publishing
+---
 
-- The main CI workflow in [.github/workflows/ci.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/ci.yml) always validates Docker builds for changed services.
-- Docker Hub publishing from that workflow is optional and only runs when the repository variable `ENABLE_DOCKERHUB_PUSH` is set to `true`.
-- The dedicated ECR publishing workflow remains [.github/workflows/build-push-ecr.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/build-push-ecr.yml).
-- On normal `main` pushes, the ECR workflow now publishes only changed containerized services. It falls back to a full backend image rebuild when deployment is enabled or when shared build/deploy files change.
-
-For local development, the primary [docker-compose.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.yml) now includes both `pos-mcp-server` and `ollama` alongside the rest of the backend stack.
-
-## Project Structure
-
-The project is organized as a multi-module Maven build. Key directories include:
-
-```
-durion-positivity-backend/
-├── pom.xml                 # Parent POM handling dependency versions
-├── mvnw / mvnw.cmd         # Maven wrapper scripts
-├── docs/                   # Backend-specific architectural documentation
-├── pos-api-gateway/        # Edge gateway service
-├── pos-security-service/   # Auth & Identity service
-├── pos-accounting/         # Accounting & Ledger domain
-├── pos-order/              # Order placement & processing
-├── pos-inventory/          # Stock tracking & reservations
-├── pos-customer/           # Customer profiles & loyalty
-├── pos-catalog/            # Product catalog & definitions
-├── pos-coverage-aggregate/ # Aggregate JaCoCo XML for full Sonar analysis
-└── ... (other pos-* modules)
-```
-
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-- **Java 25+** (Recommended: Use [SDKMAN!](https://sdkman.io/) for automatic version management)
+| Tool | Version | Notes |
+|---|---|---|
+| Java | 25 (Temurin) | Use SDKMAN!: `sdk env install` reads `.sdkmanrc` |
+| Docker | 24+ | Required for PostgreSQL and observability stack |
+| Docker Compose | v2 | Bundled with Docker Desktop |
+| Maven | 3.8.1+ | Wrapper (`./mvnw`) included — no local install needed |
 
-  ```bash
-  # Install SDKMAN! (if not already installed)
-  curl -s "https://get.sdkman.io" | bash
-
-  # After installation, cd into the project directory
-  # SDKMAN! will automatically switch to Java 25.0.2-tem based on .sdkmanrc
-  cd durion-positivity-backend
-  sdk env install  # Install the required Java version if needed
-  ```
-
-- **Docker** (for running databases/infrastructure)
-- **Maven** (optional, wrapper provided)
-
-### Build & Run
-
-1. **Build the entire suite**:
-
-    ```bash
-    ./mvnw clean package
-    ```
-
-2. **Run a specific service** (e.g., Order Service):
-
-    ```bash
-    cd pos-order
-    ../mvnw spring-boot:run
-    ```
-
-    *Note: Ensure dependent infrastructure (PostgreSQL, Registry, etc.) is running via Docker.*
-
-3. **Run Tests**:
-
-    ```bash
-    ./mvnw test
-    ```
-
-4. **Format Java sources**:
-
-    ```bash
-    ./mvnw com.diffplug.spotless:spotless-maven-plugin:2.43.0:check
-    ./mvnw com.diffplug.spotless:spotless-maven-plugin:2.43.0:apply
-    ```
-
-    Spotless is configured with Palantir Java Format for repo-wide Java whitespace, indentation, and brace normalization.
-    If you prefer the shorter `spotless:check` / `spotless:apply` form, add `com.diffplug.spotless` to your Maven `pluginGroups`.
-
-### Frontend SSR Host Allowlist (Docker Compose)
-
-When running `pos-frontend` via `docker-compose.yml`, set `NG_ALLOWED_HOSTS` in your `.env` file.
-This controls Angular SSR host validation and should be a comma-separated list of allowed hostnames/IPs.
-
-Example:
+### Build
 
 ```bash
-NG_ALLOWED_HOSTS=durionpos.org,www.durionpos.org,34.202.151.97
+# Build all modules (skip tests for speed)
+./mvnw clean package -DskipTests
+
+# Build a single service and its dependencies
+./mvnw -pl pos-order -am clean package -DskipTests
+
+# Full build with tests
+./mvnw clean verify
+
+# Apply code formatting
+./mvnw spotless:apply
 ```
 
-### Local Kafka For `pos-workorder`
+### Run Locally
 
-Start a single-node local Kafka stack (broker + Kafka UI + topic init):
+**Option 1 — Docker Compose (recommended)**
+
+Starts the full stack: all services, PostgreSQL, Kafka, Prometheus, Grafana, Jaeger, and Ollama.
 
 ```bash
-./scripts/workorder-kafka-local.sh up
+# Copy and fill in required secrets
+cp .env.example .env   # set POSTGRES_PASSWORD, POS_SECURITY_API_SECRET, etc.
+
+docker-compose up -d
+
+# Verify the gateway is healthy
+curl http://localhost:8080/actuator/health
 ```
 
-Run `pos-workorder` against local Kafka:
+**Option 2 — Bare JVM (minimal)**
 
 ```bash
-./mvnw -pl pos-workorder spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev,local-kafka --server.port=8090"
+# 1. Start infrastructure
+cd pos-service-discovery && ../mvnw spring-boot:run &
+
+# 2. Start the security service
+cd pos-security-service && ../mvnw spring-boot:run &
+
+# 3. Start any domain service with the dev profile
+cd pos-order && ../mvnw spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev"
 ```
 
-Useful endpoints:
+**Useful local ports**
 
-- Kafka bootstrap server: `localhost:9092`
-- Kafka UI: `http://localhost:8098`
+| Service | URL |
+|---|---|
+| API Gateway | <http://localhost:8080> |
+| Eureka Dashboard | <http://localhost:8761> |
+| Swagger UI (aggregated) | <http://localhost:8080/swagger-ui.html> |
+| Prometheus | <http://localhost:9090> |
+| Grafana | <http://localhost:3000> |
+| Jaeger UI | <http://localhost:16686> |
+| PostgreSQL | `localhost:5432` |
+| Ollama | <http://localhost:11434> |
 
-Stop and clean up Kafka local stack:
+---
 
-```bash
-./scripts/workorder-kafka-local.sh down
+## API & Authentication
+
+### Authentication
+
+```http
+POST /security-service/v1/auth/login
+Content-Type: application/json
+
+{ "username": "...", "password": "..." }
 ```
 
-For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.md).
+Returns a signed JWT. Include it in all subsequent requests:
 
-## Known Issues & Migration Notes
-
-### Spring Boot 4.0.2+ MockMvc Import Change
-
-**Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 4.0.2+.
-
-**Old Import** (Spring Boot 3.4.x and earlier):
-
-```java
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+```http
+Authorization: Bearer <token>
+X-API-Version: 1
 ```
 
-**New Import** (Spring Boot 4.0.2+):
+### API Versioning
 
-```java
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+Every request **must** include the `X-API-Version` header. The gateway rewrites the path before routing:
+
+```
+Client:  GET /customer/crm/accounts   X-API-Version: 1
+Gateway: GET /customer/v1/crm/accounts  →  lb://CUSTOMER
+Service: receives GET /v1/crm/accounts
 ```
 
-**Impact**: Integration tests using `@AutoConfigureMockMvc` will fail to compile until the import is updated.
+### Identity Headers (injected by gateway)
 
-**Resolution**: Update all test classes to use the new import path. This affects contract behavior integration tests that use MockMvc for REST API testing.
+| Header | Content |
+|---|---|
+| `X-User` | Username extracted from JWT |
+| `X-User-Id` | User UUID |
+| `X-Authorities` | Decoded permission bitset |
+| `X-API-Version` | Forwarded API version |
 
-## Agents & Documentation
+Downstream services must **never** accept these headers from external clients — the gateway strips any inbound identity headers.
 
-This repository participates in the workspace-wide agent ecosystem.
+### Error Envelope
 
-- **Agent Guide**: [AGENTS.md](AGENTS.md) (Local context and commands)
-- **Architecture Guide**: [docs/ARCHITECTURE_GUIDE.md](docs/ARCHITECTURE_GUIDE.md) (Docker, ports, service communication, observability)
-- **Development Guide**: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) (OpenAPI, POM, version management, pos-events)
-- **Operations Runbook**: [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md) (Operations, RBAC, permissions)
-- **Workspace Agents**: [../durion/AGENTS.md](../durion/AGENTS.md)
+All error responses follow a standard envelope (see `docs/ERROR_ENVELOPE.md`):
 
-Refer to the root [Durion](../durion/README.md) repository for governance, ADRs, and shared architectural standards.
+```json
+{
+  "timestamp": "2026-04-21T12:00:00Z",
+  "status": 404,
+  "error": "NOT_FOUND",
+  "message": "Account not found",
+  "path": "/v1/crm/accounts/abc"
+}
+```
 
-## Gateway Authentication & Headers
+---
 
-See [pos-api-gateway/README.md](pos-api-gateway/README.md) for gateway authentication boundary behavior.
+## Observability
 
-- Injected headers:
-  - X-Authorities: canonical authority list for service-level `@PreAuthorize` checks
-  - X-User: authenticated subject
-  - X-User-Id: stable user identifier from JWT `uid` claim (legacy `userId` claim is compatibility-only)
-- JWT issuer and role/permission authority: `pos-security-service` (see [ADR-0011](../durion/docs/adr/0011-api-gateway-security-architecture.adr.md))
+All services expose Spring Actuator endpoints. The OTEL Java agent is bundled in every Docker image.
+
+| Signal | Endpoint / URL |
+|---|---|
+| Health | `GET /actuator/health` |
+| Metrics (Prometheus) | `GET /actuator/prometheus` |
+| Tracing | Sent to OTEL collector → Jaeger at `:16686` |
+| Structured logs | Logback JSON → Grafana via Loki (when configured) |
+
+Configuration lives in `observability/`.
+
+---
+
+## Configuration Reference
+
+Services are configured via Spring profiles. Each module has its own `application.yml` plus profile overlays.
+
+| Profile | Use Case | Database |
+|---|---|---|
+| `dev` | Local bare-JVM development | H2 in-memory |
+| `docker` | Docker Compose | PostgreSQL (internal network) |
+| `alpha` | Staging/pre-prod | PostgreSQL (remote) |
+| `prod` | Production | PostgreSQL (remote) |
+
+**Key environment variables (Docker Compose)**
+
+| Variable | Purpose |
+|---|---|
+| `POSTGRES_PASSWORD` | PostgreSQL superuser password |
+| `POS_SECURITY_API_SECRET` | Shared secret for service-to-service calls to security service |
+| `POS_EVENTS_API_SECRET` | Shared secret for posting to event-receiver |
+| `STRIPE_API_KEY` | Stripe payment integration (pos-accounting) |
+| `EXA_API_KEY` | Exa web search (optional, pos-mcp-server) |
+| `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | Grafana login |
+
+**Database initialization**
+
+On first run, `postgres/init-databases.sql` is mounted and creates all 20+ per-service databases. Flyway handles schema migrations automatically on service startup.
+
+---
+
+## Project Structure
+
+```
+durion-positivity-backend/
+├── pom.xml                      # Parent POM — centralised dependency versions
+├── mvnw / mvnw.cmd              # Maven wrapper
+├── .sdkmanrc                    # Java 25.0.2-tem lock (SDKMAN!)
+├── docker-compose.yml           # Local dev orchestration
+├── postgres/
+│   └── init-databases.sql       # Creates all per-service databases
+├── docs/                        # Architecture, development, operations guides
+├── observability/               # Prometheus, Grafana, OTEL configs
+├── build-tools/                 # Spotless / Checkstyle configs
+├── scripts/                     # Helper scripts (Kafka setup, etc.)
+├── deployment/
+│   └── alpha/                   # Alpha/staging compose overrides
+├── pos-api-gateway/
+├── pos-service-discovery/
+├── pos-security-service/
+├── pos-customer/
+├── pos-order/
+├── pos-inventory/
+├── pos-accounting/
+├── pos-catalog/
+├── pos-invoice/
+├── pos-workorder/
+├── pos-tax/
+├── pos-price/
+├── pos-location/
+├── pos-people/
+├── pos-shop-manager/
+├── pos-vehicle-inventory/
+├── pos-vehicle-fitment/
+├── pos-vehicle-reference-carapi/
+├── pos-vehicle-reference-nhtsa/
+├── pos-image/
+├── pos-documents/
+├── pos-bulk-loader/
+├── pos-mcp-server/
+├── pos-event-receiver/
+├── pos-events/                  # Shared library
+├── pos-shared-dtos/             # Shared library
+├── pos-security-common/         # Shared library
+├── pos-tax-common/              # Shared library
+├── pos-bulk-ingest-lib/         # Shared library
+├── pos-document-helper/         # Shared library
+├── pos-dependencies/            # Internal BOM
+├── pos-archunit/                # Architecture tests
+└── pos-coverage-aggregate/      # Aggregated JaCoCo reports
+```
+
+---
+
+## CI/CD
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | PR · push to `main` | Detect changed modules, run tests, build images |
+| `build-push-ecr.yml` | Push to `main` | Publish changed service images to ECR |
+| `contract-sync.yml` | Schedule | Sync OpenAPI contracts |
+| `dependency-check.yml` | Schedule | OWASP dependency vulnerability scan |
+| `nightly-full-stack-compose.yml` | Nightly | Full-stack integration tests via Docker Compose |
+| `pr-checks.yml` | PR | Code quality gates (Spotless, Checkstyle, SpotBugs) |
+
+Docker images use `eclipse-temurin:25-jdk-alpine` as the base and include the Grafana OpenTelemetry Java agent (v2.9.0).
+
+---
+
+## Contributing
+
+1. **Java version** — run `sdk env install` to activate the correct JVM.
+2. **Format before committing** — `./mvnw spotless:apply`.
+3. **Test your service** — `./mvnw -pl <module> -am clean verify`.
+4. **Architecture rules** — `pos-archunit` enforces package-level boundaries; CI will fail if they are violated.
+5. See `docs/DEVELOPMENT_GUIDE.md` for detailed guidance on adding new services, registering permissions, and using the event system.
+
+---
+
+## Further Reading
+
+| Document | Location |
+|---|---|
+| Architecture Guide | `docs/ARCHITECTURE_GUIDE.md` |
+| Development Guide | `docs/DEVELOPMENT_GUIDE.md` |
+| Operations Runbook | `docs/OPERATIONS_RUNBOOK.md` |
+| Error Envelope Spec | `docs/ERROR_ENVELOPE.md` |
+| UUID v7 Migration | `docs/UUID_V7_MIGRATION.md` |
+| API Gateway deep-dive | `pos-api-gateway/README.md` |
+| Customer bulk ingest | `pos-customer/README.md` |
+| Tax service config | `pos-tax/README.md` |
+| Docs index | `docs/README.md` |
