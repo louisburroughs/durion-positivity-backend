@@ -40,7 +40,7 @@ public class WebMvcTestSecurityConfig {
 
   @Bean(name = "gatewaySecurityFilterChain")
   @Primary
-  public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
     http.csrf(AbstractHttpConfigurer::disable)
         .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
         .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())

@@ -45,30 +45,30 @@ class VehicleFitmentLoaderStrategyTest {
 
   @Test
   void validate_returnsNoErrors_whenPartNumberIdPresent() {
-    VehicleFitmentRecord record = new VehicleFitmentRecord();
-    record.setPartNumberId("99001");
+    VehicleFitmentRecord vehicleRecord = new VehicleFitmentRecord();
+    vehicleRecord.setPartNumberId("99001");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).isEmpty();
   }
 
   @Test
   void validate_returnsError_whenPartNumberIdMissing() {
-    VehicleFitmentRecord record = new VehicleFitmentRecord();
-    record.setPartNumberId(null);
+    VehicleFitmentRecord vehicleRecord = new VehicleFitmentRecord();
+    vehicleRecord.setPartNumberId(null);
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("partNumberId is required"));
   }
 
   @Test
   void validate_returnsError_whenPartNumberIdNotNumeric() {
-    VehicleFitmentRecord record = new VehicleFitmentRecord();
-    record.setPartNumberId("not-a-number");
+    VehicleFitmentRecord vehicleRecord = new VehicleFitmentRecord();
+    vehicleRecord.setPartNumberId("not-a-number");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("partNumberId must be a valid number"));
   }

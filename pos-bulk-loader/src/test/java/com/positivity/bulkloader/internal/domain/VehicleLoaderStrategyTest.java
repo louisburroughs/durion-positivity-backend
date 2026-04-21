@@ -47,91 +47,91 @@ class VehicleLoaderStrategyTest {
 
   @Test
   void validate_returnsNoErrors_whenAllRequiredFieldsPresent() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("00000000-0000-0000-0000-000000000001");
-    record.setVin("1HGCM82633A004352");
-    record.setUnitNumber("UNIT-001");
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicleRecord.setVin("1HGCM82633A004352");
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).isEmpty();
   }
 
   @Test
   void validate_returnsError_whenAccountIdMissing() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId(null);
-    record.setVin("1HGCM82633A004352");
-    record.setUnitNumber("UNIT-001");
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId(null);
+    vehicleRecord.setVin("1HGCM82633A004352");
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("accountId is required"));
   }
 
   @Test
   void validate_returnsError_whenAccountIdNotUUID() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("not-a-uuid");
-    record.setVin("1HGCM82633A004352");
-    record.setUnitNumber("UNIT-001");
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("not-a-uuid");
+    vehicleRecord.setVin("1HGCM82633A004352");
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("accountId must be a valid UUID"));
   }
 
   @Test
   void validate_returnsError_whenVinMissing() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("00000000-0000-0000-0000-000000000001");
-    record.setVin(null);
-    record.setUnitNumber("UNIT-001");
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicleRecord.setVin(null);
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("vin"));
   }
 
   @Test
   void validate_returnsError_whenVinWrongLength() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("00000000-0000-0000-0000-000000000001");
-    record.setVin("SHORT");
-    record.setUnitNumber("UNIT-001");
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicleRecord.setVin("SHORT");
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("17"));
   }
 
   @Test
   void validate_returnsError_whenUnitNumberMissing() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("00000000-0000-0000-0000-000000000001");
-    record.setVin("1HGCM82633A004352");
-    record.setUnitNumber(null);
-    record.setDescription("2024 Honda Accord");
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicleRecord.setVin("1HGCM82633A004352");
+    vehicleRecord.setUnitNumber(null);
+    vehicleRecord.setDescription("2024 Honda Accord");
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("unitNumber"));
   }
 
   @Test
   void validate_returnsError_whenDescriptionMissing() {
-    VehicleBulkRecord record = new VehicleBulkRecord();
-    record.setAccountId("00000000-0000-0000-0000-000000000001");
-    record.setVin("1HGCM82633A004352");
-    record.setUnitNumber("UNIT-001");
-    record.setDescription(null);
+    VehicleBulkRecord vehicleRecord = new VehicleBulkRecord();
+    vehicleRecord.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicleRecord.setVin("1HGCM82633A004352");
+    vehicleRecord.setUnitNumber("UNIT-001");
+    vehicleRecord.setDescription(null);
 
-    List<String> errors = strategy.validate(record);
+    List<String> errors = strategy.validate(vehicleRecord);
 
     assertThat(errors).anyMatch(e -> e.contains("description"));
   }
