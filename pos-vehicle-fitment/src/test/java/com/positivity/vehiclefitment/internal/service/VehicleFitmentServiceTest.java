@@ -370,7 +370,7 @@ class VehicleFitmentServiceTest {
         when(manufacturerRepository.findAllByNameIgnoreCase("Toyota")).thenReturn(List.of(manufacturer));
         when(makeRepository.findByManufacturerIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry"))
                 .thenReturn(Optional.empty());
-        when(makeRepository.save(any(Make.class))).thenReturn(savedMake);
+        when(makeRepository.saveAndFlush(any(Make.class))).thenReturn(savedMake);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -380,7 +380,7 @@ class VehicleFitmentServiceTest {
         PartFitmentResponse response = service.createFitment(request);
 
         verify(makeRepository).findByManufacturerIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry");
-        verify(makeRepository).save(any(Make.class));
+        verify(makeRepository).saveAndFlush(any(Make.class));
         assertThat(response.getMakeName()).isEqualTo("Camry");
     }
 
@@ -408,7 +408,7 @@ class VehicleFitmentServiceTest {
                 .thenReturn(Optional.of(existingMake));
         when(modelRepository.findByMakeIdAndNameIgnoreCase(MAKE_ID, "Corolla"))
                 .thenReturn(Optional.empty());
-        when(modelRepository.save(any(Model.class))).thenReturn(savedModel);
+        when(modelRepository.saveAndFlush(any(Model.class))).thenReturn(savedModel);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -419,7 +419,7 @@ class VehicleFitmentServiceTest {
         PartFitmentResponse response = service.createFitment(request);
 
         verify(modelRepository).findByMakeIdAndNameIgnoreCase(MAKE_ID, "Corolla");
-        verify(modelRepository).save(any(Model.class));
+        verify(modelRepository).saveAndFlush(any(Model.class));
         assertThat(response.getModelName()).isEqualTo("Corolla");
     }
 
@@ -445,7 +445,7 @@ class VehicleFitmentServiceTest {
                 .thenReturn(Optional.of(existingMake));
         when(vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(MAKE_ID, "Passenger Car"))
                 .thenReturn(Optional.empty());
-        when(vehicleTypeRepository.save(any(VehicleType.class))).thenReturn(savedType);
+        when(vehicleTypeRepository.saveAndFlush(any(VehicleType.class))).thenReturn(savedType);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -456,7 +456,7 @@ class VehicleFitmentServiceTest {
         PartFitmentResponse response = service.createFitment(request);
 
         verify(vehicleTypeRepository).findByMakeIdAndVehicleTypeNameIgnoreCase(MAKE_ID, "Passenger Car");
-        verify(vehicleTypeRepository).save(any(VehicleType.class));
+        verify(vehicleTypeRepository).saveAndFlush(any(VehicleType.class));
         assertThat(response.getVehicleTypeName()).isEqualTo("Passenger Car");
     }
 
@@ -523,7 +523,7 @@ class VehicleFitmentServiceTest {
 
         when(makeRepository.findByManufacturerIsNullAndNameIgnoreCase("Generic"))
                 .thenReturn(Optional.empty());
-        when(makeRepository.save(any(Make.class))).thenReturn(savedMake);
+        when(makeRepository.saveAndFlush(any(Make.class))).thenReturn(savedMake);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -550,7 +550,7 @@ class VehicleFitmentServiceTest {
 
         when(modelRepository.findByMakeIsNullAndNameIgnoreCase("UnknownModel"))
                 .thenReturn(Optional.empty());
-        when(modelRepository.save(any(Model.class))).thenReturn(savedModel);
+        when(modelRepository.saveAndFlush(any(Model.class))).thenReturn(savedModel);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
@@ -575,7 +575,7 @@ class VehicleFitmentServiceTest {
 
         when(vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase("Trailer"))
                 .thenReturn(Optional.empty());
-        when(vehicleTypeRepository.save(any(VehicleType.class))).thenReturn(savedType);
+        when(vehicleTypeRepository.saveAndFlush(any(VehicleType.class))).thenReturn(savedType);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
         CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
