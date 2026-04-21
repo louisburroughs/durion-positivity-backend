@@ -699,7 +699,8 @@ public class BatchConfiguration {
         if (value == null) {
             return fallback;
         }
-        return value.replaceAll("[\r\n\t]", "").trim();
+        String sanitizedValue = value.replaceAll("[\r\n\t]", "").trim();
+        return sanitizedValue.isBlank() ? fallback : sanitizedValue;
     }
 
     private JobContext resolveJobContext(String writerName, String jobIdParam, String locationIdParam, int chunkSize) {

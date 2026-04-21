@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/catalog")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('catalog:product:create')")
 @Tag(name = "Catalog Bulk Ingest API", description = "Bulk import catalog products")
 public class CatalogBulkIngestController extends AbstractBulkIngestController<CatalogBulkIngestRecord> {
 
@@ -32,6 +34,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     private final ProductMasterDataService productMasterDataService;
 
     @Override
+    @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('catalog:product:create')")
     @EmitEvent(id = "CATALOG_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(

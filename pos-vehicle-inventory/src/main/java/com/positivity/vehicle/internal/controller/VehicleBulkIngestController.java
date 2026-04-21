@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,12 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/vehicles")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
 @Tag(name = "Vehicle Bulk Ingest API", description = "Bulk import vehicle records")
 public class VehicleBulkIngestController extends AbstractBulkIngestController<VehicleBulkIngestRecord> {
 
   private final VehicleService vehicleService;
 
   @Override
+  @PostMapping("/bulk-ingest")
   @PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
   @EmitEvent(id = "VEHICLE_BULK_INGEST", apiVersion = "1")
   public ResponseEntity<BulkIngestResponse> bulkIngest(

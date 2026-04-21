@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -97,7 +99,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/catalog/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "catalog:product:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test
@@ -136,7 +149,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/customer/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "crm:party:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test
@@ -176,7 +200,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/people/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "people:employee:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test
@@ -217,7 +252,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/price/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "pricing:base_price:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test
@@ -259,7 +305,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/vehicles/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "vehicle-inventory:registry:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test
@@ -299,7 +356,18 @@ class BatchConfigurationWriterTest {
         restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
     assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-    verify(mockRestClient).post();
+    verify(requestBodyUriSpec).uri("/v1/fitments/bulk-ingest");
+    verify(requestBodySpec).header("X-Authorities", "vehicle-fitment:hint:create");
+    verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+    @SuppressWarnings("unchecked")
+    var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+    assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+    assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+    assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+    assertThat(request.getRecords()).hasSize(1);
   }
 
   @Test

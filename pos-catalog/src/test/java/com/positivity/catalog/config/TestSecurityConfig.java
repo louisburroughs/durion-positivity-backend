@@ -16,6 +16,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
@@ -72,8 +73,14 @@ public class TestSecurityConfig {
                             .map(SimpleGrantedAuthority::new)
                             .toList();
 
-            var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String headerUser = request.getHeader("X-User");
+            String username = (headerUser != null && !headerUser.isBlank()) ? headerUser : "testuser";
+
+            var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
+            Authentication existing = SecurityContextHolder.getContext().getAuthentication();
+            if (existing == null || !existing.isAuthenticated()) {
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
             filterChain.doFilter(request, response);
         }
     }

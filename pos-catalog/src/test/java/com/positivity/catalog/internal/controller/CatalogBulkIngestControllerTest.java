@@ -133,4 +133,23 @@ class CatalogBulkIngestControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void bulkIngest_forbiddenWhenMissingAuthority() throws Exception {
+        CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
+        catalogRecord.setSku("FORBIDDEN-001");
+        catalogRecord.setName("Unauthorized Widget");
+
+        BulkIngestRequest<CatalogBulkIngestRecord> req = new BulkIngestRequest<>();
+        req.setJobId(java.util.UUID.randomUUID());
+        req.setLocationId(java.util.UUID.randomUUID());
+        req.setOperatorId("op-1");
+        req.setRecords(List.of(catalogRecord));
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                .header("X-Authorities", "wrong:authority")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
+    }
 }

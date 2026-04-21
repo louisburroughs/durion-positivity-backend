@@ -133,7 +133,7 @@ class PermissionBitsetCodecTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("decodeToPermissions silently ignores bits beyond catalog max (bit 227+)")
+    @DisplayName("decodeToPermissions correctly decodes bit 227 (CATALOG__SUPPLIER_COST__READ) and ignores bits beyond catalog max")
     void decodeToPermissionsIgnoresUnknownBitsGracefully() {
         // Construct a byte array with bit 227 set (the first bit beyond the catalog).
         // BitSet.valueOf uses little-endian within bytes, so bit 227 = byte[28] | 0x08
@@ -141,12 +141,12 @@ class PermissionBitsetCodecTest {
         // Also set bit 0 (accounting:je:view) to have a known valid permission present.
         byte[] bytes = new byte[29]; // 29 bytes covers bits 0..227
         bytes[0] = (byte) 0x01; // bit 0
-        bytes[28] = (byte) 0x08; // bit 227 (beyond catalog, should be ignored)
+        bytes[28] = (byte) 0x08; // bit 227 = CATALOG__SUPPLIER_COST__READ
         String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
         Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded, PermissionCode.CATALOG_VERSION);
 
-        // Only the known permission should be present; bit 227 must be silently ignored
+        // Both known permissions should be present; truly out-of-range bits beyond the catalog max would be silently ignored
         assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW,
                 PermissionCode.CATALOG__SUPPLIER_COST__READ);
     }
