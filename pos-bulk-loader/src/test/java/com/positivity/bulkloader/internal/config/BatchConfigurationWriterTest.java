@@ -582,4 +582,97 @@ class BatchConfigurationWriterTest {
     assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
     verify(mockRestClient).post();
   }
+
+  // --- Blank operatorId sanitization (PRCR-001) ---
+
+  @Test
+  void catalogBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+    product.setName("Product Name");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "catalog:product:create");
+  }
+
+  @Test
+  void customerBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
+    person.setLastName("Doe");
+
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "crm:party:create");
+  }
+
+  @Test
+  void peopleBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
+    employee.setEmployeeNumber("EMP-001");
+    employee.setHireDate("2020-01-01");
+
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "people:employee:create");
+  }
+
+  @Test
+  void priceBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
+    priceEntry.setMsrp("9.99");
+    priceEntry.setCurrency("USD");
+    priceEntry.setEffectiveFrom("2024-01-01");
+
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "pricing:base_price:create");
+  }
+
+  @Test
+  void vehicleBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicle.setVin("1HGCM82633A004352");
+    vehicle.setUnitNumber("V-001");
+    vehicle.setDescription("Sedan");
+    vehicle.setYear("2022");
+
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "vehicle-inventory:registry:create");
+  }
+
+  @Test
+  void vehicleFitmentBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setPartNumberId("12345");
+    fitment.setManufacturerName("Bosch");
+    fitment.setMakeName("Honda");
+
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verify(requestBodySpec).header("X-User", "bulk-loader-service");
+    verify(requestBodySpec).header("X-Authorities", "vehicle-fitment:hint:create");
+  }
 }
