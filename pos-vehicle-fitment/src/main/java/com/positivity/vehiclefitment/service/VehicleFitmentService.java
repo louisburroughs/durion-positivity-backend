@@ -1,5 +1,7 @@
 package com.positivity.vehiclefitment.service;
 
+import com.positivity.vehiclefitment.internal.dto.CreatePartFitmentRequest;
+import com.positivity.vehiclefitment.internal.dto.PartFitmentResponse;
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
@@ -8,6 +10,7 @@ import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface VehicleFitmentService {
 
@@ -25,4 +28,10 @@ public interface VehicleFitmentService {
     List<Model> getModelsByMake(UUID makeId);
 
     List<VehicleType> getVehicleTypesForMake(UUID makeId);
+
+    /**
+     * Creates a new part fitment record, resolving vehicle entities by name.
+     */
+    @NonNull
+    PartFitmentResponse createFitment(@NonNull CreatePartFitmentRequest request);
 }

@@ -27,6 +27,8 @@ public final class EventTypes {
                 EventTypeRegistration.write("VEHICLE_PREFERENCES_MERGE", "Merge vehicle preferences")
                         .build(),
                 EventTypeRegistration.write("VEHICLE_PREFERENCES_DELETE", "Delete vehicle preferences")
+                        .build(),
+                EventTypeRegistration.write("VEHICLE_BULK_INGEST", "Bulk ingest vehicle records")
                         .build());
     }
 }

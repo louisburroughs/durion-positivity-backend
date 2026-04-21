@@ -8,6 +8,10 @@ import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
+import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
+import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
+import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +45,8 @@ public class BatchConfiguration {
     private final CustomerLoaderStrategy customerLoaderStrategy;
     private final PersonLoaderStrategy personLoaderStrategy;
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
+    private final VehicleLoaderStrategy vehicleLoaderStrategy;
+    private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
 
     @Value("${pos.catalog.base-url:http://localhost:8082}")
     private String catalogBaseUrl;
@@ -53,6 +59,12 @@ public class BatchConfiguration {
 
     @Value("${pos.price.base-url:http://localhost:8088}")
     private String priceBaseUrl;
+
+    @Value("${pos.vehicle-inventory.base-url:http://localhost:8091}")
+    private String vehicleInventoryBaseUrl;
+
+    @Value("${pos.vehicle-fitment.base-url:http://localhost:8092}")
+    private String vehicleFitmentBaseUrl;
 
     @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}")
     private String storageRoot;
@@ -335,5 +347,168 @@ public class BatchConfiguration {
                 "priceBulkIngestWriter is not implemented. "
                         + "The price bulk load step is intentionally disabled until bulk-ingest endpoint "
                         + "integration is provided for base URL: " + priceBaseUrl);
+    }
+
+    @Bean
+    public Job vehicleBulkLoadJob(Step vehicleBulkLoadStep) {
+        return new JobBuilder("vehicleBulkLoadJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(vehicleBulkLoadStep)
+                .build();
+    }
+
+    @Bean
+    public Step vehicleBulkLoadStep(
+            FlatFileItemReader<VehicleBulkRecord> vehicleCsvReader,
+            ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor,
+            ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter) {
+        return new StepBuilder("vehicleBulkLoadStep", jobRepository)
+                .<VehicleBulkRecord, VehicleBulkRecord>chunk(500)
+                .transactionManager(transactionManager)
+                .reader(vehicleCsvReader)
+                .processor(vehicleItemProcessor)
+                .writer(vehicleBulkIngestWriter)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<VehicleBulkRecord> vehicleCsvReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
+        }
+        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
+        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
+        if (!resolved.startsWith(base)) {
+            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
+        }
+
+        BeanWrapperFieldSetMapper<VehicleBulkRecord> mapper = new BeanWrapperFieldSetMapper<>();
+        mapper.setTargetType(VehicleBulkRecord.class);
+        return new FlatFileItemReaderBuilder<VehicleBulkRecord>()
+                .name("vehicleCsvReader")
+                .resource(new FileSystemResource(resolved))
+                .delimited()
+                .names(
+                        "accountId",
+                        "vin",
+                        "unitNumber",
+                        "description",
+                        "make",
+                        "model",
+                        "year",
+                        "trim",
+                        "licensePlate",
+                        "licensePlateJurisdiction")
+                .fieldSetMapper(mapper)
+                .linesToSkip(1)
+                .build();
+    }
+
+    @Bean
+    public ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor() {
+        return item -> {
+            List<String> errors = vehicleLoaderStrategy.validate(item);
+            if (!errors.isEmpty()) {
+                log.warn("Vehicle record validation failed: {}", errors);
+                return null;
+            }
+            return item;
+        };
+    }
+
+    @Bean
+    public ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter(RestClient.Builder restClientBuilder) {
+        throw new IllegalStateException(
+                "vehicleBulkIngestWriter is not implemented. "
+                        + "The vehicle bulk load step is intentionally disabled until bulk-ingest endpoint "
+                        + "integration is provided for endpoint: "
+                        + vehicleInventoryBaseUrl
+                        + "/v1/vehicles/bulk-ingest");
+    }
+
+    @Bean
+    public Job vehicleFitmentBulkLoadJob(Step vehicleFitmentBulkLoadStep) {
+        return new JobBuilder("vehicleFitmentBulkLoadJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(vehicleFitmentBulkLoadStep)
+                .build();
+    }
+
+    @Bean
+    public Step vehicleFitmentBulkLoadStep(
+            FlatFileItemReader<VehicleFitmentRecord> vehicleFitmentCsvReader,
+            ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor,
+            ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter) {
+        return new StepBuilder("vehicleFitmentBulkLoadStep", jobRepository)
+                .<VehicleFitmentRecord, VehicleFitmentRecord>chunk(500)
+                .transactionManager(transactionManager)
+                .reader(vehicleFitmentCsvReader)
+                .processor(vehicleFitmentItemProcessor)
+                .writer(vehicleFitmentBulkIngestWriter)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<VehicleFitmentRecord> vehicleFitmentCsvReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
+        }
+        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
+        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
+        if (!resolved.startsWith(base)) {
+            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
+        }
+
+        BeanWrapperFieldSetMapper<VehicleFitmentRecord> mapper = new BeanWrapperFieldSetMapper<>();
+        mapper.setTargetType(VehicleFitmentRecord.class);
+        return new FlatFileItemReaderBuilder<VehicleFitmentRecord>()
+                .name("vehicleFitmentCsvReader")
+                .resource(new FileSystemResource(resolved))
+                .delimited()
+                .names(
+                        "partNumberId",
+                        "manufacturerName",
+                        "makeName",
+                        "modelName",
+                        "vehicleTypeName",
+                        "vehicleYear",
+                        "engineType",
+                        "submodel",
+                        "notes")
+                .fieldSetMapper(mapper)
+                .linesToSkip(1)
+                .build();
+    }
+
+    @Bean
+    public ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor() {
+        return item -> {
+            List<String> errors = vehicleFitmentLoaderStrategy.validate(item);
+            if (!errors.isEmpty()) {
+                log.warn("Vehicle fitment record validation failed: {}", errors);
+                return null;
+            }
+            return item;
+        };
+    }
+
+    @Bean
+    public ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter(RestClient.Builder restClientBuilder) {
+        throw new IllegalStateException(
+                "vehicleFitmentBulkIngestWriter is not implemented. "
+                        + "The vehicle fitment bulk load step is intentionally disabled until bulk-ingest endpoint "
+                        + "integration is provided for endpoint: "
+                        + vehicleFitmentBaseUrl
+                        + "/v1/fitments/bulk-ingest");
     }
 }

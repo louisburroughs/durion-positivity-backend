@@ -1,8 +1,11 @@
 package com.positivity.vehiclefitment.internal.service;
 
+import com.positivity.vehiclefitment.internal.dto.CreatePartFitmentRequest;
+import com.positivity.vehiclefitment.internal.dto.PartFitmentResponse;
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
+import com.positivity.vehiclefitment.internal.entity.PartFitmentEntity;
 import com.positivity.vehiclefitment.internal.entity.VehicleType;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
@@ -10,6 +13,7 @@ import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
 import com.positivity.vehiclefitment.internal.repository.MakeRepository;
 import com.positivity.vehiclefitment.internal.repository.ManufacturerRepository;
 import com.positivity.vehiclefitment.internal.repository.ModelRepository;
+import com.positivity.vehiclefitment.internal.repository.PartFitmentRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
@@ -21,7 +25,10 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -38,10 +45,88 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     private final MakeRepository makeRepository;
     private final ModelRepository modelRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
+    private final PartFitmentRepository partFitmentRepository;
     private final RestClient restClient;
     private final VehicleVariableRepository vehicleVariableRepository;
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    @Transactional
+    public @NonNull PartFitmentResponse createFitment(@NonNull CreatePartFitmentRequest request) {
+        Manufacturer manufacturer = null;
+        Make make = null;
+        Model model = null;
+        VehicleType vehicleType = null;
+
+        if (StringUtils.hasText(request.getManufacturerName())) {
+            manufacturer = manufacturerRepository
+                    .findByNameIgnoreCase(request.getManufacturerName())
+                    .orElseGet(() -> {
+                        Manufacturer newManufacturer = new Manufacturer();
+                        newManufacturer.setName(request.getManufacturerName());
+                        return manufacturerRepository.save(newManufacturer);
+                    });
+        }
+
+        if (StringUtils.hasText(request.getMakeName())) {
+            final Manufacturer resolvedManufacturer = manufacturer;
+            make = makeRepository.findByNameIgnoreCase(request.getMakeName()).orElseGet(() -> {
+                Make newMake = new Make();
+                newMake.setName(request.getMakeName());
+                newMake.setManufacturer(resolvedManufacturer);
+                return makeRepository.save(newMake);
+            });
+        }
+
+        if (StringUtils.hasText(request.getModelName())) {
+            final Make resolvedMake = make;
+            model = modelRepository.findByNameIgnoreCase(request.getModelName()).orElseGet(() -> {
+                Model newModel = new Model();
+                newModel.setName(request.getModelName());
+                newModel.setMake(resolvedMake);
+                return modelRepository.save(newModel);
+            });
+        }
+
+        if (StringUtils.hasText(request.getVehicleTypeName())) {
+            final Make resolvedMake = make;
+            vehicleType = vehicleTypeRepository
+                    .findByVehicleTypeNameIgnoreCase(request.getVehicleTypeName())
+                    .orElseGet(() -> {
+                        VehicleType newVehicleType = new VehicleType();
+                        newVehicleType.setVehicleTypeName(request.getVehicleTypeName());
+                        newVehicleType.setMake(resolvedMake);
+                        return vehicleTypeRepository.save(newVehicleType);
+                    });
+        }
+
+        PartFitmentEntity entity = new PartFitmentEntity();
+        entity.setPartNumberId(request.getPartNumberId());
+        entity.setVehicleManufacturer(manufacturer);
+        entity.setVehicleMake(make);
+        entity.setVehicleModel(model);
+        entity.setVehicleType(vehicleType);
+        entity.setVehicleYear(request.getVehicleYear());
+        entity.setEngineType(request.getEngineType());
+        entity.setSubmodel(request.getSubmodel());
+        entity.setNotes(request.getNotes());
+
+        PartFitmentEntity saved = partFitmentRepository.save(entity);
+
+        return PartFitmentResponse.builder()
+                .id(saved.getId())
+                .partNumberId(saved.getPartNumberId())
+                .manufacturerName(manufacturer != null ? manufacturer.getName() : null)
+                .makeName(make != null ? make.getName() : null)
+                .modelName(model != null ? model.getName() : null)
+                .vehicleTypeName(vehicleType != null ? vehicleType.getVehicleTypeName() : null)
+                .vehicleYear(saved.getVehicleYear())
+                .engineType(saved.getEngineType())
+                .submodel(saved.getSubmodel())
+                .notes(saved.getNotes())
+                .build();
+    }
 
     @Override
     public List<VehicleVariable> getVehicleVariables() {
