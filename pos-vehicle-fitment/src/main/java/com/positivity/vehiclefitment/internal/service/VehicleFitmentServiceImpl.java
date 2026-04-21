@@ -1,7 +1,5 @@
 package com.positivity.vehiclefitment.internal.service;
 
-import com.positivity.vehiclefitment.internal.dto.CreatePartFitmentRequest;
-import com.positivity.vehiclefitment.internal.dto.PartFitmentResponse;
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
@@ -18,10 +16,13 @@ import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
+import com.positivity.vehiclefitment.service.dto.CreatePartFitmentRequest;
+import com.positivity.vehiclefitment.service.dto.PartFitmentResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,18 +61,22 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         VehicleType vehicleType = null;
 
         if (StringUtils.hasText(request.getManufacturerName())) {
-            manufacturer = manufacturerRepository
-                    .findByNameIgnoreCase(request.getManufacturerName())
-                    .orElseGet(() -> {
-                        Manufacturer newManufacturer = new Manufacturer();
-                        newManufacturer.setName(request.getManufacturerName());
-                        return manufacturerRepository.save(newManufacturer);
-                    });
+            List<Manufacturer> existing = manufacturerRepository.findAllByNameIgnoreCase(request.getManufacturerName());
+            if (existing.isEmpty()) {
+                manufacturer = new Manufacturer();
+                manufacturer.setName(request.getManufacturerName());
+                manufacturer = manufacturerRepository.save(manufacturer);
+            } else {
+                manufacturer = existing.getFirst();
+            }
         }
 
         if (StringUtils.hasText(request.getMakeName())) {
             final Manufacturer resolvedManufacturer = manufacturer;
-            make = makeRepository.findByNameIgnoreCase(request.getMakeName()).orElseGet(() -> {
+            Optional<Make> found = resolvedManufacturer != null
+                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(resolvedManufacturer.getId(), request.getMakeName())
+                    : makeRepository.findAllByNameIgnoreCase(request.getMakeName()).stream().findFirst();
+            make = found.orElseGet(() -> {
                 Make newMake = new Make();
                 newMake.setName(request.getMakeName());
                 newMake.setManufacturer(resolvedManufacturer);
@@ -81,7 +86,10 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
         if (StringUtils.hasText(request.getModelName())) {
             final Make resolvedMake = make;
-            model = modelRepository.findByNameIgnoreCase(request.getModelName()).orElseGet(() -> {
+            Optional<Model> found = resolvedMake != null
+                    ? modelRepository.findByMakeIdAndNameIgnoreCase(resolvedMake.getId(), request.getModelName())
+                    : modelRepository.findAllByNameIgnoreCase(request.getModelName()).stream().findFirst();
+            model = found.orElseGet(() -> {
                 Model newModel = new Model();
                 newModel.setName(request.getModelName());
                 newModel.setMake(resolvedMake);
@@ -91,14 +99,15 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
         if (StringUtils.hasText(request.getVehicleTypeName())) {
             final Make resolvedMake = make;
-            vehicleType = vehicleTypeRepository
-                    .findByVehicleTypeNameIgnoreCase(request.getVehicleTypeName())
-                    .orElseGet(() -> {
-                        VehicleType newVehicleType = new VehicleType();
-                        newVehicleType.setVehicleTypeName(request.getVehicleTypeName());
-                        newVehicleType.setMake(resolvedMake);
-                        return vehicleTypeRepository.save(newVehicleType);
-                    });
+            Optional<VehicleType> found = resolvedMake != null
+                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(resolvedMake.getId(), request.getVehicleTypeName())
+                    : vehicleTypeRepository.findAllByVehicleTypeNameIgnoreCase(request.getVehicleTypeName()).stream().findFirst();
+            vehicleType = found.orElseGet(() -> {
+                VehicleType newVehicleType = new VehicleType();
+                newVehicleType.setVehicleTypeName(request.getVehicleTypeName());
+                newVehicleType.setMake(resolvedMake);
+                return vehicleTypeRepository.save(newVehicleType);
+            });
         }
 
         PartFitmentEntity entity = new PartFitmentEntity();

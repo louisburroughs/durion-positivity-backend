@@ -149,8 +149,8 @@ See [pos-bulk-ingest-lib/README.md](../pos-bulk-ingest-lib/README.md) for contra
 
 ## New Wave 3: Vehicle bulk-ingest
 
-- Job: `vehicleBulkLoadJob` — ingest CSV rows as `VehicleBulkRecord`, POSTs to `pos-vehicle-inventory` at `/v1/vehicles/bulk-ingest`.
-- Job: `vehicleFitmentBulkLoadJob` — ingest CSV rows as `VehicleFitmentRecord`, POSTs to `pos-vehicle-fitment` at `/v1/fitments/bulk-ingest`.
+- Job: `vehicleBulkLoadJob` — stub; validates `VehicleBulkRecord` rows but HTTP writer is not yet implemented. Will POST to `pos-vehicle-inventory` at `/v1/vehicles/bulk-ingest` once wiring is complete.
+- Job: `vehicleFitmentBulkLoadJob` — stub; validates `VehicleFitmentRecord` rows but HTTP writer is not yet implemented. Will POST to `pos-vehicle-fitment` at `/v1/fitments/bulk-ingest` once wiring is complete.
 - Records validated by `VehicleLoaderStrategy` and `VehicleFitmentLoaderStrategy` before callout.
 
 Permissions: service calls target endpoints that require domain-specific create permissions (see target module README for exact scopes).

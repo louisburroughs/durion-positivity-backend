@@ -9,5 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface VehicleTypeRepository extends JpaRepository<VehicleType, UUID> {
     List<VehicleType> findByMakeId(UUID makeId);
 
-    Optional<VehicleType> findByVehicleTypeNameIgnoreCase(String vehicleTypeName);
+    Optional<VehicleType> findByMakeIdAndVehicleTypeNameIgnoreCase(UUID makeId, String vehicleTypeName);
+
+    List<VehicleType> findAllByVehicleTypeNameIgnoreCase(String vehicleTypeName);
 }

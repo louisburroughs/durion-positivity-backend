@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.vehiclefitment.config.WebMvcTestSecurityConfig;
 import com.positivity.vehiclefitment.internal.dto.FitmentBulkIngestRecord;
-import com.positivity.vehiclefitment.internal.dto.PartFitmentResponse;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
+import com.positivity.vehiclefitment.service.dto.PartFitmentResponse;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

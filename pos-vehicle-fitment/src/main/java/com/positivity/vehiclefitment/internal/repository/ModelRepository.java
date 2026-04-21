@@ -9,5 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ModelRepository extends JpaRepository<Model, UUID> {
     List<Model> findByMakeId(UUID makeId);
 
-    Optional<Model> findByNameIgnoreCase(String name);
+    Optional<Model> findByMakeIdAndNameIgnoreCase(UUID makeId, String name);
+
+    List<Model> findAllByNameIgnoreCase(String name);
 }
