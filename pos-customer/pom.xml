@@ -87,6 +87,7 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>

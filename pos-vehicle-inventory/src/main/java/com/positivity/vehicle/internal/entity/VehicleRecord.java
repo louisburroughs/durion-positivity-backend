@@ -23,7 +23,9 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -37,14 +39,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(
-        name = "vehicle_records",
-        indexes = {
-            @Index(name = "idx_vr_account_id", columnList = "account_id"),
-            @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
-            @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
-            @Index(name = "idx_vr_license_plate", columnList = "license_plate")
-        })
+@Table(name = "vehicle_records", indexes = {
+        @Index(name = "idx_vr_account_id", columnList = "account_id"),
+        @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
+        @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
+        @Index(name = "idx_vr_license_plate", columnList = "license_plate")
+})
 @EntityListeners(AuditingEntityListener.class)
 public class VehicleRecord {
 
@@ -110,6 +110,14 @@ public class VehicleRecord {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @CreatedBy
+    @Column(name = "created_by", updatable = false)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(name = "updated_by")
+    private String updatedBy;
 
     @Version
     @Column(name = "version", nullable = false)
