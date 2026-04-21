@@ -45,8 +45,8 @@ public class WebMvcTestSecurityConfig {
         .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
         .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
         .exceptionHandling(ex -> ex.authenticationEntryPoint(
-            (request, response, authException) ->
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")));
+            (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED,
+                "Unauthorized")));
     return http.build();
   }
 

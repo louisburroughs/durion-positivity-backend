@@ -512,3 +512,5 @@ public class BatchConfiguration {
                         + "/v1/fitments/bulk-ingest");
     }
 }
+
+    

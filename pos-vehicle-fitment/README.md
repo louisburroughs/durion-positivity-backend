@@ -16,10 +16,9 @@ Manages part fitments, hierarchical vehicle taxonomy (Manufacturer → Make → 
 ## Key Endpoints (Wave 3 additions)
 
 - `POST /v1/fitments/bulk-ingest` — bulk ingest fitments (CSV → `FitmentBulkIngestRecord`)
-	- Permission: `vehicle-fitment:hint:create`
-	- Event emitted: `VEHICLE_FITMENT_BULK_INGEST` (apiVersion `1`)
+ 	- Permission: `vehicle-fitment:hint:create`
+ 	- Event emitted: `VEHICLE_FITMENT_BULK_INGEST` (apiVersion `1`)
 
 ## Service behavior
 
 - `VehicleFitmentService.createFitment(...)` implements a find-or-create hierarchy pattern: it will locate or create Manufacturer, Make, Model, then `VehicleType`, and finally persist the `PartFitment` association.
-

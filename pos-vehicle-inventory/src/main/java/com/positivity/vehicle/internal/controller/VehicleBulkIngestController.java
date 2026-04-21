@@ -28,67 +28,67 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Vehicle Bulk Ingest API", description = "Bulk import vehicle records")
 public class VehicleBulkIngestController extends AbstractBulkIngestController<VehicleBulkIngestRecord> {
 
-    private final VehicleService vehicleService;
+  private final VehicleService vehicleService;
 
-    @Override
-    @PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
-    @EmitEvent(id = "VEHICLE_BULK_INGEST", apiVersion = "1")
-    public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<VehicleBulkIngestRecord> request) {
-        return super.bulkIngest(request);
+  @Override
+  @PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
+  @EmitEvent(id = "VEHICLE_BULK_INGEST", apiVersion = "1")
+  public ResponseEntity<BulkIngestResponse> bulkIngest(
+      @Valid @RequestBody @NonNull BulkIngestRequest<VehicleBulkIngestRecord> request) {
+    return super.bulkIngest(request);
+  }
+
+  @Override
+  protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<VehicleBulkIngestRecord> request) {
+    List<BulkIngestResult> results = new ArrayList<>();
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (int i = 0; i < request.getRecords().size(); i++) {
+      VehicleBulkIngestRecord ingestRecord = request.getRecords().get(i);
+      try {
+        CreateVehicleRequest createRequest = CreateVehicleRequest.builder()
+            .accountId(ingestRecord.getAccountId())
+            .vin(ingestRecord.getVin())
+            .unitNumber(ingestRecord.getUnitNumber())
+            .description(ingestRecord.getDescription())
+            .licensePlate(ingestRecord.getLicensePlate())
+            .licensePlateJurisdiction(ingestRecord.getLicensePlateJurisdiction())
+            .year(ingestRecord.getYear())
+            .make(ingestRecord.getMake())
+            .model(ingestRecord.getModel())
+            .trim(ingestRecord.getTrim())
+            .build();
+
+        var created = vehicleService.createVehicle(createRequest);
+        results.add(BulkIngestResult.builder()
+            .rowIndex(i)
+            .entityId(created.getVehicleId())
+            .success(true)
+            .build());
+        successCount++;
+      } catch (Exception exception) {
+        log.warn("Failed to ingest vehicle record at row {}: {}", i, exception.getMessage(), exception);
+        results.add(BulkIngestResult.builder()
+            .rowIndex(i)
+            .success(false)
+            .errorCode("VEHICLE_INGEST_FAILED")
+            .errorMessage(errorMessage(exception))
+            .build());
+        failureCount++;
+      }
     }
 
-    @Override
-    protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<VehicleBulkIngestRecord> request) {
-        List<BulkIngestResult> results = new ArrayList<>();
-        int successCount = 0;
-        int failureCount = 0;
+    return BulkIngestResponse.builder()
+        .totalSubmitted(request.getRecords().size())
+        .successCount(successCount)
+        .failureCount(failureCount)
+        .results(results)
+        .build();
+  }
 
-        for (int i = 0; i < request.getRecords().size(); i++) {
-            VehicleBulkIngestRecord ingestRecord = request.getRecords().get(i);
-            try {
-                CreateVehicleRequest createRequest = CreateVehicleRequest.builder()
-                        .accountId(ingestRecord.getAccountId())
-                        .vin(ingestRecord.getVin())
-                        .unitNumber(ingestRecord.getUnitNumber())
-                        .description(ingestRecord.getDescription())
-                        .licensePlate(ingestRecord.getLicensePlate())
-                        .licensePlateJurisdiction(ingestRecord.getLicensePlateJurisdiction())
-                        .year(ingestRecord.getYear())
-                        .make(ingestRecord.getMake())
-                        .model(ingestRecord.getModel())
-                        .trim(ingestRecord.getTrim())
-                        .build();
-
-                var created = vehicleService.createVehicle(createRequest);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .entityId(created.getVehicleId())
-                        .success(true)
-                        .build());
-                successCount++;
-            } catch (Exception exception) {
-                log.warn("Failed to ingest vehicle record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("VEHICLE_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
-                failureCount++;
-            }
-        }
-
-        return BulkIngestResponse.builder()
-                .totalSubmitted(request.getRecords().size())
-                .successCount(successCount)
-                .failureCount(failureCount)
-                .results(results)
-                .build();
-    }
-
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Vehicle ingest failed" : message;
-    }
+  private String errorMessage(@NonNull Exception exception) {
+    String message = exception.getMessage();
+    return message == null || message.isBlank() ? "Vehicle ingest failed" : message;
+  }
 }

@@ -6,15 +6,15 @@ import lombok.Data;
 @Data
 public class FitmentBulkIngestRecord {
 
-    @NotNull
-    private Long partNumberId;
+  @NotNull
+  private Long partNumberId;
 
-    private String manufacturerName;
-    private String makeName;
-    private String modelName;
-    private String vehicleTypeName;
-    private String vehicleYear;
-    private String engineType;
-    private String submodel;
-    private String notes;
+  private String manufacturerName;
+  private String makeName;
+  private String modelName;
+  private String vehicleTypeName;
+  private String vehicleYear;
+  private String engineType;
+  private String submodel;
+  private String notes;
 }

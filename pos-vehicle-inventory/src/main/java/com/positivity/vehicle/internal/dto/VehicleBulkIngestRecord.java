@@ -9,23 +9,23 @@ import lombok.Data;
 @Data
 public class VehicleBulkIngestRecord {
 
-    @NotNull
-    private UUID accountId;
+  @NotNull
+  private UUID accountId;
 
-    @NotBlank
-    @Size(min = 17, max = 17)
-    private String vin;
+  @NotBlank
+  @Size(min = 17, max = 17)
+  private String vin;
 
-    @NotBlank
-    private String unitNumber;
+  @NotBlank
+  private String unitNumber;
 
-    @NotBlank
-    private String description;
+  @NotBlank
+  private String description;
 
-    private String licensePlate;
-    private String licensePlateJurisdiction;
-    private Integer year;
-    private String make;
-    private String model;
-    private String trim;
+  private String licensePlate;
+  private String licensePlateJurisdiction;
+  private Integer year;
+  private String make;
+  private String model;
+  private String trim;
 }

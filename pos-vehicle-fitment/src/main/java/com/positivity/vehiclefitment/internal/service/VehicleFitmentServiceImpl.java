@@ -128,6 +128,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .build();
     }
 
+    
     @Override
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();

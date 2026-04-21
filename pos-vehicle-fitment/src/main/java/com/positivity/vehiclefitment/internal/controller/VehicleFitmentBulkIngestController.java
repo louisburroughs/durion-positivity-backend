@@ -29,64 +29,64 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Vehicle Fitment Bulk Ingest API", description = "Bulk import vehicle fitment records")
 public class VehicleFitmentBulkIngestController extends AbstractBulkIngestController<FitmentBulkIngestRecord> {
 
-    private final VehicleFitmentService vehicleFitmentService;
+  private final VehicleFitmentService vehicleFitmentService;
 
-    @Override
-    @PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
-    @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
-    public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<FitmentBulkIngestRecord> request) {
-        return super.bulkIngest(request);
+  @Override
+  @PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
+  @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
+  public ResponseEntity<BulkIngestResponse> bulkIngest(
+      @Valid @RequestBody @NonNull BulkIngestRequest<FitmentBulkIngestRecord> request) {
+    return super.bulkIngest(request);
+  }
+
+  @Override
+  protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<FitmentBulkIngestRecord> request) {
+    List<BulkIngestResult> results = new ArrayList<>();
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (int i = 0; i < request.getRecords().size(); i++) {
+      FitmentBulkIngestRecord ingestRecord = request.getRecords().get(i);
+      try {
+        CreatePartFitmentRequest createRequest = new CreatePartFitmentRequest(ingestRecord.getPartNumberId());
+        createRequest.setManufacturerName(ingestRecord.getManufacturerName());
+        createRequest.setMakeName(ingestRecord.getMakeName());
+        createRequest.setModelName(ingestRecord.getModelName());
+        createRequest.setVehicleTypeName(ingestRecord.getVehicleTypeName());
+        createRequest.setVehicleYear(ingestRecord.getVehicleYear());
+        createRequest.setEngineType(ingestRecord.getEngineType());
+        createRequest.setSubmodel(ingestRecord.getSubmodel());
+        createRequest.setNotes(ingestRecord.getNotes());
+
+        PartFitmentResponse created = vehicleFitmentService.createFitment(createRequest);
+        results.add(BulkIngestResult.builder()
+            .rowIndex(i)
+            .entityId(created.getId())
+            .success(true)
+            .build());
+        successCount++;
+      } catch (Exception exception) {
+        log.warn("Failed to ingest fitment record at row {}: {}", i, exception.getMessage(), exception);
+        results.add(BulkIngestResult.builder()
+            .rowIndex(i)
+            .success(false)
+            .errorCode("FITMENT_INGEST_FAILED")
+            .errorMessage(errorMessage(exception))
+            .build());
+        failureCount++;
+      }
     }
 
-    @Override
-    protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<FitmentBulkIngestRecord> request) {
-        List<BulkIngestResult> results = new ArrayList<>();
-        int successCount = 0;
-        int failureCount = 0;
+    return BulkIngestResponse.builder()
+        .totalSubmitted(request.getRecords().size())
+        .successCount(successCount)
+        .failureCount(failureCount)
+        .results(results)
+        .build();
+  }
 
-        for (int i = 0; i < request.getRecords().size(); i++) {
-            FitmentBulkIngestRecord ingestRecord = request.getRecords().get(i);
-            try {
-                CreatePartFitmentRequest createRequest = new CreatePartFitmentRequest(ingestRecord.getPartNumberId());
-                createRequest.setManufacturerName(ingestRecord.getManufacturerName());
-                createRequest.setMakeName(ingestRecord.getMakeName());
-                createRequest.setModelName(ingestRecord.getModelName());
-                createRequest.setVehicleTypeName(ingestRecord.getVehicleTypeName());
-                createRequest.setVehicleYear(ingestRecord.getVehicleYear());
-                createRequest.setEngineType(ingestRecord.getEngineType());
-                createRequest.setSubmodel(ingestRecord.getSubmodel());
-                createRequest.setNotes(ingestRecord.getNotes());
-
-                PartFitmentResponse created = vehicleFitmentService.createFitment(createRequest);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .entityId(created.getId())
-                        .success(true)
-                        .build());
-                successCount++;
-            } catch (Exception exception) {
-                log.warn("Failed to ingest fitment record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("FITMENT_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
-                failureCount++;
-            }
-        }
-
-        return BulkIngestResponse.builder()
-                .totalSubmitted(request.getRecords().size())
-                .successCount(successCount)
-                .failureCount(failureCount)
-                .results(results)
-                .build();
-    }
-
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Fitment ingest failed" : message;
-    }
+  private String errorMessage(@NonNull Exception exception) {
+    String message = exception.getMessage();
+    return message == null || message.isBlank() ? "Fitment ingest failed" : message;
+  }
 }

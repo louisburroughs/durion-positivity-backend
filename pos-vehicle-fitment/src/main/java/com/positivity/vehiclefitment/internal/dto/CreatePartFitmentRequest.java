@@ -6,22 +6,22 @@ import org.jspecify.annotations.NonNull;
 @Data
 public class CreatePartFitmentRequest {
 
-    @NonNull
-    private Long partNumberId;
+  @NonNull
+  private Long partNumberId;
 
-    private String manufacturerName;
+  private String manufacturerName;
 
-    private String makeName;
+  private String makeName;
 
-    private String modelName;
+  private String modelName;
 
-    private String vehicleTypeName;
+  private String vehicleTypeName;
 
-    private String vehicleYear;
+  private String vehicleYear;
 
-    private String engineType;
+  private String engineType;
 
-    private String submodel;
+  private String submodel;
 
-    private String notes;
+  private String notes;
 }
