@@ -26,3 +26,5 @@ permissions:
     description: "Edit pricing rules"
   - name: "pricing:rule:delete"
     description: "Delete pricing rules"
+  - name: "pricing:base_price:create"
+    description: "Create or update product base price (MSRP) records"
