@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER_COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+DOCKER_COMPOSE_FILE="$SCRIPT_DIR/../docker-compose.yml"
 
 echo "=========================================="
 echo "Docker Compose Secrets Verification"
