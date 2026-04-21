@@ -55,9 +55,9 @@ application-secrets.yml
 .story-work/work
 .story-work/inbox
 
-### Durion Processing Files ###
+#temp processing document
 Durion-Processing.md
-**/Durion-Processing.md
+PR-Review-Processing.md
 
 /logs/
 /logs/*
