@@ -12,4 +12,6 @@ public interface ModelRepository extends JpaRepository<Model, UUID> {
     Optional<Model> findByMakeIdAndNameIgnoreCase(UUID makeId, String name);
 
     List<Model> findAllByNameIgnoreCase(String name);
+
+    Optional<Model> findByMakeIsNullAndNameIgnoreCase(String name);
 }

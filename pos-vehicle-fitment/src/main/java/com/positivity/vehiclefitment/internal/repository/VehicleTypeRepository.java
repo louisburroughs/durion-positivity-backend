@@ -12,4 +12,6 @@ public interface VehicleTypeRepository extends JpaRepository<VehicleType, UUID> 
     Optional<VehicleType> findByMakeIdAndVehicleTypeNameIgnoreCase(UUID makeId, String vehicleTypeName);
 
     List<VehicleType> findAllByVehicleTypeNameIgnoreCase(String vehicleTypeName);
+
+    Optional<VehicleType> findByMakeIsNullAndVehicleTypeNameIgnoreCase(String vehicleTypeName);
 }

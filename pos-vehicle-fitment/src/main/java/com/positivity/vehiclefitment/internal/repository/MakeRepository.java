@@ -12,4 +12,6 @@ public interface MakeRepository extends JpaRepository<Make, UUID> {
     Optional<Make> findByManufacturerIdAndNameIgnoreCase(UUID manufacturerId, String name);
 
     List<Make> findAllByNameIgnoreCase(String name);
+
+    Optional<Make> findByManufacturerIsNullAndNameIgnoreCase(String name);
 }

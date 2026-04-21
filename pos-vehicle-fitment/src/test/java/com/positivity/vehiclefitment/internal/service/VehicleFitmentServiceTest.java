@@ -510,4 +510,82 @@ class VehicleFitmentServiceTest {
         verify(makeRepository, never()).save(any(Make.class));
         assertThat(response.getMakeName()).isEqualTo("Camry");
     }
+
+    @Test
+    void createFitment_usesNullParentScopedLookup_forMakeWhenNoManufacturer() {
+        Make savedMake = new Make();
+        savedMake.setId(MAKE_ID);
+        savedMake.setName("Generic");
+
+        PartFitmentEntity savedEntity = new PartFitmentEntity();
+        savedEntity.setId(UUID.randomUUID());
+        savedEntity.setPartNumberId(1L);
+
+        when(makeRepository.findByManufacturerIsNullAndNameIgnoreCase("Generic"))
+                .thenReturn(Optional.empty());
+        when(makeRepository.save(any(Make.class))).thenReturn(savedMake);
+        when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
+
+        CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
+        request.setMakeName("Generic");
+        // no manufacturerName set — null-parent path
+
+        PartFitmentResponse response = service.createFitment(request);
+
+        verify(makeRepository).findByManufacturerIsNullAndNameIgnoreCase("Generic");
+        verify(makeRepository, never()).findByManufacturerIdAndNameIgnoreCase(any(), any());
+        assertThat(response.getMakeName()).isEqualTo("Generic");
+    }
+
+    @Test
+    void createFitment_usesNullParentScopedLookup_forModelWhenNoMake() {
+        UUID modelId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        Model savedModel = new Model();
+        savedModel.setId(modelId);
+        savedModel.setName("UnknownModel");
+
+        PartFitmentEntity savedEntity = new PartFitmentEntity();
+        savedEntity.setId(UUID.randomUUID());
+        savedEntity.setPartNumberId(1L);
+
+        when(modelRepository.findByMakeIsNullAndNameIgnoreCase("UnknownModel"))
+                .thenReturn(Optional.empty());
+        when(modelRepository.save(any(Model.class))).thenReturn(savedModel);
+        when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
+
+        CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
+        request.setModelName("UnknownModel");
+        // no makeName set — null-parent path
+
+        PartFitmentResponse response = service.createFitment(request);
+
+        verify(modelRepository).findByMakeIsNullAndNameIgnoreCase("UnknownModel");
+        verify(modelRepository, never()).findByMakeIdAndNameIgnoreCase(any(), any());
+        assertThat(response.getModelName()).isEqualTo("UnknownModel");
+    }
+
+    @Test
+    void createFitment_usesNullParentScopedLookup_forVehicleTypeWhenNoMake() {
+        VehicleType savedType = new VehicleType();
+        savedType.setVehicleTypeName("Trailer");
+
+        PartFitmentEntity savedEntity = new PartFitmentEntity();
+        savedEntity.setId(UUID.randomUUID());
+        savedEntity.setPartNumberId(1L);
+
+        when(vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase("Trailer"))
+                .thenReturn(Optional.empty());
+        when(vehicleTypeRepository.save(any(VehicleType.class))).thenReturn(savedType);
+        when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
+
+        CreatePartFitmentRequest request = new CreatePartFitmentRequest(1L);
+        request.setVehicleTypeName("Trailer");
+        // no makeName set — null-parent path
+
+        PartFitmentResponse response = service.createFitment(request);
+
+        verify(vehicleTypeRepository).findByMakeIsNullAndVehicleTypeNameIgnoreCase("Trailer");
+        verify(vehicleTypeRepository, never()).findByMakeIdAndVehicleTypeNameIgnoreCase(any(), any());
+        assertThat(response.getVehicleTypeName()).isEqualTo("Trailer");
+    }
 }

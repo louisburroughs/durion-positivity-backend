@@ -368,9 +368,6 @@ public class BatchConfiguration {
                 .reader(vehicleCsvReader)
                 .processor(vehicleItemProcessor)
                 .writer(vehicleBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
                 .build();
     }
 
@@ -450,9 +447,6 @@ public class BatchConfiguration {
                 .reader(vehicleFitmentCsvReader)
                 .processor(vehicleFitmentItemProcessor)
                 .writer(vehicleFitmentBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
                 .build();
     }
 
@@ -512,5 +506,3 @@ public class BatchConfiguration {
                         + "/v1/fitments/bulk-ingest");
     }
 }
-
-    
