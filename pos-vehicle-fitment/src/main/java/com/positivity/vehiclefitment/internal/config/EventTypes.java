@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the vehicle fitment module.
-         * Total: 5 event types.
+     * Total: 5 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
