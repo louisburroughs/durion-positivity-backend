@@ -99,7 +99,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         Manufacturer entity = new Manufacturer();
         entity.setName(name);
         try {
-            return manufacturerRepository.save(entity);
+            return manufacturerRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return manufacturerRepository.findAllByNameIgnoreCase(name).stream().findFirst()
                     .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + name));
@@ -120,7 +120,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         entity.setName(name);
         entity.setManufacturer(manufacturer);
         try {
-            return makeRepository.save(entity);
+            return makeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (manufacturer != null
                     ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), name)
@@ -143,7 +143,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         entity.setName(name);
         entity.setMake(make);
         try {
-            return modelRepository.save(entity);
+            return modelRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
                     ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), name)
@@ -166,7 +166,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         entity.setVehicleTypeName(name);
         entity.setMake(make);
         try {
-            return vehicleTypeRepository.save(entity);
+            return vehicleTypeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
                     ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), name)
