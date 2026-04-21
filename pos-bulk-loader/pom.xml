@@ -38,11 +38,11 @@
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
     </dependency>
-    <!-- H2 Database: test scope only — not bundled into production or alpha artifacts -->
+    <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
-      <scope>test</scope>
+      <scope>runtime</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.cloud</groupId>

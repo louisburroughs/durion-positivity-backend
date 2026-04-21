@@ -87,10 +87,11 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- JSON Processing -->
@@ -202,14 +203,6 @@
     <profiles>
         <profile>
             <id>openapi</id>
-            <dependencies>
-                <!-- H2 promoted to runtime so spring-boot:start can connect to the in-memory DB -->
-                <dependency>
-                    <groupId>com.h2database</groupId>
-                    <artifactId>h2</artifactId>
-                    <scope>runtime</scope>
-                </dependency>
-            </dependencies>
             <build>
                 <plugins>
                     <plugin>

@@ -27,6 +27,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -55,60 +56,10 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     @Override
     @Transactional
     public @NonNull PartFitmentResponse createFitment(@NonNull CreatePartFitmentRequest request) {
-        Manufacturer manufacturer = null;
-        Make make = null;
-        Model model = null;
-        VehicleType vehicleType = null;
-
-        if (StringUtils.hasText(request.getManufacturerName())) {
-            List<Manufacturer> existing = manufacturerRepository.findAllByNameIgnoreCase(request.getManufacturerName());
-            if (existing.isEmpty()) {
-                manufacturer = new Manufacturer();
-                manufacturer.setName(request.getManufacturerName());
-                manufacturer = manufacturerRepository.save(manufacturer);
-            } else {
-                manufacturer = existing.getFirst();
-            }
-        }
-
-        if (StringUtils.hasText(request.getMakeName())) {
-            final Manufacturer resolvedManufacturer = manufacturer;
-            Optional<Make> found = resolvedManufacturer != null
-                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(resolvedManufacturer.getId(), request.getMakeName())
-                    : makeRepository.findAllByNameIgnoreCase(request.getMakeName()).stream().findFirst();
-            make = found.orElseGet(() -> {
-                Make newMake = new Make();
-                newMake.setName(request.getMakeName());
-                newMake.setManufacturer(resolvedManufacturer);
-                return makeRepository.save(newMake);
-            });
-        }
-
-        if (StringUtils.hasText(request.getModelName())) {
-            final Make resolvedMake = make;
-            Optional<Model> found = resolvedMake != null
-                    ? modelRepository.findByMakeIdAndNameIgnoreCase(resolvedMake.getId(), request.getModelName())
-                    : modelRepository.findAllByNameIgnoreCase(request.getModelName()).stream().findFirst();
-            model = found.orElseGet(() -> {
-                Model newModel = new Model();
-                newModel.setName(request.getModelName());
-                newModel.setMake(resolvedMake);
-                return modelRepository.save(newModel);
-            });
-        }
-
-        if (StringUtils.hasText(request.getVehicleTypeName())) {
-            final Make resolvedMake = make;
-            Optional<VehicleType> found = resolvedMake != null
-                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(resolvedMake.getId(), request.getVehicleTypeName())
-                    : vehicleTypeRepository.findAllByVehicleTypeNameIgnoreCase(request.getVehicleTypeName()).stream().findFirst();
-            vehicleType = found.orElseGet(() -> {
-                VehicleType newVehicleType = new VehicleType();
-                newVehicleType.setVehicleTypeName(request.getVehicleTypeName());
-                newVehicleType.setMake(resolvedMake);
-                return vehicleTypeRepository.save(newVehicleType);
-            });
-        }
+        Manufacturer manufacturer = resolveManufacturer(request.getManufacturerName());
+        Make make = resolveMake(request.getMakeName(), manufacturer);
+        Model model = resolveModel(request.getModelName(), make);
+        VehicleType vehicleType = resolveVehicleType(request.getVehicleTypeName(), make);
 
         PartFitmentEntity entity = new PartFitmentEntity();
         entity.setPartNumberId(request.getPartNumberId());
@@ -137,7 +88,93 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 .build();
     }
 
-    
+    private Manufacturer resolveManufacturer(String name) {
+        if (!StringUtils.hasText(name)) {
+            return null;
+        }
+        List<Manufacturer> existing = manufacturerRepository.findAllByNameIgnoreCase(name);
+        if (!existing.isEmpty()) {
+            return existing.getFirst();
+        }
+        Manufacturer entity = new Manufacturer();
+        entity.setName(name);
+        try {
+            return manufacturerRepository.save(entity);
+        } catch (DataIntegrityViolationException _) {
+            return manufacturerRepository.findAllByNameIgnoreCase(name).stream().findFirst()
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + name));
+        }
+    }
+
+    private Make resolveMake(String name, Manufacturer manufacturer) {
+        if (!StringUtils.hasText(name)) {
+            return null;
+        }
+        Optional<Make> found = manufacturer != null
+                ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), name)
+                : makeRepository.findAllByNameIgnoreCase(name).stream().findFirst();
+        if (found.isPresent()) {
+            return found.get();
+        }
+        Make entity = new Make();
+        entity.setName(name);
+        entity.setManufacturer(manufacturer);
+        try {
+            return makeRepository.save(entity);
+        } catch (DataIntegrityViolationException _) {
+            return (manufacturer != null
+                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), name)
+                    : makeRepository.findAllByNameIgnoreCase(name).stream().findFirst())
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + name));
+        }
+    }
+
+    private Model resolveModel(String name, Make make) {
+        if (!StringUtils.hasText(name)) {
+            return null;
+        }
+        Optional<Model> found = make != null
+                ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), name)
+                : modelRepository.findAllByNameIgnoreCase(name).stream().findFirst();
+        if (found.isPresent()) {
+            return found.get();
+        }
+        Model entity = new Model();
+        entity.setName(name);
+        entity.setMake(make);
+        try {
+            return modelRepository.save(entity);
+        } catch (DataIntegrityViolationException _) {
+            return (make != null
+                    ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), name)
+                    : modelRepository.findAllByNameIgnoreCase(name).stream().findFirst())
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on model: " + name));
+        }
+    }
+
+    private VehicleType resolveVehicleType(String name, Make make) {
+        if (!StringUtils.hasText(name)) {
+            return null;
+        }
+        Optional<VehicleType> found = make != null
+                ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), name)
+                : vehicleTypeRepository.findAllByVehicleTypeNameIgnoreCase(name).stream().findFirst();
+        if (found.isPresent()) {
+            return found.get();
+        }
+        VehicleType entity = new VehicleType();
+        entity.setVehicleTypeName(name);
+        entity.setMake(make);
+        try {
+            return vehicleTypeRepository.save(entity);
+        } catch (DataIntegrityViolationException _) {
+            return (make != null
+                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), name)
+                    : vehicleTypeRepository.findAllByVehicleTypeNameIgnoreCase(name).stream().findFirst())
+                    .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on vehicleType: " + name));
+        }
+    }
+
     @Override
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
