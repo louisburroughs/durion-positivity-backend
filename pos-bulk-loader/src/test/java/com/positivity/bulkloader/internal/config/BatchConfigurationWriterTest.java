@@ -36,470 +36,482 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-@SuppressWarnings({"java:S100", "java:S1192"})
+@SuppressWarnings({ "java:S100", "java:S1192" })
 @ExtendWith(MockitoExtension.class)
 class BatchConfigurationWriterTest {
 
-    private static final String VALID_JOB_ID = "00000000-0000-0000-0000-000000000001";
-    private static final String VALID_LOCATION_ID = "00000000-0000-0000-0000-000000000002";
-    private static final String VALID_OPERATOR_ID = "op-001";
-
-    @Mock JobRepository jobRepository;
-    @Mock PlatformTransactionManager transactionManager;
-    @Mock CatalogLoaderStrategy catalogLoaderStrategy;
-    @Mock CustomerLoaderStrategy customerLoaderStrategy;
-    @Mock PersonLoaderStrategy personLoaderStrategy;
-    @Mock BasePriceLoaderStrategy basePriceLoaderStrategy;
-    @Mock VehicleLoaderStrategy vehicleLoaderStrategy;
-    @Mock VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
-
-    @Mock RestClient.Builder restClientBuilder;
-    @Mock RestClient mockRestClient;
-    @Mock RestClient.RequestBodyUriSpec requestBodyUriSpec;
-
-    @Mock(answer = Answers.RETURNS_SELF)
-    RestClient.RequestBodySpec requestBodySpec;
-    @Mock RestClient.ResponseSpec responseSpec;
-
-    @InjectMocks
-    BatchConfiguration batchConfiguration;
-
-    @BeforeEach
-    void setUp() {
-        lenient().when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
-        lenient().when(restClientBuilder.build()).thenReturn(mockRestClient);
-        lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
-        lenient().when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
-        lenient().when(requestBodySpec.retrieve()).thenReturn(responseSpec);
-    }
-
-    // --- catalogBulkIngestWriter ---
-
-    @Test
-    void catalogBulkIngestWriter_happyPath_postsChunk() {
-        CatalogProductRecord product = new CatalogProductRecord();
-        product.setSku("SKU-001");
-        product.setName("Product Name");
-
-        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
-
-    @Test
-    void catalogBulkIngestWriter_nullJobId_skipsChunk() {
-        CatalogProductRecord product = new CatalogProductRecord();
-        product.setSku("SKU-001");
-
-        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    @Test
-    void catalogBulkIngestWriter_nullLocationId_skipsChunk() {
-        CatalogProductRecord product = new CatalogProductRecord();
-        product.setSku("SKU-001");
-
-        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    // --- customerBulkIngestWriter ---
-
-    @Test
-    void customerBulkIngestWriter_happyPath_postsChunk() {
-        CustomerPersonRecord person = new CustomerPersonRecord();
-        person.setFirstName("John");
-        person.setLastName("Doe");
-
-        ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
-
-    @Test
-    void customerBulkIngestWriter_nullJobId_skipsChunk() {
-        CustomerPersonRecord person = new CustomerPersonRecord();
-        person.setFirstName("John");
-
-        ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    @Test
-    void customerBulkIngestWriter_nullLocationId_skipsChunk() {
-        CustomerPersonRecord person = new CustomerPersonRecord();
-        person.setFirstName("John");
-
-        ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    // --- peopleBulkIngestWriter ---
-
-    @Test
-    void peopleBulkIngestWriter_happyPath_postsChunk() {
-        PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
-        employee.setEmployeeNumber("EMP-001");
-        employee.setHireDate("2020-01-01");
-
-        ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
-
-    @Test
-    void peopleBulkIngestWriter_nullJobId_skipsChunk() {
-        PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
-
-        ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    @Test
-    void peopleBulkIngestWriter_nullLocationId_skipsChunk() {
-        PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
-
-        ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    // --- priceBulkIngestWriter ---
-
-    @Test
-    void priceBulkIngestWriter_happyPath_postsChunk() {
-        BasePriceRecord priceEntry = new BasePriceRecord();
-        priceEntry.setProductId("prod-1");
-        priceEntry.setMsrp("9.99");
-        priceEntry.setCurrency("USD");
-        priceEntry.setEffectiveFrom("2024-01-01");
-
-        ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
-
-    @Test
-    void priceBulkIngestWriter_nullJobId_skipsChunk() {
-        BasePriceRecord priceEntry = new BasePriceRecord();
-        priceEntry.setProductId("prod-1");
-
-        ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-
-        assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
-
-    @Test
-    void priceBulkIngestWriter_nullLocationId_skipsChunk() {
-        BasePriceRecord priceEntry = new BasePriceRecord();
-        priceEntry.setProductId("prod-1");
+  private static final String VALID_JOB_ID = "00000000-0000-0000-0000-000000000001";
+  private static final String VALID_LOCATION_ID = "00000000-0000-0000-0000-000000000002";
+  private static final String VALID_OPERATOR_ID = "op-001";
+
+  @Mock
+  JobRepository jobRepository;
+  @Mock
+  PlatformTransactionManager transactionManager;
+  @Mock
+  CatalogLoaderStrategy catalogLoaderStrategy;
+  @Mock
+  CustomerLoaderStrategy customerLoaderStrategy;
+  @Mock
+  PersonLoaderStrategy personLoaderStrategy;
+  @Mock
+  BasePriceLoaderStrategy basePriceLoaderStrategy;
+  @Mock
+  VehicleLoaderStrategy vehicleLoaderStrategy;
+  @Mock
+  VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
+
+  @Mock
+  RestClient.Builder restClientBuilder;
+  @Mock
+  RestClient mockRestClient;
+  @Mock
+  RestClient.RequestBodyUriSpec requestBodyUriSpec;
+
+  @Mock(answer = Answers.RETURNS_SELF)
+  RestClient.RequestBodySpec requestBodySpec;
+  @Mock
+  RestClient.ResponseSpec responseSpec;
+
+  @InjectMocks
+  BatchConfiguration batchConfiguration;
+
+  @BeforeEach
+  void setUp() {
+    lenient().when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
+    lenient().when(restClientBuilder.build()).thenReturn(mockRestClient);
+    lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
+    lenient().when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
+    lenient().when(requestBodySpec.retrieve()).thenReturn(responseSpec);
+  }
+
+  // --- catalogBulkIngestWriter ---
+
+  @Test
+  void catalogBulkIngestWriter_happyPath_postsChunk() {
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+    product.setName("Product Name");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
+
+  @Test
+  void catalogBulkIngestWriter_nullJobId_skipsChunk() {
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  @Test
+  void catalogBulkIngestWriter_nullLocationId_skipsChunk() {
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  // --- customerBulkIngestWriter ---
+
+  @Test
+  void customerBulkIngestWriter_happyPath_postsChunk() {
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
+    person.setLastName("Doe");
+
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
+
+  @Test
+  void customerBulkIngestWriter_nullJobId_skipsChunk() {
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
+
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-        ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+    assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  @Test
+  void customerBulkIngestWriter_nullLocationId_skipsChunk() {
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
+
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  // --- peopleBulkIngestWriter ---
+
+  @Test
+  void peopleBulkIngestWriter_happyPath_postsChunk() {
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
+    employee.setEmployeeNumber("EMP-001");
+    employee.setHireDate("2020-01-01");
+
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
+
+  @Test
+  void peopleBulkIngestWriter_nullJobId_skipsChunk() {
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
+
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  @Test
+  void peopleBulkIngestWriter_nullLocationId_skipsChunk() {
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
+
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  // --- priceBulkIngestWriter ---
+
+  @Test
+  void priceBulkIngestWriter_happyPath_postsChunk() {
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
+    priceEntry.setMsrp("9.99");
+    priceEntry.setCurrency("USD");
+    priceEntry.setEffectiveFrom("2024-01-01");
+
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
+
+  @Test
+  void priceBulkIngestWriter_nullJobId_skipsChunk() {
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
+
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
+
+  @Test
+  void priceBulkIngestWriter_nullLocationId_skipsChunk() {
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
 
-        assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
 
-    // --- vehicleBulkIngestWriter ---
-
-    @Test
-    void vehicleBulkIngestWriter_happyPath_postsChunk() {
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setAccountId("00000000-0000-0000-0000-000000000001");
-        vehicle.setVin("1HGCM82633A004352");
-        vehicle.setUnitNumber("V-001");
-        vehicle.setDescription("Sedan");
-        vehicle.setYear("2022");
+    assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  // --- vehicleBulkIngestWriter ---
+
+  @Test
+  void vehicleBulkIngestWriter_happyPath_postsChunk() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setAccountId("00000000-0000-0000-0000-000000000001");
+    vehicle.setVin("1HGCM82633A004352");
+    vehicle.setUnitNumber("V-001");
+    vehicle.setDescription("Sedan");
+    vehicle.setYear("2022");
 
-        assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleBulkIngestWriter_nullJobId_skipsChunk() {
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setVin("1HGCM82633A004352");
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleBulkIngestWriter_nullJobId_skipsChunk() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setVin("1HGCM82633A004352");
 
-        assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleBulkIngestWriter_nullLocationId_skipsChunk() {
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setVin("1HGCM82633A004352");
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+  @Test
+  void vehicleBulkIngestWriter_nullLocationId_skipsChunk() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setVin("1HGCM82633A004352");
 
-        assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
 
-    // --- vehicleFitmentBulkIngestWriter ---
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_happyPath_postsChunk() {
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setPartNumberId("12345");
-        fitment.setManufacturerName("Bosch");
-        fitment.setMakeName("Honda");
+  // --- vehicleFitmentBulkIngestWriter ---
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleFitmentBulkIngestWriter_happyPath_postsChunk() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setPartNumberId("12345");
+    fitment.setManufacturerName("Bosch");
+    fitment.setMakeName("Honda");
 
-        assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_nullJobId_skipsChunk() {
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setPartNumberId("12345");
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleFitmentBulkIngestWriter_nullJobId_skipsChunk() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setPartNumberId("12345");
 
-        assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_nullLocationId_skipsChunk() {
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setPartNumberId("12345");
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+  @Test
+  void vehicleFitmentBulkIngestWriter_nullLocationId_skipsChunk() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setPartNumberId("12345");
 
-        assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-        verify(mockRestClient, never()).post();
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
 
-    // --- RestClientException rethrow tests ---
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verify(mockRestClient, never()).post();
+  }
 
-    @Test
-    void catalogBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+  // --- RestClientException rethrow tests ---
 
-        CatalogProductRecord product = new CatalogProductRecord();
-        product.setSku("SKU-001");
+  @Test
+  void catalogBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<CatalogProductRecord> chunk = Chunk.of(product);
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<CatalogProductRecord> chunk = Chunk.of(product);
 
-    @Test
-    void customerBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-        CustomerPersonRecord person = new CustomerPersonRecord();
-        person.setFirstName("John");
+  @Test
+  void customerBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<CustomerPersonRecord> chunk = Chunk.of(person);
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<CustomerPersonRecord> chunk = Chunk.of(person);
 
-    @Test
-    void peopleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-        PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+  @Test
+  void peopleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<PersonRecord> chunk = Chunk.of(employee);
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<PersonRecord> chunk = Chunk.of(employee);
 
-    @Test
-    void priceBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-        BasePriceRecord priceEntry = new BasePriceRecord();
-        priceEntry.setProductId("prod-1");
+  @Test
+  void priceBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<BasePriceRecord> chunk = Chunk.of(priceEntry);
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<BasePriceRecord> chunk = Chunk.of(priceEntry);
 
-    @Test
-    void vehicleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setVin("1HGCM82633A004352");
+  @Test
+  void vehicleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<VehicleBulkRecord> chunk = Chunk.of(vehicle);
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setVin("1HGCM82633A004352");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<VehicleBulkRecord> chunk = Chunk.of(vehicle);
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setManufacturerName("Bosch");
+  @Test
+  void vehicleFitmentBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+    when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
-        Chunk<VehicleFitmentRecord> chunk = Chunk.of(fitment);
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setManufacturerName("Bosch");
 
-        assertThrows(RestClientException.class, () -> writer.write(chunk));
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+    Chunk<VehicleFitmentRecord> chunk = Chunk.of(fitment);
 
-    // --- Malformed UUID skip tests ---
+    assertThrows(RestClientException.class, () -> writer.write(chunk));
+  }
 
-    @Test
-    void catalogBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        CatalogProductRecord product = new CatalogProductRecord();
-        product.setSku("SKU-001");
+  // --- Malformed UUID skip tests ---
 
-        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void catalogBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
 
-        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void customerBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        CustomerPersonRecord person = new CustomerPersonRecord();
-        person.setFirstName("John");
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-        ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void customerBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    CustomerPersonRecord person = new CustomerPersonRecord();
+    person.setFirstName("John");
 
-        assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<CustomerPersonRecord> writer = batchConfiguration.customerBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void peopleBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+    assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-        ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void peopleBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    PersonRecord employee = new PersonRecord();
+    employee.setLegalName("Jane Smith");
 
-        assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void priceBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        BasePriceRecord priceEntry = new BasePriceRecord();
-        priceEntry.setProductId("prod-1");
+    assertThatCode(() -> writer.write(Chunk.of(employee))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-        ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void priceBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    BasePriceRecord priceEntry = new BasePriceRecord();
+    priceEntry.setProductId("prod-1");
 
-        assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<BasePriceRecord> writer = batchConfiguration.priceBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setVin("1HGCM82633A004352");
+    assertThatCode(() -> writer.write(Chunk.of(priceEntry))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setVin("1HGCM82633A004352");
 
-        assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_skipsChunk_onMalformedJobId() {
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setManufacturerName("Bosch");
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleFitmentBulkIngestWriter_skipsChunk_onMalformedJobId() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setManufacturerName("Bosch");
 
-        assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-        verifyNoInteractions(mockRestClient);
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    // --- Type conversion error tests ---
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verifyNoInteractions(mockRestClient);
+  }
 
-    @Test
-    void vehicleBulkIngestWriter_handlesInvalidAccountId_andYear() {
-        VehicleBulkRecord vehicle = new VehicleBulkRecord();
-        vehicle.setAccountId("not-a-uuid");
-        vehicle.setYear("not-a-number");
-        vehicle.setVin("1HGCM82633A004352");
+  // --- Type conversion error tests ---
 
-        ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleBulkIngestWriter_handlesInvalidAccountId_andYear() {
+    VehicleBulkRecord vehicle = new VehicleBulkRecord();
+    vehicle.setAccountId("not-a-uuid");
+    vehicle.setYear("not-a-number");
+    vehicle.setVin("1HGCM82633A004352");
 
-        assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
+    ItemWriter<VehicleBulkRecord> writer = batchConfiguration.vehicleBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
 
-    @Test
-    void vehicleFitmentBulkIngestWriter_handlesInvalidPartNumberId() {
-        VehicleFitmentRecord fitment = new VehicleFitmentRecord();
-        fitment.setPartNumberId("not-a-long");
-        fitment.setManufacturerName("Bosch");
+    assertThatCode(() -> writer.write(Chunk.of(vehicle))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
 
-        ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
-                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+  @Test
+  void vehicleFitmentBulkIngestWriter_handlesInvalidPartNumberId() {
+    VehicleFitmentRecord fitment = new VehicleFitmentRecord();
+    fitment.setPartNumberId("not-a-long");
+    fitment.setManufacturerName("Bosch");
 
-        assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
-        verify(mockRestClient).post();
-    }
+    ItemWriter<VehicleFitmentRecord> writer = batchConfiguration.vehicleFitmentBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(fitment))).doesNotThrowAnyException();
+    verify(mockRestClient).post();
+  }
 }

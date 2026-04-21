@@ -149,13 +149,14 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(catalogBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            JobContext context = resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam,
+                    chunk.size());
             if (context == null) {
                 return;
             }
 
-            BulkIngestRequest<CatalogProductRecord> request =
-                    buildBulkIngestRequest(context, operatorId, new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<CatalogProductRecord> request = buildBulkIngestRequest(context, operatorId,
+                    new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
@@ -248,13 +249,14 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(customerBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            JobContext context = resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam,
+                    chunk.size());
             if (context == null) {
                 return;
             }
 
-            BulkIngestRequest<CustomerPersonRecord> request =
-                    buildBulkIngestRequest(context, operatorId, new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<CustomerPersonRecord> request = buildBulkIngestRequest(context, operatorId,
+                    new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
@@ -352,8 +354,8 @@ public class BatchConfiguration {
                 return;
             }
 
-            BulkIngestRequest<PersonRecord> request =
-                    buildBulkIngestRequest(context, operatorId, new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<PersonRecord> request = buildBulkIngestRequest(context, operatorId,
+                    new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
@@ -451,8 +453,8 @@ public class BatchConfiguration {
                 return;
             }
 
-            BulkIngestRequest<BasePriceRecord> request =
-                    buildBulkIngestRequest(context, operatorId, new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<BasePriceRecord> request = buildBulkIngestRequest(context, operatorId,
+                    new ArrayList<>(chunk.getItems()));
 
             try {
                 client.post()
@@ -493,9 +495,9 @@ public class BatchConfiguration {
                 .reader(vehicleCsvReader)
                 .processor(vehicleItemProcessor)
                 .writer(vehicleBulkIngestWriter)
-            .faultTolerant()
-            .skipLimit(Integer.MAX_VALUE)
-            .skip(Exception.class)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
                 .build();
     }
 
@@ -555,7 +557,8 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            JobContext context = resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam,
+                    chunk.size());
             if (context == null) {
                 return;
             }
@@ -602,9 +605,9 @@ public class BatchConfiguration {
                 .reader(vehicleFitmentCsvReader)
                 .processor(vehicleFitmentItemProcessor)
                 .writer(vehicleFitmentBulkIngestWriter)
-            .faultTolerant()
-            .skipLimit(Integer.MAX_VALUE)
-            .skip(Exception.class)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
                 .build();
     }
 
@@ -663,8 +666,8 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(vehicleFitmentBaseUrl).build();
         return chunk -> {
-            JobContext context =
-                    resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            JobContext context = resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam,
+                    chunk.size());
             if (context == null) {
                 return;
             }
@@ -810,7 +813,8 @@ public class BatchConfiguration {
         }
     }
 
-    private record JobContext(UUID jobId, UUID locationId) {}
+    private record JobContext(UUID jobId, UUID locationId) {
+    }
 
     private record VehicleWriterPayload(
             UUID accountId,
@@ -822,7 +826,8 @@ public class BatchConfiguration {
             Integer year,
             String trim,
             String licensePlate,
-            String licensePlateJurisdiction) {}
+            String licensePlateJurisdiction) {
+    }
 
     private record FitmentWriterPayload(
             Long partNumberId,
@@ -833,5 +838,6 @@ public class BatchConfiguration {
             String vehicleYear,
             String engineType,
             String submodel,
-            String notes) {}
+            String notes) {
+    }
 }
