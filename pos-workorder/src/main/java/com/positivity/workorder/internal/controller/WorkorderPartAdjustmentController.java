@@ -35,194 +35,142 @@ import org.springframework.web.bind.annotation.*;
  * - Query adjustment history
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/{workorderId}/parts")
 @Tag(name = "Workorder Part Adjustments", description = "Part substitutions, returns, and corrections")
 public class WorkorderPartAdjustmentController {
 
-    private final WorkorderPartAdjustmentService adjustmentService;
-    private final WorkorderSubstitutionService substitutionService;
+        private final WorkorderPartAdjustmentService adjustmentService;
+        private final WorkorderSubstitutionService substitutionService;
 
-    public WorkorderPartAdjustmentController(
-            WorkorderPartAdjustmentService adjustmentService, WorkorderSubstitutionService substitutionService) {
-        this.adjustmentService = adjustmentService;
-        this.substitutionService = substitutionService;
-    }
-
-    /**
-     * Substitute one part for another.
-     */
-    @PostMapping("/substitute")
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
-    @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
-    @Operation(
-            summary = "Substitute part",
-            description = "Replace one part with another. Original part preserved for history.")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Part substituted successfully",
-            content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (part already consumed, etc.)")
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    @ApiResponse(responseCode = "409", description = "Idempotency conflict")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Substitute part request",
-            required = true,
-            content =
-                    @Content(
-                            schema = @Schema(implementation = SubstitutePartRequest.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "substitutePart",
-                                            value =
-                                                    "{\"originalPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"substitutePartId\":\"550e8400-e29b-41d4-a716-446655440051\",\"reason\":\"Supplier substitution\",\"notes\":\"Equivalent OEM part\"}")))
-    public ResponseEntity<WorkorderPartAdjustmentEventResponse> substitutePart(
-            @PathVariable @NonNull UUID workorderId,
-            @RequestBody @Valid @NonNull SubstitutePartRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
-
-        try {
-            // Issue #49: Delegate substitute flow to dedicated substitution service.
-            WorkorderPartAdjustmentEventResponse response = substitutionService.substitutePartLine(
-                    workorderId,
-                    request.getOriginalPartId(),
-                    request.getSubstitutePartId(),
-                    request.getReason(),
-                    idempotencyKey,
-                    request.getNotes());
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    /**
-     * Return unused part quantity.
-     */
-    @PostMapping("/returnUnused")
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
-    @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
-    @Operation(
-            summary = "Return unused quantity",
-            description = "Return unused part quantity beyond normal return flow")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Unused quantity returned successfully",
-            content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Return unused quantity request",
-            required = true,
-            content =
-                    @Content(
-                            schema = @Schema(implementation = ReturnPartQuantityRequest.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "returnUnused",
-                                            value =
-                                                    "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":1,\"reason\":\"Unused after repair\",\"notes\":\"Returned to stock\"}")))
-    public ResponseEntity<WorkorderPartAdjustmentEventResponse> returnUnusedQuantity(
-            @PathVariable @NonNull UUID workorderId,
-            @RequestBody @Valid @NonNull ReturnPartQuantityRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
-
-        try {
-            WorkorderPartAdjustmentEventResponse response = adjustmentService.returnUnusedQuantity(
-                    workorderId,
-                    request.getWorkorderPartId(),
-                    request.getQuantity(),
-                    request.getReason(),
-                    idempotencyKey,
-                    request.getNotes());
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    /**
-     * Correct part quantity (administrative correction).
-     */
-    @PostMapping("/correct")
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
-    @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
-    @Operation(summary = "Correct part quantity", description = "Administrative correction for data entry errors")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Part quantity corrected successfully",
-            content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Correct part quantity request",
-            required = true,
-            content =
-                    @Content(
-                            schema = @Schema(implementation = CorrectPartQuantityRequest.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "correctPartQuantity",
-                                            value =
-                                                    "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"newQuantity\":3,\"reason\":\"Data correction\",\"notes\":\"Corrected after inventory count\"}")))
-    public ResponseEntity<WorkorderPartAdjustmentEventResponse> correctPartQuantity(
-            @PathVariable @NonNull UUID workorderId,
-            @RequestBody @Valid @NonNull CorrectPartQuantityRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
-
-        try {
-            WorkorderPartAdjustmentEventResponse response = adjustmentService.correctPartQuantity(
-                    workorderId,
-                    request.getWorkorderPartId(),
-                    request.getNewQuantity(),
-                    request.getReason(),
-                    idempotencyKey,
-                    request.getNotes());
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    /**
-     * Get adjustment history for all parts on a workorder, or a specific part if
-     * partId is provided.
-     */
-    @GetMapping("/adjustments")
-    @PreAuthorize("hasAuthority('workorder:parts:view')")
-    @Operation(
-            summary = "Get part adjustment history",
-            description =
-                    "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Adjustment history retrieved successfully (newest first)",
-            content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    public ResponseEntity<List<WorkorderPartAdjustmentEventResponse>> getAdjustmentHistory(
-            @PathVariable @NonNull UUID workorderId,
-            @RequestParam(required = false)
-                    @Nullable
-                    @Parameter(
-                            description = "Optional part ID to filter history for a specific part",
-                            example = "550e8400-e29b-41d4-a716-446655440050")
-                    UUID partId) {
-
-        List<WorkorderPartAdjustmentEventResponse> responses;
-        if (partId != null) {
-            responses = adjustmentService.getPartAdjustmentHistory(partId);
-        } else {
-            responses = adjustmentService.getAdjustmentHistory(workorderId);
+        public WorkorderPartAdjustmentController(
+                        WorkorderPartAdjustmentService adjustmentService,
+                        WorkorderSubstitutionService substitutionService) {
+                this.adjustmentService = adjustmentService;
+                this.substitutionService = substitutionService;
         }
 
-        return ResponseEntity.ok(responses);
-    }
+        /**
+         * Substitute one part for another.
+         */
+        @PostMapping("/substitute")
+        @PreAuthorize("hasAuthority('workorder:parts:add')")
+        @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
+        @Operation(summary = "Substitute part", description = "Replace one part with another. Original part preserved for history.")
+        @ApiResponse(responseCode = "201", description = "Part substituted successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request (part already consumed, etc.)")
+        @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+        @ApiResponse(responseCode = "409", description = "Idempotency conflict")
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Substitute part request", required = true, content = @Content(schema = @Schema(implementation = SubstitutePartRequest.class), examples = @ExampleObject(name = "substitutePart", value = "{\"originalPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"substitutePartId\":\"550e8400-e29b-41d4-a716-446655440051\",\"reason\":\"Supplier substitution\",\"notes\":\"Equivalent OEM part\"}")))
+        public ResponseEntity<WorkorderPartAdjustmentEventResponse> substitutePart(
+                        @PathVariable @NonNull UUID workorderId,
+                        @RequestBody @Valid @NonNull SubstitutePartRequest request,
+                        @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
+
+                try {
+                        // Issue #49: Delegate substitute flow to dedicated substitution service.
+                        WorkorderPartAdjustmentEventResponse response = substitutionService.substitutePartLine(
+                                        workorderId,
+                                        request.getOriginalPartId(),
+                                        request.getSubstitutePartId(),
+                                        request.getReason(),
+                                        idempotencyKey,
+                                        request.getNotes());
+
+                        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                } catch (NoSuchElementException e) {
+                        return ResponseEntity.notFound().build();
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                        return ResponseEntity.badRequest().build();
+                }
+        }
+
+        /**
+         * Return unused part quantity.
+         */
+        @PostMapping("/returnUnused")
+        @PreAuthorize("hasAuthority('workorder:parts:add')")
+        @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
+        @Operation(summary = "Return unused quantity", description = "Return unused part quantity beyond normal return flow")
+        @ApiResponse(responseCode = "201", description = "Unused quantity returned successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
+        @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Return unused quantity request", required = true, content = @Content(schema = @Schema(implementation = ReturnPartQuantityRequest.class), examples = @ExampleObject(name = "returnUnused", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":1,\"reason\":\"Unused after repair\",\"notes\":\"Returned to stock\"}")))
+        public ResponseEntity<WorkorderPartAdjustmentEventResponse> returnUnusedQuantity(
+                        @PathVariable @NonNull UUID workorderId,
+                        @RequestBody @Valid @NonNull ReturnPartQuantityRequest request,
+                        @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
+
+                try {
+                        WorkorderPartAdjustmentEventResponse response = adjustmentService.returnUnusedQuantity(
+                                        workorderId,
+                                        request.getWorkorderPartId(),
+                                        request.getQuantity(),
+                                        request.getReason(),
+                                        idempotencyKey,
+                                        request.getNotes());
+
+                        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                } catch (NoSuchElementException e) {
+                        return ResponseEntity.notFound().build();
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                        return ResponseEntity.badRequest().build();
+                }
+        }
+
+        /**
+         * Correct part quantity (administrative correction).
+         */
+        @PostMapping("/correct")
+        @PreAuthorize("hasAuthority('workorder:parts:add')")
+        @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
+        @Operation(summary = "Correct part quantity", description = "Administrative correction for data entry errors")
+        @ApiResponse(responseCode = "201", description = "Part quantity corrected successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request")
+        @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Correct part quantity request", required = true, content = @Content(schema = @Schema(implementation = CorrectPartQuantityRequest.class), examples = @ExampleObject(name = "correctPartQuantity", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"newQuantity\":3,\"reason\":\"Data correction\",\"notes\":\"Corrected after inventory count\"}")))
+        public ResponseEntity<WorkorderPartAdjustmentEventResponse> correctPartQuantity(
+                        @PathVariable @NonNull UUID workorderId,
+                        @RequestBody @Valid @NonNull CorrectPartQuantityRequest request,
+                        @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
+
+                try {
+                        WorkorderPartAdjustmentEventResponse response = adjustmentService.correctPartQuantity(
+                                        workorderId,
+                                        request.getWorkorderPartId(),
+                                        request.getNewQuantity(),
+                                        request.getReason(),
+                                        idempotencyKey,
+                                        request.getNotes());
+
+                        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                } catch (NoSuchElementException e) {
+                        return ResponseEntity.notFound().build();
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                        return ResponseEntity.badRequest().build();
+                }
+        }
+
+        /**
+         * Get adjustment history for all parts on a workorder, or a specific part if
+         * partId is provided.
+         */
+        @GetMapping("/adjustments")
+        @PreAuthorize("hasAuthority('workorder:parts:view')")
+        @Operation(summary = "Get part adjustment history", description = "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder")
+        @ApiResponse(responseCode = "200", description = "Adjustment history retrieved successfully (newest first)", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
+        @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+        public ResponseEntity<List<WorkorderPartAdjustmentEventResponse>> getAdjustmentHistory(
+                        @PathVariable @NonNull UUID workorderId,
+                        @RequestParam(required = false) @Nullable @Parameter(description = "Optional part ID to filter history for a specific part", example = "550e8400-e29b-41d4-a716-446655440050") UUID partId) {
+
+                List<WorkorderPartAdjustmentEventResponse> responses;
+                if (partId != null) {
+                        responses = adjustmentService.getPartAdjustmentHistory(partId);
+                } else {
+                        responses = adjustmentService.getAdjustmentHistory(workorderId);
+                }
+
+                return ResponseEntity.ok(responses);
+        }
 }

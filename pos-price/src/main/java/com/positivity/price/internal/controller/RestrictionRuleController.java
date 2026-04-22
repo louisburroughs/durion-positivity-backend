@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Restriction Rules", description = "CRUD operations for price restriction rules")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price/restrictions/rules")
 public class RestrictionRuleController {
 

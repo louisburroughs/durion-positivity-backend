@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 @Slf4j
@@ -36,28 +37,14 @@ public class WorkorderDetailController {
 
     @GetMapping("/{workorderId}/detail")
     @PreAuthorize("isAuthenticated()")
-    @Operation(
-            summary = "Get workorder detail with role-based visibility",
-            description =
-                    "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
-                            + "Capability flags indicate which actions the user can perform.",
-            responses = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Workorder detail retrieved successfully",
-                        content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @Operation(summary = "Get workorder detail with role-based visibility", description = "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
+            + "Capability flags indicate which actions the user can perform.", responses = {
+                    @ApiResponse(responseCode = "200", description = "Workorder detail retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "Workorder not found")
             })
     public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
-            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
-                    @PathVariable
-                    @NonNull
-                    UUID workorderId,
-            @Parameter(
-                            description = "User authorities (comma-separated)",
-                            example = "workorder:workorder:view,workorder:financials:view")
-                    @RequestHeader(value = "X-Authorities", required = false)
-                    String authorities) {
+            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
+            @Parameter(description = "User authorities (comma-separated)", example = "workorder:workorder:view,workorder:financials:view") @RequestHeader(value = "X-Authorities", required = false) String authorities) {
 
         // Extract authorities from header
         Set<String> userAuthorities = extractAuthorities(authorities);
@@ -83,8 +70,7 @@ public class WorkorderDetailController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

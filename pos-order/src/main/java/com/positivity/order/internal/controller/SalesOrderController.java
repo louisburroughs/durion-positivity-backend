@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/orders")
 @RequiredArgsConstructor
 @Slf4j
@@ -91,14 +92,13 @@ public class SalesOrderController {
     @EmitEvent(id = "ORDER_LINK_SOURCE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> linkSource(
             @PathVariable UUID orderId, @Valid @RequestBody LinkSourceRequest request) {
-        SalesOrderSummary updated =
-                salesOrderService.linkSource(orderId, request.getSourceType(), request.getSourceId());
+        SalesOrderSummary updated = salesOrderService.linkSource(orderId, request.getSourceType(),
+                request.getSourceId());
         return ResponseEntity.ok(toResponse(updated));
     }
 
     private SalesOrderResponse toResponse(SalesOrderSummary summary) {
-        List<SalesOrderLineResponse> lines =
-                summary.lines().stream().map(this::toLineResponse).toList();
+        List<SalesOrderLineResponse> lines = summary.lines().stream().map(this::toLineResponse).toList();
         return SalesOrderResponse.builder()
                 .orderId(summary.orderId())
                 .customerId(summary.customerId())

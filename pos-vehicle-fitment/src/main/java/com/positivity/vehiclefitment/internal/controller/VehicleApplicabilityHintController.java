@@ -32,20 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
  * REST controller for managing vehicle applicability hints.
  */
 @Slf4j
-@Tag(
-        name = "Vehicle Applicability Hints",
-        description = "Endpoints for managing product fitment hints and filtering products by vehicle attributes")
+@Tag(name = "Vehicle Applicability Hints", description = "Endpoints for managing product fitment hints and filtering products by vehicle attributes")
 @RequiredArgsConstructor
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicle-fitment/hints")
 public class VehicleApplicabilityHintController {
 
     private final VehicleApplicabilityHintService hintService;
 
-    @Operation(
-            summary = "Create a vehicle applicability hint",
-            description = "Create a new hint with fitment tags for a product")
+    @Operation(summary = "Create a vehicle applicability hint", description = "Create a new hint with fitment tags for a product")
     @ApiResponse(responseCode = "201", description = "Hint created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Product not found")
@@ -61,9 +58,7 @@ public class VehicleApplicabilityHintController {
         }
     }
 
-    @Operation(
-            summary = "Update a vehicle applicability hint",
-            description = "Update the fitment tags for an existing hint")
+    @Operation(summary = "Update a vehicle applicability hint", description = "Update the fitment tags for an existing hint")
     @ApiResponse(responseCode = "200", description = "Hint updated successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Hint not found")
@@ -81,9 +76,7 @@ public class VehicleApplicabilityHintController {
         }
     }
 
-    @Operation(
-            summary = "Delete a vehicle applicability hint",
-            description = "Remove a hint and all its associated tags")
+    @Operation(summary = "Delete a vehicle applicability hint", description = "Remove a hint and all its associated tags")
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
     @ApiResponse(responseCode = "404", description = "Hint not found")
     @EmitEvent(id = "VEHICLE_HINT_DELETED", apiVersion = "1")
@@ -114,9 +107,7 @@ public class VehicleApplicabilityHintController {
         }
     }
 
-    @Operation(
-            summary = "Get hints by product ID",
-            description = "Retrieve all hints associated with a specific product")
+    @Operation(summary = "Get hints by product ID", description = "Retrieve all hints associated with a specific product")
     @ApiResponse(responseCode = "200", description = "Hints retrieved successfully")
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<HintResponse>> getHintsByProductId(
@@ -125,9 +116,7 @@ public class VehicleApplicabilityHintController {
         return ResponseEntity.ok(responses);
     }
 
-    @Operation(
-            summary = "Filter products by vehicle attributes",
-            description = "Find products that match the provided vehicle attributes")
+    @Operation(summary = "Filter products by vehicle attributes", description = "Find products that match the provided vehicle attributes")
     @ApiResponse(responseCode = "200", description = "Products filtered successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @EmitEvent(id = "FITMENT_PRODUCTS_FILTER", apiVersion = "1")
@@ -141,8 +130,7 @@ public class VehicleApplicabilityHintController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

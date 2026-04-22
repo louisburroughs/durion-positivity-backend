@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
@@ -121,8 +122,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
-                    String vin) {
+            @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable String vin) {
         try {
             return vehicleLegacyService
                     .getVehicleByVin(vin)
@@ -140,8 +140,7 @@ public class VehicleController {
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> updateVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable
-                    String vin,
+            @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable String vin,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
         try {
             return vehicleLegacyService
@@ -160,8 +159,7 @@ public class VehicleController {
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/vin/{vin}")
     public ResponseEntity<Void> deleteVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable
-                    String vin) {
+            @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable String vin) {
         try {
             if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
                 return ResponseEntity.notFound().build();

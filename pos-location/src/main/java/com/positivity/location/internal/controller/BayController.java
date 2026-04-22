@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Bay API", description = "Operations for managing bays within locations")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/locations/{locationId}/bays")
 public class BayController {
     private final BayService bayService;
@@ -38,9 +39,7 @@ public class BayController {
         this.bayService = bayService;
     }
 
-    @Operation(
-            summary = "List bays",
-            description = "List bays for a location with optional status and bayType filters.")
+    @Operation(summary = "List bays", description = "List bays for a location with optional status and bayType filters.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
     @PreAuthorize("hasAuthority('location:bay:read')")
     @GetMapping

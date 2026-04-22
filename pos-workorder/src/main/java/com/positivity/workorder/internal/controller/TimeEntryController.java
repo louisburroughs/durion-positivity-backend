@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Time Entry API", description = "Endpoints for approving and rejecting submitted time entries")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/timeEntries")
 @RequiredArgsConstructor
 public class TimeEntryController {

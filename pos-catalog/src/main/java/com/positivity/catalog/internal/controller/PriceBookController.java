@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/price-books")
 @Tag(name = "Price Book API", description = "Manage price books, pricing rules, and resolution")
 public class PriceBookController {

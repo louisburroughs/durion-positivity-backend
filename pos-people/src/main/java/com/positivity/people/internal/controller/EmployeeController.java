@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/employees")
 @RequiredArgsConstructor
 @Tag(name = "Employee API", description = "Employee profile and offboarding operations")
@@ -34,9 +35,7 @@ public class EmployeeController {
 
     @PostMapping
     @EmitEvent(id = "PEOPLE_EMPLOYEE_CREATE", apiVersion = "1")
-    @Operation(
-            summary = "Create employee profile",
-            description = "Creates a new employee profile with identity, employment, and role-related attributes.")
+    @Operation(summary = "Create employee profile", description = "Creates a new employee profile with identity, employment, and role-related attributes.")
     @ApiResponse(responseCode = "201", description = "Employee created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "409", description = "Duplicate employee")
@@ -49,9 +48,7 @@ public class EmployeeController {
 
     @PutMapping("/{employeeId}")
     @EmitEvent(id = "PEOPLE_EMPLOYEE_UPDATE", apiVersion = "1")
-    @Operation(
-            summary = "Update employee profile",
-            description = "Updates an existing employee profile using the provided employee ID.")
+    @Operation(summary = "Update employee profile", description = "Updates an existing employee profile using the provided employee ID.")
     @ApiResponse(responseCode = "200", description = "Employee updated")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Employee not found")
@@ -75,9 +72,7 @@ public class EmployeeController {
 
     @PostMapping("/{employeeId}/disable")
     @EmitEvent(id = "PEOPLE_EMPLOYEE_DISABLE", apiVersion = "1")
-    @Operation(
-            summary = "Disable employee profile",
-            description = "Disables an employee profile and records optional disable metadata.")
+    @Operation(summary = "Disable employee profile", description = "Disables an employee profile and records optional disable metadata.")
     @ApiResponse(responseCode = "200", description = "Employee disabled")
     @ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
     @ApiResponse(responseCode = "404", description = "Employee not found")

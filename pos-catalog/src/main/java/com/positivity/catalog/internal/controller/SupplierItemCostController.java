@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/supplier-costs")
 @Tag(name = "Supplier Item Cost API", description = "Manage supplier item costs with volume tiers")
 public class SupplierItemCostController {

@@ -20,40 +20,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/allocations/shortages")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('inventory:shortages:resolve')")
 @Tag(name = "Shortage Resolution", description = "Shortage resolution recommendation endpoints")
 public class ShortageController {
 
-    private final ShortageResolutionService shortageResolutionService;
+        private final ShortageResolutionService shortageResolutionService;
 
-    @PostMapping("/resolve")
-    @EmitEvent(id = "INVENTORY_SHORTAGE_RESOLVE", apiVersion = "1")
-    @Operation(
-            summary = "Resolve shortage",
-            description = "Returns candidate shortage resolution options from substitutes and external availability")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Resolution options returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ShortageResolutionResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Validation failure",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "User lacks required shortage resolution authority",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "422",
-            description = "Unable to resolve shortage under current constraints",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ShortageResolutionResponse> resolveShortage(
-            @Valid @RequestBody ShortageResolutionRequest request) {
-        return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
-    }
+        @PostMapping("/resolve")
+        @EmitEvent(id = "INVENTORY_SHORTAGE_RESOLVE", apiVersion = "1")
+        @Operation(summary = "Resolve shortage", description = "Returns candidate shortage resolution options from substitutes and external availability")
+        @ApiResponse(responseCode = "200", description = "Resolution options returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ShortageResolutionResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "403", description = "User lacks required shortage resolution authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "422", description = "Unable to resolve shortage under current constraints", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<ShortageResolutionResponse> resolveShortage(
+                        @Valid @RequestBody ShortageResolutionRequest request) {
+                return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
+        }
 }

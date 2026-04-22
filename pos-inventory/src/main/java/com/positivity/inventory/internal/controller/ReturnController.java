@@ -21,37 +21,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/returns")
 @RequiredArgsConstructor
 @Tag(name = "Returns", description = "Inventory return-to-stock endpoints")
 public class ReturnController {
 
-    private final ReturnService returnService;
+        private final ReturnService returnService;
 
-    @PostMapping
-    @EmitEvent(id = "INVENTORY_RETURN_TO_STOCK_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
-    @Operation(
-            summary = "Return items to stock",
-            description = "Returns issued parts to inventory and records resulting return movement")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Return recorded",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Validation failure",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "User lacks required return authority",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "422",
-            description = "Return quantity exceeds allowable amount",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ReturnResponse> returnItemsToStock(@Valid @RequestBody ReturnItemsRequest request) {
-        ReturnResponse response = returnService.returnItemsToStock(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+        @PostMapping
+        @EmitEvent(id = "INVENTORY_RETURN_TO_STOCK_CREATE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+        @Operation(summary = "Return items to stock", description = "Returns issued parts to inventory and records resulting return movement")
+        @ApiResponse(responseCode = "201", description = "Return recorded", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "403", description = "User lacks required return authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "422", description = "Return quantity exceeds allowable amount", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<ReturnResponse> returnItemsToStock(@Valid @RequestBody ReturnItemsRequest request) {
+                ReturnResponse response = returnService.returnItemsToStock(request);
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
 }

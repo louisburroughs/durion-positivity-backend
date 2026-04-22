@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 public class PersonController {
@@ -48,9 +49,7 @@ public class PersonController {
     @GetMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:view')")
     public ResponseEntity<Person> getPersonById(
-            @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000")
-                    @PathVariable
-                    UUID personId) {
+            @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         return personService
                 .getPersonById(personId)
                 .map(ResponseEntity::ok)
@@ -86,9 +85,7 @@ public class PersonController {
     @PutMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:edit')")
     public ResponseEntity<Person> updatePerson(
-            @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000")
-                    @PathVariable
-                    UUID personId,
+            @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId,
             @Parameter(description = "Updated person object") @Valid @RequestBody Person person) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -105,9 +102,7 @@ public class PersonController {
     @DeleteMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:delete')")
     public ResponseEntity<Void> deletePerson(
-            @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000")
-                    @PathVariable
-                    UUID personId) {
+            @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }

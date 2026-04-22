@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Controller for promotion offer lifecycle operations. Issue: #97 */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/promotions/offers")
 @Tag(name = "Promotion Offers", description = "Promotion offer lifecycle operations")
 @SecurityRequirement(name = "BearerAuth")
@@ -40,9 +41,7 @@ public class PromotionOfferController {
     @PostMapping
     @EmitEvent(id = "PROMOTION_OFFER_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('Promotion:Manage')")
-    @Operation(
-            summary = "Create promotion offer",
-            description = "Creates a new promotion offer with code, lifecycle settings, and discount policy.")
+    @Operation(summary = "Create promotion offer", description = "Creates a new promotion offer with code, lifecycle settings, and discount policy.")
     @ApiResponse(responseCode = "201", description = "Promotion offer created.")
     @ApiResponse(responseCode = "400", description = "Invalid promotion offer request.")
     @ApiResponse(responseCode = "409", description = "Promotion code already exists.")
@@ -56,9 +55,7 @@ public class PromotionOfferController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('Promotion:View')")
-    @Operation(
-            summary = "Get promotion offer by ID",
-            description = "Retrieves a promotion offer using its unique identifier.")
+    @Operation(summary = "Get promotion offer by ID", description = "Retrieves a promotion offer using its unique identifier.")
     @ApiResponse(responseCode = "200", description = "Promotion offer returned.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
@@ -69,9 +66,7 @@ public class PromotionOfferController {
 
     @GetMapping("/by-code/{promoCode}")
     @PreAuthorize("hasAuthority('Promotion:View')")
-    @Operation(
-            summary = "Get promotion offer by code",
-            description = "Retrieves a promotion offer using its promotion code.")
+    @Operation(summary = "Get promotion offer by code", description = "Retrieves a promotion offer using its promotion code.")
     @ApiResponse(responseCode = "200", description = "Promotion offer returned.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
@@ -83,9 +78,7 @@ public class PromotionOfferController {
     @PatchMapping("/{id}/activate")
     @EmitEvent(id = "PROMOTION_OFFER_ACTIVATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('Promotion:Manage')")
-    @Operation(
-            summary = "Activate promotion offer",
-            description = "Activates a promotion offer so it becomes eligible for application.")
+    @Operation(summary = "Activate promotion offer", description = "Activates a promotion offer so it becomes eligible for application.")
     @ApiResponse(responseCode = "200", description = "Promotion offer activated.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "409", description = "Promotion offer cannot be activated in current state.")
@@ -98,9 +91,7 @@ public class PromotionOfferController {
     @PatchMapping("/{id}/deactivate")
     @EmitEvent(id = "PROMOTION_OFFER_DEACTIVATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('Promotion:Manage')")
-    @Operation(
-            summary = "Deactivate promotion offer",
-            description = "Deactivates a promotion offer so it is no longer eligible for application.")
+    @Operation(summary = "Deactivate promotion offer", description = "Deactivates a promotion offer so it is no longer eligible for application.")
     @ApiResponse(responseCode = "200", description = "Promotion offer deactivated.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
@@ -112,10 +103,7 @@ public class PromotionOfferController {
     @PostMapping("/apply")
     @EmitEvent(id = "PROMOTION_OFFER_APPLY", apiVersion = "1")
     @PreAuthorize("hasAuthority('Promotion:Apply')")
-    @Operation(
-            summary = "Apply promotion offer during estimate pricing",
-            description =
-                    "Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.")
+    @Operation(summary = "Apply promotion offer during estimate pricing", description = "Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.")
     @ApiResponse(responseCode = "200", description = "Promotion offer applied.")
     @ApiResponse(responseCode = "400", description = "Invalid promotion application request.")
     @ApiResponse(responseCode = "404", description = "Promotion offer not found or not eligible.")

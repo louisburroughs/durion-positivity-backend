@@ -20,25 +20,21 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Shop API", description = "Endpoints for shop management, technicians, and services")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class ShopController {
 
     private final ShopService shopService;
 
-    @Operation(
-            summary = "Get technician's person details",
-            description = "Retrieve the person details for a technician by technician ID.")
+    @Operation(summary = "Get technician's person details", description = "Retrieve the person details for a technician by technician ID.")
     @ApiResponse(responseCode = "200", description = "Person details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Technician or person not found.")
     @GetMapping("/{locationId}/technicians/{personId}/person")
     @PreAuthorize("hasAuthority('shop:location:view')")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
-            @Parameter(description = "ID of the shop", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable
-                    UUID locationId,
-            @Parameter(description = "ID of the technician", example = "123e4567-e89b-12d3-a456-426614174001")
-                    @PathVariable
-                    UUID personId) {
+            @Parameter(description = "ID of the shop", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID locationId,
+            @Parameter(description = "ID of the technician", example = "123e4567-e89b-12d3-a456-426614174001") @PathVariable UUID personId) {
         PersonDTO person = shopService.getTechnicianPerson(locationId, personId);
         if (person == null) {
             return ResponseEntity.notFound().build();
@@ -46,9 +42,7 @@ public class ShopController {
         return ResponseEntity.ok(person);
     }
 
-    @Operation(
-            summary = "Get shop service details",
-            description = "Retrieve the details of a shop service by service ID.")
+    @Operation(summary = "Get shop service details", description = "Retrieve the details of a shop service by service ID.")
     @ApiResponse(responseCode = "200", description = "Service details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Service not found.")
     @GetMapping("/{locationId}/services/{serviceId}/details")

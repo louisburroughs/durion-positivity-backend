@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Vehicle Registry API", description = "Operations for creating and maintaining vehicle registry records")
 @RequiredArgsConstructor
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @Validated
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicle-registry")
@@ -50,8 +51,7 @@ public class VehicleRegistryController {
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<VehicleResponse> createVehicle(
-            @Parameter(description = "Vehicle creation request", required = true) @Valid @NotNull @RequestBody
-                    CreateVehicleRequest request) {
+            @Parameter(description = "Vehicle creation request", required = true) @Valid @NotNull @RequestBody CreateVehicleRequest request) {
         try {
             VehicleResponse response = vehicleService.createVehicle(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -78,8 +78,7 @@ public class VehicleRegistryController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleResponse> getVehicleByVin(
-            @Parameter(description = "Vehicle VIN", required = true) @PathVariable @NotBlank @Size(min = 17, max = 17)
-                    String vin) {
+            @Parameter(description = "Vehicle VIN", required = true) @PathVariable @NotBlank @Size(min = 17, max = 17) String vin) {
         return vehicleService
                 .getVehicleByVin(vin)
                 .map(ResponseEntity::ok)
@@ -94,8 +93,7 @@ public class VehicleRegistryController {
     @PutMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> updateVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId,
-            @Parameter(description = "Vehicle update request", required = true) @Valid @NotNull @RequestBody
-                    UpdateVehicleRequest request) {
+            @Parameter(description = "Vehicle update request", required = true) @Valid @NotNull @RequestBody UpdateVehicleRequest request) {
         try {
             VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
             return ResponseEntity.ok(response);

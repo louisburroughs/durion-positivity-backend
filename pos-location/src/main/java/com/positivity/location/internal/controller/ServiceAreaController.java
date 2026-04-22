@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "Service Area API", description = "Operations for managing service areas")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/service-areas")
 @RequiredArgsConstructor
 public class ServiceAreaController {

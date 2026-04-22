@@ -26,53 +26,41 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Promotion Redemptions", description = "Operations for recording and querying promotion redemptions")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/promotions/redemptions")
 public class PromotionRedemptionController {
 
-    private final PromotionRedemptionService promotionRedemptionService;
+        private final PromotionRedemptionService promotionRedemptionService;
 
-    public PromotionRedemptionController(PromotionRedemptionService promotionRedemptionService) {
-        this.promotionRedemptionService = promotionRedemptionService;
-    }
+        public PromotionRedemptionController(PromotionRedemptionService promotionRedemptionService) {
+                this.promotionRedemptionService = promotionRedemptionService;
+        }
 
-    @Operation(summary = "Record promotion redemption", description = "Record a promotion redemption idempotently")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "201",
-                        description = "Promotion redemption recorded",
-                        content = @Content(schema = @Schema(implementation = PromotionRedemptionResponse.class))),
-                @ApiResponse(responseCode = "409", description = "Duplicate redemption", content = @Content),
-                @ApiResponse(
-                        responseCode = "403",
-                        description = "Forbidden - insufficient permissions",
-                        content = @Content)
-            })
-    @PostMapping
-    @PreAuthorize("hasAuthority('Promotion:RecordRedemption')")
-    @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
-    public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
-            @Valid @RequestBody RecordRedemptionRequest request) {
-        PromotionRedemptionResponse response = promotionRedemptionService.recordRedemption(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+        @Operation(summary = "Record promotion redemption", description = "Record a promotion redemption idempotently")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "201", description = "Promotion redemption recorded", content = @Content(schema = @Schema(implementation = PromotionRedemptionResponse.class))),
+                        @ApiResponse(responseCode = "409", description = "Duplicate redemption", content = @Content),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        })
+        @PostMapping
+        @PreAuthorize("hasAuthority('Promotion:RecordRedemption')")
+        @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
+        public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
+                        @Valid @RequestBody RecordRedemptionRequest request) {
+                PromotionRedemptionResponse response = promotionRedemptionService.recordRedemption(request);
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
 
-    @Operation(
-            summary = "Get redemptions by customer",
-            description = "Retrieve all recorded redemptions for a customer")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Promotion redemptions returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class))))
-    @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
-    @GetMapping("/by-customer/{customerId}")
-    @PreAuthorize("hasAuthority('Promotion:ViewRedemption')")
-    @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")
-    public ResponseEntity<List<PromotionRedemptionResponse>> getRedemptionsByCustomer(@PathVariable UUID customerId) {
-        List<PromotionRedemptionResponse> response = promotionRedemptionService.getRedemptionsByCustomer(customerId);
-        return ResponseEntity.ok(response);
-    }
+        @Operation(summary = "Get redemptions by customer", description = "Retrieve all recorded redemptions for a customer")
+        @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class))))
+        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @GetMapping("/by-customer/{customerId}")
+        @PreAuthorize("hasAuthority('Promotion:ViewRedemption')")
+        @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")
+        public ResponseEntity<List<PromotionRedemptionResponse>> getRedemptionsByCustomer(
+                        @PathVariable UUID customerId) {
+                List<PromotionRedemptionResponse> response = promotionRedemptionService
+                                .getRedemptionsByCustomer(customerId);
+                return ResponseEntity.ok(response);
+        }
 }

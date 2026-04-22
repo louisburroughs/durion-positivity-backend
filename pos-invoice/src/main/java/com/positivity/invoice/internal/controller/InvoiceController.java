@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/invoices")
 @Tag(name = "Invoice", description = "Invoice generation and lifecycle management")
 @PreAuthorize("hasAuthority('invoice:manage')")
@@ -60,9 +61,7 @@ public class InvoiceController {
 
     @PostMapping("/{invoiceId}/adjustments")
     @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")
-    @Operation(
-            summary = "Apply invoice adjustment",
-            description = "Apply discount, fee, or correction to a draft invoice")
+    @Operation(summary = "Apply invoice adjustment", description = "Apply discount, fee, or correction to a draft invoice")
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
     public ResponseEntity<InvoiceDetailsResponse> applyAdjustment(
             @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull AdjustmentRequest request) {
@@ -71,10 +70,7 @@ public class InvoiceController {
 
     @PostMapping("/{invoiceId}/finalize")
     @EmitEvent(id = "INVOICE_FINALIZED", apiVersion = "1")
-    @Operation(
-            summary = "Finalize invoice",
-            description =
-                    "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
+    @Operation(summary = "Finalize invoice", description = "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
     @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
@@ -84,10 +80,7 @@ public class InvoiceController {
 
     @PostMapping("/{invoiceId}/revert")
     @EmitEvent(id = "INVOICE_DRAFT_REVERT", apiVersion = "1")
-    @Operation(
-            summary = "Revert finalized invoice",
-            description =
-                    "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
+    @Operation(summary = "Revert finalized invoice", description = "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
     @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
     @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> revertInvoice(

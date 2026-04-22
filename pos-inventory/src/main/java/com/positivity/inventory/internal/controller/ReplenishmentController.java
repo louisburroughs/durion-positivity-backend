@@ -24,59 +24,39 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/replenishment")
 @RequiredArgsConstructor
 @Tag(name = "Replenishment", description = "Replenishment task and policy endpoints")
 public class ReplenishmentController {
 
-    private final ReplenishmentService replenishmentService;
+        private final ReplenishmentService replenishmentService;
 
-    @GetMapping("/tasks")
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @Operation(
-            summary = "List replenishment tasks",
-            description = "Returns replenishment tasks that should be fulfilled.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Replenishment tasks returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = ReplenishmentTaskResponse.class))))
-    public ResponseEntity<List<ReplenishmentTaskResponse>> getReplenishmentTasks() {
-        return ResponseEntity.ok(replenishmentService.getReplenishmentTasks());
-    }
+        @GetMapping("/tasks")
+        @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+        @Operation(summary = "List replenishment tasks", description = "Returns replenishment tasks that should be fulfilled.")
+        @ApiResponse(responseCode = "200", description = "Replenishment tasks returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReplenishmentTaskResponse.class))))
+        public ResponseEntity<List<ReplenishmentTaskResponse>> getReplenishmentTasks() {
+                return ResponseEntity.ok(replenishmentService.getReplenishmentTasks());
+        }
 
-    @GetMapping("/policies")
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @Operation(summary = "List replenishment policies", description = "Returns configured replenishment policies.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Replenishment policies returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
-    public ResponseEntity<List<ReplenishmentPolicyResponse>> getReplenishmentPolicies() {
-        return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies());
-    }
+        @GetMapping("/policies")
+        @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+        @Operation(summary = "List replenishment policies", description = "Returns configured replenishment policies.")
+        @ApiResponse(responseCode = "200", description = "Replenishment policies returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
+        public ResponseEntity<List<ReplenishmentPolicyResponse>> getReplenishmentPolicies() {
+                return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies());
+        }
 
-    @PostMapping("/policies")
-    @EmitEvent(id = "INVENTORY_REPLENISHMENT_POLICY_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
-    @Operation(
-            summary = "Create replenishment policy",
-            description = "Creates a replenishment policy used to generate replenishment tasks.")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Replenishment policy created",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    public ResponseEntity<ReplenishmentPolicyResponse> createReplenishmentPolicy(
-            @Valid @RequestBody CreateReplenishmentPolicyRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(replenishmentService.createReplenishmentPolicy(request));
-    }
+        @PostMapping("/policies")
+        @EmitEvent(id = "INVENTORY_REPLENISHMENT_POLICY_CREATE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+        @Operation(summary = "Create replenishment policy", description = "Creates a replenishment policy used to generate replenishment tasks.")
+        @ApiResponse(responseCode = "201", description = "Replenishment policy created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Validation failure")
+        public ResponseEntity<ReplenishmentPolicyResponse> createReplenishmentPolicy(
+                        @Valid @RequestBody CreateReplenishmentPolicyRequest request) {
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(replenishmentService.createReplenishmentPolicy(request));
+        }
 }

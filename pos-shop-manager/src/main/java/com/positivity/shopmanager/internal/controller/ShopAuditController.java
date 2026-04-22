@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * records.
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/shop/audit")
 @RequiredArgsConstructor
 public class ShopAuditController {

@@ -32,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @Tag(name = "Mobile Unit API", description = "Operations for managing mobile units within locations")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/mobile-units")
 @RequiredArgsConstructor
 public class MobileUnitController {
@@ -106,8 +107,7 @@ public class MobileUnitController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

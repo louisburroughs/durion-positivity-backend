@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #50
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price/snapshots")
 @Tag(name = "Pricing Snapshots", description = "Read operations for immutable pricing snapshots")
 public class PricingSnapshotController {
@@ -37,9 +38,7 @@ public class PricingSnapshotController {
      */
     @GetMapping("/{snapshotId}")
     @PreAuthorize("isAuthenticated()")
-    @Operation(
-            summary = "Get pricing snapshot by ID",
-            description = "Retrieves an immutable pricing snapshot using its snapshot identifier.")
+    @Operation(summary = "Get pricing snapshot by ID", description = "Retrieves an immutable pricing snapshot using its snapshot identifier.")
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned.")
     @ApiResponse(responseCode = "404", description = "Pricing snapshot not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")

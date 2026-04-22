@@ -46,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/persons")
 @RequiredArgsConstructor
 @Tag(name = "CRM Persons", description = "Individual person management APIs")
@@ -72,13 +73,10 @@ public class CrmPersonController {
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
     @Operation(summary = "Create a new person", description = "Creates an individual person record in the CRM system")
     @ApiResponses({
-        @ApiResponse(
-                responseCode = "201",
-                description = "Person created successfully",
-                content = @Content(schema = @Schema(implementation = CreatePersonResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Invalid request - validation failed"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+            @ApiResponse(responseCode = "201", description = "Person created successfully", content = @Content(schema = @Schema(implementation = CreatePersonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request - validation failed"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<CreatePersonResponse> createPerson(
             @Valid @RequestBody CreatePersonRequest request, Principal principal) {
@@ -104,17 +102,12 @@ public class CrmPersonController {
     @GetMapping("/{personId}")
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_GET", apiVersion = "1")
-    @Operation(
-            summary = "Get a person by ID",
-            description = "Retrieves an individual person record by their unique identifier")
+    @Operation(summary = "Get a person by ID", description = "Retrieves an individual person record by their unique identifier")
     @ApiResponses({
-        @ApiResponse(
-                responseCode = "200",
-                description = "Person found",
-                content = @Content(schema = @Schema(implementation = GetPersonResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Person not found"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+            @ApiResponse(responseCode = "200", description = "Person found", content = @Content(schema = @Schema(implementation = GetPersonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Person not found"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<GetPersonResponse> getPerson(
             @Parameter(description = "The person's unique identifier") @PathVariable UUID personId) {
@@ -140,9 +133,9 @@ public class CrmPersonController {
     @EmitEvent(id = "CRM_PERSON_SEARCH", apiVersion = "1")
     @Operation(summary = "Search persons", description = "Searches for persons matching the specified criteria")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Search results returned"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+            @ApiResponse(responseCode = "200", description = "Search results returned"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<List<GetPersonResponse>> searchPersons(
             @Parameter(description = "Search by name (first or last)") @RequestParam(required = false) String name,

@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "CRM Contacts", description = "Contact point and role management for parties")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/parties")
 public class CrmContactsController {
 
@@ -53,21 +54,12 @@ public class CrmContactsController {
      * GET /v1/crm/parties/{partyId}/contacts
      * Requires: CONTACT_VIEW permission
      */
-    @Operation(
-            summary = "Get contacts with roles",
-            description = "Retrieve all contacts for a party including their role assignments")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Contacts retrieved successfully",
-                        content = @Content(schema = @Schema(implementation = GetContactsWithRolesResponse.class))),
-                @ApiResponse(
-                        responseCode = "403",
-                        description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
-            })
+    @Operation(summary = "Get contacts with roles", description = "Retrieve all contacts for a party including their role assignments")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Contacts retrieved successfully", content = @Content(schema = @Schema(implementation = GetContactsWithRolesResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+    })
     @GetMapping("/{partyId}/contacts")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
     @EmitEvent(id = "CRM_CONTACTS_LIST", apiVersion = "1")
@@ -89,30 +81,20 @@ public class CrmContactsController {
      * PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles
      * Requires: CONTACT_ROLE_ASSIGN permission
      */
-    @Operation(
-            summary = "Update contact roles",
-            description = "Assign or update role assignments for a specific contact within a party")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Roles updated successfully",
-                        content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
-                @ApiResponse(
-                        responseCode = "403",
-                        description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
-            })
+    @Operation(summary = "Update contact roles", description = "Assign or update role assignments for a specific contact within a party")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Roles updated successfully", content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
+    })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
     @EmitEvent(id = "CRM_CONTACT_ROLES_UPDATE", apiVersion = "1")
     public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
             @Parameter(description = "Contact ID", required = true) @PathVariable @NonNull UUID contactId,
-            @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull
-                    UpdateContactRolesRequest request) {
+            @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull UpdateContactRolesRequest request) {
 
         try {
             UpdateContactRolesResponse response = contactRoleService.updateContactRoles(partyId, contactId, request);

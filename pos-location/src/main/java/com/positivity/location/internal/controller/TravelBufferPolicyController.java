@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "Travel Buffer Policy API", description = "Operations for managing travel buffer policies")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/travel-buffer-policies")
 @RequiredArgsConstructor
 public class TravelBufferPolicyController {

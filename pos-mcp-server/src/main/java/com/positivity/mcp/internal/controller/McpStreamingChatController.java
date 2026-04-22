@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/mcp")
 public class McpStreamingChatController {
 
@@ -39,13 +40,14 @@ public class McpStreamingChatController {
             @RequestBody @Valid @NonNull StreamChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-        @NonNull String userId = authentication.getName();
-        @NonNull String role = extractPrimaryRole(authentication);
+        @NonNull
+        String userId = authentication.getName();
+        @NonNull
+        String role = extractPrimaryRole(authentication);
 
         return streamingSessionAgentManager
                 .streamChat(userId, role, request.message())
-                .map(token ->
-                        ServerSentEvent.<String>builder(token).event("chat").build());
+                .map(token -> ServerSentEvent.<String>builder(token).event("chat").build());
     }
 
     private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
@@ -57,9 +59,7 @@ public class McpStreamingChatController {
                 .orElse("ROLE_USER"));
     }
 
-    @Schema(
-            name = "StreamChatRequest",
-            description = "Streaming chat request payload",
-            example = "{\"message\":\"Hello\"}")
-    public record StreamChatRequest(@NotBlank @NonNull String message) {}
+    @Schema(name = "StreamChatRequest", description = "Streaming chat request payload", example = "{\"message\":\"Hello\"}")
+    public record StreamChatRequest(@NotBlank @NonNull String message) {
+    }
 }

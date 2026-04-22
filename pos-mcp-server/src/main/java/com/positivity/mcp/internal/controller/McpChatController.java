@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * The agent has role-specific tools, Exa web search, and RAG.
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/mcp")
 public class McpChatController {
 
@@ -41,8 +42,10 @@ public class McpChatController {
             @RequestBody @Valid @NonNull ChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-        @NonNull String userId = authentication.getName();
-        @NonNull String role = extractPrimaryRole(authentication);
+        @NonNull
+        String userId = authentication.getName();
+        @NonNull
+        String role = extractPrimaryRole(authentication);
         String response = agentOrchestrationService.chat(userId, role, request.message());
         return ResponseEntity.ok(new ChatResponse(response));
     }
@@ -57,8 +60,10 @@ public class McpChatController {
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
-    public record ChatRequest(@NotBlank @NonNull String message) {}
+    public record ChatRequest(@NotBlank @NonNull String message) {
+    }
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
-    public record ChatResponse(@NonNull String response) {}
+    public record ChatResponse(@NonNull String response) {
+    }
 }

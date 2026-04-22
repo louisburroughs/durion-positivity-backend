@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/{productId}/msrp")
 @Tag(name = "Product MSRP API", description = "Manage MSRP values with effective dates")
 public class ProductMsrpController {

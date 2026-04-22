@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code @PreAuthorize} on {@link ConflictOverrideService}.
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/appointments/{appointmentId}/conflict-override")
 @Tag(name = "Conflict Override API", description = "Operations for appointment conflict override decisions")
 public class ConflictOverrideController {
@@ -43,17 +44,14 @@ public class ConflictOverrideController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyAuthority('shop:schedule:edit', 'appointments:reschedule')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
-    @Operation(
-            summary = "Execute appointment conflict override",
-            description = "Executes a conflict override for the specified appointment when authorized.")
+    @Operation(summary = "Execute appointment conflict override", description = "Executes a conflict override for the specified appointment when authorized.")
     @ApiResponse(responseCode = "201", description = "Conflict override executed.")
     @ApiResponse(responseCode = "400", description = "Invalid request or appointment ID mismatch.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     @ApiResponse(responseCode = "404", description = "Appointment not found.")
     public @NonNull ConflictOverrideResponse executeOverride(
             @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
-            @Parameter(description = "Conflict override request payload", required = true) @RequestBody @NonNull
-                    ConflictOverrideRequest request) {
+            @Parameter(description = "Conflict override request payload", required = true) @RequestBody @NonNull ConflictOverrideRequest request) {
         // Validate that path appointmentId is consistent with request body
         // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {

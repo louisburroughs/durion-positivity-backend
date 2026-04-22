@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: CAP-214 #39
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/locations/{siteId}/storage-locations")
 @RequiredArgsConstructor
 public class StorageLocationController {

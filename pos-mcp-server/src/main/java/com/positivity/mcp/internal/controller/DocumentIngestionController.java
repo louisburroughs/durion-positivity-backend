@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/mcp")
 public class DocumentIngestionController {
 
@@ -55,15 +56,11 @@ public class DocumentIngestionController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @Schema(
-            name = "DocumentIngestionRequest",
-            description = "Document ingestion payload",
-            example = "{\"content\":\"sample\",\"metadata\":{\"document_id\":\"policy-123\",\"source\":\"manual\"}}")
+    @Schema(name = "DocumentIngestionRequest", description = "Document ingestion payload", example = "{\"content\":\"sample\",\"metadata\":{\"document_id\":\"policy-123\",\"source\":\"manual\"}}")
     public record DocumentIngestionRequest(
             @NotBlank @NonNull String content,
 
-            @Schema(description = "Optional key-value metadata for the document")
-            Map<String, Object> metadata) {
+            @Schema(description = "Optional key-value metadata for the document") Map<String, Object> metadata) {
         public DocumentIngestionRequest {
             if (metadata == null) {
                 metadata = Map.of();

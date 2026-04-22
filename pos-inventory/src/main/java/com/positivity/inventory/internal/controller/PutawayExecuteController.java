@@ -22,39 +22,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/putaway")
 @RequiredArgsConstructor
 @Tag(name = "Putaway Execution", description = "Execute putaway tasks with validation and audit events")
 public class PutawayExecuteController {
 
-    private final PutawayExecuteService putawayExecuteService;
+        private final PutawayExecuteService putawayExecuteService;
 
-    @PostMapping("/tasks/{taskId}/execute")
-    @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:putaway:execute')")
-    @Operation(
-            summary = "Execute putaway task",
-            description =
-                    "Executes a putaway task by moving SKU quantity from source location to destination location.")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Putaway executed successfully",
-                        content =
-                                @Content(
-                                        mediaType = "application/json",
-                                        schema = @Schema(implementation = PutawayExecutionResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Bad request - invalid task ID or request payload"),
-                @ApiResponse(responseCode = "403", description = "Forbidden - insufficient authority"),
-                @ApiResponse(responseCode = "404", description = "Putaway task not found"),
-                @ApiResponse(responseCode = "422", description = "Validation failed for putaway execution")
-            })
-    public ResponseEntity<PutawayExecutionResponse> executePutaway(
-            @Parameter(description = "Putaway task identifier", required = true) @PathVariable String taskId,
-            @Parameter(description = "Putaway execution request payload", required = true) @Valid @RequestBody
-                    PutawayExecutionRequest request) {
-        PutawayExecutionResponse response = putawayExecuteService.executePutaway(taskId, request);
-        return ResponseEntity.ok(response);
-    }
+        @PostMapping("/tasks/{taskId}/execute")
+        @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:putaway:execute')")
+        @Operation(summary = "Execute putaway task", description = "Executes a putaway task by moving SKU quantity from source location to destination location.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Putaway executed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PutawayExecutionResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Bad request - invalid task ID or request payload"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient authority"),
+                        @ApiResponse(responseCode = "404", description = "Putaway task not found"),
+                        @ApiResponse(responseCode = "422", description = "Validation failed for putaway execution")
+        })
+        public ResponseEntity<PutawayExecutionResponse> executePutaway(
+                        @Parameter(description = "Putaway task identifier", required = true) @PathVariable String taskId,
+                        @Parameter(description = "Putaway execution request payload", required = true) @Valid @RequestBody PutawayExecutionRequest request) {
+                PutawayExecutionResponse response = putawayExecuteService.executePutaway(taskId, request);
+                return ResponseEntity.ok(response);
+        }
 }

@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Order Cancellation", description = "Cancel orders and retry failed cancellations")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/orders/carts")
 @RequiredArgsConstructor
 @Slf4j

@@ -22,21 +22,19 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Shop Bay API", description = "Operations for managing bays within shop locations")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class ShopBayController {
 
     private final BayService bayService;
 
-    @Operation(
-            summary = "Get bays",
-            description = "List all bays or get a specific bay detail by locationId and bayId.")
+    @Operation(summary = "Get bays", description = "List all bays or get a specific bay detail by locationId and bayId.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
-    @GetMapping({"/bays", "/{locationId}/bays/{bayId}"})
+    @GetMapping({ "/bays", "/{locationId}/bays/{bayId}" })
     @PreAuthorize("hasAuthority('shop:bay:view')")
     public ResponseEntity<Object> getBays(
-            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false)
-                    Long locationId,
+            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false) Long locationId,
             @Parameter(description = "Bay ID (optional for specific bay)") @PathVariable(required = false) Long bayId) {
         log.info("Fetching bays - locationId(mask)={}, bayId(mask)={}", maskForLog(locationId), maskForLog(bayId));
         Object bays = bayService.getBays(locationId, bayId);
@@ -86,8 +84,7 @@ public class ShopBayController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

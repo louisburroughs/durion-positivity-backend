@@ -26,16 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/timeEntries")
 @Tag(name = "People TimeEntries", description = "Time entry adjustments and related APIs")
 public class TimeEntryAdjustmentController {
 
     private final TimeEntryAdjustmentService adjustmentService;
 
-    @Operation(
-            summary = "Create a time entry adjustment",
-            description =
-                    "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.")
+    @Operation(summary = "Create a time entry adjustment", description = "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.")
     @ApiResponse(responseCode = "201", description = "Adjustment created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Time entry not found")
@@ -49,9 +47,7 @@ public class TimeEntryAdjustmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
     }
 
-    @Operation(
-            summary = "List adjustments for a time entry",
-            description = "Retrieve all adjustments associated with a specific time entry.")
+    @Operation(summary = "List adjustments for a time entry", description = "Retrieve all adjustments associated with a specific time entry.")
     @ApiResponse(responseCode = "200", description = "List returned")
     @GetMapping(value = "/{timeEntryId}/adjustments", produces = "application/json")
     @PreAuthorize("hasAuthority('people:timeAdjustment:view')")
@@ -60,9 +56,7 @@ public class TimeEntryAdjustmentController {
         return ResponseEntity.ok(list);
     }
 
-    @Operation(
-            summary = "Approve a time entry adjustment",
-            description = "Approve a pending time entry adjustment. Requires approval permissions.")
+    @Operation(summary = "Approve a time entry adjustment", description = "Approve a pending time entry adjustment. Requires approval permissions.")
     @ApiResponse(responseCode = "200", description = "Adjustment approved successfully")
     @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Adjustment not found")
