@@ -1,0 +1,45 @@
+{
+  "properties": [
+    {
+      "name": "pos.price.default-customer-tier-id",
+      "type": "java.util.UUID",
+      "description": "Default customer tier id used when pricing data is unavailable.",
+      "defaultValue": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "name": "pos.inventory.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the pos-inventory service.",
+      "defaultValue": "http://pos-inventory"
+    },
+    {
+      "name": "pos.price.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the pos-price service.",
+      "defaultValue": "http://pos-price"
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

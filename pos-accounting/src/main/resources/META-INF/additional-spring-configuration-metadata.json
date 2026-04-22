@@ -1,0 +1,129 @@
+{
+  "properties": [
+    {
+      "name": "pos.accounting.default-mappings.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable default GL mapping fallback when explicit posting rules are missing.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.accounting.default-mappings.allow-global-defaults",
+      "type": "java.lang.Boolean",
+      "description": "Allow fallback to organization-agnostic default mappings.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.accounting.default-mappings.require-amount-field",
+      "type": "java.lang.Boolean",
+      "description": "Require payload.amount when creating journal entries from default mappings.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.accounting.credit-memo.revenue-account-id",
+      "type": "java.util.UUID",
+      "description": "GL account used for credit memo revenue reversal entries."
+    },
+    {
+      "name": "pos.accounting.credit-memo.tax-payable-account-id",
+      "type": "java.util.UUID",
+      "description": "GL account used for credit memo tax payable reversal entries."
+    },
+    {
+      "name": "pos.accounting.credit-memo.ar-account-id",
+      "type": "java.util.UUID",
+      "description": "GL account used for credit memo accounts receivable reversal entries."
+    },
+    {
+      "name": "pos.accounting.kafka.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable accounting Kafka consumers for payment-cleared events.",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.accounting.kafka.payments-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic containing payment-cleared events.",
+      "defaultValue": "payment.cleared.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.consumer-group",
+      "type": "java.lang.String",
+      "description": "Kafka consumer group for accounting payment event consumers."
+    },
+    {
+      "name": "pos.invoice.service.url",
+      "type": "java.lang.String",
+      "description": "Base URL for the pos-invoice service.",
+      "defaultValue": "http://pos-invoice:8085"
+    },
+    {
+      "name": "pos.customer.service.url",
+      "type": "java.lang.String",
+      "description": "Base URL for the pos-customer service.",
+      "defaultValue": "http://pos-customer:8080"
+    },
+    {
+      "name": "pos.workorder.service.url",
+      "type": "java.lang.String",
+      "description": "Base URL for the pos-workorder service.",
+      "defaultValue": "http://pos-workorder:8080"
+    },
+    {
+      "name": "pos.restclient.connect.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient connect timeout in milliseconds.",
+      "defaultValue": 3000
+    },
+    {
+      "name": "pos.restclient.read.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient read timeout in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "payment.gateway.provider",
+      "type": "java.lang.String",
+      "description": "Payment gateway provider selector for accounting payment flows.",
+      "defaultValue": "stripe"
+    },
+    {
+      "name": "stripe.api-key",
+      "type": "java.lang.String",
+      "description": "Stripe API key used for payment gateway calls."
+    },
+    {
+      "name": "stripe.connect-account",
+      "type": "java.lang.String",
+      "description": "Optional Stripe Connect account id for destination charges."
+    },
+    {
+      "name": "stripe.idempotency-window-hours",
+      "type": "java.lang.Long",
+      "description": "Number of hours to retain Stripe idempotency keys.",
+      "defaultValue": 24
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

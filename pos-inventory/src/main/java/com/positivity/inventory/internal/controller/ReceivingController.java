@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Receiving", description = "Receiving session creation, item receiving, and cross-dock execution endpoints")
 public class ReceivingController {
 
+        private static final String NO_CURRENT_USER = "No current user";
         private final ReceivingService receivingService;
 
         @PostMapping("/sessions")
@@ -52,7 +53,7 @@ public class ReceivingController {
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Receiving session creation payload", content = @Content(schema = @Schema(implementation = CreateReceivingSessionRequest.class))) @Valid @RequestBody CreateReceivingSessionRequest request) {
 
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
 
                 ReceivingSessionResponse response = receivingService.createReceivingSession(request, actorUserId);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -90,7 +91,7 @@ public class ReceivingController {
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Receive lines payload", content = @Content(schema = @Schema(implementation = ReceiveItemsRequest.class))) @Valid @RequestBody ReceiveItemsRequest request) {
 
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
 
                 ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request,
                                 actorUserId);
@@ -119,7 +120,7 @@ public class ReceivingController {
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Cross-dock request payload", content = @Content(schema = @Schema(implementation = CrossDockRequest.class))) @Valid @RequestBody CrossDockRequest request) {
 
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
 
                 CrossDockResponse response = receivingService.crossDockLineToWorkorder(sessionId, lineId, request,
                                 actorUserId);

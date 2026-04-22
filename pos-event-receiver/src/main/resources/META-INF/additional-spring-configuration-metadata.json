@@ -1,20 +1,6 @@
 {
   "properties": [
     {
-      "name": "spring.flyway.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable or disable Flyway database migrations.",
-      "defaultValue": true
-    },
-    {
-      "name": "spring.flyway.locations",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Locations of SQL migration scripts.",
-      "defaultValue": [
-        "classpath:db/migration"
-      ]
-    },
-    {
       "name": "pos.events.api-secret",
       "type": "java.lang.String",
       "description": "Shared secret for pos-events API authentication."

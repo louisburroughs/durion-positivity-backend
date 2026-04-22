@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "carapi.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the upstream CarAPI integration.",
+      "defaultValue": "https://carapi.app/api"
+    }
+  ]
+}

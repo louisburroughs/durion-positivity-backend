@@ -1,0 +1,69 @@
+{
+  "properties": [
+    {
+      "name": "auth.token-identity-required",
+      "type": "java.lang.Boolean",
+      "description": "Reject tokens that do not contain perm_bits identity claims.",
+      "defaultValue": false
+    },
+    {
+      "name": "auth.strip-inbound-identity-headers",
+      "type": "java.lang.Boolean",
+      "description": "Strip inbound identity headers before forwarding to downstream services.",
+      "defaultValue": true
+    },
+    {
+      "name": "auth.reject-header-token-mismatch",
+      "type": "java.lang.Boolean",
+      "description": "Reject requests when inbound identity headers conflict with token identity.",
+      "defaultValue": false
+    },
+    {
+      "name": "auth.auth-path-root",
+      "type": "java.lang.String",
+      "description": "Auth endpoint root path that bypasses JWT checks.",
+      "defaultValue": "/security-service/v1/auth"
+    },
+    {
+      "name": "auth.auth-path-prefix",
+      "type": "java.lang.String",
+      "description": "Auth endpoint prefix that bypasses JWT checks.",
+      "defaultValue": "/security-service/v1/auth/"
+    },
+    {
+      "name": "auth.stripped-auth-path-root",
+      "type": "java.lang.String",
+      "description": "Stripped auth endpoint root path that bypasses JWT checks.",
+      "defaultValue": "/v1/auth"
+    },
+    {
+      "name": "auth.stripped-auth-path-prefix",
+      "type": "java.lang.String",
+      "description": "Stripped auth endpoint prefix that bypasses JWT checks.",
+      "defaultValue": "/v1/auth/"
+    },
+    {
+      "name": "security.jwt.secret",
+      "type": "java.lang.String",
+      "description": "JWT signing secret used by the gateway for local token validation."
+    },
+    {
+      "name": "pos.gateway.security.strict-jwt-header-validation",
+      "type": "java.lang.Boolean",
+      "description": "Enable strict JWT header pre-validation at the gateway.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.gateway.security.allowed-jwt-algorithms",
+      "type": "java.lang.String",
+      "description": "Comma-separated JWT alg values allowed when strict validation is enabled.",
+      "defaultValue": "HS256"
+    },
+    {
+      "name": "gateway.host",
+      "type": "java.lang.String",
+      "description": "Public host URL used in generated OpenAPI server metadata.",
+      "defaultValue": "http://localhost:8080"
+    }
+  ]
+}

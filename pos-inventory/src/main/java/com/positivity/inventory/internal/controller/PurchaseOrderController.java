@@ -39,6 +39,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Purchase Orders", description = "Purchase order creation, lifecycle, and receiving endpoints")
 public class PurchaseOrderController {
 
+        private static final String NO_CURRENT_USER = "No current user";
+
         private final PurchaseOrderService purchaseOrderService;
 
         @PostMapping
@@ -51,7 +53,7 @@ public class PurchaseOrderController {
         public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
                         @Valid @RequestBody CreatePurchaseOrderRequest request) {
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
                 PurchaseOrderResponse response = purchaseOrderService.createPurchaseOrder(request, actorUserId);
                 return ResponseEntity.status(201).body(response);
         }
@@ -98,7 +100,7 @@ public class PurchaseOrderController {
                 // Full service-layer resolution is tracked as a module-wide refactor for a
                 // future ADR update.
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
                 return ResponseEntity.ok(purchaseOrderService.approvePurchaseOrder(poId, request, actorUserId));
         }
 
@@ -115,7 +117,7 @@ public class PurchaseOrderController {
                         @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
                         @Valid @RequestBody RevisePurchaseOrderRequest request) {
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
                 return ResponseEntity.ok(purchaseOrderService.revisePurchaseOrder(poId, request, actorUserId));
         }
 
@@ -130,7 +132,7 @@ public class PurchaseOrderController {
         public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrder(
                         @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId) {
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
                 return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(poId, actorUserId));
         }
 
@@ -147,7 +149,7 @@ public class PurchaseOrderController {
                         @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
                         @Valid @RequestBody ReceivePurchaseOrderRequest request) {
                 String actorUserId = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
+                                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
                 return ResponseEntity.ok(purchaseOrderService.receivePurchaseOrder(poId, request, actorUserId));
         }
 }

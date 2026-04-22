@@ -43,10 +43,8 @@ public class VehiclePreferencesController {
         private final VehiclePreferencesService preferencesService;
 
         @Operation(summary = "Get vehicle care preferences", description = "Retrieves the care preferences for a vehicle. Returns 404 if no preferences exist.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Preferences found and returned", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "No preferences found for this vehicle")
-        })
+        @ApiResponse(responseCode = "200", description = "Preferences found and returned", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
+        @ApiResponse(responseCode = "404", description = "No preferences found for this vehicle")
         @GetMapping
         public ResponseEntity<VehicleCarePreferenceResponse> getPreferences(
                         @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
@@ -60,12 +58,10 @@ public class VehiclePreferencesController {
         }
 
         @Operation(summary = "Create or update vehicle care preferences", description = "Upserts preferences for a vehicle. If preferences exist, replaces them entirely. Use PATCH for partial updates.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
-                        @ApiResponse(responseCode = "201", description = "Preferences created successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "Vehicle not found"),
-                        @ApiResponse(responseCode = "400", description = "Invalid preference data")
-        })
+        @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
+        @ApiResponse(responseCode = "201", description = "Preferences created successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
+        @ApiResponse(responseCode = "404", description = "Vehicle not found")
+        @ApiResponse(responseCode = "400", description = "Invalid preference data")
         @PutMapping
         @EmitEvent(id = "VEHICLE_PREFERENCES_UPSERT", apiVersion = "1")
         public ResponseEntity<VehicleCarePreferenceResponse> upsertPreferences(
@@ -89,10 +85,8 @@ public class VehiclePreferencesController {
         }
 
         @Operation(summary = "Partially update vehicle care preferences", description = "Merges provided preference fields into existing preferences without replacing the entire map")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Preferences merged successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "No existing preferences to merge into")
-        })
+        @ApiResponse(responseCode = "200", description = "Preferences merged successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
+        @ApiResponse(responseCode = "404", description = "No existing preferences to merge into")
         @PatchMapping
         @EmitEvent(id = "VEHICLE_PREFERENCES_MERGE", apiVersion = "1")
         public ResponseEntity<VehicleCarePreferenceResponse> mergePreferences(
@@ -110,10 +104,8 @@ public class VehiclePreferencesController {
         }
 
         @Operation(summary = "Delete vehicle care preferences", description = "Removes all preferences for a vehicle")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "204", description = "Preferences deleted successfully"),
-                        @ApiResponse(responseCode = "404", description = "No preferences found to delete")
-        })
+        @ApiResponse(responseCode = "204", description = "Preferences deleted successfully")
+        @ApiResponse(responseCode = "404", description = "No preferences found to delete")
         @DeleteMapping
         @EmitEvent(id = "VEHICLE_PREFERENCES_DELETE", apiVersion = "1")
         public ResponseEntity<Void> deletePreferences(

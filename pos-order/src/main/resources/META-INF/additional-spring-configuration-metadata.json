@@ -1,0 +1,33 @@
+{
+  "properties": [
+    {
+      "name": "gateway.base-url",
+      "type": "java.lang.String",
+      "description": "Gateway base URL used for event type registration.",
+      "defaultValue": "http://localhost:8080"
+    },
+    {
+      "name": "pos-events.registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup event type registration for pos-order.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

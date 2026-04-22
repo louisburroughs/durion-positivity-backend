@@ -1,0 +1,45 @@
+{
+  "properties": [
+    {
+      "name": "documents.pdf.max-input-characters",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of input characters accepted for PDF generation.",
+      "defaultValue": 1000000
+    },
+    {
+      "name": "documents.pdf.template-base-path",
+      "type": "java.lang.String",
+      "description": "Base classpath location for PDF templates.",
+      "defaultValue": "classpath:/templates"
+    },
+    {
+      "name": "documents.pdf.max-table-rows",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of rows allowed in rendered PDF tables.",
+      "defaultValue": 200
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

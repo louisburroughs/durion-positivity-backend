@@ -68,7 +68,7 @@ public class WorkexecTimeTrackingController {
                 ZoneId zoneId;
                 try {
                         zoneId = ZoneId.of(timezone);
-                } catch (Exception ex) {
+                } catch (Exception _) {
                         return badRequest(ERROR_INVALID_REQUEST, "Invalid timezone value");
                 }
 

@@ -1,0 +1,86 @@
+{
+  "properties": [
+    {
+      "name": "bulk-loader.storage.local-root",
+      "type": "java.lang.String",
+      "description": "Root directory used to persist uploaded bulk-loader files.",
+      "defaultValue": "/tmp/bulk-loader"
+    },
+    {
+      "name": "bulk-loader.tus.expiry-hours",
+      "type": "java.lang.Integer",
+      "description": "Number of hours before incomplete TUS uploads expire.",
+      "defaultValue": 24
+    },
+    {
+      "name": "bulk-loader.tus.cleanup-interval-ms",
+      "type": "java.lang.Long",
+      "description": "Cleanup interval in milliseconds for expired TUS uploads."
+    },
+    {
+      "name": "bulk-loader.tus.max-upload-size",
+      "type": "java.lang.Long",
+      "description": "Maximum allowed upload size in bytes for TUS uploads.",
+      "defaultValue": 536870912
+    },
+    {
+      "name": "pos.catalog.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-catalog.",
+      "defaultValue": "http://localhost:8082"
+    },
+    {
+      "name": "pos.customer.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-customer.",
+      "defaultValue": "http://localhost:8086"
+    },
+    {
+      "name": "pos.people.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-people.",
+      "defaultValue": "http://localhost:8087"
+    },
+    {
+      "name": "pos.price.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-price.",
+      "defaultValue": "http://localhost:8088"
+    },
+    {
+      "name": "pos.vehicle-inventory.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-vehicle-inventory.",
+      "defaultValue": "http://localhost:8091"
+    },
+    {
+      "name": "pos.vehicle-fitment.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for bulk-ingest calls to pos-vehicle-fitment.",
+      "defaultValue": "http://localhost:8092"
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}
