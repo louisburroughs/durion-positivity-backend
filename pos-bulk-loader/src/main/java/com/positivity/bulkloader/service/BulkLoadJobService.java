@@ -11,6 +11,8 @@ public interface BulkLoadJobService {
 
     BulkLoadJobResponse createJob(@NonNull BulkLoadJobCreateRequest request, @NonNull String operatorId);
 
+    void markUploadStored(@NonNull UUID jobId, @NonNull String operatorId, @NonNull String storagePath);
+
     BulkLoadJobResponse getJob(@NonNull UUID jobId, @NonNull String operatorId);
 
     Page<BulkLoadJobResponse> listJobsForOperator(@NonNull String operatorId, @NonNull Pageable pageable);

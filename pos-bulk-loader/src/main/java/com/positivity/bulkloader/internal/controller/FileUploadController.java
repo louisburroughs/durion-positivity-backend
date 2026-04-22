@@ -49,6 +49,7 @@ public class FileUploadController {
         bulkLoadJobService.getJob(jobId, operatorId);
         String originalFileName = file.getOriginalFilename() == null ? "upload.csv" : file.getOriginalFilename();
         String storagePath = fileStorageService.store(jobId, originalFileName, file.getInputStream(), file.getSize());
+        bulkLoadJobService.markUploadStored(jobId, operatorId, storagePath);
         FileUploadResponse response = FileUploadResponse.builder()
                 .jobId(jobId)
                 .storagePath(storagePath)

@@ -12,6 +12,7 @@ import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,9 @@ class BulkLoadJobServiceImplTest {
 
     @Mock
     BulkLoadJobRepository jobRepository;
+
+    @Mock
+    BulkLoadBatchLauncher bulkLoadBatchLauncher;
 
     @InjectMocks
     BulkLoadJobServiceImpl service;
@@ -66,6 +70,47 @@ class BulkLoadJobServiceImplTest {
         assertThatThrownBy(() -> service.createJob(request, OPERATOR_ID))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("active bulk load job");
+    }
+
+    @Test
+    void markUploadStored_whenJobOwned_persistsStoragePathAndTransitionsToUploading() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.markUploadStored(JOB_ID, OPERATOR_ID, "00000000-0000-0000-0000-000000000001/products.csv");
+
+        assertThat(job.getOriginalFilePath()).isEqualTo("00000000-0000-0000-0000-000000000001/products.csv");
+        assertThat(job.getStatus()).isEqualTo(JobStatus.UPLOADING);
+        verify(jobRepository).save(job);
+    }
+
+    @Test
+    void startProcessing_whenUploadedFileMissing_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("uploaded file is persisted");
+    }
+
+    @Test
+    void startProcessing_whenUploadedFilePresent_transitionsToProcessing() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID);
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.PROCESSING);
+        assertThat(job.getStartedAt()).isNotNull();
+        verify(bulkLoadBatchLauncher).launch(job);
+        verify(jobRepository).save(job);
     }
 
     // ─── cancelJob ───────────────────────────────────────────────────────────

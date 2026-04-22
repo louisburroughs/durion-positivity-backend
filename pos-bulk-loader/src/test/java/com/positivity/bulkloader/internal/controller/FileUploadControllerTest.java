@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,6 +62,8 @@ class FileUploadControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.jobId").value(JOB_ID.toString()))
                                 .andExpect(jsonPath("$.fileName").value("products.csv"));
+
+                verify(bulkLoadJobService).markUploadStored(JOB_ID, "test-operator", "/uploads/products.csv");
         }
 
         @Test

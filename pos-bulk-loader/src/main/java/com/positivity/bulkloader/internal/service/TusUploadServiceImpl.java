@@ -4,6 +4,7 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.TusUploadService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,15 +31,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class TusUploadServiceImpl implements TusUploadService {
 
     private final TusUploadRepository tusUploadRepository;
+    private final BulkLoadJobService bulkLoadJobService;
     private final Path storageRoot;
     private final Path tusRoot;
     private final int expiryHours;
 
     public TusUploadServiceImpl(
             TusUploadRepository tusUploadRepository,
+            BulkLoadJobService bulkLoadJobService,
             @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath,
             @Value("${bulk-loader.tus.expiry-hours:24}") int expiryHours) {
         this.tusUploadRepository = tusUploadRepository;
+        this.bulkLoadJobService = bulkLoadJobService;
         this.storageRoot = Paths.get(storageRootPath);
         this.tusRoot = this.storageRoot.resolve(".tus");
         this.expiryHours = expiryHours;
@@ -146,6 +150,8 @@ public class TusUploadServiceImpl implements TusUploadService {
         Files.createDirectories(jobDir);
         Path dest = jobDir.resolve(upload.getFileName());
         Files.move(tempFile, dest, StandardCopyOption.REPLACE_EXISTING);
+        String storagePath = storageRoot.relativize(dest).toString();
+        bulkLoadJobService.markUploadStored(upload.getJobId(), upload.getOperatorId(), storagePath);
         upload.setCompleted(true);
         tusUploadRepository.save(upload);
         log.info("TUS upload finalized: id={} jobId={} size={} dest={}", upload.getId(), upload.getJobId(),

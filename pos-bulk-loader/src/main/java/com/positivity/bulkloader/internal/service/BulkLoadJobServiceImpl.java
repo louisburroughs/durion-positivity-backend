@@ -6,6 +6,7 @@ import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import java.time.Instant;
 import java.util.List;
@@ -30,6 +31,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
             JobStatus.PROCESSING);
 
     private final BulkLoadJobRepository jobRepository;
+    private final BulkLoadBatchLauncher bulkLoadBatchLauncher;
 
     @Override
     @Transactional
@@ -58,6 +60,29 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
                 operatorId,
                 request.getDomainType());
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void markUploadStored(@NonNull UUID jobId, @NonNull String operatorId, @NonNull String storagePath) {
+        if (storagePath.isBlank()) {
+            throw new IllegalArgumentException("storagePath must not be blank");
+        }
+
+        BulkLoadJob job = findOrThrow(jobId);
+        if (!job.getOperatorId().equals(operatorId)) {
+            throw new JobOwnershipViolationException(jobId.toString());
+        }
+        if (job.getStatus() == JobStatus.CANCELLED || job.getStatus() == JobStatus.COMPLETED
+                || job.getStatus() == JobStatus.FAILED) {
+            throw new IllegalStateException("Job cannot accept uploads in terminal state: " + job.getStatus());
+        }
+
+        job.setOriginalFilePath(storagePath);
+        if (job.getStatus() == JobStatus.CREATED) {
+            job.setStatus(JobStatus.UPLOADING);
+        }
+        jobRepository.save(job);
     }
 
     @Override
@@ -100,6 +125,10 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
             throw new IllegalStateException(
                     "Job cannot be transitioned to PROCESSING from state: " + job.getStatus());
         }
+        if (job.getOriginalFilePath() == null || job.getOriginalFilePath().isBlank()) {
+            throw new IllegalStateException("Job cannot be processed before an uploaded file is persisted");
+        }
+        bulkLoadBatchLauncher.launch(job);
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now());
         jobRepository.save(job);
