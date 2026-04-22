@@ -16,6 +16,6 @@ public class OpenApiConfig {
                         .title("POS Tax Service API")
                         .version("1.0")
                         .description("Tax calculation service with external API passthrough and test mode support")
-                        .contact(new Contact().name("Durion Team").email("platform@durionpos.org")));
+                        .contact(new Contact().name("Durion Support Services").email("platform@durionpos.org")));
     }
 }

@@ -4,7 +4,7 @@ info:
   description: "API documentation for the Customer service, accessible via the API\
     \ Gateway."
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -19,6 +19,8 @@ tags:
   description: Vehicle management operations for customers
 - name: CRM Snapshots
   description: Consolidated CRM data snapshots
+- name: Customer Bulk Ingest API
+  description: Bulk import customer records
 - name: CRM Party Relationships
   description: Commercial account relationship management APIs
 - name: CRM Contacts
@@ -137,16 +139,16 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Customer or vehicle not found
         "200":
           description: Vehicle found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-        "403":
-          description: Forbidden - insufficient permissions
     put:
       tags:
       - CRM Vehicles
@@ -175,8 +177,8 @@ paths:
               $ref: "#/components/schemas/CreateVehicleForPartyRequest"
         required: true
       responses:
-        "400":
-          description: Bad request - invalid input
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Customer or vehicle not found
         "200":
@@ -185,8 +187,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "403":
-          description: Forbidden - insufficient permissions
+        "400":
+          description: Bad request - invalid input
     delete:
       tags:
       - CRM Vehicles
@@ -209,12 +211,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Customer or vehicle not found
         "204":
           description: Vehicle deleted successfully
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
     put:
       tags:
@@ -244,18 +246,18 @@ paths:
               $ref: "#/components/schemas/VehicleTransferRequest"
         required: true
       responses:
-        "400":
-          description: Bad request - invalid input
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Customer or vehicle not found
         "200":
           description: Vehicle transferred successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-        "403":
-          description: Forbidden - insufficient permissions
+        "400":
+          description: Bad request - invalid input
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -286,6 +288,8 @@ paths:
               $ref: "#/components/schemas/UpdateContactRolesRequest"
         required: true
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Roles updated successfully
           content:
@@ -294,8 +298,6 @@ paths:
                 $ref: "#/components/schemas/UpdateContactRolesResponse"
         "400":
           description: Invalid request
-        "403":
-          description: Forbidden - insufficient permissions
         "404":
           description: Party or contact not found
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
@@ -361,6 +363,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateContactRolesRequest"
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Roles updated successfully
           content:
@@ -371,8 +375,6 @@ paths:
           description: Invalid role assignment
         "404":
           description: Party or contact not found
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/promotions/redemptions:
     post:
       tags:
@@ -387,16 +389,43 @@ paths:
               $ref: "#/components/schemas/RecordRedemptionRequest"
         required: true
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "409":
+          description: Duplicate redemption
         "201":
           description: Promotion redemption recorded
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PromotionRedemptionResponse"
-        "409":
-          description: Duplicate redemption
-        "403":
-          description: Forbidden - insufficient permissions
+  /v1/customer/bulk-ingest:
+    post:
+      tags:
+      - Customer Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestCustomerBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/crm:
     get:
       tags:
@@ -468,10 +497,6 @@ paths:
               $ref: "#/components/schemas/CreateVehicleForPartyRequest"
         required: true
       responses:
-        "404":
-          description: Customer not found
-        "400":
-          description: Bad request - invalid input
         "403":
           description: Forbidden - insufficient permissions
         "201":
@@ -480,6 +505,10 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+        "400":
+          description: Bad request - invalid input
+        "404":
+          description: Customer not found
   /v1/crm/persons:
     get:
       tags:
@@ -600,16 +629,16 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Preferences retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
     post:
       tags:
       - CRM Communication Preferences
@@ -632,6 +661,10 @@ paths:
               $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
         required: true
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "400":
           description: Invalid request
         "200":
@@ -640,10 +673,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
@@ -673,14 +702,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "201":
-          description: Relationship created successfully
+        "404":
+          description: Party or person not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "404":
-          description: Party or person not found
+        "201":
+          description: Relationship created successfully
           content:
             '*/*':
               schema:
@@ -717,8 +746,8 @@ paths:
               $ref: "#/components/schemas/ResolveAccountTierRequest"
         required: true
       responses:
-        "404":
-          description: Account not found
+        "403":
+          description: Forbidden - insufficient permissions
         "400":
           description: Invalid request
         "200":
@@ -727,8 +756,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ResolveAccountTierResponse"
-        "403":
-          description: Forbidden - insufficient permissions
+        "404":
+          description: Account not found
   /v1/crm/accounts/parties:
     post:
       tags:
@@ -742,6 +771,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateCommercialAccountRequest"
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "201":
           description: Account created successfully
           content:
@@ -750,8 +781,6 @@ paths:
                 $ref: "#/components/schemas/CreateCommercialAccountResponse"
         "400":
           description: Invalid request
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/accounts/parties/{partyId}/vehicles:
     post:
       tags:
@@ -779,12 +808,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreateVehicleForPartyResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Party not found
         "400":
           description: Invalid vehicle data
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/accounts/parties/{partyId}/merge:
     post:
       tags:
@@ -806,18 +835,18 @@ paths:
             schema:
               $ref: "#/components/schemas/MergePartiesRequest"
       responses:
-        "400":
-          description: Invalid merge request
-        "404":
-          description: Party not found
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Parties merged successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MergePartiesResponse"
-        "403":
-          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
+        "400":
+          description: Invalid merge request
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -834,16 +863,16 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Preferences retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
     post:
       tags:
       - CRM Accounts
@@ -865,18 +894,18 @@ paths:
             schema:
               $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
       responses:
-        "400":
-          description: Invalid preference data
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Preferences updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
+        "400":
+          description: Invalid preference data
   /v1/crm/accounts/parties/search:
     post:
       tags:
@@ -890,8 +919,6 @@ paths:
             schema:
               $ref: "#/components/schemas/SearchPartiesRequest"
       responses:
-        "400":
-          description: Invalid search criteria
         "403":
           description: Forbidden - insufficient permissions
         "200":
@@ -900,6 +927,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchPartiesResponse"
+        "400":
+          description: Invalid search criteria
   /v1/promotions/redemptions/by-customer/{customerId}:
     get:
       tags:
@@ -915,6 +944,8 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Promotion redemptions returned
           content:
@@ -923,8 +954,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PromotionRedemptionResponse"
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -973,10 +1002,10 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CrmSnapshotDTO"
-        "403":
-          description: Access denied
         "404":
           description: Party not found
+        "403":
+          description: Access denied
   /v1/crm/snapshot/party/{partyId}/billing-rules:
     get:
       tags:
@@ -1035,14 +1064,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
-        "200":
-          description: Person found
+        "404":
+          description: Person not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
-        "404":
-          description: Person not found
+        "200":
+          description: Person found
           content:
             '*/*':
               schema:
@@ -1069,16 +1098,16 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Contacts retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetContactsWithRolesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
@@ -1123,14 +1152,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "404":
-          description: Party not found
+        "200":
+          description: Contacts retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "200":
-          description: Contacts retrieved successfully
+        "404":
+          description: Party not found
           content:
             '*/*':
               schema:
@@ -1157,6 +1186,8 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Tier retrieved successfully
           content:
@@ -1165,8 +1196,6 @@ paths:
                 $ref: "#/components/schemas/GetAccountTierResponse"
         "404":
           description: Account not found
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/accounts/parties/{partyId}:
     get:
       tags:
@@ -1183,10 +1212,10 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Party not found
         "403":
           description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Party details retrieved successfully
           content:
@@ -1209,16 +1238,16 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
         "200":
           description: Contacts retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetContactsWithRolesResponse"
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1379,6 +1408,14 @@ components:
           format: date-time
           description: Last update timestamp (UTC).
           example: 2026-02-27T13:00:00Z
+        createdBy:
+          type: string
+          description: Username of the actor who created this record.
+          example: jsmith
+        updatedBy:
+          type: string
+          description: Username of the actor who last modified this record.
+          example: jsmith
         version:
           type: integer
           format: int64
@@ -1495,6 +1532,74 @@ components:
         createdAt:
           type: string
           format: date-time
+    BulkIngestRequestCustomerBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    CustomerBulkIngestRecord:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phoneNumber:
+          type: string
+        primaryAddress:
+          type: string
+        customerNumber:
+          type: string
+      required:
+      - firstName
+      - lastName
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     CreatePersonRequest:
       type: object
       description: Request to create an individual person record
@@ -1961,18 +2066,12 @@ components:
     PageCustomerDTO:
       type: object
       properties:
-        totalPages:
-          type: integer
-          format: int32
         totalElements:
           type: integer
           format: int64
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
+        totalPages:
+          type: integer
+          format: int32
         size:
           type: integer
           format: int32
@@ -1983,8 +2082,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1993,6 +2098,9 @@ components:
     Pageablenull:
       type: object
       properties:
+        offset:
+          type: integer
+          format: int64
         paged:
           type: boolean
         pageNumber:
@@ -2001,9 +2109,6 @@ components:
         pageSize:
           type: integer
           format: int32
-        offset:
-          type: integer
-          format: int64
         sort:
           $ref: "#/components/schemas/Sortnull"
         unpaged:
@@ -2011,9 +2116,9 @@ components:
     Sortnull:
       type: object
       properties:
-        sorted:
-          type: boolean
         empty:
+          type: boolean
+        sorted:
           type: boolean
         unsorted:
           type: boolean

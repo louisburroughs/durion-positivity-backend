@@ -9,15 +9,20 @@ import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
+import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.service.GLAccountService;
+import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +45,9 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private GLAccountService glAccountService;
+
+    @Autowired
+    private JournalEntryService journalEntryService;
 
     @Test
     @DisplayName("Create GL account - happy path")
@@ -192,24 +200,56 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Deactivate GL account - non-zero balance rejected")
     void testDeactivateGLAccount_NonZeroBalance() {
-        // Given - create account
-        GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("7000")
-                .accountName("Account with Balance")
-                .accountType(AccountType.ASSET)
-                .build();
-        glAccountService.createGLAccount(request);
+        // Given — create the account under test
+        GLAccountResponse created = glAccountService.createGLAccount(
+                GLAccountCreateRequest.builder()
+                        .accountCode("7000")
+                        .accountName("Account with Balance")
+                        .accountType(AccountType.ASSET)
+                        .build());
 
-        // NOTE: In a real test, you would create journal entries to give this account a
-        // balance.
-        // For this test, we're relying on the fact that the account has zero balance.
-        // If you want to test non-zero balance rejection, you need to:
-        // 1. Create journal entries posting to this account
-        // 2. Then attempt deactivation
+        // A second active account to hold the offsetting credit (entry must be balanced)
+        GLAccountResponse counterpart = glAccountService.createGLAccount(
+                GLAccountCreateRequest.builder()
+                        .accountCode("7001")
+                        .accountName("Counterpart Account")
+                        .accountType(AccountType.LIABILITY)
+                        .build());
 
-        // For now, this test documents the expected behavior
-        // When the balance is non-zero, deactivation should fail with
-        // AccountNotZeroBalanceException
+        // Build a balanced journal entry: debit 500.00 to account 7000
+        JournalEntryLine debitLine = new JournalEntryLine();
+        debitLine.setLineNumber(1);
+        debitLine.setGlAccountId(created.getGlAccountId());
+        debitLine.setDebitAmount(new BigDecimal("500.00"));
+        debitLine.setCreditAmount(BigDecimal.ZERO);
+        debitLine.setDescription("Test debit to 7000");
+
+        JournalEntryLine creditLine = new JournalEntryLine();
+        creditLine.setLineNumber(2);
+        creditLine.setGlAccountId(counterpart.getGlAccountId());
+        creditLine.setDebitAmount(BigDecimal.ZERO);
+        creditLine.setCreditAmount(new BigDecimal("500.00"));
+        creditLine.setDescription("Offsetting credit to 7001");
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
+        entry.setDescription("Non-zero balance setup for deactivation test");
+        entry.setLines(List.of(debitLine, creditLine));
+
+        JournalEntry draft = journalEntryService.createJournalEntry(entry);
+        journalEntryService.postJournalEntry(draft.getJournalEntryId());
+
+        // When / Then — deactivation must fail because the account has a 500.00 debit balance
+        UUID accountId = created.getGlAccountId();
+        assertThatThrownBy(() -> glAccountService.deactivateGLAccount(accountId))
+                .isInstanceOf(AccountNotZeroBalanceException.class)
+                .hasMessageContaining("7000")
+                .hasMessageContaining("500");
+
+        // Account must remain ACTIVE — state should not have changed
+        GLAccountResponse unchanged = glAccountService.getGLAccount(accountId);
+        assertThat(unchanged.getStatus()).isEqualTo(GLAccountStatus.ACTIVE);
+        assertThat(unchanged.getDeactivationDate()).isNull();
     }
 
     @Test

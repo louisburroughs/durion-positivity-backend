@@ -48,7 +48,7 @@ class BulkLoadJobControllerTest {
         // ─── POST /v1/bulk-jobs — 201 Created ────────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void createJob_validRequest_returns201() throws Exception {
                 BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
                 request.setFileName("products.csv");
@@ -80,13 +80,13 @@ class BulkLoadJobControllerTest {
 
                 mockMvc.perform(post("/v1/bulk-jobs")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-Authorities", "BULK_IMPORT_READ") // EXECUTE required
+                                .header("X-Authorities", "bulkImport:status:read") // EXECUTE required
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isForbidden());
         }
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void createJob_missingFileName_returns400() throws Exception {
                 BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
                 request.setDomainType(DomainType.CATALOG_PRODUCT);
@@ -101,7 +101,7 @@ class BulkLoadJobControllerTest {
         // ─── GET /v1/bulk-jobs/{jobId} — 200 OK ──────────────────────────────────
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_READ")
+        @WithMockUser(authorities = "bulkImport:status:read")
         void getJob_whenExists_returns200() throws Exception {
                 BulkLoadJobResponse response = BulkLoadJobResponse.builder()
                                 .id(JOB_ID)
@@ -118,7 +118,7 @@ class BulkLoadJobControllerTest {
         }
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_READ")
+        @WithMockUser(authorities = "bulkImport:status:read")
         void getJob_whenNotFound_returns404() throws Exception {
                 when(bulkLoadJobService.getJob(eq(JOB_ID), any()))
                                 .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
@@ -129,7 +129,7 @@ class BulkLoadJobControllerTest {
         @Test
         void getJob_withoutReadAuthority_returns403() throws Exception {
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)
-                                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                                .header("X-Authorities", "bulkImport:upload:execute")) // READ required
                                 .andExpect(status().isForbidden());
         }
 
@@ -142,14 +142,14 @@ class BulkLoadJobControllerTest {
 
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID)
                                 .header("X-User", "operator-b")
-                                .header("X-Authorities", "BULK_IMPORT_READ"))
+                                .header("X-Authorities", "bulkImport:status:read"))
                                 .andExpect(status().isNotFound());
         }
 
         // ─── POST /v1/bulk-jobs/{jobId}/cancel ───────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void cancelJob_whenValid_returns200() throws Exception {
                 BulkLoadJobResponse response = BulkLoadJobResponse.builder()
                                 .id(JOB_ID)
@@ -173,7 +173,7 @@ class BulkLoadJobControllerTest {
 
                 mockMvc.perform(post("/v1/bulk-jobs/{jobId}/cancel", JOB_ID)
                                 .header("X-User", "other-operator")
-                                .header("X-Authorities", "BULK_IMPORT_EXECUTE"))
+                                .header("X-Authorities", "bulkImport:upload:execute"))
                                 .andExpect(status().isForbidden());
         }
 }

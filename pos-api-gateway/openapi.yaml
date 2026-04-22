@@ -27,7 +27,7 @@ info:
 
     **Example**: `curl -H "X-API-Version: 1" http://localhost:8080/inventory/items`
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: 1.0.0
 servers:

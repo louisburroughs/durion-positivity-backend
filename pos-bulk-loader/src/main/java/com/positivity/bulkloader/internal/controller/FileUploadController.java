@@ -35,9 +35,11 @@ public class FileUploadController {
     private final FileStorageService fileStorageService;
 
     @PostMapping("/{jobId}/upload")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_FILE_UPLOAD", apiVersion = "1")
-    @Operation(summary = "Upload a file for a bulk load job")
+    @Operation(summary = "Upload a file for a bulk load job", description = "Uploads a file for the specified bulk load job. The file is stored and associated with the job for later processing. "
+            +
+            "The job must be in CREATED or UPLOADING state. Multiple files can be uploaded, but only the latest file will be processed.")
     @ApiResponse(responseCode = "200", description = "File uploaded and content detected")
     @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<FileUploadResponse> uploadFile(
@@ -62,7 +64,7 @@ public class FileUploadController {
     }
 
     @PostMapping("/{jobId}/process")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
     @Operation(summary = "Transition a bulk load job to PROCESSING state", description = "Marks the job as PROCESSING. Batch execution is triggered separately by the batch runner. "
             +

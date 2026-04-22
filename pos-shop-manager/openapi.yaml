@@ -3,7 +3,7 @@ info:
   title: POS Shop Manager Service API
   description: Shop Manager service for managing shop operations and staff
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:

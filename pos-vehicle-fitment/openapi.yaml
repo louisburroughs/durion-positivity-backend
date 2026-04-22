@@ -3,7 +3,7 @@ info:
   title: Vehicle Fitment API
   description: API for vehicle fitment data in the POS system
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
   version: "1.0"
 servers:
@@ -15,6 +15,8 @@ tags:
     by vehicle attributes
 - name: Vehicle Fitment API
   description: "Endpoints for vehicle manufacturers, makes, models, and types"
+- name: Vehicle Fitment Bulk Ingest API
+  description: Bulk import vehicle fitment records
 paths:
   /v1/vehicle-fitment/hints/{hintId}:
     get:
@@ -160,6 +162,33 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/FilterProductsResponse"
+  /v1/fitments/bulk-ingest:
+    post:
+      tags:
+      - Vehicle Fitment Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestFitmentBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/vehicle-fitment/vehicle-types/{makeId}:
     get:
       tags:
@@ -404,6 +433,80 @@ components:
       required:
       - count
       - productIds
+    BulkIngestRequestFitmentBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitmentBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    FitmentBulkIngestRecord:
+      type: object
+      properties:
+        partNumberId:
+          type: integer
+          format: int64
+        manufacturerName:
+          type: string
+        makeName:
+          type: string
+        modelName:
+          type: string
+        vehicleTypeName:
+          type: string
+        vehicleYear:
+          type: string
+        engineType:
+          type: string
+        submodel:
+          type: string
+        notes:
+          type: string
+      required:
+      - partNumberId
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     VehicleTypeResponse:
       type: object
       description: Vehicle type response for a make

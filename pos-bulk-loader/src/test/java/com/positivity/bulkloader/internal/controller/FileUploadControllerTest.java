@@ -46,7 +46,7 @@ class FileUploadControllerTest {
         // ─── POST /v1/bulk-jobs/{jobId}/upload ───────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void uploadFile_validMultipart_returns200() throws Exception {
                 MockMultipartFile file = new MockMultipartFile("file", "products.csv", "text/csv",
                                 "sku,name\nABC-001,Widget".getBytes());
@@ -70,14 +70,14 @@ class FileUploadControllerTest {
 
                 mockMvc.perform(multipart("/v1/bulk-jobs/{jobId}/upload", JOB_ID)
                                 .file(file)
-                                .header("X-Authorities", "BULK_IMPORT_READ"))
+                                .header("X-Authorities", "bulkImport:status:read"))
                                 .andExpect(status().isForbidden());
         }
 
         // ─── POST /v1/bulk-jobs/{jobId}/process ──────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void startProcessing_whenJobExists_returns200() throws Exception {
                 BulkLoadJobResponse response = BulkLoadJobResponse.builder()
                                 .id(JOB_ID)

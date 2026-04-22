@@ -4,7 +4,7 @@ info:
   description: "API documentation for the Product service, accessible via the API\
     \ Gateway."
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -13,6 +13,8 @@ servers:
 tags:
 - name: UOM Conversion API
   description: Unit of measure conversion API
+- name: Catalog Bulk Ingest API
+  description: Bulk import catalog products
 - name: Products API
   description: "API for products, lifecycle, and pricing"
 - name: Item Cost API
@@ -154,6 +156,18 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
+          description: Temporal overlap or optimistic locking conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: MSRP updated
           content:
@@ -169,18 +183,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "409":
-          description: Temporal overlap or optimistic locking conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/lifecycle:
     get:
       tags:
@@ -432,6 +434,12 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostUpdateRequestDto"
         required: true
       responses:
+        "404":
+          description: Not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
           description: Updated
           content:
@@ -447,12 +455,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
     delete:
       tags:
       - Supplier Item Cost API
@@ -569,12 +571,6 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
         "200":
           description: Price book rule updated
           content:
@@ -590,6 +586,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Rule conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
     delete:
       tags:
       - Price Book API
@@ -717,6 +719,12 @@ paths:
                 default: "##default"
         required: true
       responses:
+        "400":
+          description: Invalid request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
         "200":
           description: Catalog updated successfully
           content:
@@ -732,12 +740,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "404":
           description: Catalog not found
           content:
@@ -865,6 +867,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
+        "409":
+          description: Business conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
         "201":
           description: Product created
           content:
@@ -880,12 +888,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Business conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -1007,12 +1009,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "201":
           description: MSRP created
           content:
@@ -1028,6 +1024,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/uom-conversions:
     get:
       tags:
@@ -1108,12 +1110,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
-        "409":
-          description: Duplicate supplier and item combination
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "201":
           description: Created
           content:
@@ -1129,6 +1125,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Duplicate supplier and item combination
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1144,18 +1146,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideCreateRequestDto"
         required: true
       responses:
-        "400":
-          description: Guardrail validation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "201":
           description: Override created
           content:
@@ -1171,6 +1161,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Guardrail validation failed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
@@ -1248,6 +1250,12 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override approved
           content:
@@ -1263,12 +1271,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
@@ -1496,6 +1498,33 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+  /v1/catalog/bulk-ingest:
+    post:
+      tags:
+      - Catalog Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestCatalogBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/catalog-items/{type}:
     post:
       tags:
@@ -1517,6 +1546,12 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
+        "400":
+          description: Invalid item type or request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
         "201":
           description: Catalog item created successfully
           content:
@@ -1532,12 +1567,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid item type or request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
   /v1/products/{productId}/substitutes:
     get:
       tags:
@@ -1553,6 +1582,14 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductDto"
         "200":
           description: Substitute parts returned
           content:
@@ -1568,14 +1605,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/msrp/active:
     get:
       tags:
@@ -1596,12 +1625,6 @@ paths:
           type: string
           format: date
       responses:
-        "404":
-          description: No active MSRP for date
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: Active MSRP returned
           content:
@@ -1617,6 +1640,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: No active MSRP for date
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/detail:
     get:
       tags:
@@ -1640,12 +1669,6 @@ paths:
         schema:
           default: "##default"
       responses:
-        "400":
-          description: Invalid location ID
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
         "200":
           description: Successfully retrieved product details (may be partial if some
             services unavailable)
@@ -1662,6 +1685,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Invalid location ID
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
         "404":
           description: Product not found
           content:
@@ -1689,6 +1718,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Service not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceDto"
         "200":
           description: Successfully retrieved service
           content:
@@ -1704,12 +1739,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Service not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ServiceDto"
   /v1/products/services/name/{name}:
     get:
       tags:
@@ -1829,12 +1858,6 @@ paths:
         schema:
           default: "##default"
       responses:
-        "404":
-          description: No pricing context found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
         "200":
           description: Effective price returned
           content:
@@ -1850,6 +1873,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: No pricing context found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
   /v1/products/noninventory/{productId}:
     get:
       tags:
@@ -1865,6 +1894,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Non-inventory product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NonInventoryProductDto"
         "200":
           description: Successfully retrieved non-inventory product
           content:
@@ -1880,12 +1915,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Non-inventory product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/NonInventoryProductDto"
   /v1/products/noninventory/name/{name}:
     get:
       tags:
@@ -3241,6 +3270,76 @@ components:
           type: string
           format: uuid
         fallbackReason:
+          type: string
+    BulkIngestRequestCatalogBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    CatalogBulkIngestRecord:
+      type: object
+      properties:
+        sku:
+          type: string
+        upc:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        categoryName:
+          type: string
+        subcategoryName:
+          type: string
+        price:
+          type: number
+      required:
+      - name
+      - sku
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
           type: string
     AvailabilityInfo:
       type: object

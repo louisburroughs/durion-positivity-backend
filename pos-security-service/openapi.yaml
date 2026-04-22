@@ -3,7 +3,7 @@ info:
   title: POS Security Service API
   description: API documentation for POS Security Service
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -4478,8 +4478,9 @@ paths:
     get:
       tags:
       - JWT API
-      summary: Extract authorities from JWT token
-      description: Get the authorities claim from a JWT token (expanded by gateway)
+      summary: Extract authorities from JWT token (deprecated)
+      description: Compatibility endpoint for legacy tokens. New token issuance does
+        not include an authorities claim.
       operationId: getAuthorities
       parameters:
       - name: token
@@ -4533,6 +4534,7 @@ paths:
                 items:
                   type: string
                 uniqueItems: true
+      deprecated: true
   /v1/audit/pricing-snapshots/{snapshotId}:
     get:
       tags:

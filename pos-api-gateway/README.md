@@ -14,7 +14,7 @@ A lightweight authentication/authorization filter enriches requests with user id
   - Gateway rewrites request path: `/{domain}/{resource}` + header `X-API-Version: 1` → `/{domain}/v1/{resource}`
   - Example: `GET /customer/crm/accounts` with header `X-API-Version: 1` → routes to `GET /customer/v1/crm/accounts`
 - **Path Format**: Clients call `http://localhost:8080/{domain}/{resource}` with the version header; gateway inserts `/v{version}` after `{domain}`
-  - Domain examples: `customer`, `inventory`, `order`, `accounting`
+  - Domain examples: `customer`, `inventory`, `order`, `accounting`, `bulk-loader`
   - Gateway routes to internal service via service discovery (e.g., `lb://CUSTOMER`)
   - Service receives the request after gateway strips `/{domain}` prefix
 

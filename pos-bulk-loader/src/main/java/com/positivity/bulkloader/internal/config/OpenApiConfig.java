@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.config;
+package com.positivity.bulkloader.internal.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -13,8 +13,8 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("POS Accounting Service API")
-                        .description("Accounting service for invoice, journal entry, and GL account management")
+                        .title("POS Bulk Loader Service API")
+                        .description("Bulk loader service for importing and processing POS data in bulk.")
                         .version("v1")
                         .contact(
                                 new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));

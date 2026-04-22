@@ -1,6 +1,9 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
+import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
+import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.NoSuchElementException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -31,6 +34,18 @@ public class BulkLoaderExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleBadRequest(IllegalArgumentException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(TusOffsetConflictException.class)
+    public ProblemDetail handleTusConflict(TusOffsetConflictException ex, HttpServletResponse response) {
+        response.setHeader("Tus-Resumable", "1.0.0");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(TusUploadExpiredException.class)
+    public ProblemDetail handleTusExpired(TusUploadExpiredException ex, HttpServletResponse response) {
+        response.setHeader("Tus-Resumable", "1.0.0");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.GONE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

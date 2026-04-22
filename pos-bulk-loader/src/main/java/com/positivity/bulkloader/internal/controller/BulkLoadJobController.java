@@ -36,9 +36,9 @@ public class BulkLoadJobController {
     private final BulkLoadJobService bulkLoadJobService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_CREATE", apiVersion = "1")
-    @Operation(summary = "Create a new bulk load job")
+    @Operation(summary = "Create a new bulk load job", description = "Creates a new bulk load job for the authenticated operator. Each operator can only have one active job at a time. The job starts in CREATED state and must be populated with a file upload before processing can begin.")
     @ApiResponse(responseCode = "201", description = "Job created")
     @ApiResponse(responseCode = "409", description = "Operator already has an active job")
     public ResponseEntity<BulkLoadJobResponse> createJob(
@@ -49,8 +49,8 @@ public class BulkLoadJobController {
     }
 
     @GetMapping("/{jobId}")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "Get a bulk load job by ID")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "Get a bulk load job by ID", description = "Retrieves the details of a bulk load job for the authenticated operator. The operator can only access their own jobs.")
     @ApiResponse(responseCode = "200", description = "Job found")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
@@ -60,8 +60,8 @@ public class BulkLoadJobController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "List bulk load jobs for the authenticated operator")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "List bulk load jobs for the authenticated operator", description = "Retrieves a paginated list of bulk load jobs for the authenticated operator. The operator can only access their own jobs.")
     @ApiResponse(responseCode = "200", description = "Jobs listed")
     public ResponseEntity<Page<BulkLoadJobResponse>> listJobs(@NonNull Pageable pageable) {
         String operatorId = currentOperatorId();
@@ -69,9 +69,9 @@ public class BulkLoadJobController {
     }
 
     @PostMapping("/{jobId}/cancel")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_CANCEL", apiVersion = "1")
-    @Operation(summary = "Cancel a running bulk load job")
+    @Operation(summary = "Cancel a running bulk load job", description = "Cancels a bulk load job that is currently in progress. The operator can only cancel their own jobs.")
     @ApiResponse(responseCode = "200", description = "Job cancelled")
     @ApiResponse(responseCode = "409", description = "Job is already in terminal state")
     public ResponseEntity<BulkLoadJobResponse> cancelJob(@PathVariable @NonNull UUID jobId) {

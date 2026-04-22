@@ -22,7 +22,7 @@ public class OpenApiConfig {
                         .description(WORKORDER_API_DESCRIPTION)
                         .version(WORKORDER_API_VERSION)
                         .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));
     }
 
     @Bean
@@ -39,7 +39,7 @@ public class OpenApiConfig {
             info.title(WORKORDER_API_TITLE)
                     .description(WORKORDER_API_DESCRIPTION)
                     .version(WORKORDER_API_VERSION)
-                    .contact(new Contact().email("louis.burroughs@gmail.com").name("Durion Team"));
+                    .contact(new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services"));
         };
     }
 }

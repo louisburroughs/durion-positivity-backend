@@ -34,8 +34,8 @@ public class ReviewQueueController {
     private final ReviewQueueService reviewQueueService;
 
     @GetMapping("/{jobId}/audit")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "Get audit records for a bulk load job")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "Get audit records for a bulk load job", description = "Returns a list of audit records for the specified bulk load job, including review status and details for each record.")
     @ApiResponse(responseCode = "200", description = "Audit records returned")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<AuditRecordResponse>> getAuditRecords(@PathVariable @NonNull UUID jobId) {
@@ -44,8 +44,8 @@ public class ReviewQueueController {
     }
 
     @GetMapping("/{jobId}/error-report")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "Download error report as CSV for a bulk load job")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "Download error report as CSV for a bulk load job", description = "Generates and downloads a CSV file containing all error records for the specified bulk load job.")
     @ApiResponse(responseCode = "200", description = "CSV error report downloaded")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<Resource> downloadErrorReport(@PathVariable @NonNull UUID jobId) {

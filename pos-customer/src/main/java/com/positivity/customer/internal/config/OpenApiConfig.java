@@ -11,16 +11,18 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApiConfig {
 
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("Positivity Customer API")
-                        .description("API documentation for the Customer service, accessible via the API Gateway.")
-                        .version("v1")
-                        .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")))
-                .servers(List.of(
-                        new Server().url("http://api-gateway.local/v1/customer").description("API Gateway")));
-    }
+        @Bean
+        public OpenAPI customOpenAPI() {
+                return new OpenAPI()
+                                .info(new Info()
+                                                .title("Positivity Customer API")
+                                                .description("API documentation for the Customer service, accessible via the API Gateway.")
+                                                .version("v1")
+                                                .contact(
+                                                                new Contact().email("louis.burroughs@gmail.com")
+                                                                                .name("Durion Support Services")))
+                                .servers(List.of(
+                                                new Server().url("http://api-gateway.local/v1/customer")
+                                                                .description("API Gateway")));
+        }
 }

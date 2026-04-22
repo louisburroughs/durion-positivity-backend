@@ -8,6 +8,8 @@ servers:
 tags:
 - name: Event Types
   description: Manage EventTypes for PreregisteredEvents
+- name: Event Summary
+  description: Query aggregated event counts by timeframe
 - name: Event Emission
   description: Receive and persist emitted events from internal services
 paths:
@@ -145,14 +147,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "200":
-          description: Event type created or updated successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "400":
-          description: Invalid request parameters
+        "200":
+          description: Event type created or updated successfully
           content:
             '*/*':
               schema:
@@ -212,18 +214,60 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EventTypeResponse"
         "201":
           description: Event type created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventTypeResponse"
+  /v1/events/summary/lastWeek:
+    get:
+      tags:
+      - Event Summary
+      summary: Get event summary for the last week
+      description: Returns event counts grouped by event type for the last 7 days
+      operationId: getLastWeekSummary
+      responses:
+        "200":
+          description: Summary returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventSummaryResponse"
+  /v1/events/summary/lastHour:
+    get:
+      tags:
+      - Event Summary
+      summary: Get event summary for the last hour
+      description: Returns event counts grouped by event type for the last 60 minutes
+      operationId: getLastHourSummary
+      responses:
+        "200":
+          description: Summary returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventSummaryResponse"
+  /v1/events/summary/lastDay:
+    get:
+      tags:
+      - Event Summary
+      summary: Get event summary for the last day
+      description: Returns event counts grouped by event type for the last 24 hours
+      operationId: getLastDaySummary
+      responses:
+        "200":
+          description: Summary returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventSummaryResponse"
   /v1/eventTypes/active:
     get:
       tags:
@@ -367,3 +411,16 @@ components:
       - id
       - publishedAt
       - timestamp
+    EventSummaryResponse:
+      type: object
+      description: Event count grouped by event type for a given timeframe
+      properties:
+        eventTypeId:
+          type: string
+          description: Event type identifier
+          example: ORDER_ORDER_CREATE
+        count:
+          type: integer
+          format: int64
+          description: Number of events of this type in the timeframe
+          example: 42

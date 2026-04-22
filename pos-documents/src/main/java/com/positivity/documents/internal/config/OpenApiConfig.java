@@ -17,6 +17,6 @@ public class OpenApiConfig {
                         .version("v1")
                         .description("API documentation for document rendering and format conversion")
                         .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));
     }
 }

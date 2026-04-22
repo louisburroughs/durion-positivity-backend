@@ -1,5 +1,6 @@
 package com.positivity.accounting.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -160,7 +161,10 @@ class OutboxProcessorTest {
     void cleanupOldEvents_exception() {
         when(outboxService.cleanupOldEvents(any(Instant.class))).thenThrow(new RuntimeException("DB error"));
 
-        // Should not propagate
-        processor.cleanupOldEvents();
+        // Exception must not propagate — scheduled methods that throw will be unscheduled by Spring
+        assertDoesNotThrow(() -> processor.cleanupOldEvents());
+
+        // Cleanup was attempted before the exception was caught (not an early return)
+        verify(outboxService).cleanupOldEvents(any(Instant.class));
     }
 }

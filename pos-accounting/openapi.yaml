@@ -3,7 +3,7 @@ info:
   title: POS Accounting Service API
   description: "Accounting service for invoice, journal entry, and GL account management"
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -1833,17 +1833,17 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
-        "403":
-          description: Authorization denied - separate authorization required
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Refund recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "403":
+          description: Authorization denied - separate authorization required
+          content:
+            '*/*':
+              schema: {}
         "400":
           description: Invalid request parameters
           content:
@@ -1880,6 +1880,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1890,12 +1896,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "422":
           description: Policy validation failed
           content:
@@ -1915,6 +1915,12 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
+        "201":
+          description: Cancellation recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1930,12 +1936,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Cancellation recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2274,14 +2274,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Balance sheet generated successfully
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
@@ -2463,12 +2463,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Invoice status returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
         "500":
           description: Error retrieving invoice status
           content:
@@ -2477,6 +2471,12 @@ paths:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
         "404":
           description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
+        "200":
+          description: Invoice status returned
           content:
             '*/*':
               schema:
@@ -2812,6 +2812,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2828,12 +2834,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/range:
     get:
       tags:
@@ -2859,6 +2859,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range
           content:
@@ -2875,12 +2881,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2898,6 +2898,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2914,12 +2920,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2945,6 +2945,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2953,12 +2959,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/by-order/{orderId}:
     get:
       tags:
@@ -2984,6 +2984,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2992,12 +2998,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -3039,6 +3039,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -3055,12 +3061,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
@@ -3815,11 +3815,9 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
-          - PENDING_REVIEW
           - APPROVED
           - REJECTED
           - PAID
-          - CANCELLED
           - VOIDED
           example: PENDING_RECEIPT_MATCH
         originEventId:
@@ -5259,12 +5257,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -5275,8 +5267,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -5285,17 +5283,17 @@ components:
     Pageablenull:
       type: object
       properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
-        paged:
-          type: boolean
-        offset:
-          type: integer
-          format: int64
         sort:
           $ref: "#/components/schemas/Sortnull"
         unpaged:
@@ -5303,9 +5301,9 @@ components:
     Sortnull:
       type: object
       properties:
-        sorted:
-          type: boolean
         empty:
+          type: boolean
+        sorted:
           type: boolean
         unsorted:
           type: boolean
@@ -5355,10 +5353,8 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
-          - PENDING_REVIEW
           - APPROVED
           - REJECTED
           - PAID
-          - CANCELLED
           - VOIDED
           example: APPROVED

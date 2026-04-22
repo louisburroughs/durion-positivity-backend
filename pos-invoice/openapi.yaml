@@ -3,17 +3,21 @@ info:
   title: POS Invoice API
   description: API documentation for invoice and billing rules management
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
   version: v1
 servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Payment
+  description: Card payment initiation and capture endpoints
 - name: Invoice
   description: Invoice generation and lifecycle management
 - name: Billing Rules
   description: Manage billing rules for commercial accounts
+- name: Receipt
+  description: Invoice receipt generation and reprint endpoints
 paths:
   /v1/billing/rules/{partyId}:
     get:
@@ -127,6 +131,295 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
+  /v1/invoices/{invoiceId}/receipts:
+    post:
+      tags:
+      - Receipt
+      operationId: generateReceipt
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateReceiptRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceiptResponse"
+  /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
+    post:
+      tags:
+      - Receipt
+      operationId: reprintReceipt
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReprintReceiptRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceiptResponse"
+  /v1/invoices/{invoiceId}/receipts/{receiptId}/print:
+    post:
+      tags:
+      - Receipt
+      operationId: recordPrintDelivery
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrintDeliveryRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+  /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
+    post:
+      tags:
+      - Receipt
+      operationId: sendEmailReceipt
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailDeliveryRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+  /v1/invoices/{invoiceId}/payments:
+    post:
+      tags:
+      - Payment
+      summary: Initiate card payment
+      description: Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice
+      operationId: initiatePayment
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiatePaymentRequest"
+        required: true
+      responses:
+        "503":
+          description: Payment gateway unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "400":
+          description: Invalid or missing required fields
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "422":
+          description: Payment method declined
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "201":
+          description: Payment intent created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+  /v1/invoices/{invoiceId}/payments/{paymentId}/void:
+    post:
+      tags:
+      - PaymentReversal
+      summary: Void authorized payment
+      operationId: voidPayment
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoidPaymentRequest"
+        required: true
+      responses:
+        "200":
+          description: Payment voided
+        "422":
+          description: Void window expired
+        "404":
+          description: Payment intent not found
+        "409":
+          description: Invalid payment state
+  /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
+    post:
+      tags:
+      - PaymentReversal
+      summary: Refund captured payment
+      operationId: refundPayment
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundPaymentRequest"
+        required: true
+      responses:
+        "201":
+          description: Refund created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "404":
+          description: Payment intent not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "409":
+          description: Invalid payment state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "422":
+          description: Refund window expired or insufficient refundable amount
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RefundPaymentResponse"
+  /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
+    post:
+      tags:
+      - Payment
+      summary: Capture authorized payment hold
+      operationId: capturePayment
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureAmountRequest"
+        required: true
+      responses:
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "200":
+          description: Payment captured
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "404":
+          description: Payment intent not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
   /v1/invoices/{invoiceId}/finalize:
     post:
       tags:
@@ -446,6 +739,210 @@ components:
         workorderItemId:
           type: string
           format: uuid
+    GenerateReceiptRequest:
+      type: object
+      properties:
+        paymentIntentId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+        templateId:
+          type: string
+        templateVersion:
+          type: string
+      required:
+      - paymentIntentId
+      - templateId
+      - templateVersion
+      - terminalId
+    ReceiptResponse:
+      type: object
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        status:
+          type: string
+          enum:
+          - GENERATED
+    ReprintReceiptRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    PrintDeliveryRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILED
+      required:
+      - status
+    EmailDeliveryRequest:
+      type: object
+      properties:
+        emailAddress:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILED
+      required:
+      - emailAddress
+      - status
+    InitiatePaymentRequest:
+      type: object
+      description: Request to initiate a card payment
+      properties:
+        paymentFlow:
+          type: string
+          description: "Payment flow: SALE_CAPTURE (default one-step) or AUTH_ONLY\
+            \ (two-step)"
+          enum:
+          - SALE_CAPTURE
+          - AUTH_ONLY
+        amount:
+          type: number
+          description: Payment amount (must be positive)
+        idempotencyKey:
+          type: string
+          description: Client-provided idempotency key for safe retry
+        paymentToken:
+          type: string
+          description: Tokenised card reference (no PAN)
+      required:
+      - amount
+      - idempotencyKey
+      - paymentFlow
+      - paymentToken
+    InitiatePaymentResponse:
+      type: object
+      description: Payment intent result
+      properties:
+        paymentIntentId:
+          type: string
+          format: uuid
+          description: Payment intent identifier
+        status:
+          type: string
+          description: Current lifecycle status of the payment intent
+          enum:
+          - PENDING
+          - AUTHORIZED
+          - CAPTURED
+          - CAPTURE_FAILED
+          - VOIDED
+          - EXPIRED
+        authorizedAmount:
+          type: number
+          description: Amount authorized on the card
+        capturedAmount:
+          type: number
+          description: Amount captured (funds moved)
+        voidedRemainderAmount:
+          type: number
+          description: Remainder voided after partial capture
+        gatewayProvider:
+          type: string
+          description: "Gateway provider identifier (e.g., stripe)"
+        gatewayResponse:
+          type: string
+          description: Raw gateway response JSON for audit
+    VoidPaymentRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+          - CUSTOMER_REQUEST
+          - DUPLICATE_AUTHORIZATION
+          - ENTRY_ERROR
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+        notes:
+          type: string
+      required:
+      - reason
+    RefundPaymentRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        reason:
+          type: string
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+        notes:
+          type: string
+      required:
+      - amount
+      - reason
+    RefundPaymentResponse:
+      type: object
+      properties:
+        refundId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        paymentIntentId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        reason:
+          type: string
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+        notes:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        gatewayReference:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+    CaptureAmountRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        captureIdempotencyKey:
+          type: string
+      required:
+      - amount
+      - captureIdempotencyKey
     FinalizationRequest:
       type: object
       properties:

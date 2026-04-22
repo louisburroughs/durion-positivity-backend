@@ -4,7 +4,7 @@ info:
   description: "Human Resources service for employee management, payroll, and benefits\
     \ administration"
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -21,14 +21,8 @@ tags:
   description: Operations for querying people availability
 - name: Work Sessions API
   description: Operations for managing work sessions and breaks
-- name: People API
-  description: Operations related to people records
 - name: People - TimeEntries
   description: Time entry adjustments and related APIs
-- name: People TimeEntries
-  description: Time entry adjustments and related APIs
-- name: People - Exceptions
-  description: Time entry exception APIs
 - name: User-Person Linking API
   description: Link authentication users to person records
 - name: People - Access Control
@@ -36,6 +30,14 @@ tags:
     permissions (CAP-120)
 - name: Employee API
   description: Employee profile and offboarding operations
+- name: People API
+  description: Operations related to people records
+- name: People TimeEntries
+  description: Time entry adjustments and related APIs
+- name: People - Exceptions
+  description: Time entry exception APIs
+- name: People Bulk Ingest API
+  description: Bulk import employee records
 paths:
   /v1/people/{personId}:
     get:
@@ -380,6 +382,12 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
+        "404":
+          description: Person or role not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "400":
           description: Invalid request
           content:
@@ -392,12 +400,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
-        "404":
-          description: Person or role not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -516,12 +518,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -530,6 +526,12 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -560,12 +562,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -574,6 +570,12 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -1032,6 +1034,33 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
+  /v1/people/bulk-ingest:
+    post:
+      tags:
+      - People Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestPersonBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/people/{personUuid}/access/roles:
     get:
       tags:
@@ -1430,6 +1459,12 @@ paths:
           type: string
           format: date-time
       responses:
+        "400":
+          description: Invalid request for revoking role assignment
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Person or role assignment not found
           content:
@@ -1438,12 +1473,6 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "204":
           description: Role assignment revoked successfully
-        "400":
-          description: Invalid request for revoking role assignment
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -2163,6 +2192,75 @@ components:
         assignmentEndDate:
           type: string
           format: date
+    BulkIngestRequestPersonBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    PersonBulkIngestRecord:
+      type: object
+      properties:
+        legalName:
+          type: string
+        preferredName:
+          type: string
+        employeeNumber:
+          type: string
+        hireDate:
+          type: string
+        primaryEmail:
+          type: string
+        primaryPhone:
+          type: string
+      required:
+      - employeeNumber
+      - hireDate
+      - legalName
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     RoleDto:
       type: object
       properties:

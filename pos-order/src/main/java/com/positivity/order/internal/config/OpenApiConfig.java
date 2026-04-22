@@ -23,6 +23,6 @@ public class OpenApiConfig {
                         .description("API documentation for the Order service, accessible via the API Gateway.")
                         .version("v1")
                         .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));
     }
 }

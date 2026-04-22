@@ -20,6 +20,8 @@ public final class BulkLoaderEventTypes {
                 EventTypeRegistration.write("BULK_LOADER_FILE_UPLOAD", "File uploaded for bulk load job")
                         .build(),
                 EventTypeRegistration.approval("BULK_LOADER_MAPPING_APPROVE", "Column mappings approved by operator")
+                        .build(),
+                EventTypeRegistration.write("BULK_LOADER_TUS_UPLOAD_COMPLETE", "TUS resumable upload completed")
                         .build());
     }
 }

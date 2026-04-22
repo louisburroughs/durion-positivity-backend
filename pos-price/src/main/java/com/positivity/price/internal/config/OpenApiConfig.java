@@ -17,6 +17,6 @@ public class OpenApiConfig {
                         .description("Price service for managing product pricing and discounts")
                         .version("v1")
                         .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));
     }
 }

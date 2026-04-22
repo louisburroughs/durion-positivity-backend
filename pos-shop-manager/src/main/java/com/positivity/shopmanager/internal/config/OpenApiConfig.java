@@ -17,6 +17,6 @@ public class OpenApiConfig {
                         .description("Shop Manager service for managing shop operations and staff")
                         .version("v1")
                         .contact(
-                                new Contact().email("louis.burroughs@gmail.com").name("Durion Team")));
+                                new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")));
     }
 }

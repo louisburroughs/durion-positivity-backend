@@ -4,7 +4,7 @@ info:
   description: "API documentation for the Shop Location service, accessible via the\
     \ API Gateway. Shop locations are Maintenance Bays and Mobile Shops."
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -15,6 +15,8 @@ tags:
   description: Operations for managing mobile units within locations
 - name: Travel Buffer Policy API
   description: Operations for managing travel buffer policies
+- name: Location Bulk Ingest API
+  description: Bulk import locations
 - name: Bay API
   description: Operations for managing bays within locations
 - name: Site Defaults API
@@ -607,6 +609,33 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationParentResponseDTO"
+  /v1/locations/bulk-ingest:
+    post:
+      tags:
+      - Location Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestLocationBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/travel-buffer-policies/{id}:
     patch:
       tags:
@@ -1522,6 +1551,84 @@ components:
           format: uuid
         parentType:
           type: string
+    BulkIngestRequestLocationBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocationBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    LocationBulkIngestRecord:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        stateOrProvince:
+          type: string
+        postalCode:
+          type: string
+        countryCode:
+          type: string
+        phoneNumber:
+          type: string
+        active:
+          type: boolean
+        locationTypeName:
+          type: string
+      required:
+      - code
+      - name
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     StorageLocationPatchRequest:
       type: object
       properties:
@@ -1619,12 +1726,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -1635,8 +1736,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1645,6 +1752,9 @@ components:
     Pageablenull:
       type: object
       properties:
+        offset:
+          type: integer
+          format: int64
         paged:
           type: boolean
         pageNumber:
@@ -1653,9 +1763,6 @@ components:
         pageSize:
           type: integer
           format: int32
-        offset:
-          type: integer
-          format: int64
         sort:
           $ref: "#/components/schemas/Sortnull"
         unpaged:
@@ -1663,9 +1770,9 @@ components:
     Sortnull:
       type: object
       properties:
-        sorted:
-          type: boolean
         empty:
+          type: boolean
+        sorted:
           type: boolean
         unsorted:
           type: boolean
@@ -1707,12 +1814,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -1723,8 +1824,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1769,12 +1876,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -1785,8 +1886,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1818,12 +1925,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -1834,8 +1935,14 @@ components:
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32

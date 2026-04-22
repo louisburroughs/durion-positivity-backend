@@ -16,6 +16,6 @@ public class OpenApiConfig {
                         .title("Vehicle Fitment API")
                         .version("1.0")
                         .description("API for vehicle fitment data in the POS system")
-                        .contact(new Contact().name("Durion Team").email("platform@durionpos.org")));
+                        .contact(new Contact().name("Durion Support Services").email("platform@durionpos.org")));
     }
 }

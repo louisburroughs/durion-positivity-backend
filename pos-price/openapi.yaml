@@ -3,13 +3,15 @@ info:
   title: Positivity Price API
   description: Price service for managing product pricing and discounts
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Price Bulk Ingest API
+  description: Bulk import base price records
 - name: Pricing Snapshots
   description: Read operations for immutable pricing snapshots
 - name: Promotion Offers
@@ -441,6 +443,33 @@ paths:
           content:
             '*/*':
               schema: {}
+  /v1/price/bulk-ingest:
+    post:
+      tags:
+      - Price Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestBasePriceBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/promotions/offers/{id}/deactivate:
     patch:
       tags:
@@ -1386,6 +1415,74 @@ components:
         resultingValue:
           $ref: "#/components/schemas/MoneyAmount"
           description: Running value after this rule adjustment
+    BasePriceBulkIngestRecord:
+      type: object
+      properties:
+        productId:
+          type: string
+        msrp:
+          type: string
+        currency:
+          type: string
+          maxLength: 3
+          minLength: 3
+        effectiveFrom:
+          type: string
+      required:
+      - currency
+      - effectiveFrom
+      - msrp
+      - productId
+    BulkIngestRequestBasePriceBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/BasePriceBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     PricingSnapshotResponse:
       type: object
       description: Response payload for immutable pricing snapshot retrieval

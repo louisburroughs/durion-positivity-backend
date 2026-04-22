@@ -44,7 +44,7 @@ class ReviewQueueControllerTest {
         // ─── GET /v1/bulk-jobs/{jobId}/audit ─────────────────────────────────────
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_READ")
+        @WithMockUser(authorities = "bulkImport:status:read")
         void getAuditRecords_returnsList() throws Exception {
                 AuditRecordResponse auditRecord = AuditRecordResponse.builder()
                                 .id(AUDIT_ID)
@@ -66,14 +66,14 @@ class ReviewQueueControllerTest {
         @Test
         void getAuditRecords_withoutReadAuthority_returns403() throws Exception {
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}/audit", JOB_ID)
-                                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                                .header("X-Authorities", "bulkImport:upload:execute")) // READ required
                                 .andExpect(status().isForbidden());
         }
 
         // ─── GET /v1/bulk-jobs/{jobId}/error-report ───────────────────────────────
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_READ")
+        @WithMockUser(authorities = "bulkImport:status:read")
         void downloadErrorReport_returns200WithContentDispositionAttachment() throws Exception {
                 String csv = "row_number,entity_type,review_status,reason_codes,original_values\n";
                 when(reviewQueueService.generateErrorReport(JOB_ID)).thenReturn(new ByteArrayResource(csv.getBytes()));
@@ -88,7 +88,7 @@ class ReviewQueueControllerTest {
         @Test
         void downloadErrorReport_withoutReadAuthority_returns403() throws Exception {
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}/error-report", JOB_ID)
-                                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                                .header("X-Authorities", "bulkImport:upload:execute")) // READ required
                                 .andExpect(status().isForbidden());
         }
 }

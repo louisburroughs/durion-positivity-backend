@@ -3,7 +3,7 @@ info:
   title: Vehicle Inventory API
   description: API for managing vehicle inventory in the POS system
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
   version: "1.0"
 servers:
@@ -14,6 +14,8 @@ tags:
   description: Operations for creating and maintaining vehicle registry records
 - name: Vehicle API
   description: Endpoints for vehicle CRUD and VIN-based operations
+- name: Vehicle Bulk Ingest API
+  description: Bulk import vehicle records
 - name: Vehicle Preferences
   description: Manage vehicle care preferences with flexible schema support
 - name: Vehicle Search
@@ -70,8 +72,8 @@ paths:
               $ref: "#/components/schemas/PreferencesUpsertDto"
         required: true
       responses:
-        "201":
-          description: Preferences created successfully
+        "200":
+          description: Preferences updated successfully
           content:
             '*/*':
               schema:
@@ -82,14 +84,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: Vehicle not found
+        "201":
+          description: Preferences created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences updated successfully
+        "404":
+          description: Vehicle not found
           content:
             '*/*':
               schema:
@@ -427,14 +429,14 @@ paths:
           type: boolean
           default: false
       responses:
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
@@ -453,18 +455,45 @@ paths:
               $ref: "#/components/schemas/SearchVehiclesRequest"
         required: true
       responses:
-        "200":
-          description: Search results returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SearchVehiclesResponse"
         "400":
           description: Invalid search query
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
+        "200":
+          description: Search results returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SearchVehiclesResponse"
+  /v1/vehicles/bulk-ingest:
+    post:
+      tags:
+      - Vehicle Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIngestRequestVehicleBulkIngestRecord"
+        required: true
+      responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "200":
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BulkIngestResponse"
   /v1/vehicles-legacy:
     get:
       tags:
@@ -783,6 +812,14 @@ components:
           format: date-time
           description: Last update timestamp (UTC).
           example: 2026-02-27T13:00:00Z
+        createdBy:
+          type: string
+          description: Username of the actor who created this record.
+          example: jsmith
+        updatedBy:
+          type: string
+          description: Username of the actor who last modified this record.
+          example: jsmith
         version:
           type: integer
           format: int64
@@ -834,6 +871,88 @@ components:
         make:
           type: string
         model:
+          type: string
+    BulkIngestRequestVehicleBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleBulkIngestRecord"
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    VehicleBulkIngestRecord:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+          maxLength: 17
+          minLength: 17
+        unitNumber:
+          type: string
+        description:
+          type: string
+        licensePlate:
+          type: string
+        licensePlateJurisdiction:
+          type: string
+        year:
+          type: integer
+          format: int32
+        make:
+          type: string
+        model:
+          type: string
+        trim:
+          type: string
+      required:
+      - accountId
+      - description
+      - unitNumber
+      - vin
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkIngestResult"
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
           type: string
     CreateVehicleRequest:
       type: object
