@@ -1,33 +1,29 @@
 # pos-coverage-aggregate
 
-This module exists only to generate a single aggregate JaCoCo XML report for
-full-repository SonarCloud analysis.
+Aggregate JaCoCo report module for full-repository SonarCloud analysis. This module contains no production code — it exists only to combine JaCoCo XML coverage data from all `pos-*` modules into a single report consumed by SonarCloud.
 
-## Purpose
+## Responsibilities
 
-- aggregate coverage from the backend reactor into one report
-- provide a stable SonarCloud input at
-  `target/site/jacoco-aggregate/jacoco.xml`
-- support authoritative coverage analysis on `main` and nightly CI runs
+- Aggregate JaCoCo coverage from all backend reactor modules into one XML report
+- Provide a stable SonarCloud input at `target/site/jacoco-aggregate/jacoco.xml`
+- Support authoritative full-repository coverage analysis on main and nightly CI runs
 
-## Typical Usage
+## Dependencies
 
-From the backend repository root:
+- `pos-shared-dtos`, `pos-security-common` — included to ensure coverage from cross-cutting libraries is captured
+
+## Development
+
+This is a `pom`-packaged aggregator with no runnable service. It is not intended to be started.
 
 ```bash
+# Generate the aggregate report
 ./mvnw -pl pos-coverage-aggregate -am -DskipITs verify
-```
 
-To run SonarCloud with the aggregate report:
-
-```bash
+# Run with SonarCloud analysis
 ./mvnw -pl pos-coverage-aggregate -am -DskipITs verify \
   org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
   -Dsonar.coverage.jacoco.xmlReportPaths=pos-coverage-aggregate/target/site/jacoco-aggregate/jacoco.xml
 ```
 
-## Notes
-
-- The module is intentionally `pom`-packaged and contains no production code.
-- PR workflows continue to use lighter per-module coverage import; this module
-  is for full-repository coverage lanes.
+PR workflows use lighter per-module coverage; this module is for the full-repository coverage lane.

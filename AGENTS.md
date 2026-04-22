@@ -68,7 +68,7 @@ Treat each `pos-*` directory as a standard Spring Boot service using existing mo
 
 **Package structure example:**
 
-```
+```ascii
 com.positivity.accounting/
 ├── PosAccountingApplication.java  ← Spring Boot main class (root level)
 ├── service/                       ← PUBLIC API (exposed to other modules)
@@ -219,12 +219,12 @@ public class {Module}EventTypeInitializer implements ApplicationRunner {
 
 #### Threshold Presets
 
-| Preset | p50 | p95 | p99 | Use Case |
-|--------|-----|-----|-----|----------|
-| `fastRead` | 50ms | 200ms | 500ms | Simple GET/list operations |
-| `search` | 100ms | 500ms | 1s | Search/filter with pagination |
-| `write` | 200ms | 1s | 3s | POST/PUT/DELETE operations |
-| `approval` | 500ms | 2s | 5s | Workflow approval operations |
+| Preset     | p50   | p95   | p99   | Use Case                      |
+| ---------- | ----- | ----- | ----- | ----------------------------- |
+| `fastRead` | 50ms  | 200ms | 500ms | Simple GET/list operations    |
+| `search`   | 100ms | 500ms | 1s    | Search/filter with pagination |
+| `write`    | 200ms | 1s    | 3s    | POST/PUT/DELETE operations    |
+| `approval` | 500ms | 2s    | 5s    | Workflow approval operations  |
 
 #### Module Dependencies
 

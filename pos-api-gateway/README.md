@@ -1,149 +1,60 @@
-# POS API Gateway — Security Blurb
+# pos-api-gateway
 
-A lightweight authentication/authorization filter enriches requests with user identity and authorities, keeping the gateway thin and pushing policy to services.
+Spring Cloud Gateway (WebFlux) acting as the single external entry point for the Durion POS platform. Validates JWT bearer tokens, strips or propagates identity headers, routes requests to downstream microservices discovered through Eureka, and aggregates Swagger UI documentation from all services.
 
-## What It Does
+## Responsibilities
 
-### API Versioning & Routing
+- Authenticate and authorise all inbound requests via local JWT validation (JJWT)
+- Decode the `perm_bits` BitSet claim and map bit indexes to canonical `PERM_*` authority strings
+- Route traffic to registered `pos-*` microservices using Eureka load-balanced routes (`lb://`)
+- Strip inbound identity-spoofing headers before forwarding to downstream services
+- Rewrite API version header (`X-API-Version: 1`) into URL path prefix (`/v1/`)
+- Serve a unified Swagger UI aggregating OpenAPI specs from every registered service
 
-- **X-API-Version Header (REQUIRED)**: API calls must include the `X-API-Version` header with a simple integer version (e.g., `1`, `2`, `3`), except for explicit public bootstrap endpoints.
-  - Header format: `X-API-Version: 1`
-  - Missing or invalid header returns `400 Bad Request`
-  - Public auth bootstrap paths under `/security-service/v1/auth/**` are exempt from version-header enforcement
-  - Already versioned service paths (for example `/customer/v1/...`) are forwarded as-is and not rewritten again
-  - Gateway rewrites request path: `/{domain}/{resource}` + header `X-API-Version: 1` → `/{domain}/v1/{resource}`
-  - Example: `GET /customer/crm/accounts` with header `X-API-Version: 1` → routes to `GET /customer/v1/crm/accounts`
-- **Path Format**: Clients call `http://localhost:8080/{domain}/{resource}` with the version header; gateway inserts `/v{version}` after `{domain}`
-  - Domain examples: `customer`, `inventory`, `order`, `accounting`, `bulk-loader`
-  - Gateway routes to internal service via service discovery (e.g., `lb://CUSTOMER`)
-  - Service receives the request after gateway strips `/{domain}` prefix
+## Key Classes
 
-### Authentication & Authorization
+- `SecurityGatewayConfig` — reactive Spring Security filter chain; JWT validation and header injection
+- `GatewayPermissionCatalog` — maps bit indexes to canonical authority strings; enforces `perm_ver`
+- `GatewayAuthProperties` — binds `auth.*` and `pos.gateway.security.*` configuration properties
+- `ApiVersionHeaderToPathFilter` — rewrites `X-API-Version` header value to URL path segment
+- `OpenApiConfig` — aggregates per-service OpenAPI docs into the unified Swagger UI
 
-- Validates JWTs locally in the gateway using the configured signing secret (`security.jwt.secret`). The gateway enforces the canonical token contract issued by `pos-security-service`.
-- Tokens MUST include `perm_bits` and `perm_ver`; tokens missing either claim are rejected (401). The gateway treats missing or mismatched `perm_ver` as an authentication failure (fail-closed semantics).
-- Decodes `perm_bits` (Base64URL bitset) and maps set bit indexes to canonical `PERM_*` authorities for downstream services.
-- Strips inbound identity headers (`X-User`, `X-User-Id`, `X-Authorities`, `X-Roles`) and regenerates trusted identity headers from verified token claims.
-- Injects headers to downstream services:
-  - `X-Authorities`: comma-separated authorities (e.g., `PERM_crm:party:view,PERM_crm:vehicle:edit,...`)
-  - `X-User`: token subject (`sub`)
-  - `X-User-Id`: token `uid` claim (legacy `userId` support is compatibility-only downstream)
-  - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
-- Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`, `/security-service/v1/auth/**`
+## Routes (selected)
 
-Source:
+Routes strip the leading path prefix before forwarding to the upstream service.
 
-- API Versioning & routing: `src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java`
-- Authentication & authorization: `src/main/java/com/positivity/gateway/config/SecurityGatewayConfig.java`
+| Prefix | Upstream Service |
+|---|---|
+| `/accounting/**` | `lb://ACCOUNTING` |
+| `/catalog/**` | `lb://CATALOG` |
+| `/customer/**` | `lb://CUSTOMER` |
+| `/inventory/**` | `lb://INVENTORY` |
+| `/invoice/**` | `lb://INVOICE` |
+| `/order/**` | `lb://ORDER` |
+| `/workorder/**` | `lb://WORKORDER` |
+| `/security-service/**` | `lb://SECURITY-SERVICE` |
+| `/shop-manager/**` | `lb://SHOP-MANAGER` |
+
+Discovery locator is disabled; only explicitly configured routes are exposed. `pos-tax` and `pos-events` are intentionally not routed externally.
 
 ## Configuration
 
-- Configure local JWT validation via `security.jwt.secret` and gateway auth flags under `auth.*`.
-- Configure JWT validation to trust tokens from `pos-security-service` and audience `api-gateway`.
+| Property | Default | Description |
+|---|---|---|
+| `pos.gateway.security.strict-jwt-header-validation` | `true` | Reject unsafe JWT header patterns before introspection |
+| `pos.gateway.security.allowed-jwt-algorithms` | `HS256` | Permitted JWT `alg` values |
+| `auth.token-identity-required` | `false` | Reject tokens missing `perm_bits` claim |
+| `auth.strip-inbound-identity-headers` | `true` | Strip `X-User`, `X-User-Id`, `X-Authorities` headers |
+| `auth.auth-path-root` | `/security-service/v1/auth` | Public auth path that bypasses JWT checks |
 
-## Authentication & Authorization
+## Dependencies
 
-### Local JWT Validation
+No internal `pos-*` module dependencies. Requires Spring Cloud Gateway, Netflix Eureka client, and JJWT.
 
-- The gateway validates JWT signatures locally using JJWT and the configured `security.jwt.secret`. No runtime call to `pos-security-service` is required for signature validation.
-
-### Permission Bitset Decode
-
-- Tokens issued by the security service include a `perm_bits` claim. `perm_bits` is a Base64URL-encoded BitSet; the gateway decodes it and maps set bit indexes to authorities via `GatewayPermissionCatalog`.
-
-### Catalog Version
-
-- Tokens must include `perm_ver` and the gateway requires `perm_ver == GatewayPermissionCatalog.CATALOG_VERSION`. A mismatched or missing `perm_ver` results in `401 Unauthorized` (fail-closed).
-
-### Identity Header Hardening
-
-- The gateway strips inbound identity headers (`X-User`, `X-User-Id`, `X-Authorities`, `X-Roles`) and injects trusted headers derived from validated tokens: `X-User` (`sub`), `X-User-Id` (`uid`), and `X-Authorities` (canonical authorities list).
-
-### Feature Flags (under `auth:` prefix)
-
-- `auth.strip-inbound-identity-headers` (default: `true`) — controls stripping of inbound identity headers.
-- `auth.reject-header-token-mismatch` (default: `false`) — when `true`, requests whose inbound headers conflict with token-derived identity are rejected.
-
-Note: The gateway's default behaviour is to require `perm_bits`/`perm_ver`. Any temporary legacy fallbacks for `authorities` are intentionally disabled in greenfield PERM rollouts; enable compatibility only during controlled migration windows.
-
-### Observability Counters
-
-- The gateway increments Micrometer counters for auth observability and rollout monitoring:
-  - `auth.token.validation.failure`
-  - `auth.user.identity.missing`
-  - `auth.perm.decode.failure`
-  - `auth.perm.catalog.version.unknown`
-  - `auth.header.strip.count`
-
-### Trust Boundary
-
-- The gateway is the trust boundary for downstream services: it validates JWTs from the `Authorization: Bearer ...` header and injects trusted identity headers (`X-User`, `X-User-Id`, `X-Authorities`). Downstream services should not accept unauthenticated identity headers from clients.
-
-### Legacy Backward-Compat
-
-- Legacy fallback for an `authorities` claim is not enabled by default in greenfield PERM mode. If a migration window requires it, enable the explicit compatibility flag and audit `auth.legacy.decode.count` closely; remove the fallback after migration.
-
-Example — gateway decoding `perm_bits` (conceptual):
-
-```java
-// Base64URL decode then BitSet.valueOf(bytes)
-byte[] decoded = Base64.getUrlDecoder().decode(permBits);
-BitSet bits = BitSet.valueOf(decoded);
-List<String> authorities = bits.stream()
-    .mapToObj(GatewayPermissionCatalog::authorityForBit)
-    .filter(Objects::nonNull)
-    .toList();
-```
-
-## Notes
-
-- **API Versioning is mandatory**: All client requests must include `X-API-Version` with a simple integer (e.g., `1`, `2`). This enables independent versioning of endpoints across the platform.
-- **Gateway is thin & stateless**: Validates versions, injects auth headers, rewrites paths. No policy logic here; services enforce authorization via `@PreAuthorize("hasAuthority('crm:...')")`.
-- **Version header forwarding**: The gateway forwards `X-API-Version` to downstream services, enabling per-endpoint version tracking and observability.
-- **Role and permission management ownership**: `pos-security-service` is the source of truth for roles, permissions, and assignments.
-- Downstream services authorize on canonical authorities from gateway-established security context.
-
-## Quick Test
-
-### Basic Request Flow with API Version
-
-1) Build gateway
+## Development
 
 ```bash
-./mvnw -pl pos-api-gateway -am -DskipTests clean compile
+./mvnw -pl pos-api-gateway -am spring-boot:run
 ```
 
-1) Issue a token (example)
-
-```bash
-curl -s -X POST "http://localhost:8086/v1/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"alice","roles":["CSR","FLEET_MANAGER"]}'
-# Returns JSON containing accessToken
-```
-
-1) Call a backend endpoint **with required X-API-Version header**
-
-```bash
-# ✓ CORRECT: Version header provided
-curl -X GET "http://localhost:8080/customer/crm/accounts/11111111-1111-1111-1111-111111111111/tier" \
-  -H "Authorization: Bearer eyJhbGc...token..." \
-  -H "X-API-Version: 1"
-# Gateway rewrites to: /customer/v1/crm/accounts/{id}/tier and routes to customer service
-
-# ✗ WRONG: Missing version header
-curl -X GET "http://localhost:8080/customer/crm/accounts/11111111-1111-1111-1111-111111111111/tier" \
-  -H "Authorization: Bearer eyJhbGc...token..."
-# Returns: 400 Bad Request — X-API-Version header required
-```
-
-1) Downstream service receives (after gateway processing)
-
-```java
-GET /v1/crm/accounts/11111111-1111-1111-1111-111111111111/tier
-Headers:
-  Authorization: Bearer eyJhbGc...token...
-  X-Authorities: crm:party:view,crm:vehicle:edit,...
-  X-User: alice
-  X-API-Version: 1
-```
+Swagger UI: `http://localhost:8080/swagger-ui.html`

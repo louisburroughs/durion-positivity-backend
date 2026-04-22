@@ -9,18 +9,21 @@ pos-events enables microservices to emit domain events asynchronously without in
 ## ⚠️ Critical Design Constraint
 
 **pos-events is a pure helper/library module. It MUST NOT:**
+
 - ❌ Have a database connection or data source
 - ❌ Register with service discovery (Eureka)
 - ❌ Expose REST API endpoints or gateway routes
 - ❌ Have external service dependencies
 
 **This module provides only:**
+
 - ✅ Annotation-driven event emission (`@EmitEvent`)
 - ✅ Shared profile-aware application time (`Clock`, `ScaledClock`, `TimeSource`)
 - ✅ Auto-configuration for Spring Boot
 - ✅ Event publishing via Spring's `ApplicationEventPublisher`
 
 **Violation of these constraints will:**
+
 1. Break the module's reusability across services
 2. Create circular dependencies
 3. Prevent independent deployment
@@ -31,12 +34,13 @@ pos-events is a **dependency consumed by other modules**, not a service itself.
 ## Public API
 
 ### `@EmitEvent`
+
 Marker annotation placed on service methods to automatically emit events when the method executes successfully.
 
 ```java
 @Service
 public class OrderService {
-    
+
     @EmitEvent
     public Order createOrder(OrderRequest request) {
         Order order = new Order(request);
@@ -47,12 +51,14 @@ public class OrderService {
 ```
 
 **Automatic behavior:**
+
 - Event is emitted after method returns successfully
 - Event payload includes method name, execution time, and result
 - Event name: `{service}.{method}` (e.g., `order-service.createOrder`)
 - Failed methods do NOT emit events (only successful executions)
 
 ### `EventEmitted`
+
 Record (data class) containing the event payload.
 
 ```java
@@ -64,17 +70,18 @@ public record EventEmitted(
 ```
 
 ### `EmitEventProxyFactory`
+
 Optional factory for manual event emission in non-method-level contexts.
 
 ```java
 @Component
 public class SomeComponent {
     private final EmitEventProxyFactory factory;
-    
+
     public SomeComponent(EmitEventProxyFactory factory) {
         this.factory = factory;
     }
-    
+
     public void doSomething() {
         // manual event emission
         factory.emit(new EventEmitted("custom-event", data, 100L));
@@ -83,6 +90,7 @@ public class SomeComponent {
 ```
 
 ### Shared Application Time
+
 `pos-events` also owns the shared backend `Clock` auto-configuration. Consumer
 modules should inject `Clock` for service/config code instead of declaring local
 default `Clock.systemUTC()` beans.
@@ -125,7 +133,8 @@ The dependency is already centralized in the root `pos-dependencies` BOM. Just r
 **Automatic:** No manual configuration needed. The library's auto-configuration activates on classpath inclusion.
 
 **Verify activation** (optional, in application logs):
-```
+
+```text
 Registering auto-configuration: PosEventsApplication
 Registering bean: emitEventAspect
 Registering bean: emitEventProxyFactory
@@ -154,13 +163,13 @@ pos.time.accelerated.zone=UTC
 ```java
 @Service
 public class WorkorderService {
-    
+
     @EmitEvent
     public Workorder createWorkorder(CreateWorkorderRequest request) {
         // business logic
         return workorder;
     }
-    
+
     @EmitEvent
     public Workorder updateWorkorderStatus(Long id, WorkorderStatus status) {
         // business logic
@@ -176,7 +185,7 @@ If another module wants to consume emitted events:
 ```java
 @Component
 public class WorkorderAuditListener {
-    
+
     @EventListener
     public void onWorkorderCreated(EventEmitted event) {
         if (event.eventName().contains("createWorkorder")) {
@@ -190,17 +199,17 @@ public class WorkorderAuditListener {
 
 The following modules currently use pos-events:
 
-| Module | Usage | Purpose |
-|--------|-------|---------|
-| pos-accounting | `@EmitEvent` | Track journal entries and financial transactions |
-| pos-workorder | `@EmitEvent` | Track workorder lifecycle events |
-| pos-catalog | `@EmitEvent` | Track catalog updates and product changes |
-| pos-vehicle-fitment | `@EventListener` | Audit fitment compatibility checks |
-| pos-image | `Clock` | Shared application/auditing time |
-| pos-vehicle-reference-carapi | `Clock` | Shared application/auditing time |
-| pos-vehicle-reference-nhtsa | `Clock` | Shared application/auditing time |
-| pos-event-receiver | `@EventListener` | Centralized event log collection |
-| pos-archunit | Test scope | Validate event emission architecture |
+| Module                       | Usage            | Purpose                                          |
+| ---------------------------- | ---------------- | ------------------------------------------------ |
+| pos-accounting               | `@EmitEvent`     | Track journal entries and financial transactions |
+| pos-workorder                | `@EmitEvent`     | Track workorder lifecycle events                 |
+| pos-catalog                  | `@EmitEvent`     | Track catalog updates and product changes        |
+| pos-vehicle-fitment          | `@EventListener` | Audit fitment compatibility checks               |
+| pos-image                    | `Clock`          | Shared application/auditing time                 |
+| pos-vehicle-reference-carapi | `Clock`          | Shared application/auditing time                 |
+| pos-vehicle-reference-nhtsa  | `Clock`          | Shared application/auditing time                 |
+| pos-event-receiver           | `@EventListener` | Centralized event log collection                 |
+| pos-archunit                 | Test scope       | Validate event emission architecture             |
 
 ## Implementation Details
 
@@ -215,7 +224,7 @@ The following modules currently use pos-events:
 
 ### Package Structure
 
-```
+```ascii
 com.positivity.events/
 ├── EmitEvent.java              (public: annotation)
 ├── EventEmitted.java           (public: event record)
@@ -232,6 +241,7 @@ com.positivity.time/
 ```
 
 **Public API** (consumed by other modules):
+
 - `EmitEvent` annotation
 - `EventEmitted` record
 - `EmitEventProxyFactory` bean
@@ -240,6 +250,7 @@ com.positivity.time/
 - `ScaledClock`, `MetricTime`, and `TimeSource`
 
 **Internal Implementation** (implementation details):
+
 - `EmitEventAspect` (aspect interceptor)
 - `EmitEventProxy` (proxy utility)
 
@@ -247,13 +258,13 @@ com.positivity.time/
 
 All versions are centralized in the root `pom.xml`:
 
-| Dependency | Version | Purpose |
-|---|---|---|
-| Spring Framework (spring-context) | 6.x (from parent) | Core annotation support |
-| Spring Boot (spring-boot-starter-aop) | 3.4.2 (from parent) | AOP framework |
-| Spring Boot (spring-boot-autoconfigure) | 3.4.2 (from parent) | Auto-configuration machinery |
-| Lombok | 1.18.32 (centralized property) | Annotation processing |
-| SLF4J | 2.0.13 (centralized property) | Logging API |
+| Dependency                              | Version                        | Purpose                      |
+| --------------------------------------- | ------------------------------ | ---------------------------- |
+| Spring Framework (spring-context)       | 6.x (from parent)              | Core annotation support      |
+| Spring Boot (spring-boot-starter-aop)   | 3.4.2 (from parent)            | AOP framework                |
+| Spring Boot (spring-boot-autoconfigure) | 3.4.2 (from parent)            | Auto-configuration machinery |
+| Lombok                                  | 1.18.32 (centralized property) | Annotation processing        |
+| SLF4J                                   | 2.0.13 (centralized property)  | Logging API                  |
 
 **No transitive dependencies** on logging implementations, web frameworks, or databases. Consumers provide their own logging via `spring-boot-starter-logging`.
 
@@ -262,12 +273,14 @@ All versions are centralized in the root `pom.xml`:
 ### When to Use `@EmitEvent`
 
 ✅ **DO use** for:
+
 - Service method that performs significant business operations
 - State changes that should be tracked or audited
 - Events that other modules might need to know about
 - Post-transaction operations (order created, payment processed, etc.)
 
 ❌ **DON'T use** for:
+
 - Read-only queries or lookups
 - Internal helper methods
 - Methods that frequently throw exceptions (events only emit on success)
@@ -278,22 +291,22 @@ All versions are centralized in the root `pom.xml`:
 ```java
 @SpringBootTest
 public class WorkorderServiceTest {
-    
+
     @Autowired
     private ApplicationEventPublisher eventPublisher;
-    
+
     @Autowired
     private WorkorderService service;
-    
+
     @Test
     void testOrderCreationEmitsEvent() {
         // Capture published events
         var eventCaptor = new TestEventCaptor();
         eventPublisher.addListener(eventCaptor);
-        
+
         // Execute business logic
         Workorder created = service.createWorkorder(request);
-        
+
         // Verify event was emitted
         assertThat(eventCaptor.getCapturedEvents())
             .anyMatch(e -> e.eventName().contains("createWorkorder"));
