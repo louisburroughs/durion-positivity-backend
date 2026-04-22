@@ -68,9 +68,8 @@ public class FileUploadController {
     @PostMapping("/{jobId}/process")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
-    @Operation(summary = "Transition a bulk load job to PROCESSING state", description = "Marks the job as PROCESSING. Batch execution is triggered separately by the batch runner. "
-            +
-            "The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state.")
+    @Operation(summary = "Launch a bulk load job for processing", description = "Starts Spring Batch execution for the specified bulk load job and transitions it to PROCESSING. "
+            + "The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state and must already have a persisted upload and locationId.")
     @ApiResponse(responseCode = "200", description = "Job transitioned to PROCESSING")
     @ApiResponse(responseCode = "404", description = "Job not found")
     @ApiResponse(responseCode = "409", description = "Invalid state transition")

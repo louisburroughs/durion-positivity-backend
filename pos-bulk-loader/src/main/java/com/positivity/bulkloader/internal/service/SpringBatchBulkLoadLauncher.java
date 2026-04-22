@@ -18,6 +18,7 @@ import org.springframework.util.StringUtils;
 
 @Service
 @Slf4j
+@SuppressWarnings("removal")
 public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
 
   private final JobLauncher jobLauncher;
@@ -50,6 +51,12 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
     if (!StringUtils.hasText(job.getOriginalFilePath())) {
       throw new IllegalArgumentException("Bulk load job must include a persisted storage path before launch");
     }
+    if (job.getLocationId() == null) {
+      throw new IllegalArgumentException("Bulk load job must include a locationId before launch");
+    }
+    if (!StringUtils.hasText(job.getOperatorId())) {
+      throw new IllegalArgumentException("Bulk load job must include an operatorId before launch");
+    }
 
     try {
       jobLauncher.run(
@@ -57,6 +64,8 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
           new JobParametersBuilder()
               .addString("jobId", job.getId().toString())
               .addString("storagePath", job.getOriginalFilePath())
+              .addString("locationId", job.getLocationId().toString())
+              .addString("operatorId", job.getOperatorId())
               .addLong("launchEpochMillis", System.currentTimeMillis())
               .toJobParameters());
       log.info("Launched batch job for bulk load job {} domain {}", job.getId(), job.getDomainType());

@@ -128,6 +128,9 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (job.getOriginalFilePath() == null || job.getOriginalFilePath().isBlank()) {
             throw new IllegalStateException("Job cannot be processed before an uploaded file is persisted");
         }
+        if (job.getLocationId() == null) {
+            throw new IllegalStateException("Job cannot be processed before a locationId is assigned");
+        }
         bulkLoadBatchLauncher.launch(job);
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now());

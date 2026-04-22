@@ -101,6 +101,7 @@ class BulkLoadJobServiceImplTest {
     void startProcessing_whenUploadedFilePresent_transitionsToProcessing() {
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
         job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
         when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -111,6 +112,19 @@ class BulkLoadJobServiceImplTest {
         assertThat(job.getStartedAt()).isNotNull();
         verify(bulkLoadBatchLauncher).launch(job);
         verify(jobRepository).save(job);
+    }
+
+    @Test
+    void startProcessing_whenLocationIdMissing_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(null);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("locationId");
     }
 
     // ─── cancelJob ───────────────────────────────────────────────────────────
@@ -178,6 +192,7 @@ class BulkLoadJobServiceImplTest {
         BulkLoadJob job = new BulkLoadJob();
         job.setId(id);
         job.setOperatorId(operatorId);
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         job.setFileName("products.csv");
         job.setDomainType(DomainType.CATALOG_PRODUCT);
         job.setStatus(status);

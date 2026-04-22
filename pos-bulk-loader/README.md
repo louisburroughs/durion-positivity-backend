@@ -29,7 +29,7 @@ Base path: `/v1/bulk-jobs`
 - `GET /v1/bulk-jobs` - list operator jobs (`200`)
 - `POST /v1/bulk-jobs/{jobId}/cancel` - cancel job (`200`)
 - `POST /v1/bulk-jobs/{jobId}/upload` - upload source file (`200`)
-- `POST /v1/bulk-jobs/{jobId}/process` - start processing (`200`)
+- `POST /v1/bulk-jobs/{jobId}/process` - launch Spring Batch processing (`200`)
 - `GET /v1/bulk-jobs/{jobId}/mappings` - read proposed mappings (`200`)
 - `PUT /v1/bulk-jobs/{jobId}/mappings` - approve mappings (`200`)
 - `GET /v1/bulk-jobs/{jobId}/audit` - list row audit records (`200`)
@@ -40,6 +40,7 @@ Base path: `/v1/bulk-jobs`
 - Uses gateway header-based security via `pos-security-common` (`GatewaySecurityConfig`).
 - State-changing endpoints require `BULK_IMPORT_EXECUTE`.
 - Read endpoints require `BULK_IMPORT_READ`.
+- When `/v1/bulk-jobs/{jobId}/process` runs inside an authenticated HTTP request, outbound bulk-ingest calls relay the caller bearer token in addition to gateway headers so downstream services can resolve stable user identity from JWT claims.
 
 ## Event Logging
 
@@ -64,7 +65,9 @@ Registered event types are defined in:
 - **Step Name**: `catalogBulkLoadStep`
 - **Chunk Size**: 500 records
 - **Auto-start**: Disabled in production (`spring.batch.job.enabled: false`)
-- **Trigger**: Jobs started via API endpoint (`POST /v1/bulk-jobs/{jobId}/process`)
+- **Trigger**: Jobs started via API endpoint (`POST /v1/bulk-jobs/{jobId}/process`), which launches the matching Spring Batch job using the persisted upload path, locationId, and operatorId
+
+Job execution updates `bulk_load_job` with terminal status (`COMPLETED` or `FAILED`), row counts, success and failure counts, and `completedAt` when the batch run finishes.
 
 ### Spring Batch Tables
 

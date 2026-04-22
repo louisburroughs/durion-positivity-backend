@@ -13,6 +13,9 @@ import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
+import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
+import com.positivity.security.common.GatewaySecurityConstants;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -34,16 +37,21 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
 public class BatchConfiguration {
 
+    private static final String BEARER_PREFIX = "Bearer ";
     private static final String HEADER_AUTHORITIES = "X-Authorities";
     private static final String HEADER_USER = "X-User";
     private static final String BULK_LOADER_SERVICE_USER = "bulk-loader-service";
@@ -56,6 +64,7 @@ public class BatchConfiguration {
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
+    private final BulkLoadJobExecutionListener bulkLoadJobExecutionListener;
 
     @Value("${pos.catalog.base-url:http://localhost:8082}")
     private String catalogBaseUrl;
@@ -82,6 +91,7 @@ public class BatchConfiguration {
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
         return new JobBuilder("catalogBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(catalogBulkLoadStep)
                 .build();
     }
@@ -160,11 +170,12 @@ public class BatchConfiguration {
                     new ArrayList<>(chunk.getItems()));
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/catalog/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "catalog:product:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -183,6 +194,7 @@ public class BatchConfiguration {
     public Job customerBulkLoadJob(Step customerBulkLoadStep) {
         return new JobBuilder("customerBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(customerBulkLoadStep)
                 .build();
     }
@@ -261,11 +273,12 @@ public class BatchConfiguration {
                     new ArrayList<>(chunk.getItems()));
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/customer/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "crm:party:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -284,6 +297,7 @@ public class BatchConfiguration {
     public Job peopleBulkLoadJob(Step peopleBulkLoadStep) {
         return new JobBuilder("peopleBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(peopleBulkLoadStep)
                 .build();
     }
@@ -361,11 +375,12 @@ public class BatchConfiguration {
                     new ArrayList<>(chunk.getItems()));
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/people/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "people:employee:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -384,6 +399,7 @@ public class BatchConfiguration {
     public Job priceBulkLoadJob(Step priceBulkLoadStep) {
         return new JobBuilder("priceBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(priceBulkLoadStep)
                 .build();
     }
@@ -461,11 +477,12 @@ public class BatchConfiguration {
                     new ArrayList<>(chunk.getItems()));
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/price/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "pricing:base_price:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -484,6 +501,7 @@ public class BatchConfiguration {
     public Job vehicleBulkLoadJob(Step vehicleBulkLoadStep) {
         return new JobBuilder("vehicleBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(vehicleBulkLoadStep)
                 .build();
     }
@@ -573,11 +591,12 @@ public class BatchConfiguration {
                     payloads);
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/vehicles/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "vehicle-inventory:registry:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -596,6 +615,7 @@ public class BatchConfiguration {
     public Job vehicleFitmentBulkLoadJob(Step vehicleFitmentBulkLoadStep) {
         return new JobBuilder("vehicleFitmentBulkLoadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(bulkLoadJobExecutionListener)
                 .start(vehicleFitmentBulkLoadStep)
                 .build();
     }
@@ -684,11 +704,12 @@ public class BatchConfiguration {
                     payloads);
 
             try {
-                client.post()
+                RestClient.RequestBodySpec requestSpec = client.post()
                         .uri("/v1/fitments/bulk-ingest")
                         .header(HEADER_AUTHORITIES, "vehicle-fitment:hint:create")
-                    .header(HEADER_USER, sanitizedOperatorId)
-                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec.contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -709,6 +730,42 @@ public class BatchConfiguration {
         }
         String sanitizedValue = value.replaceAll("[\r\n\t]", "").trim();
         return sanitizedValue.isBlank() ? fallback : sanitizedValue;
+    }
+
+    private void applyRelayHeaders(RestClient.RequestBodySpec requestSpec) {
+        String authorizationHeader = resolveAuthorizationHeader();
+        if (!StringUtils.hasText(authorizationHeader)) {
+            return;
+        }
+
+        requestSpec.header(HttpHeaders.AUTHORIZATION, authorizationHeader);
+        requestSpec.header(GatewaySecurityConstants.HEADER_TOKEN, extractTokenValue(authorizationHeader));
+    }
+
+    private String resolveAuthorizationHeader() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
+            return null;
+        }
+
+        HttpServletRequest request = requestAttributes.getRequest();
+        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
+            return authorizationHeader;
+        }
+
+        String gatewayTokenHeader = request.getHeader(GatewaySecurityConstants.HEADER_TOKEN);
+        if (!StringUtils.hasText(gatewayTokenHeader)) {
+            return null;
+        }
+        return gatewayTokenHeader.startsWith(BEARER_PREFIX)
+                ? gatewayTokenHeader
+                : BEARER_PREFIX + gatewayTokenHeader;
+    }
+
+    private String extractTokenValue(String authorizationHeader) {
+        return authorizationHeader.startsWith(BEARER_PREFIX)
+                ? authorizationHeader.substring(BEARER_PREFIX.length())
+                : authorizationHeader;
     }
 
     private JobContext resolveJobContext(String writerName, String jobIdParam, String locationIdParam, int chunkSize) {

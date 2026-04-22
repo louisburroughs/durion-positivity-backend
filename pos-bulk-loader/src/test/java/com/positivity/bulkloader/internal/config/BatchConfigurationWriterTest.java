@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
@@ -31,12 +32,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @SuppressWarnings({ "java:S100", "java:S1192" })
 @ExtendWith(MockitoExtension.class)
@@ -80,6 +85,7 @@ class BatchConfigurationWriterTest {
 
   @BeforeEach
   void setUp() {
+    RequestContextHolder.resetRequestAttributes();
     lenient().when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
     lenient().when(restClientBuilder.build()).thenReturn(mockRestClient);
     lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
@@ -111,6 +117,24 @@ class BatchConfigurationWriterTest {
     assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
     assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
     assertThat(request.getRecords()).hasSize(1);
+  }
+
+  @Test
+  void catalogBulkIngestWriter_withBearerToken_relaysAuthorizationAndGatewayToken() {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer token-123");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+    product.setName("Product Name");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(requestBodySpec).header(HttpHeaders.AUTHORIZATION, "Bearer token-123");
+    verify(requestBodySpec).header(GatewaySecurityConstants.HEADER_TOKEN, "token-123");
   }
 
   @Test
