@@ -92,7 +92,7 @@ class BulkLoadJobServiceImplTest {
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
 
-        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID))
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("uploaded file is persisted");
     }
@@ -106,11 +106,11 @@ class BulkLoadJobServiceImplTest {
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
         when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.startProcessing(JOB_ID, OPERATOR_ID);
+        service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123");
 
         assertThat(job.getStatus()).isEqualTo(JobStatus.PROCESSING);
         assertThat(job.getStartedAt()).isNotNull();
-        verify(bulkLoadBatchLauncher).launch(job);
+        verify(bulkLoadBatchLauncher).launch(job, "Bearer token-123");
         verify(jobRepository).save(job);
     }
 
@@ -122,7 +122,7 @@ class BulkLoadJobServiceImplTest {
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
 
-        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID))
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("locationId");
     }

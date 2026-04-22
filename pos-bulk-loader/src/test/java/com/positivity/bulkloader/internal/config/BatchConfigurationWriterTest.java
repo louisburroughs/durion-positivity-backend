@@ -24,6 +24,7 @@ import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
+import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -83,6 +84,8 @@ class BatchConfigurationWriterTest {
   @InjectMocks
   BatchConfiguration batchConfiguration;
 
+  BulkLoadAuthorizationContext bulkLoadAuthorizationContext = new BulkLoadAuthorizationContext();
+
   @BeforeEach
   void setUp() {
     RequestContextHolder.resetRequestAttributes();
@@ -91,6 +94,17 @@ class BatchConfigurationWriterTest {
     lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
     lenient().when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
     lenient().when(requestBodySpec.retrieve()).thenReturn(responseSpec);
+    batchConfiguration = new BatchConfiguration(
+        jobRepository,
+        transactionManager,
+        catalogLoaderStrategy,
+        customerLoaderStrategy,
+        personLoaderStrategy,
+        basePriceLoaderStrategy,
+        vehicleLoaderStrategy,
+        vehicleFitmentLoaderStrategy,
+        bulkLoadAuthorizationContext,
+        null);
   }
 
   // --- catalogBulkIngestWriter ---
@@ -135,6 +149,22 @@ class BatchConfigurationWriterTest {
     assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
     verify(requestBodySpec).header(HttpHeaders.AUTHORIZATION, "Bearer token-123");
     verify(requestBodySpec).header(GatewaySecurityConstants.HEADER_TOKEN, "token-123");
+  }
+
+  @Test
+  void catalogBulkIngestWriter_withLaunchAuthorizationContext_relaysAuthorizationWithoutRequestContext() {
+    bulkLoadAuthorizationContext.setAuthorizationHeader("Bearer token-launch");
+
+    CatalogProductRecord product = new CatalogProductRecord();
+    product.setSku("SKU-001");
+    product.setName("Product Name");
+
+    ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+        restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+    assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+    verify(requestBodySpec).header(HttpHeaders.AUTHORIZATION, "Bearer token-launch");
+    verify(requestBodySpec).header(GatewaySecurityConstants.HEADER_TOKEN, "token-launch");
   }
 
   @Test

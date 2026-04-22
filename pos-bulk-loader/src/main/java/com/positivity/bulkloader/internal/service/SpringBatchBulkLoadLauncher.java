@@ -5,12 +5,13 @@ import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
-import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.launch.JobRestartException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -18,10 +19,10 @@ import org.springframework.util.StringUtils;
 
 @Service
 @Slf4j
-@SuppressWarnings("removal")
 public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
 
-  private final JobLauncher jobLauncher;
+  private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
+  private final JobOperator jobOperator;
   private final Job catalogBulkLoadJob;
   private final Job customerBulkLoadJob;
   private final Job peopleBulkLoadJob;
@@ -30,14 +31,16 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
   private final Job vehicleFitmentBulkLoadJob;
 
   public SpringBatchBulkLoadLauncher(
-      JobLauncher jobLauncher,
+      BulkLoadAuthorizationContext bulkLoadAuthorizationContext,
+      JobOperator jobOperator,
       @Qualifier("catalogBulkLoadJob") Job catalogBulkLoadJob,
       @Qualifier("customerBulkLoadJob") Job customerBulkLoadJob,
       @Qualifier("peopleBulkLoadJob") Job peopleBulkLoadJob,
       @Qualifier("priceBulkLoadJob") Job priceBulkLoadJob,
       @Qualifier("vehicleBulkLoadJob") Job vehicleBulkLoadJob,
       @Qualifier("vehicleFitmentBulkLoadJob") Job vehicleFitmentBulkLoadJob) {
-    this.jobLauncher = jobLauncher;
+    this.bulkLoadAuthorizationContext = bulkLoadAuthorizationContext;
+    this.jobOperator = jobOperator;
     this.catalogBulkLoadJob = catalogBulkLoadJob;
     this.customerBulkLoadJob = customerBulkLoadJob;
     this.peopleBulkLoadJob = peopleBulkLoadJob;
@@ -47,7 +50,7 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
   }
 
   @Override
-  public void launch(@NonNull BulkLoadJob job) {
+  public void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader) {
     if (!StringUtils.hasText(job.getOriginalFilePath())) {
       throw new IllegalArgumentException("Bulk load job must include a persisted storage path before launch");
     }
@@ -59,7 +62,8 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
     }
 
     try {
-      jobLauncher.run(
+      bulkLoadAuthorizationContext.setAuthorizationHeader(authorizationHeader);
+      jobOperator.start(
           resolveJob(job.getDomainType()),
           new JobParametersBuilder()
               .addString("jobId", job.getId().toString())
@@ -73,6 +77,8 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
         | InvalidJobParametersException ex) {
       throw new IllegalStateException(
           "Failed to launch Spring Batch job for bulk load job %s".formatted(job.getId()), ex);
+    } finally {
+      bulkLoadAuthorizationContext.clear();
     }
   }
 

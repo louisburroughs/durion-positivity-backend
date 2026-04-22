@@ -40,7 +40,7 @@ Base path: `/v1/bulk-jobs`
 - Uses gateway header-based security via `pos-security-common` (`GatewaySecurityConfig`).
 - State-changing endpoints require `BULK_IMPORT_EXECUTE`.
 - Read endpoints require `BULK_IMPORT_READ`.
-- When `/v1/bulk-jobs/{jobId}/process` runs inside an authenticated HTTP request, outbound bulk-ingest calls relay the caller bearer token in addition to gateway headers so downstream services can resolve stable user identity from JWT claims.
+- When `/v1/bulk-jobs/{jobId}/process` runs inside an authenticated HTTP request, the launcher keeps the caller bearer token in an in-memory launch-scoped context for the duration of `jobLauncher.run(...)`, and outbound bulk-ingest calls relay that token in addition to gateway headers so downstream services can resolve stable user identity from JWT claims without persisting the token in Spring Batch metadata.
 
 ## Event Logging
 

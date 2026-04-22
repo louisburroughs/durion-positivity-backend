@@ -13,6 +13,7 @@ import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
+import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.job.parameters.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
@@ -64,6 +64,7 @@ public class BatchConfiguration {
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
+    private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
     private final BulkLoadJobExecutionListener bulkLoadJobExecutionListener;
 
     @Value("${pos.catalog.base-url:http://localhost:8082}")
@@ -90,7 +91,6 @@ public class BatchConfiguration {
     @Bean
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
         return new JobBuilder("catalogBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(catalogBulkLoadStep)
                 .build();
@@ -193,7 +193,6 @@ public class BatchConfiguration {
     @Bean
     public Job customerBulkLoadJob(Step customerBulkLoadStep) {
         return new JobBuilder("customerBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(customerBulkLoadStep)
                 .build();
@@ -296,7 +295,6 @@ public class BatchConfiguration {
     @Bean
     public Job peopleBulkLoadJob(Step peopleBulkLoadStep) {
         return new JobBuilder("peopleBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(peopleBulkLoadStep)
                 .build();
@@ -398,7 +396,6 @@ public class BatchConfiguration {
     @Bean
     public Job priceBulkLoadJob(Step priceBulkLoadStep) {
         return new JobBuilder("priceBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(priceBulkLoadStep)
                 .build();
@@ -500,7 +497,6 @@ public class BatchConfiguration {
     @Bean
     public Job vehicleBulkLoadJob(Step vehicleBulkLoadStep) {
         return new JobBuilder("vehicleBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(vehicleBulkLoadStep)
                 .build();
@@ -614,7 +610,6 @@ public class BatchConfiguration {
     @Bean
     public Job vehicleFitmentBulkLoadJob(Step vehicleFitmentBulkLoadStep) {
         return new JobBuilder("vehicleFitmentBulkLoadJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .listener(bulkLoadJobExecutionListener)
                 .start(vehicleFitmentBulkLoadStep)
                 .build();
@@ -743,6 +738,11 @@ public class BatchConfiguration {
     }
 
     private String resolveAuthorizationHeader() {
+        String launchAuthorizationHeader = bulkLoadAuthorizationContext.getAuthorizationHeader();
+        if (StringUtils.hasText(launchAuthorizationHeader) && launchAuthorizationHeader.startsWith(BEARER_PREFIX)) {
+            return launchAuthorizationHeader;
+        }
+
         if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
             return null;
         }

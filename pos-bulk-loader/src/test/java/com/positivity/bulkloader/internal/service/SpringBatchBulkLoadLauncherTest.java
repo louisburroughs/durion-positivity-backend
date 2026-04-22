@@ -15,15 +15,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
-import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.JobOperator;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({ "java:S100", "java:S1192", "removal" })
+@SuppressWarnings({ "java:S100", "java:S1192" })
 class SpringBatchBulkLoadLauncherTest {
 
+  BulkLoadAuthorizationContext bulkLoadAuthorizationContext = new BulkLoadAuthorizationContext();
+
   @Mock
-  JobLauncher jobLauncher;
+  JobOperator jobOperator;
+
+  @Mock
+  JobExecution jobExecution;
 
   @Mock
   Job catalogBulkLoadJob;
@@ -46,7 +52,8 @@ class SpringBatchBulkLoadLauncherTest {
   @Test
   void launch_whenVehicleDomain_usesVehicleJobAndStoragePathParameters() throws Exception {
     SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-        jobLauncher,
+        bulkLoadAuthorizationContext,
+        jobOperator,
         catalogBulkLoadJob,
         customerBulkLoadJob,
         peopleBulkLoadJob,
@@ -61,12 +68,15 @@ class SpringBatchBulkLoadLauncherTest {
     job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000031"));
     job.setOperatorId("operator-vehicle");
 
-    when(jobLauncher.run(any(Job.class), any(JobParameters.class))).thenReturn(null);
+    when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenAnswer(invocation -> {
+      assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isEqualTo("Bearer token-vehicle");
+      return jobExecution;
+    });
 
-    launcher.launch(job);
+    launcher.launch(job, "Bearer token-vehicle");
 
     ArgumentCaptor<JobParameters> parametersCaptor = ArgumentCaptor.forClass(JobParameters.class);
-    verify(jobLauncher).run(org.mockito.Mockito.same(vehicleBulkLoadJob), parametersCaptor.capture());
+    verify(jobOperator).start(org.mockito.Mockito.same(vehicleBulkLoadJob), parametersCaptor.capture());
     JobParameters jobParameters = parametersCaptor.getValue();
     assertThat(jobParameters.getString("jobId")).isEqualTo(jobId.toString());
     assertThat(jobParameters.getString("storagePath"))
@@ -74,12 +84,14 @@ class SpringBatchBulkLoadLauncherTest {
     assertThat(jobParameters.getString("locationId")).isEqualTo("00000000-0000-0000-0000-000000000031");
     assertThat(jobParameters.getString("operatorId")).isEqualTo("operator-vehicle");
     assertThat(jobParameters.getLong("launchEpochMillis")).isNotNull();
+    assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isNull();
   }
 
   @Test
   void launch_whenLocationIdMissing_throwsIllegalArgumentException() {
     SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-        jobLauncher,
+        bulkLoadAuthorizationContext,
+        jobOperator,
         catalogBulkLoadJob,
         customerBulkLoadJob,
         peopleBulkLoadJob,
@@ -92,7 +104,7 @@ class SpringBatchBulkLoadLauncherTest {
     job.setDomainType(DomainType.VEHICLE);
     job.setOriginalFilePath("00000000-0000-0000-0000-000000000023/vehicles.csv");
 
-    assertThatThrownBy(() -> launcher.launch(job))
+    assertThatThrownBy(() -> launcher.launch(job, null))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("locationId");
   }
@@ -100,7 +112,8 @@ class SpringBatchBulkLoadLauncherTest {
   @Test
   void launch_whenUnsupportedDomain_throwsIllegalState() {
     SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-        jobLauncher,
+        bulkLoadAuthorizationContext,
+        jobOperator,
         catalogBulkLoadJob,
         customerBulkLoadJob,
         peopleBulkLoadJob,
@@ -114,8 +127,35 @@ class SpringBatchBulkLoadLauncherTest {
     job.setDomainType(DomainType.LOCATION);
     job.setOriginalFilePath("00000000-0000-0000-0000-000000000022/locations.csv");
 
-    assertThatThrownBy(() -> launcher.launch(job))
+    assertThatThrownBy(() -> launcher.launch(job, null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("No Spring Batch job is configured");
+  }
+
+  @Test
+  void launch_whenJobLauncherFails_clearsAuthorizationContext() throws Exception {
+    SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
+        bulkLoadAuthorizationContext,
+        jobOperator,
+        catalogBulkLoadJob,
+        customerBulkLoadJob,
+        peopleBulkLoadJob,
+        priceBulkLoadJob,
+        vehicleBulkLoadJob,
+        vehicleFitmentBulkLoadJob);
+    BulkLoadJob job = new BulkLoadJob();
+    job.setId(UUID.fromString("00000000-0000-0000-0000-000000000024"));
+    job.setDomainType(DomainType.CATALOG_PRODUCT);
+    job.setOriginalFilePath("00000000-0000-0000-0000-000000000024/catalog.csv");
+    job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000034"));
+    job.setOperatorId("operator-catalog");
+
+    when(jobOperator.start(any(Job.class), any(JobParameters.class)))
+        .thenThrow(new org.springframework.batch.core.launch.JobExecutionAlreadyRunningException("already running"));
+
+    assertThatThrownBy(() -> launcher.launch(job, "Bearer token-catalog"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to launch Spring Batch job");
+    assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isNull();
   }
 }

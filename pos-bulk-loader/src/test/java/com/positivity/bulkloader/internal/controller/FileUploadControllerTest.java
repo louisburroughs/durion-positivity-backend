@@ -16,8 +16,10 @@ import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.FileStorageService;
+import com.positivity.security.common.GatewaySecurityConstants;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -94,5 +96,47 @@ class FileUploadControllerTest {
                 mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", null);
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void startProcessing_withAuthorizationHeader_forwardsBearerToken() throws Exception {
+                BulkLoadJobResponse response = BulkLoadJobResponse.builder()
+                                .id(JOB_ID)
+                                .operatorId("test-operator")
+                                .domainType(DomainType.CATALOG_PRODUCT)
+                                .status(JobStatus.PROCESSING)
+                                .build();
+
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer token-123"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", "Bearer token-123");
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void startProcessing_withGatewayTokenHeader_normalizesToBearerToken() throws Exception {
+                BulkLoadJobResponse response = BulkLoadJobResponse.builder()
+                                .id(JOB_ID)
+                                .operatorId("test-operator")
+                                .domainType(DomainType.CATALOG_PRODUCT)
+                                .status(JobStatus.PROCESSING)
+                                .build();
+
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                                .header(GatewaySecurityConstants.HEADER_TOKEN, "token-456"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", "Bearer token-456");
         }
 }

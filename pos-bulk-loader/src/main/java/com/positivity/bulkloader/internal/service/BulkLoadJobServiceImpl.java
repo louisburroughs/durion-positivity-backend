@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -115,7 +116,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     @Override
     @Transactional
-    public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId) {
+    public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId, @Nullable String authorizationHeader) {
         BulkLoadJob job = findOrThrow(jobId);
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
@@ -131,7 +132,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (job.getLocationId() == null) {
             throw new IllegalStateException("Job cannot be processed before a locationId is assigned");
         }
-        bulkLoadBatchLauncher.launch(job);
+        bulkLoadBatchLauncher.launch(job, authorizationHeader);
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now());
         jobRepository.save(job);
