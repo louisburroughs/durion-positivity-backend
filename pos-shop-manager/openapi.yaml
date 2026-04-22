@@ -40,6 +40,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Shop Mobile Unit API
@@ -57,6 +59,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/shop-manager/bays:
     get:
       tags:
@@ -71,6 +75,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Shop Bay API
@@ -88,6 +94,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/appointments/{appointmentId}/reschedule:
     put:
       tags:
@@ -135,6 +143,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/mobileUnit:
     post:
       tags:
@@ -163,6 +173,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/bays:
     post:
       tags:
@@ -190,6 +202,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/appointments:
     post:
       tags:
@@ -244,6 +258,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+      security:
+      - bearerAuth: []
   /v1/appointments/{appointmentId}/conflict-override:
     post:
       tags:
@@ -291,6 +307,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ConflictOverrideResponse"
+      security:
+      - bearerAuth: []
   /v1/appointments/{appointmentId}/assignments:
     get:
       tags:
@@ -312,6 +330,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AssignmentResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - assignment-controller
@@ -336,6 +356,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AssignmentResponse"
+      security:
+      - bearerAuth: []
   /v1/shop/audit:
     get:
       tags:
@@ -356,6 +378,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ShopAuditEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/shop/audit/{id}:
     get:
       tags:
@@ -375,6 +399,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ShopAuditEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -412,6 +438,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       tags:
@@ -449,6 +477,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PersonDTO"
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/services/{serviceId}/details:
     get:
       tags:
@@ -486,6 +516,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ServiceEntityDTO"
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/mobileUnit/{bayId}:
     get:
       tags:
@@ -515,6 +547,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Shop Mobile Unit API
@@ -543,6 +577,8 @@ paths:
           description: Mobile unit deleted successfully.
         "404":
           description: Mobile unit not found.
+      security:
+      - bearerAuth: []
   /v1/shop-manager/{locationId}/bays/{bayId}:
     get:
       tags:
@@ -571,6 +607,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Shop Bay API
@@ -599,6 +637,8 @@ paths:
           description: Bay not found.
         "204":
           description: Bay deleted successfully.
+      security:
+      - bearerAuth: []
   /v1/schedules/view:
     get:
       tags:
@@ -679,6 +719,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ScheduleViewResponse"
+      security:
+      - bearerAuth: []
   /v1/appointments/{appointmentId}:
     get:
       tags:
@@ -720,6 +762,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+      security:
+      - bearerAuth: []
   /v1/appointments/{appointmentId}/cancel:
     delete:
       tags:
@@ -753,6 +797,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     RescheduleAppointmentRequest:

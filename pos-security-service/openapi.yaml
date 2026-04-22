@@ -101,6 +101,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserDto"
+      security:
+      - bearerAuth: []
   /v1/users/{userId}/roles/{roleId}:
     put:
       tags:
@@ -161,6 +163,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - User Role Management
@@ -220,6 +224,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
+      security:
+      - bearerAuth: []
   /v1/users/{id}:
     get:
       tags:
@@ -279,6 +285,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserDto"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - User API
@@ -343,6 +351,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserDto"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - User API
@@ -397,6 +407,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User deleted successfully.
+      security:
+      - bearerAuth: []
   /v1/users/roles/{roleId}/permissions/{permissionKey}:
     put:
       tags:
@@ -456,6 +468,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission assigned to role
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Role Management
@@ -513,6 +527,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission revoked from role
+      security:
+      - bearerAuth: []
   /v1/roles/{roleId}/permissions/{permissionKey}:
     put:
       tags:
@@ -572,6 +588,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission assigned to role
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Role Management
@@ -629,6 +647,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission revoked from role
+      security:
+      - bearerAuth: []
   /v1/users/roles/{roleId}/permissions/grant:
     put:
       tags:
@@ -693,6 +713,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/roles/{roleId}/permissions/grant:
     put:
       tags:
@@ -757,6 +779,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/users/roles/permissions:
     put:
       tags:
@@ -813,6 +837,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/roles/permissions:
     put:
       tags:
@@ -869,6 +895,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/users:
     get:
       tags:
@@ -921,6 +949,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/UserDto"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - User API
@@ -977,6 +1007,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserDto"
+      security:
+      - bearerAuth: []
   /v1/users/{id}/unlock:
     post:
       tags:
@@ -1031,6 +1063,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User account unlocked successfully
+      security:
+      - bearerAuth: []
   /v1/users/{id}/expire-credentials:
     post:
       tags:
@@ -1085,6 +1119,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User credentials expired successfully
+      security:
+      - bearerAuth: []
   /v1/users/{id}/expire-account:
     post:
       tags:
@@ -1139,6 +1175,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User account expired successfully
+      security:
+      - bearerAuth: []
   /v1/users/{id}/enable:
     post:
       tags:
@@ -1193,6 +1231,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User account enabled successfully
+      security:
+      - bearerAuth: []
   /v1/users/{id}/disable:
     post:
       tags:
@@ -1247,6 +1287,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: User account disabled successfully
+      security:
+      - bearerAuth: []
   /v1/roles/assignments:
     post:
       tags:
@@ -1303,6 +1345,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleAssignmentDto"
+      security:
+      - bearerAuth: []
   /v1/users/roles/assignments:
     post:
       tags:
@@ -1359,6 +1403,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleAssignmentDto"
+      security:
+      - bearerAuth: []
   /v1/roles:
     get:
       tags:
@@ -1411,6 +1457,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Role Management
@@ -1468,6 +1516,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/users/roles:
     get:
       tags:
@@ -1520,6 +1570,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Role Management
@@ -1577,6 +1629,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/users/principals/{principalId}/roles/{roleId}:
     post:
       tags:
@@ -1638,6 +1692,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "200":
           description: Role assigned to principal successfully
+      security:
+      - bearerAuth: []
   /v1/permissions/registerPermissions:
     post:
       tags:
@@ -1697,6 +1753,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/users/permissions/registerPermissions:
     post:
       tags:
@@ -1756,6 +1814,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/users/permissions/register:
     post:
       tags:
@@ -1812,6 +1872,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionRegistrationResponse"
+      security:
+      - bearerAuth: []
   /v1/permissions/register:
     post:
       tags:
@@ -1868,6 +1930,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionRegistrationResponse"
+      security:
+      - bearerAuth: []
   /v1/users/permissions/decode:
     post:
       tags:
@@ -1925,6 +1989,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDecodeResponse"
+      security:
+      - bearerAuth: []
   /v1/permissions/decode:
     post:
       tags:
@@ -1982,6 +2048,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDecodeResponse"
+      security:
+      - bearerAuth: []
   /v1/self-registration/review-cases/{caseId}/resolve:
     post:
       tags:
@@ -2046,6 +2114,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+      security:
+      - bearerAuth: []
   /v1/auth/token-pair:
     post:
       tags:
@@ -2336,6 +2406,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TokenResponse"
+      security:
+      - bearerAuth: []
   /v1/audit/pricing-snapshots:
     post:
       tags:
@@ -2393,6 +2465,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PricingSnapshotCreatedResponse"
+      security:
+      - bearerAuth: []
   /v1/audit/events:
     get:
       tags:
@@ -2481,6 +2555,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditLogEventDto"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Audit
@@ -2537,6 +2613,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AuditEventCreatedResponse"
+      security:
+      - bearerAuth: []
   /v1/users/{userId}/permissions:
     get:
       tags:
@@ -2597,6 +2675,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/PermissionDto"
                 uniqueItems: true
+      security:
+      - bearerAuth: []
   /v1/users/{id}/account-state:
     get:
       tags:
@@ -2655,6 +2735,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountStateResponse"
+      security:
+      - bearerAuth: []
   /v1/roles/{id}:
     get:
       tags:
@@ -2712,6 +2794,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Role Management
@@ -2764,6 +2848,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Role deleted
+      security:
+      - bearerAuth: []
   /v1/users/roles/{id}:
     get:
       tags:
@@ -2821,6 +2907,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Role Management
@@ -2873,6 +2961,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Role deleted
+      security:
+      - bearerAuth: []
   /v1/roles/permissions/user/{userId}:
     get:
       tags:
@@ -2933,6 +3023,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/PermissionDto"
                 uniqueItems: true
+      security:
+      - bearerAuth: []
   /v1/users/roles/permissions/user/{userId}:
     get:
       tags:
@@ -2993,6 +3085,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/PermissionDto"
                 uniqueItems: true
+      security:
+      - bearerAuth: []
   /v1/roles/check-permission:
     get:
       tags:
@@ -3060,6 +3154,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/users/roles/check-permission:
     get:
       tags:
@@ -3127,6 +3223,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/users/roles/by-name/{name}:
     get:
       tags:
@@ -3183,6 +3281,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/roles/by-name/{name}:
     get:
       tags:
@@ -3239,6 +3339,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RoleDto"
+      security:
+      - bearerAuth: []
   /v1/roles/assignments/user/{userId}:
     get:
       tags:
@@ -3309,6 +3411,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RoleAssignmentDto"
+      security:
+      - bearerAuth: []
   /v1/users/roles/assignments/user/{userId}:
     get:
       tags:
@@ -3379,6 +3483,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RoleAssignmentDto"
+      security:
+      - bearerAuth: []
   /v1/users/permissions/{id}:
     get:
       tags:
@@ -3436,6 +3542,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/permissions/{id}:
     get:
       tags:
@@ -3493,6 +3601,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/users/permissions/validate/{permissionName}:
     get:
       tags:
@@ -3550,6 +3660,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/permissions/validate/{permissionName}:
     get:
       tags:
@@ -3607,6 +3719,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/users/permissions/exists/{permissionName}:
     get:
       tags:
@@ -3663,6 +3777,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/permissions/exists/{permissionName}:
     get:
       tags:
@@ -3719,6 +3835,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/users/permissions/domain/{domain}:
     get:
       tags:
@@ -3777,6 +3895,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/permissions/domain/{domain}:
     get:
       tags:
@@ -3835,6 +3955,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/permissions/catalog-version:
     get:
       tags:
@@ -3996,6 +4118,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/permissions:
     get:
       tags:
@@ -4055,6 +4179,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PermissionDto"
+      security:
+      - bearerAuth: []
   /v1/users/authorization/decision:
     get:
       tags:
@@ -4120,6 +4246,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AuthorizationDecisionResponse"
+      security:
+      - bearerAuth: []
   /v1/self-registration/review-cases:
     get:
       tags:
@@ -4190,6 +4318,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+      security:
+      - bearerAuth: []
   /v1/self-registration/review-cases/{caseId}:
     get:
       tags:
@@ -4247,6 +4377,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+      security:
+      - bearerAuth: []
   /v1/auth/validate:
     get:
       tags:
@@ -4359,6 +4491,8 @@ paths:
             '*/*':
               schema:
                 type: string
+      security:
+      - bearerAuth: []
   /v1/auth/subject:
     get:
       tags:
@@ -4415,6 +4549,8 @@ paths:
             '*/*':
               schema:
                 type: string
+      security:
+      - bearerAuth: []
   /v1/auth/roles:
     get:
       tags:
@@ -4474,67 +4610,8 @@ paths:
                 items:
                   type: string
                 uniqueItems: true
-  /v1/auth/authorities:
-    get:
-      tags:
-      - JWT API
-      summary: Extract authorities from JWT token (deprecated)
-      description: Compatibility endpoint for legacy tokens. New token issuance does
-        not include an authorities claim.
-      operationId: getAuthorities
-      parameters:
-      - name: token
-        in: query
-        required: true
-        schema:
-          type: string
-      responses:
-        "400":
-          description: Bad Request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: Not Found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: Conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: Token invalid or expired
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
-          description: Internal Server Error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
-          description: Authorities extracted successfully
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  type: string
-                uniqueItems: true
-      deprecated: true
+      security:
+      - bearerAuth: []
   /v1/audit/pricing-snapshots/{snapshotId}:
     get:
       tags:
@@ -4592,6 +4669,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PricingSnapshotDto"
+      security:
+      - bearerAuth: []
   /v1/audit/events/{eventId}:
     get:
       tags:
@@ -4649,6 +4728,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AuditLogEventDto"
+      security:
+      - bearerAuth: []
   /v1/users/roles/assignments/{assignmentId}:
     delete:
       tags:
@@ -4715,6 +4796,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Role assignment revoked
+      security:
+      - bearerAuth: []
   /v1/roles/assignments/{assignmentId}:
     delete:
       tags:
@@ -4781,6 +4864,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Role assignment revoked
+      security:
+      - bearerAuth: []
   /v1/auth/revoke:
     delete:
       tags:
@@ -4833,6 +4918,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "204":
           description: Token revoked successfully
+      security:
+      - bearerAuth: []
 components:
   schemas:
     ApiError:

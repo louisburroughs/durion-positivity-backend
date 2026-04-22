@@ -257,16 +257,15 @@
                                     <goal>start</goal>
                                 </goals>
                                 <configuration>
+                                    <useTestClasspath>true</useTestClasspath>
                                     <arguments>
                                         <argument>--server.port=8086</argument>
-                                        <argument>--spring.profiles.active=dev</argument>
-                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
-                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
-                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.profiles.active=test</argument>
+                                        <argument>--spring.main.lazy-initialization=true</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
-                                        <argument>--spring.boot.admin.client.enabled=false</argument>
+                                        <argument>--pos.security.permission-registration.enabled=false</argument>
+                                        <argument>--security.jwt.secret=openapi-docs-placeholder-key-01234567890123456789</argument>
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>

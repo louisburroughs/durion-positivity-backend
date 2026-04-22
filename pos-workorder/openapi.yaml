@@ -90,6 +90,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Technician Assignment API
@@ -170,6 +172,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Technician Assignment API
@@ -249,6 +253,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/labor/{entryId}/adjust:
     put:
       tags:
@@ -335,6 +341,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workexec/approvalConfigurations/{approvalId}:
     get:
       tags:
@@ -363,6 +371,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Approval Configuration API
@@ -406,6 +416,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Approval Configuration API
@@ -425,6 +437,8 @@ paths:
           description: Configuration deleted successfully.
         "404":
           description: Configuration not found.
+      security:
+      - bearerAuth: []
   /v1/workorders:
     get:
       tags:
@@ -441,6 +455,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Work Order API
@@ -487,6 +503,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/suggestSubstitutes:
     post:
       tags:
@@ -508,6 +526,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SubstituteLinkResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/start:
     post:
       tags:
@@ -553,6 +573,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderStartResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/services/{serviceId}/labor/start:
     post:
       tags:
@@ -654,6 +676,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/reopen:
     post:
       tags:
@@ -710,6 +734,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ReopenWorkorderResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/picked-items:consume:
     post:
       tags:
@@ -740,36 +766,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "200":
-          description: Picked items consumed successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ConsumePickedItemsResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "404":
-          description: Workorder not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -800,6 +796,38 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "200":
+          description: Picked items consumed successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ConsumePickedItemsResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan:
     post:
       tags:
@@ -837,8 +865,8 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "404":
-          description: Workorder or pick task not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -867,21 +895,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Invalid request
           content:
@@ -897,6 +910,23 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or pick task not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:complete:
     post:
       tags:
@@ -934,8 +964,8 @@ paths:
               unevaluatedItems:
                 default: "##default"
       responses:
-        "404":
-          description: Workorder or pick task not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -964,8 +994,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
+        "404":
+          description: Workorder or pick task not found
           content:
             '*/*':
               schema:
@@ -979,6 +1009,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}/lines/{pickLineId}:confirm:
     post:
       tags:
@@ -1023,51 +1055,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "422":
-          description: Scan mismatch or domain validation error from pos-inventory
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "200":
-          description: Pick line confirmed successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "404":
-          description: "Workorder, pick task, or pick line not found"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -1098,6 +1085,53 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "200":
+          description: Pick line confirmed successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPickTaskResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "422":
+          description: Scan mismatch or domain validation error from pos-inventory
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: "Workorder, pick task, or pick line not found"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/substitute:
     post:
       tags:
@@ -1142,6 +1176,18 @@ paths:
                   notes: Equivalent OEM part
         required: true
       responses:
+        "409":
+          description: Idempotency conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Part substituted successfully
           content:
@@ -1157,24 +1203,14 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Idempotency conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: "Invalid request (part already consumed, etc.)"
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/return:
     post:
       tags:
@@ -1244,6 +1280,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -1288,6 +1326,18 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -1303,18 +1353,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -1391,6 +1431,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/correct:
     post:
       tags:
@@ -1435,6 +1477,12 @@ paths:
                   notes: Corrected after inventory count
         required: true
       responses:
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Part quantity corrected successfully
           content:
@@ -1450,18 +1498,14 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: Invalid request
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/consume:
     post:
       tags:
@@ -1532,6 +1576,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/operationalContext/override:
     post:
       tags:
@@ -1572,6 +1618,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/labor/{entryId}/stop:
     post:
       tags:
@@ -1635,6 +1683,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/generate-invoice:
     post:
       tags:
@@ -1679,6 +1729,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/complete:
     post:
       tags:
@@ -1735,6 +1787,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CompleteWorkorderResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/changeRequests:
     get:
       tags:
@@ -1759,6 +1813,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Change Request API
@@ -1827,6 +1883,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/approval:
     post:
       tags:
@@ -1889,6 +1947,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/workSessions/{workSessionId}/stop:
     post:
       tags:
@@ -1930,6 +1990,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/workSessions/{workSessionId}/breaks:
     post:
       tags:
@@ -1970,6 +2032,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/workSessions/{workSessionId}/breaks/{breakSegmentId}/stop:
     post:
       tags:
@@ -2012,6 +2076,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/workSessions/start:
     post:
       tags:
@@ -2040,6 +2106,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/travelSegments/{travelSegmentId}/stop:
     post:
       tags:
@@ -2066,6 +2134,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TravelSegmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/travelSegments/{travelSegmentId}/adjustments:
     post:
       tags:
@@ -2092,6 +2162,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TravelSegmentAdjustmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/travelSegments/submit/{mobileWorkAssignmentId}:
     post:
       tags:
@@ -2120,6 +2192,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TravelSegmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/travelSegments/start:
     post:
       tags:
@@ -2139,6 +2213,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TravelSegmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/timeEntries/{timeEntryId}/reject:
     post:
       tags:
@@ -2165,6 +2241,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TimeEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/timeEntries/{timeEntryId}/approve:
     post:
       tags:
@@ -2185,6 +2263,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TimeEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates:
     get:
       tags:
@@ -2201,6 +2281,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Estimate API
@@ -2268,6 +2350,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/submit-for-approval:
     post:
       tags:
@@ -2305,6 +2389,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/snapshots:
     post:
       tags:
@@ -2347,6 +2433,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateSnapshotResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/reopen:
     post:
       tags:
@@ -2382,6 +2470,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/promote:
     post:
       tags:
@@ -2433,6 +2523,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/items:
     post:
       tags:
@@ -2500,6 +2592,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/decline:
     post:
       tags:
@@ -2542,6 +2636,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/calculate:
     post:
       tags:
@@ -2581,6 +2677,8 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/approval:
     post:
       tags:
@@ -2647,6 +2745,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/from-appointment:
     post:
       tags:
@@ -2692,6 +2792,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}/emergency-override:
     post:
       tags:
@@ -2756,6 +2858,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}/decline:
     post:
       tags:
@@ -2813,6 +2917,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}/approve:
     post:
       tags:
@@ -2870,6 +2976,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}/acknowledgeDenial:
     post:
       tags:
@@ -2893,6 +3001,8 @@ paths:
           description: Change request not found
         "204":
           description: Acknowledgment recorded successfully
+      security:
+      - bearerAuth: []
   /v1/workexec/time-entries/timer/stop:
     post:
       tags:
@@ -2926,6 +3036,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2963,8 +3075,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "200":
-          description: Idempotent replay returned existing timer
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
@@ -2978,8 +3090,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -3003,6 +3115,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/workexec/labor-performed:
     post:
       tags:
@@ -3089,6 +3203,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/workexec/approvalConfigurations:
     post:
       tags:
@@ -3119,6 +3235,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}:
     get:
       tags:
@@ -3147,6 +3265,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Estimate API
@@ -3166,6 +3286,8 @@ paths:
           description: Estimate deleted successfully.
         "404":
           description: Estimate not found.
+      security:
+      - bearerAuth: []
     patch:
       tags:
       - Estimate API
@@ -3190,6 +3312,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/items/{itemId}:
     delete:
       tags:
@@ -3220,6 +3344,8 @@ paths:
           description: Estimate not in DRAFT status (INVALID_STATE)
         "404":
           description: Estimate or item not found
+      security:
+      - bearerAuth: []
     patch:
       tags:
       - Estimate API
@@ -3291,6 +3417,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}:
     get:
       tags:
@@ -3319,6 +3447,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Work Order API
@@ -3338,6 +3468,8 @@ paths:
           description: Work order deleted successfully.
         "404":
           description: Work order not found.
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/transitions:
     get:
       tags:
@@ -3362,6 +3494,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderStateTransitionResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/snapshots:
     get:
       tags:
@@ -3386,6 +3520,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderSnapshotResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/picked-items:
     get:
       tags:
@@ -3435,6 +3571,8 @@ paths:
                     default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/pick-list:
     get:
       tags:
@@ -3450,8 +3588,8 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "404":
-          description: Workorder not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -3480,36 +3618,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-  /v1/workorders/{workorderId}/pick-list/tasks:
-    get:
-      tags:
-      - Workorder Pick Facade
-      summary: Get pick tasks for workorder
-      operationId: getPickTasks
-      parameters:
-      - name: workorderId
-        in: path
-        description: Workorder ID
-        required: true
-        schema:
-          default: "##default"
-        example: 550e8400-e29b-41d4-a716-446655440000
-      responses:
         "404":
           description: Workorder not found
           content:
@@ -3525,8 +3633,40 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
+  /v1/workorders/{workorderId}/pick-list/tasks:
+    get:
+      tags:
+      - Workorder Pick Facade
+      summary: Get pick tasks for workorder
+      operationId: getPickTasks
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder ID
+        required: true
+        schema:
+          default: "##default"
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
         "403":
           description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Workorder not found
           content:
             '*/*':
               schema:
@@ -3559,6 +3699,8 @@ paths:
                     default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/usageHistory:
     get:
       tags:
@@ -3605,6 +3747,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/parts/adjustments:
     get:
       tags:
@@ -3651,6 +3795,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -3679,6 +3825,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/labor:
     get:
       tags:
@@ -3711,6 +3859,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/detail:
     get:
       tags:
@@ -3757,6 +3907,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderDetailResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/completion-preconditions:
     get:
       tags:
@@ -3786,6 +3938,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CompletionPreconditionsResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/{workorderId}/canClose:
     get:
       tags:
@@ -3809,6 +3963,8 @@ paths:
             '*/*':
               schema:
                 type: boolean
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/summary:
     get:
       tags:
@@ -3839,6 +3995,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EstimateSummaryResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/{estimateId}/pdf:
     get:
       tags:
@@ -3857,13 +4015,6 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "404":
-          description: Estimate not found
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: byte
         "200":
           description: PDF generated successfully
           content:
@@ -3872,6 +4023,13 @@ paths:
                 additionalProperties:
                   default: "##default"
                 default: "##default"
+        "404":
+          description: Estimate not found
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
         "502":
           description: Document service unavailable
           content:
@@ -3879,6 +4037,8 @@ paths:
               schema:
                 type: string
                 format: byte
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -3903,6 +4063,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/location/{locationId}:
     get:
       tags:
@@ -3927,6 +4089,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/estimates/customer/{customerId}:
     get:
       tags:
@@ -3951,6 +4115,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
+      security:
+      - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}:
     get:
       tags:
@@ -3979,6 +4145,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
+      security:
+      - bearerAuth: []
   /v1/workexec:
     get:
       tags:
@@ -3995,6 +4163,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ApprovalConfigurationResponse"
+      security:
+      - bearerAuth: []
   /v1/workexec/wip:
     get:
       tags:
@@ -4029,6 +4199,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PageWorkorderStatusView"
+      security:
+      - bearerAuth: []
   /v1/workexec/wip/{workorderId}:
     get:
       tags:
@@ -4051,6 +4223,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderStatusDetail"
+      security:
+      - bearerAuth: []
   /v1/workexec/time-entries/timer/active:
     get:
       tags:
@@ -4079,6 +4253,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+      - bearerAuth: []
   /v1/workexec/job-time-totals:
     get:
       tags:
@@ -4135,6 +4311,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/workexec/estimates/search:
     get:
       tags:
@@ -4169,6 +4347,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PageEstimateSummaryResponse"
+      security:
+      - bearerAuth: []
   /v1/workexec/dashboard/today:
     get:
       tags:
@@ -4196,6 +4376,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DashboardResponse"
+      security:
+      - bearerAuth: []
   /v1/workexec/approvalConfigurations/applicable:
     get:
       tags:
@@ -4231,6 +4413,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     AssignmentHistoryEntry:
@@ -4856,34 +5040,6 @@ components:
             $ref: "#/components/schemas/ConsumeItem"
       required:
       - items
-    ConsumePickedItemsResponse:
-      type: object
-      properties:
-        workorderId:
-          type: string
-          format: uuid
-        totalItemsConsumed:
-          type: integer
-          format: int32
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/ConsumedItemResult"
-    ConsumedItemResult:
-      type: object
-      properties:
-        pickTaskId:
-          type: string
-          format: uuid
-        quantityConsumed:
-          type: integer
-          format: int32
-        status:
-          type: string
-          enum:
-          - SUCCESS
-          - PARTIAL
-          - FAILED
     ApiError:
       type: object
       default: "##default"
@@ -4951,6 +5107,34 @@ components:
           default: "##default"
           description: Validation failure message
           example: must be greater than 0
+    ConsumePickedItemsResponse:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        totalItemsConsumed:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumedItemResult"
+    ConsumedItemResult:
+      type: object
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+        quantityConsumed:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - PARTIAL
+          - FAILED
     ResolveScanRequest:
       type: object
       properties:
@@ -7587,10 +7771,10 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         first:
           type: boolean
         last:
@@ -7606,6 +7790,8 @@ components:
         offset:
           type: integer
           format: int64
+        sort:
+          $ref: "#/components/schemas/Sortnull"
         paged:
           type: boolean
         pageNumber:
@@ -7614,8 +7800,6 @@ components:
         pageSize:
           type: integer
           format: int32
-        sort:
-          $ref: "#/components/schemas/Sortnull"
         unpaged:
           type: boolean
     Sortnull:
@@ -7806,10 +7990,10 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
         sort:
           $ref: "#/components/schemas/Sortnull"
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
         first:
           type: boolean
         last:

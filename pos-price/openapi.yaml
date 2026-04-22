@@ -67,6 +67,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/{promotionId}/rules:
     get:
@@ -109,6 +110,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/EligibilityRuleResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
     post:
       tags:
@@ -156,6 +158,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/EligibilityRuleResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/{promotionId}/rules/evaluate:
     post:
@@ -204,6 +207,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/EligibilityDecisionResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/apply:
     post:
@@ -245,6 +249,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApplyPromotionResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/price/restrictions:override:
     post:
@@ -285,6 +290,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RestrictionOverrideResponse"
+      security:
+      - bearerAuth: []
   /v1/price/restrictions:evaluate:
     post:
       tags:
@@ -324,6 +331,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
+      security:
+      - bearerAuth: []
   /v1/price/restrictions/rules:
     get:
       tags:
@@ -347,6 +356,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RestrictionRuleResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Restriction Rules
@@ -383,6 +394,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
+      security:
+      - bearerAuth: []
   /v1/price/quotes:
     post:
       tags:
@@ -416,6 +429,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceQuoteResponse"
+      security:
+      - bearerAuth: []
   /v1/price/normalize:
     post:
       tags:
@@ -443,6 +458,8 @@ paths:
           content:
             '*/*':
               schema: {}
+      security:
+      - bearerAuth: []
   /v1/price/bulk-ingest:
     post:
       tags:
@@ -470,6 +487,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
+      security:
+      - bearerAuth: []
   /v1/promotions/offers/{id}/deactivate:
     patch:
       tags:
@@ -504,6 +523,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/{id}/activate:
     patch:
@@ -545,6 +565,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/{id}:
     get:
@@ -580,6 +601,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/promotions/offers/by-code/{promoCode}:
     get:
@@ -614,6 +636,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
+      - bearerAuth: []
       - BearerAuth: []
   /v1/price/snapshots/{snapshotId}:
     get:
@@ -648,6 +671,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PricingSnapshotResponse"
+      security:
+      - bearerAuth: []
   /v1/price/restrictions/rules/{ruleId}:
     get:
       tags:
@@ -680,6 +705,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Restriction Rules
@@ -717,6 +744,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
+      security:
+      - bearerAuth: []
   /v1/promotions/offers/{promotionId}/rules/{ruleId}:
     delete:
       tags:
@@ -745,6 +774,7 @@ paths:
         "404":
           description: Promotion offer or rule not found.
       security:
+      - bearerAuth: []
       - BearerAuth: []
 components:
   schemas:

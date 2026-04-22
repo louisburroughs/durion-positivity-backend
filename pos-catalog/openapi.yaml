@@ -1,50 +1,55 @@
 openapi: 3.1.0
 info:
   title: Positivity Product API
-  description: "API documentation for the Product service, accessible via the API\
-    \ Gateway."
+  description: "API documentation for the Product service, accessible via the API Gateway."
   contact:
     name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
-- url: http://api-gateway.local/v1/catalog
-  description: API Gateway
+  - url: http://api-gateway.local/v1/catalog
+    description: API Gateway
 tags:
-- name: UOM Conversion API
-  description: Unit of measure conversion API
-- name: Catalog Bulk Ingest API
-  description: Bulk import catalog products
-- name: Products API
-  description: "API for products, lifecycle, and pricing"
-- name: Item Cost API
-  description: "Manage standard, last, and average item costs"
-- name: Supplier Item Cost API
-  description: Manage supplier item costs with volume tiers
-- name: Product MSRP API
-  description: Manage MSRP values with effective dates
-- name: Catalog API
-  description: API for managing catalogs
-- name: Price Book API
-  description: "Manage price books, pricing rules, and resolution"
-- name: Catalog Items API
-  description: API for managing catalog items by type
+  - name: UOM Conversion API
+    description: Unit of measure conversion API
+  - name: Catalog Bulk Ingest API
+    description: Bulk import catalog products
+  - name: Products API
+    description: "API for products, lifecycle, and pricing"
+  - name: Item Cost API
+    description: "Manage standard, last, and average item costs"
+  - name: Supplier Item Cost API
+    description: Manage supplier item costs with volume tiers
+  - name: Product MSRP API
+    description: Manage MSRP values with effective dates
+  - name: Catalog API
+    description: API for managing catalogs
+  - name: Price Book API
+    description: "Manage price books, pricing rules, and resolution"
+  - name: Catalog Items API
+    description: API for managing catalog items by type
 paths:
   /v1/products/{productId}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get a product by ID
       description: Retrieves a specific product by its unique ID.
       operationId: getProductById
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
+        "404":
+          description: Product not found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Successfully retrieved product
           content:
@@ -60,25 +65,21 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - Products API
+        - Products API
       summary: Update product master record
       description: Updates mutable product master fields. SKU is immutable.
       operationId: updateProduct
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product to update
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product to update
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -89,19 +90,13 @@ paths:
         "400":
           description: Validation error
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "200":
@@ -119,24 +114,32 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Product not found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/msrp/{msrpId}:
     put:
       tags:
-      - Product MSRP API
+        - Product MSRP API
       summary: Update MSRP
       description: Updates a non-historical MSRP record.
       operationId: updateMsrp
       parameters:
-      - name: productId
-        in: path
-        required: true
-        schema:
-          default: "##default"
-      - name: msrpId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          required: true
+          schema:
+            default: "##default"
+        - name: msrpId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -147,25 +150,13 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "404":
           description: MSRP record not found
           content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "409":
-          description: Temporal overlap or optimistic locking conflict
-          content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "200":
@@ -183,21 +174,41 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
+          description: Temporal overlap or optimistic locking conflict
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/lifecycle:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get product lifecycle state
       description: Retrieves lifecycle state and replacement suggestions for a product.
       operationId: getProductLifecycle
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product
+          required: true
+          schema:
+            default: "##default"
       responses:
+        "404":
+          description: Product not found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Successfully retrieved lifecycle state
           content:
@@ -213,26 +224,22 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - Products API
+        - Products API
       summary: Set product lifecycle state
-      description: "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with\
-        \ effective date semantics."
+      description: "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with
+        effective date semantics."
       operationId: setLifecycleState
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -240,12 +247,6 @@ paths:
               $ref: "#/components/schemas/ProductLifecycleUpdateRequest"
         required: true
       responses:
-        "400":
-          description: Validation error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Lifecycle state updated successfully
           content:
@@ -261,38 +262,46 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Validation error
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
         "404":
           description: Product not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "403":
           description: Missing override permission
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "409":
           description: Lifecycle business rule conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
+      security:
+        - bearerAuth: []
   /v1/products/uom-conversions/{id}:
     get:
       tags:
-      - UOM Conversion API
+        - UOM Conversion API
       summary: Get conversion
       description: Retrieves a unit-of-measure conversion by its ID.
       operationId: getUomConversionById
       parameters:
-      - name: id
-        in: path
-        description: Conversion ID
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          description: Conversion ID
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Conversion found
@@ -312,23 +321,25 @@ paths:
         "404":
           description: Conversion not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - UOM Conversion API
+        - UOM Conversion API
       summary: Update conversion factor
       description: Updates the conversion factor and mutable fields for an existing
         conversion.
       operationId: updateUomConversion
       parameters:
-      - name: id
-        in: path
-        description: Conversion ID
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          description: Conversion ID
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -339,7 +350,7 @@ paths:
         "404":
           description: Conversion not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
         "200":
@@ -360,45 +371,49 @@ paths:
         "400":
           description: Invalid request
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - UOM Conversion API
+        - UOM Conversion API
       summary: Deactivate conversion
       description: Deactivates a conversion so it is excluded from active conversion
         results.
       operationId: deactivateUomConversion
       parameters:
-      - name: id
-        in: path
-        description: Conversion ID
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          description: Conversion ID
+          required: true
+          schema:
+            default: "##default"
       responses:
         "204":
           description: Conversion deactivated
         "404":
           description: Conversion not found
+      security:
+        - bearerAuth: []
   /v1/products/supplier-costs/{id}:
     get:
       tags:
-      - Supplier Item Cost API
+        - Supplier Item Cost API
       summary: Get supplier cost structure
       operationId: getCostStructure
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "404":
           description: Not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
@@ -416,17 +431,19 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - Supplier Item Cost API
+        - Supplier Item Cost API
       summary: Update supplier cost structure
       operationId: updateCostStructure
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -437,7 +454,7 @@ paths:
         "404":
           description: Not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
@@ -455,35 +472,39 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - Supplier Item Cost API
+        - Supplier Item Cost API
       summary: Delete supplier cost structure
       operationId: deleteCostStructure
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: id
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "204":
           description: Deleted
         "404":
           description: Not found
+      security:
+        - bearerAuth: []
   /v1/products/price-books/{priceBookId}:
     get:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Get price book
       description: "Retrieves a price book by ID, including its configuration metadata."
       operationId: getPriceBook
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Price book returned
@@ -503,21 +524,23 @@ paths:
         "404":
           description: Price book not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Update price book
       description: Updates mutable fields of an existing price book.
       operationId: updatePriceBook
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -543,27 +566,29 @@ paths:
         "404":
           description: Price book not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
+      security:
+        - bearerAuth: []
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
     put:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Update price book rule
       description: Updates an existing pricing rule in a price book.
       operationId: updateRule
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
-      - name: ruleId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -571,6 +596,12 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
+        "409":
+          description: Rule conflict
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
         "200":
           description: Price book rule updated
           content:
@@ -586,45 +617,43 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Deactivate price book rule
       description: Deactivates a price book rule so it is no longer considered in
         price resolution.
       operationId: deactivateRule
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
-      - name: ruleId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "204":
           description: Rule deactivated
+      security:
+        - bearerAuth: []
   /v1/products/items/{itemId}/standard-cost:
     put:
       tags:
-      - Item Cost API
+        - Item Cost API
       summary: Update standard item cost
       operationId: updateStandardCost
       parameters:
-      - name: itemId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -635,7 +664,7 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
         "200":
@@ -653,20 +682,22 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/catalogs/{catalogId}:
     get:
       tags:
-      - Catalog API
+        - Catalog API
       summary: Get a catalog by ID
       description: Retrieves a specific catalog by its unique ID.
       operationId: getCatalogById
       parameters:
-      - name: catalogId
-        in: path
-        description: ID of the catalog to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: catalogId
+          in: path
+          description: ID of the catalog to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved catalog
@@ -686,22 +717,24 @@ paths:
         "404":
           description: Catalog not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - Catalog API
+        - Catalog API
       summary: Update an existing catalog
       description: Updates an existing catalog.
       operationId: updateCatalog
       parameters:
-      - name: catalogId
-        in: path
-        description: ID of the catalog to update
-        required: true
-        schema:
-          default: "##default"
+        - name: catalogId
+          in: path
+          description: ID of the catalog to update
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         description: Updated catalog object
         content:
@@ -722,7 +755,7 @@ paths:
         "400":
           description: Invalid request body
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogDto"
         "200":
@@ -743,48 +776,52 @@ paths:
         "404":
           description: Catalog not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - Catalog API
+        - Catalog API
       summary: Delete a catalog
       description: Deletes a catalog by its ID.
       operationId: deleteCatalog
       parameters:
-      - name: catalogId
-        in: path
-        description: ID of the catalog to delete
-        required: true
-        schema:
-          default: "##default"
+        - name: catalogId
+          in: path
+          description: ID of the catalog to delete
+          required: true
+          schema:
+            default: "##default"
       responses:
         "204":
           description: Catalog deleted successfully
         "404":
           description: Catalog not found
+      security:
+        - bearerAuth: []
   /v1/catalog-items/{type}/{catalogId}:
     put:
       tags:
-      - Catalog Items API
+        - Catalog Items API
       summary: Update an existing catalog item
-      description: "Updates an existing product, service, or non-inventory product\
-        \ in the catalog."
+      description: "Updates an existing product, service, or non-inventory product in
+        the catalog."
       operationId: updateCatalogItem
       parameters:
-      - name: type
-        in: path
-        description: "Type of catalog item (product, service, noninventory)"
-        required: true
-        schema:
-          default: "##default"
-      - name: catalogId
-        in: path
-        description: ID of the catalog item to update
-        required: true
-        schema:
-          default: "##default"
+        - name: type
+          in: path
+          description: "Type of catalog item (product, service, noninventory)"
+          required: true
+          schema:
+            default: "##default"
+        - name: catalogId
+          in: path
+          description: ID of the catalog item to update
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -810,35 +847,37 @@ paths:
         "400":
           description: Invalid item type or request body
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
         "404":
           description: Catalog item not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - Catalog Items API
+        - Catalog Items API
       summary: Delete a catalog item
-      description: "Deletes a product, service, or non-inventory product from the\
-        \ catalog by its ID."
+      description: "Deletes a product, service, or non-inventory product from the
+        catalog by its ID."
       operationId: deleteCatalogItem
       parameters:
-      - name: type
-        in: path
-        description: "Type of catalog item (product, service, noninventory)"
-        required: true
-        schema:
-          default: "##default"
-      - name: catalogId
-        in: path
-        description: ID of the catalog item to delete
-        required: true
-        schema:
-          default: "##default"
+        - name: type
+          in: path
+          description: "Type of catalog item (product, service, noninventory)"
+          required: true
+          schema:
+            default: "##default"
+        - name: catalogId
+          in: path
+          description: ID of the catalog item to delete
+          required: true
+          schema:
+            default: "##default"
       responses:
         "204":
           description: Catalog item deleted successfully
@@ -846,13 +885,14 @@ paths:
           description: Invalid item type
         "404":
           description: Catalog item not found
+      security:
+        - bearerAuth: []
   /v1/products:
     post:
       tags:
-      - Products API
+        - Products API
       summary: Create product master record
-      description: Creates a product master record with immutable SKU and uniqueness
-        checks.
+      description: Creates a product master record with immutable SKU and uniqueness checks.
       operationId: createProduct
       requestBody:
         content:
@@ -864,13 +904,13 @@ paths:
         "400":
           description: Validation error
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "201":
@@ -888,42 +928,46 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/replacements:
     get:
       tags:
-      - Products API
+        - Products API
       summary: List replacement products
       description: Returns replacement options for a product.
       operationId: getReplacements
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Replacements listed
           content:
-            '*/*':
+            "*/*":
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ReplacementOption"
+      security:
+        - bearerAuth: []
     post:
       tags:
-      - Products API
+        - Products API
       summary: Add replacement product
       description: Adds a replacement suggestion to a discontinued product.
       operationId: addReplacementProduct
       parameters:
-      - name: productId
-        in: path
-        description: ID of discontinued product
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of discontinued product
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -934,34 +978,36 @@ paths:
         "201":
           description: Replacement added successfully
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
         "400":
           description: Validation error
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
         "404":
           description: Product not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/msrp:
     get:
       tags:
-      - Product MSRP API
+        - Product MSRP API
       summary: List MSRP history
       description: Returns all MSRP records for a product.
       operationId: listMsrp
       parameters:
-      - name: productId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: MSRP records returned
@@ -978,18 +1024,20 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
     post:
       tags:
-      - Product MSRP API
+        - Product MSRP API
       summary: Create MSRP
       description: Creates a product MSRP record with effective date constraints.
       operationId: createMsrp
       parameters:
-      - name: productId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -1000,13 +1048,13 @@ paths:
         "409":
           description: Temporal overlap conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "201":
@@ -1027,13 +1075,15 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+      security:
+        - bearerAuth: []
   /v1/products/uom-conversions:
     get:
       tags:
-      - UOM Conversion API
+        - UOM Conversion API
       summary: List active conversions
       description: Returns all active unit-of-measure conversion records.
       operationId: listUomConversions
@@ -1057,9 +1107,11 @@ paths:
                     default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
     post:
       tags:
-      - UOM Conversion API
+        - UOM Conversion API
       summary: Create UOM conversion
       description: Creates a new unit-of-measure conversion record.
       operationId: createUomConversion
@@ -1088,13 +1140,15 @@ paths:
         "400":
           description: Invalid request
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+      security:
+        - bearerAuth: []
   /v1/products/supplier-costs:
     post:
       tags:
-      - Supplier Item Cost API
+        - Supplier Item Cost API
       summary: Create supplier cost structure
       operationId: createCostStructure
       requestBody:
@@ -1107,7 +1161,7 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
         "201":
@@ -1128,13 +1182,15 @@ paths:
         "409":
           description: Duplicate supplier and item combination
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
+      security:
+        - bearerAuth: []
   /v1/products/pricing/location-overrides:
     post:
       tags:
-      - Products API
+        - Products API
       summary: Create location price override
       description: Creates a location-specific price override and enforces guardrails
         for margin and discount limits.
@@ -1164,30 +1220,32 @@ paths:
         "400":
           description: Guardrail validation failed
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
-      - Products API
+        - Products API
       summary: Reject pending location price override
-      description: "Rejects a pending override, persists rejection metadata, and marks\
-        \ the request as terminal."
+      description: "Rejects a pending override, persists rejection metadata, and marks
+        the request as terminal."
       operationId: rejectLocationPriceOverride
       parameters:
-      - name: overrideId
-        in: path
-        description: Override ID
-        required: true
-        schema:
-          default: "##default"
+        - name: overrideId
+          in: path
+          description: Override ID
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -1198,7 +1256,7 @@ paths:
         "404":
           description: Override or approval request not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
@@ -1219,30 +1277,32 @@ paths:
         "400":
           description: Invalid rejection request
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/pricing/location-overrides/{overrideId}/approve:
     post:
       tags:
-      - Products API
+        - Products API
       summary: Approve pending location price override
-      description: Approves a pending override and activates it as the effective location
-        price.
+      description: Approves a pending override and activates it as the effective
+        location price.
       operationId: approveLocationPriceOverride
       parameters:
-      - name: overrideId
-        in: path
-        description: Override ID
-        required: true
-        schema:
-          default: "##default"
+        - name: overrideId
+          in: path
+          description: Override ID
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -1250,12 +1310,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override approved
           content:
@@ -1271,22 +1325,30 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Override or approval request not found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
           description: Invalid approval request
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/pricing/guardrail-policies:
     post:
       tags:
-      - Products API
+        - Products API
       summary: Upsert location guardrail policy
       description: Creates or updates the active LOCATION guardrail policy used by
         price overrides.
@@ -1316,13 +1378,15 @@ paths:
         "400":
           description: Invalid policy payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/price-books:
     post:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Create price book
       description: Creates a new price book used to group and apply pricing rules.
       operationId: createPriceBook
@@ -1336,7 +1400,7 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
         "201":
@@ -1354,19 +1418,21 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/price-books/{priceBookId}/rules:
     get:
       tags:
-      - Price Book API
+        - Price Book API
       summary: List price book rules
       description: Returns all rules associated with a price book.
       operationId: listRules
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Rule list returned
@@ -1383,18 +1449,20 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
     post:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Create price book rule
       description: Adds a new pricing rule to a specific price book.
       operationId: createRule
       parameters:
-      - name: priceBookId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: priceBookId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -1405,7 +1473,7 @@ paths:
         "409":
           description: Rule conflict
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
         "201":
@@ -1423,10 +1491,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/price-books/resolve-price:
     post:
       tags:
-      - Price Book API
+        - Price Book API
       summary: Resolve effective product price
       description: Calculates the effective price for a product using applicable price
         books and rules.
@@ -1453,10 +1523,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/catalogs:
     post:
       tags:
-      - Catalog API
+        - Catalog API
       summary: Add a new catalog
       description: Adds a new catalog.
       operationId: addCatalog
@@ -1480,7 +1552,7 @@ paths:
         "400":
           description: Invalid request body
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogDto"
         "201":
@@ -1498,13 +1570,15 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/catalog/bulk-ingest:
     post:
       tags:
-      - Catalog Bulk Ingest API
+        - Catalog Bulk Ingest API
       summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record
-        results.
+      description: Accepts a batch of domain records for bulk import. Returns
+        per-record results.
       operationId: bulkIngest
       requestBody:
         content:
@@ -1516,29 +1590,31 @@ paths:
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
+      security:
+        - bearerAuth: []
   /v1/catalog-items/{type}:
     post:
       tags:
-      - Catalog Items API
+        - Catalog Items API
       summary: Add a new catalog item
       description: "Adds a new product, service, or non-inventory product to the catalog."
       operationId: addCatalogItem
       parameters:
-      - name: type
-        in: path
-        description: "Type of catalog item (product, service, noninventory)"
-        required: true
-        schema:
-          default: "##default"
+        - name: type
+          in: path
+          description: "Type of catalog item (product, service, noninventory)"
+          required: true
+          schema:
+            default: "##default"
       requestBody:
         content:
           application/json:
@@ -1546,12 +1622,6 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid item type or request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "201":
           description: Catalog item created successfully
           content:
@@ -1567,25 +1637,33 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Invalid item type or request body
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/substitutes:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get substitute parts
       description: Returns list of substitute parts for a given productId.
       operationId: getPartSubstitutes
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product
+          required: true
+          schema:
+            default: "##default"
       responses:
         "404":
           description: Product not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 type: array
                 items:
@@ -1605,25 +1683,27 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/msrp/active:
     get:
       tags:
-      - Product MSRP API
+        - Product MSRP API
       summary: Get active MSRP
       description: Returns MSRP active for the provided asOf date (or today).
       operationId: getActiveMsrp
       parameters:
-      - name: productId
-        in: path
-        required: true
-        schema:
-          default: "##default"
-      - name: asOf
-        in: query
-        required: false
-        schema:
-          type: string
-          format: date
+        - name: productId
+          in: path
+          required: true
+          schema:
+            default: "##default"
+        - name: asOf
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: Active MSRP returned
@@ -1643,31 +1723,34 @@ paths:
         "404":
           description: No active MSRP for date
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+      security:
+        - bearerAuth: []
   /v1/products/{productId}/detail:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get product details with pricing and availability
-      description: "Retrieves a consolidated view of product information including\
-        \ catalog data, location-specific pricing, and availability. Implements graceful\
-        \ degradation and returns partial data when non-critical services are unavailable."
+      description: "Retrieves a consolidated view of product information including
+        catalog data, location-specific pricing, and availability. Implements
+        graceful degradation and returns partial data when non-critical services
+        are unavailable."
       operationId: getProductDetailView
       parameters:
-      - name: productId
-        in: path
-        description: ID of the product
-        required: true
-        schema:
-          default: "##default"
-      - name: location_id
-        in: query
-        description: Location/store ID for location-specific data
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the product
+          required: true
+          schema:
+            default: "##default"
+        - name: location_id
+          in: query
+          description: Location/store ID for location-specific data
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved product details (may be partial if some
@@ -1688,40 +1771,42 @@ paths:
         "400":
           description: Invalid location ID
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
         "404":
           description: Product not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
         "500":
           description: Unexpected server error while retrieving product details
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
+      security:
+        - bearerAuth: []
   /v1/products/services/{serviceId}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get a service by ID
       description: Retrieves a specific service by its unique ID.
       operationId: getServiceById
       parameters:
-      - name: serviceId
-        in: path
-        description: ID of the service to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: serviceId
+          in: path
+          description: ID of the service to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "404":
           description: Service not found
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/ServiceDto"
         "200":
@@ -1739,20 +1824,22 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/services/name/{name}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get services by name
       description: Retrieves a list of services matching the given name.
       operationId: getServiceByName
       parameters:
-      - name: name
-        in: path
-        description: Name of the services to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: name
+          in: path
+          description: Name of the services to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved services
@@ -1769,51 +1856,53 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/search:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Search catalog products
-      description: "Cursor-based product search with optional free-text query and\
-        \ exact filters for brand, category, and SKU."
+      description: "Cursor-based product search with optional free-text query and
+        exact filters for brand, category, and SKU."
       operationId: searchProducts
       parameters:
-      - name: q
-        in: query
-        description: Free-text search query (matches product name and description)
-        required: false
-        schema:
-          default: "##default"
-      - name: brand
-        in: query
-        description: "Filter by manufacturer brand (exact, case-insensitive)"
-        required: false
-        schema:
-          default: "##default"
-      - name: category
-        in: query
-        description: "Filter by category name (exact, case-insensitive)"
-        required: false
-        schema:
-          default: "##default"
-      - name: sku
-        in: query
-        description: "Filter by SKU (exact match, case-insensitive)"
-        required: false
-        schema:
-          default: "##default"
-      - name: cursor
-        in: query
-        description: Pagination cursor from previous response
-        required: false
-        schema:
-          default: "##default"
-      - name: limit
-        in: query
-        description: Maximum number of results (1–100)
-        required: false
-        schema:
-          default: "##default"
+        - name: q
+          in: query
+          description: Free-text search query (matches product name and description)
+          required: false
+          schema:
+            default: "##default"
+        - name: brand
+          in: query
+          description: "Filter by manufacturer brand (exact, case-insensitive)"
+          required: false
+          schema:
+            default: "##default"
+        - name: category
+          in: query
+          description: "Filter by category name (exact, case-insensitive)"
+          required: false
+          schema:
+            default: "##default"
+        - name: sku
+          in: query
+          description: "Filter by SKU (exact match, case-insensitive)"
+          required: false
+          schema:
+            default: "##default"
+        - name: cursor
+          in: query
+          description: Pagination cursor from previous response
+          required: false
+          schema:
+            default: "##default"
+        - name: limit
+          in: query
+          description: Maximum number of results (1–100)
+          required: false
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Search results
@@ -1833,31 +1922,39 @@ paths:
         "400":
           description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
-            '*/*':
+            "*/*":
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
+      security:
+        - bearerAuth: []
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get effective location price
-      description: "Resolves effective price using precedence: ACTIVE override first,\
-        \ otherwise base price."
+      description: "Resolves effective price using precedence: ACTIVE override first,
+        otherwise base price."
       operationId: getEffectiveLocationPrice
       parameters:
-      - name: locationId
-        in: path
-        description: Location ID
-        required: true
-        schema:
-          default: "##default"
-      - name: productId
-        in: path
-        description: Product ID
-        required: true
-        schema:
-          default: "##default"
+        - name: locationId
+          in: path
+          description: Location ID
+          required: true
+          schema:
+            default: "##default"
+        - name: productId
+          in: path
+          description: Product ID
+          required: true
+          schema:
+            default: "##default"
       responses:
+        "404":
+          description: No pricing context found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
         "200":
           description: Effective price returned
           content:
@@ -1873,33 +1970,23 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: No pricing context found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
+      security:
+        - bearerAuth: []
   /v1/products/noninventory/{productId}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get a non-inventory product by ID
       description: Retrieves a specific non-inventory product by its unique ID.
       operationId: getNonInventoryProductById
       parameters:
-      - name: productId
-        in: path
-        description: ID of the non-inventory product to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: productId
+          in: path
+          description: ID of the non-inventory product to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
-        "404":
-          description: Non-inventory product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/NonInventoryProductDto"
         "200":
           description: Successfully retrieved non-inventory product
           content:
@@ -1915,20 +2002,28 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Non-inventory product not found
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/NonInventoryProductDto"
+      security:
+        - bearerAuth: []
   /v1/products/noninventory/name/{name}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get non-inventory products by name
       description: Retrieves a list of non-inventory products matching the given name.
       operationId: getNonInventoryProductByName
       parameters:
-      - name: name
-        in: path
-        description: Name of the non-inventory products to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: name
+          in: path
+          description: Name of the non-inventory products to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved non-inventory products
@@ -1945,20 +2040,22 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/name/{name}:
     get:
       tags:
-      - Products API
+        - Products API
       summary: Get products by name
       description: Retrieves a list of products matching the given name.
       operationId: getProductByName
       parameters:
-      - name: name
-        in: path
-        description: Name of the products to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: name
+          in: path
+          description: Name of the products to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved products
@@ -1975,18 +2072,20 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/items/{itemId}/costs:
     get:
       tags:
-      - Item Cost API
+        - Item Cost API
       summary: Get current item costs
       operationId: getItemCosts
       parameters:
-      - name: itemId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Found
@@ -2003,18 +2102,20 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/products/items/{itemId}/costs/audit:
     get:
       tags:
-      - Item Cost API
+        - Item Cost API
       summary: Get item cost audit history
       operationId: getAuditHistory
       parameters:
-      - name: itemId
-        in: path
-        required: true
-        schema:
-          default: "##default"
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Found
@@ -2031,20 +2132,22 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
   /v1/catalogs/name/{name}:
     get:
       tags:
-      - Catalog API
+        - Catalog API
       summary: Get catalogs by name
       description: Retrieves a list of catalogs matching the given name.
       operationId: getCatalogByName
       parameters:
-      - name: name
-        in: path
-        description: Name of the catalogs to be obtained
-        required: true
-        schema:
-          default: "##default"
+        - name: name
+          in: path
+          description: Name of the catalogs to be obtained
+          required: true
+          schema:
+            default: "##default"
       responses:
         "200":
           description: Successfully retrieved catalogs
@@ -2061,6 +2164,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+      security:
+        - bearerAuth: []
 components:
   schemas:
     ProductUpdateRequestDto:
@@ -2091,10 +2196,10 @@ components:
           default: "##default"
           description: JSON object represented as string
       required:
-      - description
-      - mpn
-      - name
-      - unitOfMeasure
+        - description
+        - mpn
+        - name
+        - unitOfMeasure
     CategoryDto:
       type: object
       default: "##default"
@@ -2127,28 +2232,28 @@ components:
           default: "##default"
           description: Dimension type
           enum:
-          - LENGTH
-          - WIDTH
-          - HEIGHT
-          - WEIGHT
-          - VOLUME
-          - AREA
-          - DIAMETER
-          - CIRCUMFERENCE
-          - RADIUS
-          - TEMPERATURE
-          - TIME
-          - SPEED
-          - PRESSURE
-          - FORCE
-          - ENERGY
-          - POWER
-          - FREQUENCY
-          - ANGLE
-          - DATA_SIZE
-          - CURRENT
-          - VOLTAGE
-          - RESISTANCE
+            - LENGTH
+            - WIDTH
+            - HEIGHT
+            - WEIGHT
+            - VOLUME
+            - AREA
+            - DIAMETER
+            - CIRCUMFERENCE
+            - RADIUS
+            - TEMPERATURE
+            - TIME
+            - SPEED
+            - PRESSURE
+            - FORCE
+            - ENERGY
+            - POWER
+            - FREQUENCY
+            - ANGLE
+            - DATA_SIZE
+            - CURRENT
+            - VOLTAGE
+            - RESISTANCE
         description:
           type: string
           default: "##default"
@@ -2249,8 +2354,8 @@ components:
           default: "##default"
           description: Operational status
           enum:
-          - ACTIVE
-          - INACTIVE
+            - ACTIVE
+            - INACTIVE
         productCode:
           type: string
           default: "##default"
@@ -2260,8 +2365,8 @@ components:
           default: "##default"
           description: Product code type
           enum:
-          - UPC
-          - EAN
+            - UPC
+            - EAN
         category:
           $ref: "#/components/schemas/CategoryDto"
           default: "##default"
@@ -2301,9 +2406,9 @@ components:
           default: "##default"
           description: Lifecycle state
           enum:
-          - ACTIVE
-          - INACTIVE
-          - DISCONTINUED
+            - ACTIVE
+            - INACTIVE
+            - DISCONTINUED
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
@@ -2369,10 +2474,10 @@ components:
           type: integer
           format: int64
       required:
-      - amount
-      - createdByUserId
-      - currency
-      - effectiveStartDate
+        - amount
+        - createdByUserId
+        - currency
+        - effectiveStartDate
     ProductMsrpDto:
       type: object
       properties:
@@ -2414,9 +2519,9 @@ components:
           default: "##default"
           description: Target lifecycle state
           enum:
-          - ACTIVE
-          - INACTIVE
-          - DISCONTINUED
+            - ACTIVE
+            - INACTIVE
+            - DISCONTINUED
         effectiveAt:
           type: string
           format: date-time
@@ -2452,9 +2557,9 @@ components:
           default: "##default"
           description: Current lifecycle state
           enum:
-          - ACTIVE
-          - INACTIVE
-          - DISCONTINUED
+            - ACTIVE
+            - INACTIVE
+            - DISCONTINUED
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
@@ -2519,7 +2624,7 @@ components:
         conversionFactor:
           type: number
       required:
-      - conversionFactor
+        - conversionFactor
     UomConversionDto:
       type: object
       properties:
@@ -2566,8 +2671,8 @@ components:
           description: Per-unit cost for this quantity range
           example: 5.0
       required:
-      - minQuantity
-      - unitCost
+        - minQuantity
+        - unitCost
     SupplierItemCostUpdateRequestDto:
       type: object
       default: "##default"
@@ -2600,9 +2705,9 @@ components:
           items:
             $ref: "#/components/schemas/CostTierDto"
       required:
-      - currencyCode
-      - itemId
-      - supplierId
+        - currencyCode
+        - itemId
+        - supplierId
     SupplierItemCostDto:
       type: object
       default: "##default"
@@ -2656,9 +2761,9 @@ components:
         scope:
           type: string
           enum:
-          - COMPANY_DEFAULT
-          - LOCATION
-          - CUSTOMER_TIER
+            - COMPANY_DEFAULT
+            - LOCATION
+            - CUSTOMER_TIER
         scopeId:
           type: string
           format: uuid
@@ -2667,11 +2772,11 @@ components:
         status:
           type: string
           enum:
-          - ACTIVE
-          - INACTIVE
+            - ACTIVE
+            - INACTIVE
       required:
-      - name
-      - scope
+        - name
+        - scope
     PriceBookDto:
       type: object
       properties:
@@ -2683,17 +2788,17 @@ components:
         scope:
           type: string
           enum:
-          - COMPANY_DEFAULT
-          - LOCATION
-          - CUSTOMER_TIER
+            - COMPANY_DEFAULT
+            - LOCATION
+            - CUSTOMER_TIER
         scopeId:
           type: string
           format: uuid
         status:
           type: string
           enum:
-          - ACTIVE
-          - INACTIVE
+            - ACTIVE
+            - INACTIVE
         createdAt:
           type: string
           format: date-time
@@ -2711,9 +2816,9 @@ components:
         targetType:
           type: string
           enum:
-          - SKU
-          - CATEGORY
-          - GLOBAL
+            - SKU
+            - CATEGORY
+            - GLOBAL
         targetId:
           type: string
           format: uuid
@@ -2722,9 +2827,9 @@ components:
         conditionType:
           type: string
           enum:
-          - CUSTOMER_TIER
-          - LOCATION
-          - NONE
+            - CUSTOMER_TIER
+            - LOCATION
+            - NONE
         conditionValue:
           type: string
         priority:
@@ -2743,10 +2848,10 @@ components:
           type: integer
           format: int64
       required:
-      - createdByUserId
-      - effectiveStartAt
-      - pricingLogic
-      - targetType
+        - createdByUserId
+        - effectiveStartAt
+        - pricingLogic
+        - targetType
     PriceBookRuleDto:
       type: object
       properties:
@@ -2759,9 +2864,9 @@ components:
         targetType:
           type: string
           enum:
-          - SKU
-          - CATEGORY
-          - GLOBAL
+            - SKU
+            - CATEGORY
+            - GLOBAL
         targetId:
           type: string
           format: uuid
@@ -2770,9 +2875,9 @@ components:
         conditionType:
           type: string
           enum:
-          - CUSTOMER_TIER
-          - LOCATION
-          - NONE
+            - CUSTOMER_TIER
+            - LOCATION
+            - NONE
         conditionValue:
           type: string
         priority:
@@ -2787,9 +2892,9 @@ components:
         status:
           type: string
           enum:
-          - ACTIVE
-          - INACTIVE
-          - NOT_APPLICABLE_MISSING_BASE
+            - ACTIVE
+            - INACTIVE
+            - NOT_APPLICABLE_MISSING_BASE
         createdByUserId:
           type: string
           format: uuid
@@ -2816,8 +2921,8 @@ components:
           default: "##default"
           description: Reason code for manual change
       required:
-      - newCost
-      - reasonCode
+        - newCost
+        - reasonCode
     ItemCostsDto:
       type: object
       default: "##default"
@@ -3005,11 +3110,11 @@ components:
           default: "##default"
           description: JSON object represented as string
       required:
-      - description
-      - mpn
-      - name
-      - sku
-      - unitOfMeasure
+        - description
+        - mpn
+        - name
+        - sku
+        - unitOfMeasure
     ProductReplacementRequest:
       type: object
       default: "##default"
@@ -3053,10 +3158,10 @@ components:
           type: string
           format: uuid
       required:
-      - amount
-      - createdByUserId
-      - currency
-      - effectiveStartDate
+        - amount
+        - createdByUserId
+        - currency
+        - effectiveStartDate
     UomConversionCreateRequestDto:
       type: object
       properties:
@@ -3069,9 +3174,9 @@ components:
         createdBy:
           type: string
       required:
-      - conversionFactor
-      - fromUomCode
-      - toUomCode
+        - conversionFactor
+        - fromUomCode
+        - toUomCode
     SupplierItemCostCreateRequestDto:
       type: object
       default: "##default"
@@ -3104,9 +3209,9 @@ components:
           items:
             $ref: "#/components/schemas/CostTierDto"
       required:
-      - currencyCode
-      - itemId
-      - supplierId
+        - currencyCode
+        - itemId
+        - supplierId
     LocationPriceOverrideCreateRequestDto:
       type: object
       properties:
@@ -3129,11 +3234,11 @@ components:
           type: string
           format: uuid
       required:
-      - basePrice
-      - createdByUserId
-      - locationId
-      - overridePrice
-      - productId
+        - basePrice
+        - createdByUserId
+        - locationId
+        - overridePrice
+        - productId
     LocationPriceOverrideResponseDto:
       type: object
       properties:
@@ -3162,10 +3267,10 @@ components:
         status:
           type: string
           enum:
-          - ACTIVE
-          - PENDING_APPROVAL
-          - REJECTED
-          - INACTIVE
+            - ACTIVE
+            - PENDING_APPROVAL
+            - REJECTED
+            - INACTIVE
         createdByUserId:
           type: string
           format: uuid
@@ -3207,8 +3312,8 @@ components:
         rejectionNotes:
           type: string
       required:
-      - actorUserId
-      - version
+        - actorUserId
+        - version
     GuardrailPolicyUpsertRequestDto:
       type: object
       properties:
@@ -3228,10 +3333,10 @@ components:
           maximum: 100.0
           minimum: 0.0
       required:
-      - autoApprovalThresholdPercent
-      - maxDiscountPercent
-      - minMarginPercent
-      - scopeId
+        - autoApprovalThresholdPercent
+        - maxDiscountPercent
+        - minMarginPercent
+        - scopeId
     ResolvePriceRequestDto:
       type: object
       properties:
@@ -3252,7 +3357,7 @@ components:
           type: string
           format: date
       required:
-      - productId
+        - productId
     ResolvePriceResponseDto:
       type: object
       properties:
@@ -3263,9 +3368,9 @@ components:
         source:
           type: string
           enum:
-          - PRICE_BOOK_RULE
-          - MSRP
-          - UNAVAILABLE
+            - PRICE_BOOK_RULE
+            - MSRP
+            - UNAVAILABLE
         sourceRuleId:
           type: string
           format: uuid
@@ -3287,9 +3392,9 @@ components:
         operatorId:
           type: string
       required:
-      - jobId
-      - locationId
-      - records
+        - jobId
+        - locationId
+        - records
     CatalogBulkIngestRecord:
       type: object
       properties:
@@ -3308,8 +3413,8 @@ components:
         price:
           type: number
       required:
-      - name
-      - sku
+        - name
+        - sku
     BulkIngestResponse:
       type: object
       properties:
@@ -3367,10 +3472,10 @@ components:
           default: "##default"
           description: Availability data status
           enum:
-          - OK
-          - UNAVAILABLE
-          - STALE
-          - ERROR
+            - OK
+            - UNAVAILABLE
+            - STALE
+            - ERROR
           example: OK
         asOf:
           type: string
@@ -3382,9 +3487,9 @@ components:
           default: "##default"
           description: Confidence level in availability data
           enum:
-          - LOW
-          - MEDIUM
-          - HIGH
+            - LOW
+            - MEDIUM
+            - HIGH
           example: MEDIUM
     LeadTimeInfo:
       type: object
@@ -3396,9 +3501,9 @@ components:
           default: "##default"
           description: Source of lead time data
           enum:
-          - CATALOG
-          - INVENTORY
-          - SUPPLY_CHAIN
+            - CATALOG
+            - INVENTORY
+            - SUPPLY_CHAIN
           example: CATALOG
         minDays:
           type: integer
@@ -3427,9 +3532,9 @@ components:
           default: "##default"
           description: Confidence in lead time estimate
           enum:
-          - LOW
-          - MEDIUM
-          - HIGH
+            - LOW
+            - MEDIUM
+            - HIGH
           example: LOW
     PricingInfo:
       type: object
@@ -3458,10 +3563,10 @@ components:
           default: "##default"
           description: Pricing data status
           enum:
-          - OK
-          - UNAVAILABLE
-          - STALE
-          - ERROR
+            - OK
+            - UNAVAILABLE
+            - STALE
+            - ERROR
           example: OK
         asOf:
           type: string
@@ -3473,9 +3578,9 @@ components:
           default: "##default"
           description: Confidence level in pricing data
           enum:
-          - LOW
-          - MEDIUM
-          - HIGH
+            - LOW
+            - MEDIUM
+            - HIGH
           example: HIGH
     ProductDetailView:
       type: object
@@ -3522,9 +3627,9 @@ components:
           default: "##default"
           description: Overall confidence in the data completeness
           enum:
-          - LOW
-          - MEDIUM
-          - HIGH
+            - LOW
+            - MEDIUM
+            - HIGH
           example: HIGH
     ProductSpecification:
       type: object
@@ -3651,10 +3756,10 @@ components:
         overrideStatus:
           type: string
           enum:
-          - ACTIVE
-          - PENDING_APPROVAL
-          - REJECTED
-          - INACTIVE
+            - ACTIVE
+            - PENDING_APPROVAL
+            - REJECTED
+            - INACTIVE
     NonInventoryProductDto:
       type: object
       default: "##default"
@@ -3695,9 +3800,9 @@ components:
         costTypeChanged:
           type: string
           enum:
-          - STANDARD
-          - LAST
-          - AVERAGE
+            - STANDARD
+            - LAST
+            - AVERAGE
         oldValue:
           type: number
         newValue:
@@ -3705,8 +3810,8 @@ components:
         changeSourceType:
           type: string
           enum:
-          - MANUAL
-          - PURCHASE_ORDER
+            - MANUAL
+            - PURCHASE_ORDER
         changeSourceId:
           type: string
         actor:

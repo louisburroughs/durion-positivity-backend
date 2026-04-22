@@ -4,7 +4,7 @@ info:
   description: Tax calculation service with external API passthrough and test mode
     support
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
   version: "1.0"
 servers:
@@ -68,6 +68,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TaxCalculationResponse"
+      security:
+      - bearerAuth: []
   /v1/tax/mode:
     get:
       tags:
@@ -83,6 +85,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ModeResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     TaxAddress:
