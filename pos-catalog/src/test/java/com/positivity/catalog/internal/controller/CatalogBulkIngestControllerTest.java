@@ -53,7 +53,7 @@ class CatalogBulkIngestControllerTest {
     // ─── POST /v1/catalog/bulk-ingest — 200 OK ───────────────────────────────
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT", "ROLE_CATALOG_VIEW" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_validRequest_returns200WithResults() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");
@@ -80,7 +80,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("BAD-001");
@@ -103,7 +103,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_emptyRecords_returns400() throws Exception {
         BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
         request.setJobId(JOB_ID);
@@ -117,7 +117,7 @@ class CatalogBulkIngestControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "ROLE_CATALOG_EDIT" })
+    @WithMockUser(authorities = { "catalog:product:create" })
     void bulkIngest_missingJobId_returns400() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("ABC-001");
@@ -132,5 +132,24 @@ class CatalogBulkIngestControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void bulkIngest_forbiddenWhenMissingAuthority() throws Exception {
+        CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
+        catalogRecord.setSku("FORBIDDEN-001");
+        catalogRecord.setName("Unauthorized Widget");
+
+        BulkIngestRequest<CatalogBulkIngestRecord> req = new BulkIngestRequest<>();
+        req.setJobId(java.util.UUID.randomUUID());
+        req.setLocationId(java.util.UUID.randomUUID());
+        req.setOperatorId("op-1");
+        req.setRecords(List.of(catalogRecord));
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                .header("X-Authorities", "wrong:authority")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
     }
 }
