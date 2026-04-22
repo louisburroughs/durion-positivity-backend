@@ -78,9 +78,9 @@ public class WorkorderPartAdjustmentController {
                                         request.getNotes());
 
                         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-                } catch (NoSuchElementException e) {
+                } catch (NoSuchElementException _) {
                         return ResponseEntity.notFound().build();
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -111,9 +111,9 @@ public class WorkorderPartAdjustmentController {
                                         request.getNotes());
 
                         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-                } catch (NoSuchElementException e) {
+                } catch (NoSuchElementException _) {
                         return ResponseEntity.notFound().build();
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -144,9 +144,9 @@ public class WorkorderPartAdjustmentController {
                                         request.getNotes());
 
                         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-                } catch (NoSuchElementException e) {
+                } catch (NoSuchElementException _) {
                         return ResponseEntity.notFound().build();
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }

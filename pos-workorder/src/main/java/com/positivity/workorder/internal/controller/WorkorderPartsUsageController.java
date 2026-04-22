@@ -86,7 +86,7 @@ public class WorkorderPartsUsageController {
 
                         return ResponseEntity.status(HttpStatus.CREATED)
                                         .body(WorkorderPartsUsageMapper.toResponse(event));
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -114,7 +114,7 @@ public class WorkorderPartsUsageController {
 
                         return ResponseEntity.status(HttpStatus.CREATED)
                                         .body(WorkorderPartsUsageMapper.toResponse(event));
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }

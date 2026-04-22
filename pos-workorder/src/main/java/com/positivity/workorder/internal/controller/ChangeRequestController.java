@@ -54,7 +54,7 @@ public class ChangeRequestController {
                         dto.setWorkorderId(workorderId);
                         var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
                         return ResponseEntity.ok(ChangeRequestResponse.fromEntity(created));
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -76,7 +76,7 @@ public class ChangeRequestController {
                         var approved = changeRequestService.approveChangeRequest(changeId, dto.getApprovedBy(),
                                         dto.getApprovalNote());
                         return ResponseEntity.ok(ChangeRequestResponse.fromEntity(approved));
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -97,7 +97,7 @@ public class ChangeRequestController {
                 try {
                         var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
                         return ResponseEntity.ok(ChangeRequestResponse.fromEntity(declined));
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -115,7 +115,7 @@ public class ChangeRequestController {
                 try {
                         changeRequestService.recordCustomerDenialAcknowledgment(changeId);
                         return ResponseEntity.noContent().build();
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -138,7 +138,7 @@ public class ChangeRequestController {
                         var overridden = changeRequestService.applyEmergencyOverride(changeId,
                                         dto.getExceptionReason());
                         return ResponseEntity.ok(ChangeRequestResponse.fromEntity(overridden));
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException | IllegalStateException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -153,7 +153,7 @@ public class ChangeRequestController {
                 try {
                         var changeRequest = changeRequestService.getChangeRequestById(changeId);
                         return ResponseEntity.ok(ChangeRequestResponse.fromEntity(changeRequest));
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
                 }
         }

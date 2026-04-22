@@ -141,7 +141,7 @@ public class WorkorderController {
                                         request.getSignerName(),
                                         request.getNotes());
                         return ResponseEntity.ok(WorkorderResponse.fromEntity(approved));
-                } catch (IllegalStateException | IllegalArgumentException e) {
+                } catch (IllegalStateException | IllegalArgumentException _) {
                         return ResponseEntity.badRequest().build();
                 }
         }
@@ -173,13 +173,13 @@ public class WorkorderController {
                                         .build();
 
                         return ResponseEntity.ok(response);
-                } catch (IllegalStateException e) {
+                } catch (IllegalStateException _) {
                         return ResponseEntity.badRequest()
                                         .body(CompleteWorkorderResponse.builder()
                                                         .workorderId(workorderId)
-                                                        .message(e.getMessage())
+                                                        .message(_.getMessage())
                                                         .build());
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
                 }
         }
@@ -226,7 +226,7 @@ public class WorkorderController {
                                         .build();
 
                         return ResponseEntity.ok(response);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
                 }
         }
@@ -257,13 +257,13 @@ public class WorkorderController {
                                         .build();
 
                         return ResponseEntity.ok(response);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
-                } catch (IllegalStateException e) {
+                } catch (IllegalStateException _) {
                         return ResponseEntity.badRequest()
                                         .body(ReopenWorkorderResponse.builder()
                                                         .workorderId(workorderId)
-                                                        .message(e.getMessage())
+                                                        .message(_.getMessage())
                                                         .build());
                 }
         }

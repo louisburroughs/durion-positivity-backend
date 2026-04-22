@@ -53,13 +53,7 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
     for (int i = 0; i < request.getRecords().size(); i++) {
       PersonBulkIngestRecord ingestRecord = request.getRecords().get(i);
       try {
-        LocalDate hireDate;
-        try {
-          hireDate = LocalDate.parse(ingestRecord.getHireDate());
-        } catch (DateTimeParseException exception) {
-          throw new IllegalArgumentException(
-              "Invalid hireDate format; expected YYYY-MM-DD", exception);
-        }
+        LocalDate hireDate = parseHireDate(ingestRecord.getHireDate());
 
         CreateEmployeeRequest createEmployeeRequest = new CreateEmployeeRequest();
         createEmployeeRequest.setLegalName(ingestRecord.getLegalName());
@@ -106,5 +100,14 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
   private String errorMessage(@NonNull Exception exception) {
     String message = exception.getMessage();
     return message == null || message.isBlank() ? "People ingest failed" : message;
+  }
+
+  private LocalDate parseHireDate(String hireDateValue) {
+    try {
+      return LocalDate.parse(hireDateValue);
+    } catch (DateTimeParseException exception) {
+      throw new IllegalArgumentException(
+          "Invalid hireDate format; expected YYYY-MM-DD", exception);
+    }
   }
 }

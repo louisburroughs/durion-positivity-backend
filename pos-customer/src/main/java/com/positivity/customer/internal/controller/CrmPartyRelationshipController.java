@@ -218,7 +218,7 @@ public class CrmPartyRelationshipController {
                 }
                 try {
                         return UUID.fromString(principal.getName());
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         log.warn("Unable to parse user ID from principal name: {}", principal.getName());
                         return null;
                 }

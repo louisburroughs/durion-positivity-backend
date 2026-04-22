@@ -89,7 +89,7 @@ public class BayController {
     private UUID parseUuid(String value) {
         try {
             return UUID.fromString(value);
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             return UUID.nameUUIDFromBytes(value.getBytes());
         }
     }

@@ -269,31 +269,6 @@ public class JwtController {
         }
 
         /**
-         * Extracts and returns authorities from a valid JWT token.
-         *
-         * @deprecated Compatibility-only endpoint for legacy callers.
-         *             New integrations should authorize through gateway-derived
-         *             authorities and avoid direct token authorities parsing.
-         *
-         * @param token JWT token
-         * @return set of authorities or 401 if token invalid
-         */
-        @Deprecated(since = "2026-04-12", forRemoval = false)
-        @Operation(summary = "Extract authorities from JWT token (deprecated)", description = "Compatibility endpoint for legacy tokens. New token issuance does not include an authorities claim.")
-        @ApiResponse(responseCode = "200", description = "Authorities extracted successfully")
-        @ApiResponse(responseCode = "401", description = "Token invalid or expired")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-        @PreAuthorize("isAuthenticated()")
-        @GetMapping("/authorities")
-        public ResponseEntity<Set<String>> getAuthorities(@RequestParam String token) {
-                if (!jwtService.validateToken(token)) {
-                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-                }
-                Set<String> authorities = jwtService.getAuthoritiesFromToken(token);
-                return ResponseEntity.ok(authorities);
-        }
-
-        /**
          * Extracts and returns the subject (username) from a valid JWT token.
          *
          * @param token JWT token

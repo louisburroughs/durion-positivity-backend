@@ -75,7 +75,7 @@ public class CrmAccountsController {
                 try {
                         GetAccountTierResponse response = accountTierService.getAccountTier(accountId);
                         return ResponseEntity.ok(response);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         log.warn("Account not found: {}", accountId);
                         return ResponseEntity.notFound().build();
                 }

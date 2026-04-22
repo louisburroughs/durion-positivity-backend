@@ -95,7 +95,7 @@ public class ApprovalConfigurationController {
                         ApprovalConfigurationResponse updated = approvalConfigurationService
                                         .updateConfiguration(approvalId, request);
                         return ResponseEntity.ok(updated);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
                 }
         }
