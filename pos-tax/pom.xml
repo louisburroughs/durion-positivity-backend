@@ -66,6 +66,11 @@
         <!-- Internal Dependencies -->
         <dependency>
             <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
         <dependency>
@@ -82,6 +87,13 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Database Migration -->
@@ -153,11 +165,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.springdoc</groupId>
-                <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                <version>${springdoc-openapi-maven-plugin.version}</version>
-            </plugin>
         </plugins>
     </build>
     <profiles>
@@ -208,17 +215,58 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8086/api-docs.yaml</apiDocsUrl>
-                            <failOnError>true</failOnError>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <!-- false so Maven continues to post-integration-test and the stop goal fires;
+                                 actual failure is enforced by the verify-openapi-generated antrun below -->
+                            <failOnError>false</failOnError>
                             <outputFileName>openapi.yaml</outputFileName>
                             <outputDir>${project.basedir}</outputDir>
                         </configuration>
                         <executions>
                             <execution>
+                                <id>generate-openapi</id>
                                 <phase>integration-test</phase>
                                 <goals>
                                     <goal>generate</goal>
                                 </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <!-- Delete stale output before starting so a failed run cannot mask itself -->
+                            <execution>
+                                <id>delete-stale-openapi</id>
+                                <phase>pre-integration-test</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete file="${project.basedir}/openapi.yaml" quiet="true"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                            <!-- Fail the build at verify if generate did not produce the file -->
+                            <execution>
+                                <id>verify-openapi-generated</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <fail message="openapi.yaml was not generated — springdoc generate failed">
+                                            <condition>
+                                                <not>
+                                                    <available file="${project.basedir}/openapi.yaml"/>
+                                                </not>
+                                            </condition>
+                                        </fail>
+                                    </target>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

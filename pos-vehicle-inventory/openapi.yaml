@@ -38,18 +38,20 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Preferences found and returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+        "200":
+          description: Preferences found and returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle Preferences
@@ -96,6 +98,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle Preferences
@@ -115,6 +119,8 @@ paths:
           description: No preferences found to delete
         "204":
           description: Preferences deleted successfully
+      security:
+      - bearerAuth: []
     patch:
       tags:
       - Vehicle Preferences
@@ -149,6 +155,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/{id}:
     get:
       tags:
@@ -178,6 +186,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle API
@@ -212,6 +222,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle API
@@ -232,6 +244,8 @@ paths:
           description: Vehicle deleted successfully.
         "404":
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/vin/{vin}:
     get:
       tags:
@@ -260,6 +274,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle API
@@ -293,6 +309,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle API
@@ -312,6 +330,8 @@ paths:
           description: Vehicle deleted successfully.
         "404":
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry/{vehicleId}:
     get:
       tags:
@@ -340,6 +360,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle Registry API
@@ -379,6 +401,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle Registry API
@@ -398,6 +422,8 @@ paths:
           description: Vehicle deleted successfully.
         "404":
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicles/search:
     get:
       tags:
@@ -441,6 +467,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Vehicle Search
@@ -467,6 +495,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicles/bulk-ingest:
     post:
       tags:
@@ -494,6 +524,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy:
     get:
       tags:
@@ -510,6 +542,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Vehicle API
@@ -529,6 +563,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/vin:
     post:
       tags:
@@ -549,6 +585,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry:
     post:
       tags:
@@ -575,6 +613,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry/vin/{vin}:
     get:
       tags:
@@ -604,6 +644,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     PreferencesUpsertDto:

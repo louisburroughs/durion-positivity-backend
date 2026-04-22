@@ -1,0 +1,5 @@
+Apache Maven 3.9.14 (996c630dbc656c76214ce58821dcc58be960875b)
+Maven home: /home/louis-burroughs/.m2/wrapper/dists/apache-maven-3.9.14/db91789b
+Java version: 26, vendor: Oracle Corporation, runtime: /home/louis-burroughs/.local/share/mise/installs/java/26.0.0
+Default locale: en_US, platform encoding: UTF-8
+OS name: "linux", version: "6.17.0-20-generic", arch: "amd64", family: "unix"

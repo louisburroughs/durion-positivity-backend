@@ -46,6 +46,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/HintResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle Applicability Hints
@@ -85,6 +87,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/HintResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle Applicability Hints
@@ -104,6 +108,8 @@ paths:
           description: Hint not found
         "204":
           description: Hint deleted successfully
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/hints:
     post:
       tags:
@@ -136,6 +142,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/HintResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/hints/filter-products:
     post:
       tags:
@@ -162,6 +170,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/FilterProductsResponse"
+      security:
+      - bearerAuth: []
   /v1/fitments/bulk-ingest:
     post:
       tags:
@@ -189,6 +199,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/vehicle-types/{makeId}:
     get:
       tags:
@@ -214,6 +226,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/VehicleTypeResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/models/{makeId}:
     get:
       tags:
@@ -239,6 +253,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ModelResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/manufacturers:
     get:
       tags:
@@ -255,6 +271,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ManufacturerResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/makes/{manufacturerId}:
     get:
       tags:
@@ -280,6 +298,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MakeResponse"
+      security:
+      - bearerAuth: []
   /v1/vehicle-fitment/hints/product/{productId}:
     get:
       tags:
@@ -304,6 +324,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/HintResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     FitmentTagDto:

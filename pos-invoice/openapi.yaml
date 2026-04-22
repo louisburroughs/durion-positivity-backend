@@ -46,6 +46,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Billing Rules
@@ -83,6 +85,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
+      security:
+      - bearerAuth: []
   /v1/invoices:
     post:
       tags:
@@ -103,6 +107,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/revert:
     post:
       tags:
@@ -131,6 +137,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
@@ -156,6 +164,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ReceiptResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     post:
       tags:
@@ -187,6 +197,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ReceiptResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/receipts/{receiptId}/print:
     post:
       tags:
@@ -214,6 +226,8 @@ paths:
       responses:
         "200":
           description: OK
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
     post:
       tags:
@@ -241,6 +255,8 @@ paths:
       responses:
         "200":
           description: OK
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/payments:
     post:
       tags:
@@ -292,6 +308,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/payments/{paymentId}/void:
     post:
       tags:
@@ -326,6 +344,8 @@ paths:
           description: Payment intent not found
         "409":
           description: Invalid payment state
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
     post:
       tags:
@@ -376,6 +396,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/RefundPaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
     post:
       tags:
@@ -420,6 +442,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/finalize:
     post:
       tags:
@@ -448,6 +472,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
@@ -475,6 +501,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
+      security:
+      - bearerAuth: []
   /v1/invoices/{invoiceId}:
     get:
       tags:
@@ -496,6 +524,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     BillingRulesDTO:
