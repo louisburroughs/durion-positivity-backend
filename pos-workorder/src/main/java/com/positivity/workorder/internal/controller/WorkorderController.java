@@ -173,11 +173,11 @@ public class WorkorderController {
                                         .build();
 
                         return ResponseEntity.ok(response);
-                } catch (IllegalStateException _) {
+                } catch (IllegalStateException e) {
                         return ResponseEntity.badRequest()
                                         .body(CompleteWorkorderResponse.builder()
                                                         .workorderId(workorderId)
-                                                        .message(_.getMessage())
+                                                        .message(e.getMessage())
                                                         .build());
                 } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
@@ -259,11 +259,11 @@ public class WorkorderController {
                         return ResponseEntity.ok(response);
                 } catch (IllegalArgumentException _) {
                         return ResponseEntity.notFound().build();
-                } catch (IllegalStateException _) {
+                } catch (IllegalStateException e) {
                         return ResponseEntity.badRequest()
                                         .body(ReopenWorkorderResponse.builder()
                                                         .workorderId(workorderId)
-                                                        .message(_.getMessage())
+                                                        .message(e.getMessage())
                                                         .build());
                 }
         }
