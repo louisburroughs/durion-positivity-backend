@@ -92,14 +92,14 @@ paths:
               $ref: "#/components/schemas/Person"
         required: true
       responses:
-        "404":
-          description: Person not found.
+        "200":
+          description: Person updated successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/Person"
-        "200":
-          description: Person updated successfully.
+        "404":
+          description: Person not found.
           content:
             '*/*':
               schema:
@@ -122,10 +122,10 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "404":
-          description: Person not found.
         "204":
           description: Person deleted successfully.
+        "404":
+          description: Person not found.
       security:
       - bearerAuth: []
   /v1/people/staffing/assignments/{assignmentId}:
@@ -178,12 +178,6 @@ paths:
               $ref: "#/components/schemas/UpdateStaffingAssignmentRequest"
         required: true
       responses:
-        "409":
-          description: Overlapping assignment exists.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
         "200":
           description: Assignment updated.
           content:
@@ -198,6 +192,12 @@ paths:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "404":
           description: Assignment not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
+        "409":
+          description: Overlapping assignment exists.
           content:
             '*/*':
               schema:
@@ -240,14 +240,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Employee not found
+        "200":
+          description: Employee found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
-        "200":
-          description: Employee found
+        "404":
+          description: Employee not found
           content:
             '*/*':
               schema:
@@ -275,14 +275,20 @@ paths:
               $ref: "#/components/schemas/UpdateEmployeeRequest"
         required: true
       responses:
-        "404":
-          description: Employee not found
+        "200":
+          description: Employee updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
-        "422":
-          description: Semantic validation failure
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EmployeeProfileDto"
+        "404":
+          description: Employee not found
           content:
             '*/*':
               schema:
@@ -293,14 +299,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
-        "200":
-          description: Employee updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "400":
-          description: Invalid request
+        "422":
+          description: Semantic validation failure
           content:
             '*/*':
               schema:
@@ -404,6 +404,12 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
+        "201":
+          description: Role assignment created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserRoleDto"
         "400":
           description: Invalid request
           content:
@@ -416,12 +422,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
       security:
       - bearerAuth: []
   /v1/people/workSessions/{id}/breaks/stop:
@@ -441,14 +441,14 @@ paths:
           format: uuid
         example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
       responses:
-        "404":
-          description: Work session or break not found.
+        "200":
+          description: Break stopped successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BreakDto"
-        "200":
-          description: Break stopped successfully.
+        "404":
+          description: Work session or break not found.
           content:
             '*/*':
               schema:
@@ -472,14 +472,14 @@ paths:
           format: uuid
         example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
       responses:
-        "404":
-          description: Work session not found.
+        "200":
+          description: Break started successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BreakDto"
-        "200":
-          description: Break started successfully.
+        "404":
+          description: Work session not found.
           content:
             '*/*':
               schema:
@@ -544,14 +544,20 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
+        "201":
+          description: Link created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "200":
           description: Link already exists and is returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -564,12 +570,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "400":
-          description: Invalid request
           content:
             '*/*':
               schema:
@@ -590,14 +590,20 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
+        "201":
+          description: Link created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "200":
           description: Link already exists and is returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -610,12 +616,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "400":
-          description: Invalid request
           content:
             '*/*':
               schema:
@@ -643,16 +643,18 @@ paths:
               $ref: "#/components/schemas/TimeEntryDecisionBatchRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request - rejectionReason required for all decisions
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Time entries rejected successfully
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
+        "400":
+          description: Invalid request - rejectionReason required for all decisions
+          content:
+            '*/*':
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/timeEntries/approve:
@@ -680,12 +682,14 @@ paths:
           description: Time entries approved successfully
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
         "400":
           description: Invalid request - decisions required
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/timeEntries/adjustments:
@@ -703,14 +707,14 @@ paths:
               $ref: "#/components/schemas/TimeEntryAdjustmentRequest"
         required: true
       responses:
-        "409":
-          description: Invalid time entry state for adjustment
+        "201":
+          description: Adjustment created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
-        "201":
-          description: Adjustment created
+        "400":
+          description: Invalid request
           content:
             application/json:
               schema:
@@ -721,8 +725,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
-        "400":
-          description: Invalid request
+        "409":
+          description: Invalid time entry state for adjustment
           content:
             application/json:
               schema:
@@ -753,17 +757,20 @@ paths:
           description: Adjustment approved successfully
           content:
             application/json:
-              schema: {}
-        "404":
-          description: Adjustment not found
-          content:
-            application/json:
-              schema: {}
+              schema:
+                type: object
         "403":
           description: Forbidden - insufficient permissions
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        "404":
+          description: Adjustment not found
+          content:
+            application/json:
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/staffing/assignments:
@@ -805,14 +812,14 @@ paths:
               $ref: "#/components/schemas/CreateStaffingAssignmentRequest"
         required: true
       responses:
-        "409":
-          description: Overlapping assignment exists.
+        "201":
+          description: Assignment created.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "201":
-          description: Assignment created.
+        "400":
+          description: Validation error.
           content:
             '*/*':
               schema:
@@ -823,8 +830,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "400":
-          description: Validation error.
+        "409":
+          description: Overlapping assignment exists.
           content:
             '*/*':
               schema:
@@ -935,17 +942,20 @@ paths:
           description: Exception waived successfully
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
         "400":
           description: Invalid request - waiveReason is required
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
         "404":
           description: Exception not found
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/exceptions/{exceptionId}/resolve:
@@ -973,16 +983,18 @@ paths:
             schema:
               $ref: "#/components/schemas/TimeEntryExceptionResolveRequest"
       responses:
-        "404":
-          description: Exception not found
-          content:
-            application/json:
-              schema: {}
         "200":
           description: Exception resolved successfully
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        "404":
+          description: Exception not found
+          content:
+            application/json:
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/exceptions/{exceptionId}/acknowledge:
@@ -1005,16 +1017,18 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: Exception not found
-          content:
-            application/json:
-              schema: {}
         "200":
           description: Exception acknowledged successfully
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        "404":
+          description: Exception not found
+          content:
+            application/json:
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/people/employees:
@@ -1038,8 +1052,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
-        "422":
-          description: Semantic validation failure
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -1050,8 +1064,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
-        "400":
-          description: Invalid request
+        "422":
+          description: Semantic validation failure
           content:
             '*/*':
               schema:
@@ -1078,12 +1092,6 @@ paths:
             schema:
               $ref: "#/components/schemas/DisableEmployeeRequestDto"
       responses:
-        "404":
-          description: Employee not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
         "200":
           description: Employee disabled
           content:
@@ -1092,6 +1100,12 @@ paths:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "400":
           description: Employee cannot be disabled
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EmployeeProfileDto"
+        "404":
+          description: Employee not found
           content:
             '*/*':
               schema:
@@ -1113,14 +1127,14 @@ paths:
               $ref: "#/components/schemas/BulkIngestRequestPersonBulkIngestRecord"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "200":
+          description: Batch processed (check per-record success/failure in response)
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
-        "200":
-          description: Batch processed (check per-record success/failure in response)
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -1336,14 +1350,6 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
         "200":
           description: Report generated successfully.
           content:
@@ -1352,8 +1358,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "500":
-          description: Unexpected server error
+        "400":
+          description: Invalid parameters
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -1368,8 +1382,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "400":
-          description: Invalid parameters
+        "500":
+          description: Unexpected server error
           content:
             '*/*':
               schema:
@@ -1419,24 +1433,24 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "500":
-          description: Unexpected server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
         "200":
           description: Approved time rows retrieved successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
+        "400":
+          description: Invalid parameters
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -1451,8 +1465,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "400":
-          description: Invalid parameters
+        "500":
+          description: Unexpected server error
           content:
             '*/*':
               schema:
@@ -1543,6 +1557,8 @@ paths:
           type: string
           format: date-time
       responses:
+        "204":
+          description: Role assignment revoked successfully
         "400":
           description: Invalid request for revoking role assignment
           content:
@@ -1555,8 +1571,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "204":
-          description: Role assignment revoked successfully
       security:
       - bearerAuth: []
   /v1/people/users/{userId}/link:
@@ -1594,9 +1608,11 @@ components:
         firstName:
           type: string
           description: First name of the person
+          minLength: 1
         lastName:
           type: string
           description: Last name of the person
+          minLength: 1
         primaryEmail:
           type: string
         secondaryEmail:
@@ -1628,6 +1644,7 @@ components:
           type: string
           description: Assignment role
           example: TECHNICIAN
+          minLength: 1
         effectiveFrom:
           type: string
           format: date
@@ -1761,10 +1778,12 @@ components:
       properties:
         legalName:
           type: string
+          minLength: 1
         preferredName:
           type: string
         employeeNumber:
           type: string
+          minLength: 1
         status:
           type: string
           enum:
@@ -1831,6 +1850,7 @@ components:
       properties:
         roleCode:
           type: string
+          minLength: 1
         locationId:
           type: string
           format: uuid
@@ -1842,6 +1862,24 @@ components:
           format: date-time
       required:
       - roleCode
+    UserRoleDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        roleCode:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        active:
+          type: boolean
     ProblemDetail:
       type: object
       properties:
@@ -1861,24 +1899,6 @@ components:
         properties:
           type: object
           additionalProperties: {}
-    UserRoleDto:
-      type: object
-      properties:
-        userId:
-          type: string
-        roleCode:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        active:
-          type: boolean
     BreakDto:
       type: object
       properties:
@@ -1978,6 +1998,7 @@ components:
           type: string
           description: The unique identifier of the time entry
           example: 123e4567-e89b-12d3-a456-426614174000
+          minLength: 1
         rejectionReason:
           type: string
           description: The reason for rejection. Applicable if this is a rejection
@@ -1995,6 +2016,7 @@ components:
           description: List of decisions for the time entries
           items:
             $ref: "#/components/schemas/Decision"
+          minItems: 1
       required:
       - decisions
     TimeEntryAdjustmentRequest:
@@ -2010,6 +2032,7 @@ components:
           type: string
           description: Reason code for the adjustment
           example: MISSED_BREAK
+          minLength: 1
         notes:
           type: string
           description: Additional notes explaining the adjustment
@@ -2073,6 +2096,7 @@ components:
           type: string
           description: Assignment role
           example: TECHNICIAN
+          minLength: 1
         effectiveFrom:
           type: string
           format: date
@@ -2224,6 +2248,7 @@ components:
         waiveReason:
           type: string
           description: Reason for waiving the exception
+          minLength: 1
       required:
       - waiveReason
     TimeEntryExceptionResolveRequest:
@@ -2237,10 +2262,12 @@ components:
       properties:
         legalName:
           type: string
+          minLength: 1
         preferredName:
           type: string
         employeeNumber:
           type: string
+          minLength: 1
         status:
           type: string
           enum:
@@ -2293,6 +2320,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PersonBulkIngestRecord"
+          minItems: 1
         operatorId:
           type: string
       required:
@@ -2304,12 +2332,15 @@ components:
       properties:
         legalName:
           type: string
+          minLength: 1
         preferredName:
           type: string
         employeeNumber:
           type: string
+          minLength: 1
         hireDate:
           type: string
+          minLength: 1
         primaryEmail:
           type: string
         primaryPhone:

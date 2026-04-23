@@ -30,14 +30,14 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Event type not found
+        "200":
+          description: Event type found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "200":
-          description: Event type found and returned
+        "404":
+          description: Event type not found
           content:
             '*/*':
               schema:
@@ -65,14 +65,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "404":
-          description: Event type not found
+        "200":
+          description: Event type updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "200":
-          description: Event type updated successfully
+        "404":
+          description: Event type not found
           content:
             '*/*':
               schema:
@@ -93,10 +93,10 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Event type not found
         "204":
           description: Event type deleted successfully
+        "404":
+          description: Event type not found
   /v1/eventTypes/code/{typeCode}:
     get:
       tags:
@@ -111,16 +111,17 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
         example: ORDER_CREATED
       responses:
-        "404":
-          description: Event type not found
+        "200":
+          description: Event type found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "200":
-          description: Event type found and returned
+        "404":
+          description: Event type not found
           content:
             '*/*':
               schema:
@@ -138,6 +139,7 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
         example: ORDER_ORDER_CREATE
       requestBody:
         description: Event type details
@@ -147,14 +149,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
+        "200":
+          description: Event type created or updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "200":
-          description: Event type created or updated successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
@@ -292,11 +294,13 @@ components:
           type: string
           description: Unique code identifying the event type
           example: ORDER_CREATED
+          minLength: 1
           pattern: "^[A-Z0-9_]+$"
         description:
           type: string
           description: Human-readable description of the event type
           example: Triggered when an order is created
+          minLength: 1
         active:
           type: boolean
           description: Whether the event type is active
@@ -304,7 +308,7 @@ components:
         apiVersion:
           type: string
           description: API version for this event type
-          example: 1
+          example: "1"
           pattern: "^[0-9]+$"
         p50Micros:
           type: integer
@@ -351,7 +355,7 @@ components:
         apiVersion:
           type: string
           description: Event API version
-          example: 1
+          example: "1"
         p50Micros:
           type: integer
           format: int64
@@ -384,11 +388,13 @@ components:
           type: string
           description: Preregistered event type code
           example: ORDER_ORDER_CREATE
+          minLength: 1
           pattern: "^[A-Z0-9_]+$"
         apiVersion:
           type: string
           description: Event API version
-          example: 1
+          example: "1"
+          minLength: 1
           pattern: "^[0-9]+$"
         timestamp:
           type: integer

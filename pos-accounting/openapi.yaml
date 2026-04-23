@@ -59,14 +59,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
+        "200":
+          description: Posting rule set returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetResponse"
-        "200":
-          description: Posting rule set returned
+        "404":
+          description: Posting rule set not found
           content:
             '*/*':
               schema:
@@ -95,14 +95,14 @@ paths:
               $ref: "#/components/schemas/PostingRuleSetCreateRequest"
         required: true
       responses:
-        "404":
-          description: Posting rule set not found
+        "200":
+          description: Posting rule set updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetResponse"
-        "200":
-          description: Posting rule set updated
+        "404":
+          description: Posting rule set not found
           content:
             '*/*':
               schema:
@@ -131,14 +131,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting category not found
+        "200":
+          description: Posting category returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
-          description: Posting category returned
+        "404":
+          description: Posting category not found
           content:
             '*/*':
               schema:
@@ -166,14 +166,14 @@ paths:
               $ref: "#/components/schemas/PostingCategoryUpdateRequest"
         required: true
       responses:
-        "404":
-          description: Posting category not found
+        "200":
+          description: Posting category updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
-          description: Posting category updated
+        "404":
+          description: Posting category not found
           content:
             '*/*':
               schema:
@@ -237,6 +237,12 @@ paths:
               $ref: "#/components/schemas/MappingKeyUpdateRequest"
         required: true
       responses:
+        "200":
+          description: Mapping key updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
         "404":
           description: Mapping key not found
           content:
@@ -245,12 +251,6 @@ paths:
                 $ref: "#/components/schemas/MappingKeyResponse"
         "400":
           description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "200":
-          description: Mapping key updated
           content:
             '*/*':
               schema:
@@ -273,14 +273,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Journal entry not found
+        "200":
+          description: Journal entry returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry returned
+        "404":
+          description: Journal entry not found
           content:
             '*/*':
               schema:
@@ -308,14 +308,14 @@ paths:
               $ref: "#/components/schemas/JournalEntryCreateRequest"
         required: true
       responses:
-        "404":
-          description: Journal entry not found
+        "200":
+          description: Journal entry updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry updated
+        "404":
+          description: Journal entry not found
           content:
             '*/*':
               schema:
@@ -338,14 +338,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: GL account not found
+        "200":
+          description: GL account returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account returned
+        "404":
+          description: GL account not found
           content:
             '*/*':
               schema:
@@ -373,14 +373,14 @@ paths:
               $ref: "#/components/schemas/GLAccountUpdateRequest"
         required: true
       responses:
-        "404":
-          description: GL account not found
+        "200":
+          description: GL account updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account updated
+        "404":
+          description: GL account not found
           content:
             '*/*':
               schema:
@@ -409,14 +409,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
+        "404":
+          description: Default mapping not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
-          description: Default mapping not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -450,14 +450,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
+        "404":
+          description: Default mapping not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
-          description: Default mapping not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -479,12 +479,12 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-        "404":
-          description: Default mapping not found
         "204":
           description: Default mapping deactivated
+        "404":
+          description: Default mapping not found
+        "403":
+          description: Forbidden
       security:
       - bearerAuth: []
   /v1/accounting/vendor-bills:
@@ -501,14 +501,14 @@ paths:
               $ref: "#/components/schemas/GoodsReceivedEvent"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "201":
+          description: Vendor bill created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-        "201":
-          description: Vendor bill created
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -567,14 +567,14 @@ paths:
               $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "201":
+          description: Invoice matched and bill created/updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-        "201":
-          description: Invoice matched and bill created/updated
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -643,6 +643,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -650,6 +651,7 @@ paths:
         schema:
           type: string
           default: createdAt
+          minLength: 1
       responses:
         "200":
           description: Posting rule sets listed
@@ -708,14 +710,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
+        "200":
+          description: Posting rule set published
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
-          description: Posting rule set published
+        "404":
+          description: Posting rule set not found
           content:
             '*/*':
               schema:
@@ -744,6 +746,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "200":
+          description: Posting rule set archived
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
         "404":
           description: Posting rule set not found
           content:
@@ -752,12 +760,6 @@ paths:
                 $ref: "#/components/schemas/PostingRuleVersionResponse"
         "400":
           description: No PUBLISHED version to archive
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
-          description: Posting rule set archived
           content:
             '*/*':
               schema:
@@ -789,6 +791,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -796,6 +799,7 @@ paths:
         schema:
           type: string
           default: categoryName
+          minLength: 1
       - name: isActive
         in: query
         description: Filter by active status
@@ -860,10 +864,10 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting category not found
         "204":
           description: Posting category deactivated
+        "404":
+          description: Posting category not found
         "409":
           description: Cannot deactivate - active mappings exist
       security:
@@ -886,14 +890,15 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "409":
-          description: Payment already applied; reverse applications first
         "204":
           description: Payment voided
         "404":
           description: Payment not found
+        "409":
+          description: Payment already applied; reverse applications first
       security:
       - bearerAuth: []
   /v1/accounting/payments/{paymentId}/reverse:
@@ -920,10 +925,10 @@ paths:
       responses:
         "204":
           description: Payment applications reversed
-        "409":
-          description: Payment has no applications to reverse
         "404":
           description: Payment not found
+        "409":
+          description: Payment has no applications to reverse
       security:
       - bearerAuth: []
   /v1/accounting/payments/{paymentId}/applications:
@@ -954,12 +959,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PaymentApplicationResponse"
-        "409":
-          description: Currency mismatch or invoice not applicable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
         "400":
           description: Invalid request or insufficient funds
           content:
@@ -968,6 +967,12 @@ paths:
                 $ref: "#/components/schemas/PaymentApplicationResponse"
         "404":
           description: Payment not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PaymentApplicationResponse"
+        "409":
+          description: Currency mismatch or invoice not applicable
           content:
             '*/*':
               schema:
@@ -997,12 +1002,12 @@ paths:
               $ref: "#/components/schemas/PaymentApplicationReversalRequest"
         required: true
       responses:
+        "204":
+          description: Payment application reversed
         "400":
           description: Invalid request or already reversed
         "404":
           description: Payment application not found
-        "204":
-          description: Payment application reversed
       security:
       - bearerAuth: []
   /v1/accounting/mappings:
@@ -1020,14 +1025,14 @@ paths:
               $ref: "#/components/schemas/GLMappingCreateRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "201":
+          description: GL mapping created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLMappingCreateResponse"
-        "201":
-          description: GL mapping created
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -1050,14 +1055,14 @@ paths:
               $ref: "#/components/schemas/GLMappingResolveRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "200":
+          description: GL mapping resolved
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLMappingResolveResponse"
-        "200":
-          description: GL mapping resolved
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -1141,6 +1146,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -1148,6 +1154,7 @@ paths:
         schema:
           type: string
           default: createdAt
+          minLength: 1
       responses:
         "200":
           description: Journal entries listed
@@ -1212,14 +1219,14 @@ paths:
               $ref: "#/components/schemas/JournalEntryReversalRequest"
         required: true
       responses:
-        "404":
-          description: Journal entry not found
+        "200":
+          description: Journal entry reversed
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry reversed
+        "404":
+          description: Journal entry not found
           content:
             '*/*':
               schema:
@@ -1244,7 +1251,8 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
         "200":
           description: Journal entry posted
@@ -1274,14 +1282,14 @@ paths:
               $ref: "#/components/schemas/RegenerateInvoiceFromWorkorderRequest"
         required: true
       responses:
-        "404":
-          description: Workorder not found
+        "200":
+          description: Invoice regenerated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "503":
-          description: Workorder service unavailable
+        "404":
+          description: Workorder not found
           content:
             '*/*':
               schema:
@@ -1292,8 +1300,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "200":
-          description: Invoice regenerated
+        "503":
+          description: Workorder service unavailable
           content:
             '*/*':
               schema:
@@ -1326,6 +1334,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -1333,6 +1342,7 @@ paths:
         schema:
           type: string
           default: accountCode
+          minLength: 1
       - name: status
         in: query
         description: Filter by account status
@@ -1340,14 +1350,14 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
+        "200":
+          description: GL accounts listed
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountListResponse"
-        "200":
-          description: GL accounts listed
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -1399,7 +1409,8 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
         "200":
           description: GL account deactivated
@@ -1433,16 +1444,17 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "404":
-          description: GL account not found
+        "200":
+          description: GL account archived
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account archived
+        "404":
+          description: GL account not found
           content:
             '*/*':
               schema:
@@ -1471,14 +1483,14 @@ paths:
               $ref: "#/components/schemas/GLAccountActivateRequest"
         required: true
       responses:
-        "404":
-          description: GL account not found
+        "200":
+          description: GL account activated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account activated
+        "404":
+          description: GL account not found
           content:
             '*/*':
               schema:
@@ -1517,6 +1529,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: status
         in: query
         description: Filter by processing status
@@ -1583,7 +1596,8 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
         "202":
           description: Retry requested
@@ -1622,8 +1636,14 @@ paths:
               $ref: "#/components/schemas/ReprocessEventRequest"
         required: true
       responses:
-        "409":
-          description: Event already PROCESSED (idempotency violation)
+        "202":
+          description: Reprocessing accepted
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -1634,14 +1654,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountingEventResponse"
-        "202":
-          description: Reprocessing accepted
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "400":
-          description: Invalid request
+        "409":
+          description: Event already PROCESSED (idempotency violation)
           content:
             '*/*':
               schema:
@@ -1673,6 +1687,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       responses:
         "200":
           description: Default mappings listed
@@ -1707,14 +1722,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "400":
-          description: Invalid request
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -1791,8 +1806,20 @@ paths:
               $ref: "#/components/schemas/CreateCreditMemoRequest"
         required: true
       responses:
+        "201":
+          description: Credit memo created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
         "400":
           description: Invalid request - validation errors
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+        "404":
+          description: Invoice not found
           content:
             '*/*':
               schema:
@@ -1800,18 +1827,6 @@ paths:
         "409":
           description: Business rule violation - amount exceeds balance or invoice
             not finalized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "201":
-          description: Credit memo created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "404":
-          description: Invoice not found
           content:
             '*/*':
               schema:
@@ -1833,11 +1848,6 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
-        "403":
-          description: Authorization denied - separate authorization required
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Refund recorded successfully
           content:
@@ -1848,17 +1858,26 @@ paths:
           description: Invalid request parameters
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
+        "403":
+          description: Authorization denied - separate authorization required
+          content:
+            '*/*':
+              schema:
+                type: object
         "422":
           description: Refund policy validation failed
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
         "500":
           description: Internal server error
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/accounting/audit/price-override:
@@ -1876,33 +1895,37 @@ paths:
               $ref: "#/components/schemas/PriceOverrideRequest"
         required: true
       responses:
-        "403":
-          description: Authorization denied - insufficient privileges for override
-            amount
-          content:
-            '*/*':
-              schema: {}
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Price override recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
+        "403":
+          description: Authorization denied - insufficient privileges for override
+            amount
+          content:
+            '*/*':
+              schema:
+                type: object
         "422":
           description: Policy validation failed
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/accounting/audit/cancellation:
@@ -1919,27 +1942,30 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema:
+                type: object
         "404":
           description: Source document not found
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: object
       security:
       - bearerAuth: []
   /v1/accounting/ap/payments:
@@ -1958,8 +1984,14 @@ paths:
               $ref: "#/components/schemas/ExecuteAPPaymentRequest"
         required: true
       responses:
-        "409":
-          description: "Conflict: paymentRef exists with different payload"
+        "200":
+          description: "Idempotent replay: existing payment returned"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "201":
+          description: Payment executed successfully (new payment created)
           content:
             '*/*':
               schema:
@@ -1970,20 +2002,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/APPaymentResponse"
-        "200":
-          description: "Idempotent replay: existing payment returned"
+        "409":
+          description: "Conflict: paymentRef exists with different payload"
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/APPaymentResponse"
         "500":
           description: Payment gateway failure
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "201":
-          description: Payment executed successfully (new payment created)
           content:
             '*/*':
               schema:
@@ -2103,8 +2129,8 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Income statement generated successfully
           content:
             application/json:
               schema:
@@ -2115,14 +2141,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IncomeStatementReport"
-        "200":
-          description: Income statement generated successfully
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IncomeStatementReport"
-        "401":
-          description: Unauthorized
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2143,6 +2169,7 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
           pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
         example: 123e4567-e89b-12d3-a456-426614174000
       - name: startDate
@@ -2162,8 +2189,8 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
@@ -2178,16 +2205,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "200":
-          description: Journal line drilldown successful
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "401":
-          description: Unauthorized
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2210,6 +2237,7 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
           pattern: "^[A-Z_]{1,100}$"
       - name: startDate
         in: query
@@ -2228,8 +2256,8 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Account drilldown successful
           content:
             application/json:
               schema:
@@ -2244,16 +2272,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
-          description: Account drilldown successful
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "401":
-          description: Unauthorized
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2280,12 +2308,6 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
         "200":
           description: Balance sheet generated successfully
           content:
@@ -2300,6 +2322,12 @@ paths:
                 $ref: "#/components/schemas/BalanceSheetReport"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2338,6 +2366,7 @@ paths:
           type: integer
           format: int32
           default: 10
+          exclusiveMinimum: 0
       responses:
         "200":
           description: Posting rule versions listed
@@ -2389,6 +2418,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -2396,6 +2426,7 @@ paths:
         schema:
           type: string
           default: keyName
+          minLength: 1
       - name: isActive
         in: query
         description: Filter by active status
@@ -2403,12 +2434,6 @@ paths:
         schema:
           type: boolean
       responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
         "200":
           description: Mapping keys listed
           content:
@@ -2417,6 +2442,12 @@ paths:
                 $ref: "#/components/schemas/MappingKeyListResponse"
         "403":
           description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyListResponse"
+        "404":
+          description: Posting category not found
           content:
             '*/*':
               schema:
@@ -2439,14 +2470,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Journal entry not found
+        "200":
+          description: Journal traceability returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
-        "200":
-          description: Journal traceability returned
+        "404":
+          description: Journal entry not found
           content:
             '*/*':
               schema:
@@ -2475,14 +2506,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "500":
-          description: Error retrieving invoice status
+        "404":
+          description: Invoice not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
-          description: Invoice not found
+        "500":
+          description: Error retrieving invoice status
           content:
             '*/*':
               schema:
@@ -2541,14 +2572,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: GL account not found
+        "200":
+          description: Balance returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountBalanceResponse"
-        "200":
-          description: Balance returned
+        "404":
+          description: GL account not found
           content:
             '*/*':
               schema:
@@ -2664,16 +2695,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
+        "200":
+          description: Matching default mappings returned
           content:
             '*/*':
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "200":
-          description: Matching default mappings returned
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -2697,6 +2728,7 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
       - name: organizationId
         in: query
         description: Organization ID (optional)
@@ -2705,12 +2737,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
         "200":
           description: Default mapping resolved
           content:
@@ -2719,6 +2745,12 @@ paths:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
         "404":
           description: No default mapping found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -2818,14 +2850,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
-        "500":
-          description: Internal server error
+        "200":
+          description: Audit entries retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or exception type
           content:
@@ -2834,12 +2864,14 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
+        "500":
+          description: Internal server error
           content:
-            application/json:
+            '*/*':
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/audit/range:
@@ -2867,6 +2899,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range
           content:
@@ -2883,12 +2921,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/audit/invoice/{invoiceId}:
@@ -2908,6 +2940,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2924,12 +2962,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/audit/order/{orderId}:
@@ -2949,6 +2981,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Order not found
           content:
@@ -2965,12 +3003,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/audit/by-order/{orderId}:
@@ -2990,6 +3022,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Order not found
           content:
@@ -3006,12 +3044,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/audit/actor/{actorId}:
@@ -3047,6 +3079,20 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+        "400":
+          description: Invalid date range or actor ID
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Actor not found
           content:
@@ -3063,20 +3109,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range or actor ID
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
       security:
       - bearerAuth: []
   /v1/accounting/ap/payments/{paymentId}:
@@ -3200,6 +3232,7 @@ components:
           minLength: 0
         rulesDefinition:
           type: string
+          minLength: 1
         createdBy:
           type: string
           maxLength: 50
@@ -3394,6 +3427,7 @@ components:
           description: Journal lines (must net to a balanced entry)
           items:
             $ref: "#/components/schemas/JournalEntryLineRequest"
+          minItems: 1
       required:
       - lines
       - transactionDate
@@ -3774,6 +3808,7 @@ components:
           type: string
           description: Product description
           example: Widget Type A
+          minLength: 1
         quantity:
           type: number
           description: Quantity received
@@ -3886,14 +3921,17 @@ components:
           - VOID
           - CORRECT
           example: ACCEPT
+          minLength: 1
         reason:
           type: string
           description: Reason for chosen resolution
           example: Invoice variance approved by manager
+          minLength: 1
         operatorId:
           type: string
           description: Operator identifier performing resolution
           example: manager-001
+          minLength: 1
       required:
       - operatorId
       - reason
@@ -3911,6 +3949,7 @@ components:
           type: string
           description: Product description
           example: Widget Type A
+          minLength: 1
         quantity:
           type: number
           description: Invoiced quantity
@@ -3947,6 +3986,7 @@ components:
           type: string
           description: Vendor invoice number
           example: INV-2026-001234
+          minLength: 1
         invoiceDate:
           type: string
           format: date-time
@@ -3977,6 +4017,7 @@ components:
           type: string
           description: Operator identifier performing selection
           example: advisor-001
+          minLength: 1
       required:
       - operatorId
     PostingCategoryCreateRequest:
@@ -4029,6 +4070,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InvoiceApplication"
+          minItems: 1
       required:
       - applicationRequestId
       - applications
@@ -4100,8 +4142,10 @@ components:
       properties:
         sourceSystem:
           type: string
+          minLength: 1
         externalCode:
           type: string
+          minLength: 1
         glAccountId:
           type: string
           format: uuid
@@ -4165,8 +4209,10 @@ components:
       properties:
         sourceSystem:
           type: string
+          minLength: 1
         externalCode:
           type: string
+          minLength: 1
         transactionDate:
           type: string
           format: date-time
@@ -4207,6 +4253,7 @@ components:
       properties:
         reason:
           type: string
+          minLength: 1
       required:
       - reason
     RegenerateInvoiceFromWorkorderRequest:
@@ -4269,9 +4316,11 @@ components:
       properties:
         accountCode:
           type: string
+          minLength: 1
           pattern: "^\\d{4}(-\\d{3})?$"
         accountName:
           type: string
+          minLength: 1
         accountType:
           type: string
           enum:
@@ -4401,6 +4450,7 @@ components:
       properties:
         triggeredByUserId:
           type: string
+          minLength: 1
         mappingVersionToUse:
           type: string
         reprocessingNotes:
@@ -5286,9 +5336,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -5298,7 +5348,7 @@ components:
           format: int32
         empty:
           type: boolean
-    Pageablenull:
+    PageableObject:
       type: object
       properties:
         offset:
@@ -5313,10 +5363,10 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
-    Sortnull:
+    SortObject:
       type: object
       properties:
         empty:

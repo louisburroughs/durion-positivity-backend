@@ -38,14 +38,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found for this vehicle
+        "200":
+          description: Preferences found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences found and returned
+        "404":
+          description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
@@ -80,12 +80,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "400":
-          description: Invalid preference data
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "201":
           description: Preferences created successfully
           content:
@@ -94,6 +88,12 @@ paths:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: Vehicle not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+        "400":
+          description: Invalid preference data
           content:
             '*/*':
               schema:
@@ -115,10 +115,10 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found to delete
         "204":
           description: Preferences deleted successfully
+        "404":
+          description: No preferences found to delete
       security:
       - bearerAuth: []
     patch:
@@ -455,14 +455,14 @@ paths:
           type: boolean
           default: false
       responses:
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
@@ -483,14 +483,14 @@ paths:
               $ref: "#/components/schemas/SearchVehiclesRequest"
         required: true
       responses:
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
@@ -512,14 +512,14 @@ paths:
               $ref: "#/components/schemas/BulkIngestRequestVehicleBulkIngestRecord"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "200":
+          description: Batch processed (check per-record success/failure in response)
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
-        "200":
-          description: Batch processed (check per-record success/failure in response)
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -601,14 +601,14 @@ paths:
               $ref: "#/components/schemas/CreateVehicleRequest"
         required: true
       responses:
-        "400":
-          description: Invalid vehicle request.
+        "201":
+          description: Vehicle created successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "201":
-          description: Vehicle created successfully.
+        "400":
+          description: Invalid vehicle request.
           content:
             '*/*':
               schema:
@@ -745,7 +745,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2023
+          example: 2023 Chevrolet Silverado 1500
           maxLength: 4000
           minLength: 0
         licensePlate:
@@ -814,7 +814,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: 2024 Ford F-150 XL
         licensePlate:
           type: string
           description: License plate value.
@@ -927,6 +927,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/VehicleBulkIngestRecord"
+          minItems: 1
         operatorId:
           type: string
       required:
@@ -945,8 +946,10 @@ components:
           minLength: 17
         unitNumber:
           type: string
+          minLength: 1
         description:
           type: string
+          minLength: 1
         licensePlate:
           type: string
         licensePlateJurisdiction:
@@ -1016,7 +1019,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: 2024 Ford F-150 XL
         licensePlate:
           type: string
           description: License plate value.

@@ -34,14 +34,14 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: No billing rules configured for this party
+        "200":
+          description: Billing rules found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
-        "200":
-          description: Billing rules found
+        "404":
+          description: No billing rules configured for this party
           content:
             '*/*':
               schema:
@@ -73,14 +73,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
-        "400":
-          description: Invalid billing rules data
+        "201":
+          description: Billing rules created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
-        "201":
-          description: Billing rules created
+        "400":
+          description: Invalid billing rules data
           content:
             '*/*':
               schema:
@@ -278,14 +278,8 @@ paths:
               $ref: "#/components/schemas/InitiatePaymentRequest"
         required: true
       responses:
-        "503":
-          description: Payment gateway unavailable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InitiatePaymentResponse"
-        "403":
-          description: Insufficient permissions
+        "201":
+          description: Payment intent created
           content:
             '*/*':
               schema:
@@ -296,14 +290,20 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InitiatePaymentResponse"
         "422":
           description: Payment method declined
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
-        "201":
-          description: Payment intent created
+        "503":
+          description: Payment gateway unavailable
           content:
             '*/*':
               schema:
@@ -338,12 +338,12 @@ paths:
       responses:
         "200":
           description: Payment voided
-        "422":
-          description: Void window expired
         "404":
           description: Payment intent not found
         "409":
           description: Invalid payment state
+        "422":
+          description: Void window expired
       security:
       - bearerAuth: []
   /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
@@ -424,14 +424,14 @@ paths:
               $ref: "#/components/schemas/CaptureAmountRequest"
         required: true
       responses:
-        "403":
-          description: Insufficient permissions
+        "200":
+          description: Payment captured
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
-        "200":
-          description: Payment captured
+        "403":
+          description: Insufficient permissions
           content:
             '*/*':
               schema:
@@ -666,8 +666,10 @@ components:
       properties:
         managerApprovalCode:
           type: string
+          minLength: 1
         reason:
           type: string
+          minLength: 1
       required:
       - managerApprovalCode
       - reason
@@ -777,10 +779,13 @@ components:
           format: uuid
         terminalId:
           type: string
+          minLength: 1
         templateId:
           type: string
+          minLength: 1
         templateVersion:
           type: string
+          minLength: 1
       required:
       - paymentIntentId
       - templateId
@@ -803,6 +808,7 @@ components:
       properties:
         reason:
           type: string
+          minLength: 1
       required:
       - reason
     PrintDeliveryRequest:
@@ -820,6 +826,7 @@ components:
       properties:
         emailAddress:
           type: string
+          minLength: 1
         status:
           type: string
           enum:
@@ -845,9 +852,11 @@ components:
         idempotencyKey:
           type: string
           description: Client-provided idempotency key for safe retry
+          minLength: 1
         paymentToken:
           type: string
           description: Tokenised card reference (no PAN)
+          minLength: 1
       required:
       - amount
       - idempotencyKey
@@ -970,6 +979,7 @@ components:
           type: number
         captureIdempotencyKey:
           type: string
+          minLength: 1
       required:
       - amount
       - captureIdempotencyKey
@@ -994,8 +1004,10 @@ components:
           minimum: 0.0001
         reason:
           type: string
+          minLength: 1
         authorizedBy:
           type: string
+          minLength: 1
       required:
       - amount
       - authorizedBy

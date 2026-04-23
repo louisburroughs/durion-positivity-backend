@@ -107,14 +107,14 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Location not found.
+        "200":
+          description: Location found and returned.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
-        "200":
-          description: Location found and returned.
+        "404":
+          description: Location not found.
           content:
             '*/*':
               schema:
@@ -143,14 +143,14 @@ paths:
               $ref: "#/components/schemas/LocationRequestDTO"
         required: true
       responses:
-        "404":
-          description: Location not found.
+        "200":
+          description: Location updated successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
-        "200":
-          description: Location updated successfully.
+        "404":
+          description: Location not found.
           content:
             '*/*':
               schema:
@@ -173,10 +173,10 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Location not found.
         "204":
           description: Location deleted successfully.
+        "404":
+          description: Location not found.
       security:
       - bearerAuth: []
     patch:
@@ -231,16 +231,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SiteDefaultsResponse"
         "200":
           description: Site defaults returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":
@@ -272,6 +272,12 @@ paths:
               $ref: "#/components/schemas/SiteDefaultsRequest"
         required: true
       responses:
+        "200":
+          description: Site defaults configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
         "400":
           description: Invalid request payload
           content:
@@ -288,12 +294,6 @@ paths:
           description: Location not found
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/SiteDefaultsResponse"
-        "200":
-          description: Site defaults configured
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
       security:
@@ -666,14 +666,14 @@ paths:
               $ref: "#/components/schemas/BulkIngestRequestLocationBulkIngestRecord"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "200":
+          description: Batch processed (check per-record success/failure in response)
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
-        "200":
-          description: Batch processed (check per-record success/failure in response)
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -706,14 +706,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
-        "404":
-          description: Travel buffer policy not found
+        "400":
+          description: Invalid travel buffer policy id
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
-        "400":
-          description: Invalid travel buffer policy id
+        "404":
+          description: Travel buffer policy not found
           content:
             '*/*':
               schema:
@@ -899,14 +899,14 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: Bay not found.
+        "200":
+          description: Bay retrieved successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BayResponse"
-        "200":
-          description: Bay retrieved successfully.
+        "404":
+          description: Bay not found.
           content:
             '*/*':
               schema:
@@ -962,8 +962,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden - missing location:read authority
+        "200":
+          description: Validation payload returned
           content:
             '*/*':
               schema:
@@ -974,8 +974,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
-        "200":
-          description: Validation payload returned
+        "403":
+          description: Forbidden - missing location:read authority
           content:
             '*/*':
               schema:
@@ -1196,29 +1196,16 @@ components:
           format: date
         reason:
           type: string
-    LocalTime:
-      type: object
-      properties:
-        hour:
-          type: integer
-          format: int32
-        minute:
-          type: integer
-          format: int32
-        second:
-          type: integer
-          format: int32
-        nano:
-          type: integer
-          format: int32
     LocationRequestDTO:
       type: object
       description: Location object to be created
       properties:
         name:
           type: string
+          minLength: 1
         code:
           type: string
+          minLength: 1
         geographicalLocationId:
           type: string
           format: uuid
@@ -1282,9 +1269,9 @@ components:
         dayOfWeek:
           type: string
         openTime:
-          $ref: "#/components/schemas/LocalTime"
+          type: string
         closeTime:
-          $ref: "#/components/schemas/LocalTime"
+          type: string
     LocationResponseDTO:
       type: object
       properties:
@@ -1558,8 +1545,10 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
         bayType:
           type: string
+          minLength: 1
         capacity:
           $ref: "#/components/schemas/BayCapacityRequest"
         maxConcurrentVehicles:
@@ -1638,6 +1627,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LocationBulkIngestRecord"
+          minItems: 1
         operatorId:
           type: string
       required:
@@ -1649,8 +1639,10 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
         code:
           type: string
+          minLength: 1
         addressLine1:
           type: string
         addressLine2:
@@ -1811,9 +1803,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -1823,7 +1815,7 @@ components:
           format: int32
         empty:
           type: boolean
-    Pageablenull:
+    PageableObject:
       type: object
       properties:
         offset:
@@ -1838,10 +1830,10 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
-    Sortnull:
+    SortObject:
       type: object
       properties:
         empty:
@@ -1899,9 +1891,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -1961,9 +1953,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -2010,9 +2002,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:

@@ -32,7 +32,8 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "bulkImport:upload:execute",
+        "permitAll" })
 @RequestMapping("/v1")
 @Slf4j
 @Tag(name = "TUS Resumable Upload API", description = "Resumable file uploads following the tus.io 1.0.0 protocol")

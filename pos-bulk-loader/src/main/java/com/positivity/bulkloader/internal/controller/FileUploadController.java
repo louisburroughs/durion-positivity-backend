@@ -29,7 +29,8 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+        "bulkImport:upload:execute" })
 @RequestMapping("/v1/bulk-jobs")
 @RequiredArgsConstructor
 @Slf4j

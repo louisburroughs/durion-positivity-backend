@@ -897,6 +897,101 @@ paths:
                 $ref: "#/components/schemas/RoleDto"
       security:
       - bearerAuth: []
+  /v1/audit/events/**:
+    put:
+      tags:
+      - Audit
+      summary: Update audit events not allowed
+      description: Audit events are immutable and cannot be modified after creation.
+      operationId: updateNotAllowed
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "405":
+          description: Method not allowed for immutable audit events
+      security:
+      - bearerAuth: []
+    delete:
+      tags:
+      - Audit
+      summary: Delete audit events not allowed
+      description: Audit events are immutable and cannot be deleted once recorded.
+      operationId: deleteNotAllowed
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "405":
+          description: Method not allowed for immutable audit events
+      security:
+      - bearerAuth: []
   /v1/users:
     get:
       tags:
@@ -5194,6 +5289,7 @@ components:
           type: string
           description: Resolution note recorded with the case
           example: Recovered existing disabled account and asked user to sign in.
+          minLength: 1
       required:
       - resolutionNotes
     SelfRegistrationReviewCaseResponse:
@@ -5310,20 +5406,25 @@ components:
       properties:
         email:
           type: string
+          format: email
           description: Primary email address
           example: jane.smith@example.com
+          minLength: 1
         password:
           type: string
           description: Password for the new account
           example: Sup3rS3cret!
+          minLength: 1
         firstName:
           type: string
           description: Given name
           example: Jane
+          minLength: 1
         lastName:
           type: string
           description: Family name
           example: Smith
+          minLength: 1
         phone:
           type: string
           description: Optional primary phone number
@@ -5417,9 +5518,11 @@ components:
           type: string
           description: The user's login username
           example: jane.doe
+          minLength: 1
         password:
           type: string
           description: The user's login password
+          minLength: 1
       required:
       - password
       - username

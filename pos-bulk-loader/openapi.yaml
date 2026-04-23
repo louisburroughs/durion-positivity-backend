@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: POS Accounting Service API
-  description: "Accounting service for invoice, journal entry, and GL account management"
+  title: POS Bulk Loader Service API
+  description: Bulk loader service for importing and processing POS data in bulk.
   contact:
     name: Durion Support Services
     email: louis.burroughs@gmail.com
@@ -10,80 +10,65 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
-- name: Audit Trail
-  description: Audit trail operations for tracking accounting exceptions and overrides
-- name: Payment Applications
-  description: Manage payment applications to invoices (AR)
-- name: Posting Rules
-  description: Manage posting rule sets and their lifecycle.
-- name: Invoice Payments
-  description: Apply payments and query invoice status.
-- name: Mapping Keys
-  description: Manage mapping keys for GL mapping taxonomy
-- name: Posting Categories
-  description: Manage posting categories for GL mapping taxonomy
-- name: Credit Memos
-  description: Manage credit memos for AR corrections
-- name: GL Mapping API
-  description: Endpoints for creating and resolving GL mappings
-- name: Journal Entries
-  description: Manage journal entries including posting and reversal.
-- name: GL Accounts
-  description: Manage chart of accounts including lifecycle actions.
-- name: AP Payments
-  description: Accounts Payable vendor payment operations
-- name: Financial Reporting
-  description: Income Statement and Balance Sheet generation with drilldown
-- name: Vendor Bill API
-  description: "Endpoints for vendor bill creation, matching, retrieval, and exception\
-    \ resolution"
-- name: Default GL Mappings
-  description: Manage default GL account mappings for event types without explicit
-    posting rules
-- name: Accounting Events
-  description: Ingest and manage accounting events for journal processing.
+- name: TUS Resumable Upload API
+  description: Resumable file uploads following the tus.io 1.0.0 protocol
+- name: Review Queue API
+  description: Review and download bulk import audit records
+- name: Bulk Load File Upload API
+  description: Upload files for bulk import
+- name: Column Mapping API
+  description: Manage column mappings for bulk import jobs
+- name: Bulk Load Jobs API
+  description: Manage bulk data import jobs
 paths:
-  /v1/accounting/posting-rules/{postingRuleSetId}:
+  /v1/bulk-jobs/{jobId}/mappings:
     get:
       tags:
-      - Posting Rules
-      summary: Get posting rule set
-      description: Retrieve a posting rule set by identifier.
-      operationId: getPostingRuleSet
+      - Column Mapping API
+      summary: Get proposed column mappings for a job
+      description: Retrieves the proposed column mappings for the specified bulk load
+        job. The operator can only access mappings for their own jobs. This endpoint
+        is typically used to review the detected column mappings before approving
+        them for processing.
+      operationId: getMappings
       parameters:
-      - name: postingRuleSetId
+      - name: jobId
         in: path
-        description: Posting rule set identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
         "200":
-          description: Posting rule set returned
+          description: Mappings returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/ColumnMappingResponse"
+        "403":
+          description: Job does not belong to the authenticated operator
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ColumnMappingResponse"
       security:
       - bearerAuth: []
     put:
       tags:
-      - Posting Rules
-      summary: Update posting rule set metadata
-      description: Update a posting rule set (only possible if no PUBLISHED version
-        exists).
-      operationId: updatePostingRuleSet
+      - Column Mapping API
+      summary: Approve and finalize column mappings for a job
+      description: "Approves and finalizes the proposed column mappings for the specified\
+        \ bulk load job. The operator can only approve mappings for their own jobs.\
+        \ Once approved, the mappings are locked and used for processing the bulk\
+        \ load job."
+      operationId: approveMappings
       parameters:
-      - name: postingRuleSetId
+      - name: jobId
         in: path
-        description: Posting rule set identifier
         required: true
         schema:
           type: string
@@ -92,1670 +77,36 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
+              $ref: "#/components/schemas/ColumnMappingApproveRequest"
         required: true
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
         "200":
-          description: Posting rule set updated
+          description: Mappings approved
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "409":
-          description: Cannot modify published rule set
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-categories/{postingCategoryId}:
-    get:
-      tags:
-      - Posting Categories
-      summary: Get posting category
-      description: Retrieve a posting category by identifier.
-      operationId: getPostingCategory
-      parameters:
-      - name: postingCategoryId
-        in: path
-        description: Posting category identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
-          description: Posting category returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-      security:
-      - bearerAuth: []
-    put:
-      tags:
-      - Posting Categories
-      summary: Update posting category
-      description: Update an existing posting category.
-      operationId: updatePostingCategory
-      parameters:
-      - name: postingCategoryId
-        in: path
-        description: Posting category identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PostingCategoryUpdateRequest"
-        required: true
-      responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
-          description: Posting category updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "400":
-          description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/mapping-keys/{mappingKeyId}:
-    get:
-      tags:
-      - Mapping Keys
-      summary: Get mapping key
-      description: Retrieve a mapping key by identifier.
-      operationId: getMappingKey
-      parameters:
-      - name: mappingKeyId
-        in: path
-        description: Mapping key identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Mapping key returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "404":
-          description: Mapping key not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-      security:
-      - bearerAuth: []
-    put:
-      tags:
-      - Mapping Keys
-      summary: Update mapping key
-      description: Update an existing mapping key.
-      operationId: updateMappingKey
-      parameters:
-      - name: mappingKeyId
-        in: path
-        description: Mapping key identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MappingKeyUpdateRequest"
-        required: true
-      responses:
-        "404":
-          description: Mapping key not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "400":
-          description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "200":
-          description: Mapping key updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/journal-entries/{journalEntryId}:
-    get:
-      tags:
-      - Journal Entries
-      summary: Get journal entry
-      description: Retrieve a journal entry by identifier.
-      operationId: getJournalEntry
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-      security:
-      - bearerAuth: []
-    put:
-      tags:
-      - Journal Entries
-      summary: Update journal entry
-      description: Update an existing journal entry.
-      operationId: updateJournalEntry
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/JournalEntryCreateRequest"
-        required: true
-      responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts/{glAccountId}:
-    get:
-      tags:
-      - GL Accounts
-      summary: Get GL account
-      description: Retrieve a GL account by identifier.
-      operationId: getGLAccount
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-    put:
-      tags:
-      - GL Accounts
-      summary: Update GL account
-      description: Update details for an existing GL account.
-      operationId: updateGLAccount
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GLAccountUpdateRequest"
-        required: true
-      responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/default-mappings/{id}:
-    get:
-      tags:
-      - Default GL Mappings
-      summary: Get default GL mapping
-      description: Retrieve a default GL mapping by identifier
-      operationId: getDefaultMapping
-      parameters:
-      - name: id
-        in: path
-        description: Default mapping identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Default mapping returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/ColumnMappingResponse"
         "403":
-          description: Forbidden
+          description: Job does not belong to the authenticated operator
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
-          description: Default mapping not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/ColumnMappingResponse"
       security:
       - bearerAuth: []
-    put:
-      tags:
-      - Default GL Mappings
-      summary: Update default GL mapping
-      description: Update an existing default GL account mapping
-      operationId: updateDefaultMapping
-      parameters:
-      - name: id
-        in: path
-        description: Default mapping identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DefaultGLMappingRequest"
-        required: true
-      responses:
-        "200":
-          description: Default mapping updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
-          description: Default mapping not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-      security:
-      - bearerAuth: []
-    delete:
-      tags:
-      - Default GL Mappings
-      summary: Deactivate default GL mapping
-      description: Soft delete (deactivate) a default GL mapping
-      operationId: deactivateDefaultMapping
-      parameters:
-      - name: id
-        in: path
-        description: Default mapping identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden
-        "404":
-          description: Default mapping not found
-        "204":
-          description: Default mapping deactivated
-      security:
-      - bearerAuth: []
-  /v1/accounting/vendor-bills:
-    post:
-      tags:
-      - Vendor Bill API
-      summary: Create vendor bill from goods received event
-      description: Creates a vendor bill from an inbound goods-received event payload
-      operationId: createBillFromGoodsReceivedEvent
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GoodsReceivedEvent"
-        required: true
-      responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "201":
-          description: Vendor bill created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/vendor-bills/{billId}/resolve-exception:
-    post:
-      tags:
-      - Vendor Bill API
-      summary: Resolve bill match exception
-      description: "Resolves a matching exception with action ACCEPT, VOID, or CORRECT"
-      operationId: resolveMatchException
-      parameters:
-      - name: billId
-        in: path
-        description: Vendor bill identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440001
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ExceptionResolutionRequest"
-        required: true
-      responses:
-        "200":
-          description: Exception resolved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
-          description: Vendor bill not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/vendor-bills/match:
-    post:
-      tags:
-      - Vendor Bill API
-      summary: Match vendor invoice
-      description: Performs matching for a received vendor invoice and creates/updates
-        bill state
-      operationId: matchVendorInvoice
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
-        required: true
-      responses:
-        "201":
-          description: Invoice matched and bill created/updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
-    post:
-      tags:
-      - Vendor Bill API
-      summary: Select match candidate
-      description: Selects a candidate and approves corresponding vendor bill flow
-      operationId: selectMatchCandidate
-      parameters:
-      - name: candidateId
-        in: path
-        description: Match candidate identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440030
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CandidateSelectionRequest"
-        required: true
-      responses:
-        "200":
-          description: Candidate selected
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
-          description: Candidate not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-rules:
+  /v1/bulk-jobs:
     get:
       tags:
-      - Posting Rules
-      summary: List posting rule sets
-      description: Retrieve paginated posting rule sets.
-      operationId: listPostingRuleSets
+      - Bulk Load Jobs API
+      summary: List bulk load jobs for the authenticated operator
+      description: Retrieves a paginated list of bulk load jobs for the authenticated
+        operator. The operator can only access their own jobs.
+      operationId: listJobs
       parameters:
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: sort
-        in: query
-        description: Sort field
-        required: true
-        schema:
-          type: string
-          default: createdAt
-      responses:
-        "200":
-          description: Posting rule sets listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetListResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetListResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - Posting Rules
-      summary: Create posting rule set
-      description: Create a new posting rule set with initial DRAFT version.
-      operationId: createPostingRuleSet
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
-        required: true
-      responses:
-        "201":
-          description: Posting rule set created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-rules/{postingRuleSetId}/publish:
-    post:
-      tags:
-      - Posting Rules
-      summary: Publish posting rule set
-      description: Publish the latest DRAFT version.
-      operationId: publishPostingRuleSet
-      parameters:
-      - name: postingRuleSetId
-        in: path
-        description: Posting rule set identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
-          description: Posting rule set published
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "400":
-          description: No DRAFT version to publish
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-rules/{postingRuleSetId}/archive:
-    post:
-      tags:
-      - Posting Rules
-      summary: Archive posting rule set
-      description: Archive the PUBLISHED version.
-      operationId: archivePostingRuleSet
-      parameters:
-      - name: postingRuleSetId
-        in: path
-        description: Posting rule set identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "400":
-          description: No PUBLISHED version to archive
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
-          description: Posting rule set archived
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-categories:
-    get:
-      tags:
-      - Posting Categories
-      summary: List posting categories
-      description: Retrieve paginated posting categories.
-      operationId: listPostingCategories
-      parameters:
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: sort
-        in: query
-        description: Sort field
-        required: true
-        schema:
-          type: string
-          default: categoryName
-      - name: isActive
-        in: query
-        description: Filter by active status
-        required: false
-        schema:
-          type: boolean
-      responses:
-        "200":
-          description: Posting categories listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryListResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryListResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - Posting Categories
-      summary: Create posting category
-      description: Create a new posting category.
-      operationId: createPostingCategory
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PostingCategoryCreateRequest"
-        required: true
-      responses:
-        "201":
-          description: Posting category created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "400":
-          description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-categories/{postingCategoryId}/deactivate:
-    post:
-      tags:
-      - Posting Categories
-      summary: Deactivate posting category
-      description: Deactivate a posting category.
-      operationId: deactivatePostingCategory
-      parameters:
-      - name: postingCategoryId
-        in: path
-        description: Posting category identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Posting category not found
-        "204":
-          description: Posting category deactivated
-        "409":
-          description: Cannot deactivate - active mappings exist
-      security:
-      - bearerAuth: []
-  /v1/accounting/payments/{paymentId}/void:
-    post:
-      tags:
-      - Payment Applications
-      summary: Void payment
-      description: Void a payment before settlement.
-      operationId: voidPayment
-      parameters:
-      - name: paymentId
-        in: path
-        description: Payment identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "409":
-          description: Payment already applied; reverse applications first
-        "204":
-          description: Payment voided
-        "404":
-          description: Payment not found
-      security:
-      - bearerAuth: []
-  /v1/accounting/payments/{paymentId}/reverse:
-    post:
-      tags:
-      - Payment Applications
-      summary: Reverse payment
-      description: Reverse a previously applied payment.
-      operationId: reversePayment
-      parameters:
-      - name: paymentId
-        in: path
-        description: Payment identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
-        required: true
-      responses:
-        "204":
-          description: Payment applications reversed
-        "409":
-          description: Payment has no applications to reverse
-        "404":
-          description: Payment not found
-      security:
-      - bearerAuth: []
-  /v1/accounting/payments/{paymentId}/applications:
-    post:
-      tags:
-      - Payment Applications
-      summary: Apply payment
-      description: Apply a payment to an invoice and update its status.
-      operationId: applyPayment
-      parameters:
-      - name: paymentId
-        in: path
-        description: Payment identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentApplicationRequest"
-        required: true
-      responses:
-        "201":
-          description: Payment applied successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "409":
-          description: Currency mismatch or invoice not applicable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "400":
-          description: Invalid request or insufficient funds
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "404":
-          description: Payment not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/payment-applications/{applicationId}/reverse:
-    post:
-      tags:
-      - Payment Applications
-      summary: Reverse payment application
-      description: Reverse a payment application with compensating transaction (no
-        deletion).
-      operationId: reversePaymentApplication
-      parameters:
-      - name: applicationId
-        in: path
-        description: Payment application identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
-        required: true
-      responses:
-        "400":
-          description: Invalid request or already reversed
-        "404":
-          description: Payment application not found
-        "204":
-          description: Payment application reversed
-      security:
-      - bearerAuth: []
-  /v1/accounting/mappings:
-    post:
-      tags:
-      - GL Mapping API
-      summary: Create GL mapping
-      description: Creates a new GL mapping for source-system external code resolution
-      operationId: createGLMapping
-      requestBody:
-        description: GL mapping creation request
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GLMappingCreateRequest"
-        required: true
-      responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingCreateResponse"
-        "201":
-          description: GL mapping created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingCreateResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/mappings/resolve:
-    post:
-      tags:
-      - GL Mapping API
-      summary: Resolve GL mapping
-      description: Resolves source-system external code to a GL account using effective-date
-        rules
-      operationId: resolveGLMapping
-      requestBody:
-        description: GL mapping resolve request
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GLMappingResolveRequest"
-        required: true
-      responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingResolveResponse"
-        "200":
-          description: GL mapping resolved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingResolveResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/mapping-keys:
-    post:
-      tags:
-      - Mapping Keys
-      summary: Create mapping key
-      description: Create a new mapping key for a posting category.
-      operationId: createMappingKey
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MappingKeyCreateRequest"
-        required: true
-      responses:
-        "201":
-          description: Mapping key created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "400":
-          description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/mapping-keys/{mappingKeyId}/deactivate:
-    post:
-      tags:
-      - Mapping Keys
-      summary: Deactivate mapping key
-      description: Deactivate a mapping key.
-      operationId: deactivateMappingKey
-      parameters:
-      - name: mappingKeyId
-        in: path
-        description: Mapping key identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "204":
-          description: Mapping key deactivated
-        "404":
-          description: Mapping key not found
-        "409":
-          description: Cannot deactivate - active mappings exist
-      security:
-      - bearerAuth: []
-  /v1/accounting/journal-entries:
-    get:
-      tags:
-      - Journal Entries
-      summary: List journal entries
-      description: Retrieve paginated journal entries.
-      operationId: listJournalEntries
-      parameters:
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: sort
-        in: query
-        description: Sort field
-        required: true
-        schema:
-          type: string
-          default: createdAt
-      responses:
-        "200":
-          description: Journal entries listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - Journal Entries
-      summary: Create journal entry
-      description: Create a new journal entry.
-      operationId: createJournalEntry
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/JournalEntryCreateRequest"
-        required: true
-      responses:
-        "201":
-          description: Journal entry created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/journal-entries/{journalEntryId}/reverse:
-    post:
-      tags:
-      - Journal Entries
-      summary: Reverse journal entry
-      description: Reverse a posted journal entry.
-      operationId: reverseJournalEntry
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/JournalEntryReversalRequest"
-        required: true
-      responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
-          description: Journal entry reversed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/journal-entries/{journalEntryId}/post:
-    post:
-      tags:
-      - Journal Entries
-      summary: Post journal entry
-      description: Post a draft journal entry to the ledger.
-      operationId: postJournalEntry
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "200":
-          description: Journal entry posted
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/invoice/invoices:
-    post:
-      tags:
-      - Invoice Payments
-      summary: Regenerate invoice from workorder
-      description: Regenerate an invoice from a workorder.
-      operationId: regenerateInvoiceFromWorkorder
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegenerateInvoiceFromWorkorderRequest"
-        required: true
-      responses:
-        "404":
-          description: Workorder not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "503":
-          description: Workorder service unavailable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "409":
-          description: Workorder is not in COMPLETED state
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "200":
-          description: Invoice regenerated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts:
-    get:
-      tags:
-      - GL Accounts
-      summary: List GL accounts
-      description: Retrieve paginated GL accounts filtered by status and sorted by
-        a field.
-      operationId: listGLAccounts
-      parameters:
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: sort
-        in: query
-        description: Sort field
-        required: true
-        schema:
-          type: string
-          default: accountCode
-      - name: status
-        in: query
-        description: Filter by account status
-        required: false
-        schema:
-          type: string
-      responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountListResponse"
-        "200":
-          description: GL accounts listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountListResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - GL Accounts
-      summary: Create GL account
-      description: Create a new GL account.
-      operationId: createGLAccount
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GLAccountCreateRequest"
-        required: true
-      responses:
-        "201":
-          description: GL account created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts/{glAccountId}/deactivate:
-    post:
-      tags:
-      - GL Accounts
-      summary: Deactivate GL account
-      description: Mark a GL account as inactive.
-      operationId: deactivateGLAccount
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "200":
-          description: GL account deactivated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts/{glAccountId}/archive:
-    post:
-      tags:
-      - GL Accounts
-      summary: Archive GL account
-      description: Archive a GL account and remove it from active use.
-      operationId: archiveGLAccount
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account archived
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts/{glAccountId}/activate:
-    post:
-      tags:
-      - GL Accounts
-      summary: Activate GL account
-      description: Mark a GL account as active.
-      operationId: activateGLAccount
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GLAccountActivateRequest"
-        required: true
-      responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
-          description: GL account activated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events:
-    get:
-      tags:
-      - Accounting Events
-      summary: List events
-      description: Retrieve paginated accounting events with optional filters.
-      operationId: listEvents
-      parameters:
-      - name: organizationId
-        in: query
-        description: Organization identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: status
-        in: query
-        description: Filter by processing status
-        required: false
-        schema:
-          type: string
-      responses:
-        "200":
-          description: Events listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - Accounting Events
-      summary: Submit event
-      description: Submit a new accounting event for processing.
-      operationId: submitEvent
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AccountingEventSubmitRequest"
-        required: true
-      responses:
-        "202":
-          description: Event accepted for processing
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events/{eventId}/retry:
-    post:
-      tags:
-      - Accounting Events
-      summary: Retry event processing
-      description: Retry processing for a failed accounting event.
-      operationId: retryEventProcessing
-      parameters:
-      - name: eventId
-        in: path
-        description: Event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "202":
-          description: Retry requested
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
-          description: Event not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events/{eventId}/reprocess:
-    post:
-      tags:
-      - Accounting Events
-      summary: Reprocess suspended event
-      description: Reprocess a SUSPENDED accounting event after mapping/rule correction.
-        Idempotent - returns 409 Conflict if already PROCESSED.
-      operationId: reprocessSuspendedEvent
-      parameters:
-      - name: eventId
-        in: path
-        description: Event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReprocessEventRequest"
-        required: true
-      responses:
-        "409":
-          description: Event already PROCESSED (idempotency violation)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
-          description: Event not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "202":
-          description: Reprocessing accepted
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/default-mappings:
-    get:
-      tags:
-      - Default GL Mappings
-      summary: List default GL mappings
-      description: Retrieve paginated list of default GL mappings
-      operationId: listDefaultMappings
-      parameters:
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      responses:
-        "200":
-          description: Default mappings listed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingListResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingListResponse"
-      security:
-      - bearerAuth: []
-    post:
-      tags:
-      - Default GL Mappings
-      summary: Create default GL mapping
-      description: Create a new default GL account mapping for an event type
-      operationId: createDefaultMapping
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DefaultGLMappingRequest"
-        required: true
-      responses:
-        "201":
-          description: Default mapping created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "400":
-          description: Invalid request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/credit-memos:
-    get:
-      tags:
-      - Credit Memos
-      summary: List credit memos
-      description: "Retrieve paginated credit memos with optional filters. Filter\
-        \ by customer, invoice, or status. Supports standard pagination parameters\
-        \ (page, size, sort)."
-      operationId: listCreditMemos
-      parameters:
-      - name: customerId
-        in: query
-        description: Filter by customer ID
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: originalInvoiceId
-        in: query
-        description: Filter by original invoice ID
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: status
-        in: query
-        description: "Filter by status (DRAFT, POSTED, APPLIED, VOIDED)"
-        required: false
-        schema:
-          type: string
-          enum:
-          - DRAFT
-          - POSTED
-          - APPLIED
-          - VOIDED
       - name: pageable
         in: query
         required: true
@@ -1763,3494 +114,556 @@ paths:
           $ref: "#/components/schemas/Pageable"
       responses:
         "200":
-          description: Credit memos retrieved successfully
+          description: Jobs listed
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PageCreditMemoResponse"
-        "400":
-          description: Invalid pagination or filter parameters
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PageCreditMemoResponse"
+                $ref: "#/components/schemas/PageBulkLoadJobResponse"
       security:
       - bearerAuth: []
     post:
       tags:
-      - Credit Memos
-      summary: Create credit memo
-      description: Create a new Credit Memo to reverse invoice charges. Reduces Accounts
-        Receivable by posting offsetting GL entries. Requires finalized invoice and
-        credit amount within outstanding balance.
-      operationId: createCreditMemo
+      - Bulk Load Jobs API
+      summary: Create a new bulk load job
+      description: Creates a new bulk load job for the authenticated operator. Each
+        operator can only have one active job at a time. The job starts in CREATED
+        state and must be populated with a file upload before processing can begin.
+      operationId: createJob
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateCreditMemoRequest"
+              $ref: "#/components/schemas/BulkLoadJobCreateRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request - validation errors
+        "201":
+          description: Job created
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
+                $ref: "#/components/schemas/BulkLoadJobResponse"
         "409":
-          description: Business rule violation - amount exceeds balance or invoice
-            not finalized
+          description: Operator already has an active job
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "201":
-          description: Credit memo created successfully
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+      security:
+      - bearerAuth: []
+  /v1/bulk-jobs/{jobId}/upload:
+    post:
+      tags:
+      - Bulk Load File Upload API
+      summary: Upload a file for a bulk load job
+      description: "Uploads a file for the specified bulk load job. The file is stored\
+        \ and associated with the job for later processing. The job must be in CREATED\
+        \ or UPLOADING state. Multiple files can be uploaded, but only the latest\
+        \ file will be processed."
+      operationId: uploadFile
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      responses:
+        "200":
+          description: File uploaded and content detected
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
+                $ref: "#/components/schemas/FileUploadResponse"
         "404":
-          description: Invoice not found
+          description: Job not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
+                $ref: "#/components/schemas/FileUploadResponse"
       security:
       - bearerAuth: []
-  /v1/accounting/audit/refund:
+  /v1/bulk-jobs/{jobId}/tus:
     post:
       tags:
-      - Audit Trail
-      summary: Record a refund
-      description: Creates an audit trail entry for a refund exception with policy
-        validation and settlement handling
-      operationId: recordRefund
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefundRequest"
+      - TUS Resumable Upload API
+      summary: Create a resumable upload
+      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location
+        header with the upload URL for subsequent HEAD and PATCH requests.
+      operationId: createUpload
+      parameters:
+      - name: jobId
+        in: path
         required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Tus-Resumable
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Upload-Length
+        in: header
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: Upload-Metadata
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
         "201":
-          description: Refund recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "403":
-          description: Authorization denied - separate authorization required
-          content:
-            '*/*':
-              schema: {}
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "422":
-          description: Refund policy validation failed
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
+          description: Upload created
+        "412":
+          description: Unsupported TUS version
+        "413":
+          description: Upload-Length exceeds server maximum
       security:
       - bearerAuth: []
-  /v1/accounting/audit/price-override:
+  /v1/bulk-jobs/{jobId}/process:
     post:
       tags:
-      - Audit Trail
-      summary: Record a price override
-      description: Creates an audit trail entry for a price override exception with
-        policy validation
-      operationId: recordPriceOverride
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PriceOverrideRequest"
+      - Bulk Load File Upload API
+      summary: Launch a bulk load job for processing
+      description: "Starts Spring Batch execution for the specified bulk load job\
+        \ and transitions it to PROCESSING. The job must be in CREATED, UPLOADING,\
+        \ or MAPPING_REVIEW state and must already have a persisted upload and locationId."
+      operationId: startProcessing
+      parameters:
+      - name: jobId
+        in: path
         required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "403":
-          description: Authorization denied - insufficient privileges for override
-            amount
+        "200":
+          description: Job transitioned to PROCESSING
           content:
             '*/*':
-              schema: {}
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
-        "422":
-          description: Policy validation failed
-          content:
-            '*/*':
-              schema: {}
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/cancellation:
-    post:
-      tags:
-      - Audit Trail
-      summary: Record a cancellation
-      description: Creates an audit trail entry for an order or invoice cancellation
-      operationId: recordCancellation
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CancellationRequest"
-        required: true
-      responses:
-        "201":
-          description: Cancellation recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
+                $ref: "#/components/schemas/BulkLoadJobResponse"
         "404":
-          description: Source document not found
+          description: Job not found
           content:
             '*/*':
-              schema: {}
-      security:
-      - bearerAuth: []
-  /v1/accounting/ap/payments:
-    post:
-      tags:
-      - AP Payments
-      summary: Execute vendor payment
-      description: "Execute a vendor payment with optional explicit allocations to\
-        \ bills. Idempotent using paymentRef: same ref + same payload returns existing\
-        \ payment; same ref + different payload yields 409 conflict."
-      operationId: executePayment
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ExecuteAPPaymentRequest"
-        required: true
-      responses:
+              schema:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
         "409":
-          description: "Conflict: paymentRef exists with different payload"
+          description: Invalid state transition
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "400":
-          description: "Validation error: negative amounts, invalid bills, etc."
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "200":
-          description: "Idempotent replay: existing payment returned"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "500":
-          description: Payment gateway failure
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "201":
-          description: Payment executed successfully (new payment created)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
+                $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
       - bearerAuth: []
-  /v1/accounting/vendor-bills/{billId}:
-    get:
+  /v1/bulk-jobs/{jobId}/cancel:
+    post:
       tags:
-      - Vendor Bill API
-      summary: Get vendor bill by id
-      description: Retrieves a vendor bill by its unique identifier
-      operationId: getBillById
+      - Bulk Load Jobs API
+      summary: Cancel a running bulk load job
+      description: Cancels a bulk load job that is currently in progress. The operator
+        can only cancel their own jobs.
+      operationId: cancelJob
       parameters:
-      - name: billId
+      - name: jobId
         in: path
-        description: Vendor bill identifier
         required: true
         schema:
           type: string
           format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "200":
-          description: Vendor bill found
+          description: Job cancelled
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
-          description: Vendor bill not found
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+        "409":
+          description: Job is already in terminal state
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
       - bearerAuth: []
-  /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
-    get:
+  /v1/tus/{uploadId}:
+    delete:
       tags:
-      - Vendor Bill API
-      summary: List match candidates
-      description: Lists unresolved match candidates for an ambiguous invoice event
-      operationId: listMatchCandidates
+      - TUS Resumable Upload API
+      summary: Cancel an upload
+      description: Permanently deletes a TUS upload and its temporary file.
+      operationId: deleteUpload
       parameters:
-      - name: invoiceEventId
+      - name: uploadId
         in: path
-        description: Invoice event identifier
         required: true
         schema:
           type: string
           format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440020
-      responses:
-        "200":
-          description: Match candidates returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/vendor-bills/event/{eventId}:
-    get:
-      tags:
-      - Vendor Bill API
-      summary: Get vendor bill by origin event id
-      description: Retrieves a vendor bill by origin goods-received event identifier
-      operationId: getBillByOriginEventId
-      parameters:
-      - name: eventId
-        in: path
-        description: Origin event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440010
-      responses:
-        "200":
-          description: Vendor bill found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
-          description: Vendor bill not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/reports/financial/income-statement:
-    get:
-      tags:
-      - Financial Reporting
-      summary: Generate Income Statement
-      description: "Generate Profit & Loss report for a date range with revenue, expenses,\
-        \ and net income"
-      operationId: generateIncomeStatement
-      parameters:
-      - name: startDate
-        in: query
-        description: Period start date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-01-01
-      - name: endDate
-        in: query
-        description: Period end date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-12-31
-      responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "400":
-          description: Invalid date range
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "200":
-          description: Income statement generated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-      security:
-      - bearerAuth: []
-  /v1/accounting/reports/financial/drilldown/journal-lines/{accountId}:
-    get:
-      tags:
-      - Financial Reporting
-      summary: Drilldown to Journal Lines
-      description: Show source journal entries contributing to a GL account balance
-      operationId: drilldownToJournalLines
-      parameters:
-      - name: accountId
-        in: path
-        description: GL Account ID (UUID)
-        required: true
-        schema:
-          type: string
-          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-        example: 123e4567-e89b-12d3-a456-426614174000
-      - name: startDate
-        in: query
-        description: Period start date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-01-01
-      - name: endDate
-        in: query
-        description: Period end date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-12-31
-      responses:
-        "200":
-          description: Journal line drilldown successful
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "400":
-          description: Invalid account ID or date range
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
-    get:
-      tags:
-      - Financial Reporting
-      summary: Drilldown to Accounts
-      description: Show which GL accounts contribute to a specific statement line
-      operationId: drilldownToAccounts
-      parameters:
-      - name: statementLineCode
-        in: path
-        description: "Statement line code (e.g., REVENUE_SALES)"
-        required: true
-        schema:
-          type: string
-          pattern: "^[A-Z_]{1,100}$"
-      - name: startDate
-        in: query
-        description: Period start date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-01-01
-      - name: endDate
-        in: query
-        description: Period end date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-12-31
-      responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "400":
-          description: Invalid statement line code or date range
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
-          description: Account drilldown successful
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/reports/financial/balance-sheet:
-    get:
-      tags:
-      - Financial Reporting
-      summary: Generate Balance Sheet
-      description: "Generate Balance Sheet as of a specific date with assets, liabilities,\
-        \ and equity"
-      operationId: generateBalanceSheet
-      parameters:
-      - name: asOfDate
-        in: query
-        description: As-of date (YYYY-MM-DD)
-        required: true
-        schema:
-          type: string
-          format: date
-        example: 2024-12-31
-      responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "400":
-          description: Invalid date
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-      security:
-      - bearerAuth: []
-  /v1/accounting/posting-rules/{postingRuleSetId}/versions:
-    get:
-      tags:
-      - Posting Rules
-      summary: List posting rule versions
-      description: List versions for a posting rule set.
-      operationId: listPostingRuleVersions
-      parameters:
-      - name: postingRuleSetId
-        in: path
-        description: Posting rule set identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: page
-        in: query
-        description: Page index (0-based)
+      - name: Tus-Resumable
+        in: header
         required: false
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Upload deleted
+        "404":
+          description: Upload not found
+        "412":
+          description: Unsupported TUS version
+      security:
+      - bearerAuth: []
+    head:
+      tags:
+      - TUS Resumable Upload API
+      summary: Get upload offset
+      description: Returns the current byte offset of a TUS upload for resumption.
+      operationId: getOffset
+      parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Tus-Resumable
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Current upload offset
+        "404":
+          description: Upload not found
+        "412":
+          description: Unsupported TUS version
+      security:
+      - bearerAuth: []
+    patch:
+      tags:
+      - TUS Resumable Upload API
+      summary: Upload a chunk
+      description: Appends a byte range to an in-progress TUS upload. Content-Type
+        must be application/offset+octet-stream. Upload-Offset must equal the current
+        server-side offset.
+      operationId: uploadChunk
+      parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Tus-Resumable
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Upload-Offset
+        in: header
+        required: true
         schema:
           type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
+          format: int64
+      - name: Content-Length
+        in: header
+        required: true
         schema:
           type: integer
-          format: int32
-          default: 10
+          format: int64
+      - name: Content-Type
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
-        "200":
-          description: Posting rule versions listed
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "204":
+          description: "Chunk accepted, new offset returned"
+        "409":
+          description: Upload-Offset conflict
+        "410":
+          description: Upload has expired
+        "412":
+          description: Unsupported TUS version
+        "415":
+          description: Content-Type must be application/offset+octet-stream
       security:
       - bearerAuth: []
-  /v1/accounting/posting-categories/{postingCategoryId}/mapping-keys:
+  /v1/tus:
+    options:
+      tags:
+      - TUS Resumable Upload API
+      summary: TUS server capabilities
+      description: "Returns supported TUS version, extensions, and max upload size.\
+        \ No authentication required."
+      operationId: options
+      responses:
+        "204":
+          description: Server capabilities
+      security:
+      - bearerAuth: []
+  /v1/bulk-jobs/{jobId}:
     get:
       tags:
-      - Mapping Keys
-      summary: List mapping keys by category
-      description: Retrieve paginated mapping keys for a posting category.
-      operationId: listMappingKeysByCategory
+      - Bulk Load Jobs API
+      summary: Get a bulk load job by ID
+      description: Retrieves the details of a bulk load job for the authenticated
+        operator. The operator can only access their own jobs.
+      operationId: getJob
       parameters:
-      - name: postingCategoryId
+      - name: jobId
         in: path
-        description: Posting category identifier
         required: true
         schema:
           type: string
           format: uuid
-      - name: page
-        in: query
-        description: Page index (0-based)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
-        in: query
-        description: Page size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: sort
-        in: query
-        description: Sort field
-        required: true
-        schema:
-          type: string
-          default: keyName
-      - name: isActive
-        in: query
-        description: Filter by active status
-        required: false
-        schema:
-          type: boolean
       responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
         "200":
-          description: Mapping keys listed
+          description: Job found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
+                $ref: "#/components/schemas/BulkLoadJobResponse"
         "403":
-          description: Forbidden
+          description: Job does not belong to the authenticated operator
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/journal-entries/{journalEntryId}/traceability:
-    get:
-      tags:
-      - Journal Entries
-      summary: Get journal traceability
-      description: Trace a journal entry across related records.
-      operationId: getJournalTraceability
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
         "404":
-          description: Journal entry not found
+          description: Job not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
-        "200":
-          description: Journal traceability returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
+                $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
       - bearerAuth: []
-  /v1/accounting/invoice/{invoiceId}/status:
+  /v1/bulk-jobs/{jobId}/error-report:
     get:
       tags:
-      - Invoice Payments
-      summary: Get invoice status
-      description: Retrieve current payment status for an invoice.
-      operationId: getInvoiceStatus
+      - Review Queue API
+      summary: Download error report as CSV for a bulk load job
+      description: Generates and downloads a CSV file containing all error records
+        for the specified bulk load job.
+      operationId: downloadErrorReport
       parameters:
-      - name: invoiceId
+      - name: jobId
         in: path
-        description: Invoice identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "200":
-          description: Invoice status returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
-        "500":
-          description: Error retrieving invoice status
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
-          description: Invoice not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/invoice/rules/{customerId}:
-    get:
-      tags:
-      - Invoice Payments
-      summary: Get billing rules
-      description: Retrieve billing rules for a customer.
-      operationId: getBillingRules
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Billing rules returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
-        "404":
-          description: Customer not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
-        "503":
-          description: Customer service unavailable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/gl-accounts/{glAccountId}/balance:
-    get:
-      tags:
-      - GL Accounts
-      summary: Get GL account balance
-      description: Retrieve the current balance for a GL account.
-      operationId: getAccountBalance
-      parameters:
-      - name: glAccountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountBalanceResponse"
-        "200":
-          description: Balance returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountBalanceResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events/{eventId}:
-    get:
-      tags:
-      - Accounting Events
-      summary: Get event
-      description: Retrieve details for an accounting event.
-      operationId: getEvent
-      parameters:
-      - name: eventId
-        in: path
-        description: Event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Event returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
-          description: Event not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events/{eventId}/reprocessing-history:
-    get:
-      tags:
-      - Accounting Events
-      summary: Get reprocessing history
-      description: Retrieve all reprocessing attempts for a suspended accounting event.
-        Returns an empty list if the event does not exist or has no reprocessing history.
-      operationId: getReprocessingHistory
-      parameters:
-      - name: eventId
-        in: path
-        description: Event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Reprocessing history returned (may be empty list)
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReprocessingAttemptHistoryResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/events/{eventId}/processing-log:
-    get:
-      tags:
-      - Accounting Events
-      summary: Get event processing log
-      description: Retrieve the processing log for an accounting event.
-      operationId: getEventProcessingLog
-      parameters:
-      - name: eventId
-        in: path
-        description: Event identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Processing log returned
+          description: CSV error report downloaded
           content:
             '*/*':
               schema:
                 type: string
-        "404":
-          description: Event not found
+                format: binary
+        "403":
+          description: Job does not belong to the authenticated operator
           content:
             '*/*':
               schema:
                 type: string
+                format: binary
       security:
       - bearerAuth: []
-  /v1/accounting/default-mappings/search:
+  /v1/bulk-jobs/{jobId}/audit:
     get:
       tags:
-      - Default GL Mappings
-      summary: Search default GL mappings
-      description: Find default GL mappings by event type or organization
-      operationId: searchDefaultMappings
+      - Review Queue API
+      summary: Get audit records for a bulk load job
+      description: "Returns a list of audit records for the specified bulk load job,\
+        \ including review status and details for each record."
+      operationId: getAuditRecords
       parameters:
-      - name: eventType
-        in: query
-        description: Filter by event type
-        required: false
-        schema:
-          type: string
-      - name: organizationId
-        in: query
-        description: Filter by organization ID
-        required: false
+      - name: jobId
+        in: path
+        required: true
         schema:
           type: string
           format: uuid
       responses:
+        "200":
+          description: Audit records returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditRecordResponse"
         "403":
-          description: Forbidden
+          description: Job does not belong to the authenticated operator
           content:
             '*/*':
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "200":
-          description: Matching default mappings returned
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/default-mappings/resolve:
-    get:
-      tags:
-      - Default GL Mappings
-      summary: Resolve default mapping for event
-      description: Find the most specific active default mapping for an event type
-        and organization
-      operationId: resolveDefaultMapping
-      parameters:
-      - name: eventType
-        in: query
-        description: Event type
-        required: true
-        schema:
-          type: string
-      - name: organizationId
-        in: query
-        description: Organization ID (optional)
-        required: false
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "200":
-          description: Default mapping resolved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
-          description: No default mapping found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/default-mappings/global:
-    get:
-      tags:
-      - Default GL Mappings
-      summary: List global default mappings
-      description: Retrieve all global default GL mappings (organizationId IS NULL)
-      operationId: listGlobalDefaults
-      responses:
-        "200":
-          description: Global default mappings returned
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/credit-memos/{creditMemoId}:
-    get:
-      tags:
-      - Credit Memos
-      summary: Get credit memo
-      description: Retrieve details for a specific Credit Memo by ID. Includes full
-        audit trail and current invoice balance.
-      operationId: getCreditMemo
-      parameters:
-      - name: creditMemoId
-        in: path
-        description: Credit Memo ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Credit memo retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "404":
-          description: Credit memo not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/type/{type}:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail by exception type
-      description: Retrieves audit trail entries filtered by exception type and date
-        range
-      operationId: getByType
-      parameters:
-      - name: type
-        in: path
-        description: Exception type
-        required: true
-        schema:
-          type: string
-          enum:
-          - PRICE_OVERRIDE
-          - REFUND
-          - CANCELLATION
-      - name: startDate
-        in: query
-        description: Start date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-01T00:00:00Z
-      - name: endDate
-        in: query
-        description: End date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-28T23:59:59Z
-      responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range or exception type
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/range:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail by date range
-      description: Retrieves all audit trail entries within a specified date range
-      operationId: getByDateRange
-      parameters:
-      - name: startDate
-        in: query
-        description: Start date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-01T00:00:00Z
-      - name: endDate
-        in: query
-        description: End date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-28T23:59:59Z
-      responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/invoice/{invoiceId}:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail for invoice
-      description: Retrieves all audit trail entries associated with a specific invoice
-      operationId: getByInvoiceId
-      parameters:
-      - name: invoiceId
-        in: path
-        description: Invoice ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440000
-      responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "404":
-          description: Invoice not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/order/{orderId}:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail for order
-      description: Retrieves all audit trail entries associated with a specific order
-      operationId: getByOrderId
-      parameters:
-      - name: orderId
-        in: path
-        description: Order ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440000
-      responses:
-        "404":
-          description: Order not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/by-order/{orderId}:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail for order
-      description: Retrieves all audit trail entries associated with a specific order
-      operationId: getByOrderId_1
-      parameters:
-      - name: orderId
-        in: path
-        description: Order ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440000
-      responses:
-        "404":
-          description: Order not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/audit/actor/{actorId}:
-    get:
-      tags:
-      - Audit Trail
-      summary: Get audit trail by actor
-      description: Retrieves audit trail entries for a specific actor (user) within
-        a date range
-      operationId: getByActor
-      parameters:
-      - name: actorId
-        in: path
-        description: Actor (User) ID
-        required: true
-        schema:
-          type: string
-        example: person-12345
-      - name: startDate
-        in: query
-        description: Start date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-01T00:00:00Z
-      - name: endDate
-        in: query
-        description: End date in ISO 8601 format
-        required: true
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-28T23:59:59Z
-      responses:
-        "404":
-          description: Actor not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range or actor ID
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/ap/payments/{paymentId}:
-    get:
-      tags:
-      - AP Payments
-      summary: Get payment details
-      description: Retrieve AP payment details including allocations and GL posting
-        status.
-      operationId: getPayment
-      parameters:
-      - name: paymentId
-        in: path
-        description: Payment UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-      responses:
-        "200":
-          description: Payment found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "404":
-          description: Payment not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/ap/payments/by-ref/{paymentRef}:
-    get:
-      tags:
-      - AP Payments
-      summary: Get payment by reference
-      description: Retrieve AP payment details by paymentRef (idempotency key).
-      operationId: getPaymentByRef
-      parameters:
-      - name: paymentRef
-        in: path
-        description: Payment reference (idempotency key)
-        required: true
-        schema:
-          type: string
-          maxLength: 100
-          minLength: 1
-          pattern: "^[^\\r\\n]+$"
-        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-      responses:
-        "200":
-          description: Payment found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "404":
-          description: Payment not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-      security:
-      - bearerAuth: []
-  /v1/accounting/ap/bills:
-    get:
-      tags:
-      - AP Payments
-      summary: List eligible vendor bills
-      description: "Get eligible vendor bills for payment (status = APPROVED). Bills\
-        \ are ordered by due date (oldest first, nulls last), then bill date, then\
-        \ bill ID."
-      operationId: listBills
-      parameters:
-      - name: vendorId
-        in: query
-        description: Vendor UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 01936e5b-4567-7a3d-8b6e-1a2345678901
-      responses:
-        "200":
-          description: Bills retrieved successfully
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
-        "400":
-          description: Invalid vendor ID
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+                  $ref: "#/components/schemas/AuditRecordResponse"
       security:
       - bearerAuth: []
 components:
   schemas:
-    PostingRuleSetCreateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          maxLength: 100
-          minLength: 0
-        eventType:
-          type: string
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        rulesDefinition:
-          type: string
-        createdBy:
-          type: string
-          maxLength: 50
-          minLength: 0
-      required:
-      - createdBy
-      - eventType
-      - name
-      - rulesDefinition
-    PostingRuleSetResponse:
-      type: object
-      properties:
-        postingRuleSetId:
-          type: string
-          format: uuid
-        name:
-          type: string
-        eventType:
-          type: string
-        description:
-          type: string
-        versions:
-          type: array
-          items:
-            $ref: "#/components/schemas/PostingRuleVersionResponse"
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-    PostingRuleVersionResponse:
-      type: object
-      properties:
-        versionId:
-          type: string
-          format: uuid
-        postingRuleSetId:
-          type: string
-          format: uuid
-        versionNumber:
-          type: integer
-          format: int32
-        state:
-          type: string
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - ARCHIVED
-        rulesDefinition:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-    PostingCategoryUpdateRequest:
-      type: object
-      properties:
-        categoryName:
-          type: string
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        modifiedBy:
-          type: string
-          maxLength: 50
-          minLength: 0
-      required:
-      - categoryName
-      - modifiedBy
-    PostingCategoryResponse:
-      type: object
-      properties:
-        postingCategoryId:
-          type: string
-          format: uuid
-        categoryName:
-          type: string
-        description:
-          type: string
-        isActive:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-    MappingKeyUpdateRequest:
-      type: object
-      properties:
-        keyName:
-          type: string
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        modifiedBy:
-          type: string
-          maxLength: 50
-          minLength: 0
-      required:
-      - keyName
-      - modifiedBy
-    MappingKeyResponse:
-      type: object
-      properties:
-        mappingKeyId:
-          type: string
-          format: uuid
-        postingCategoryId:
-          type: string
-          format: uuid
-        postingCategoryName:
-          type: string
-        keyName:
-          type: string
-        description:
-          type: string
-        isActive:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-    JournalEntryCreateRequest:
-      type: object
-      description: Request payload for creating or updating a journal entry
-      properties:
-        organizationId:
-          type: string
-          format: uuid
-          description: Organization UUID
-          example: 00000000-0000-4000-a000-000000000010
-        transactionDate:
-          type: string
-          format: date-time
-          description: Journal transaction date and time
-          example: 2026-01-15T10:30:00
-        description:
-          type: string
-          description: Journal entry description
-          example: Invoice accrual posting
-          maxLength: 500
-          minLength: 0
-        sourceEventId:
-          type: string
-          format: uuid
-          description: Source event UUID
-          example: 01936e5c-1234-7a3d-8b6e-123456789012
-        sourceEventType:
-          type: string
-          description: Source event type
-          example: INVOICE_RECEIVED
-          maxLength: 100
-          minLength: 0
-        postingRuleSetId:
-          type: string
-          format: uuid
-          description: Posting rule set UUID used to generate this journal entry
-        postingRuleVersionId:
-          type: string
-          format: uuid
-          description: Posting rule version UUID used to generate this journal entry
-        lines:
-          type: array
-          description: Journal lines (must net to a balanced entry)
-          items:
-            $ref: "#/components/schemas/JournalEntryLineRequest"
-      required:
-      - lines
-      - transactionDate
-    JournalEntryLineRequest:
-      type: object
-      description: Journal entry line request
-      properties:
-        glAccountId:
-          type: string
-          format: uuid
-          description: GL account UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        debitAmount:
-          type: number
-          description: Debit amount for this line
-          example: 1250.0
-          minimum: 0.00
-        creditAmount:
-          type: number
-          description: Credit amount for this line
-          example: 1250.0
-          minimum: 0.00
-        description:
-          type: string
-          description: Line description
-          example: Recognize receivable
-          maxLength: 500
-          minLength: 0
-        dimensions:
-          type: object
-          additionalProperties:
-            type: string
-          description: Optional dimensional attributes for reporting
-          example:
-            department: SERVICE
-        singleSidedAmount:
-          type: boolean
-      required:
-      - glAccountId
-    JournalEntryLineResponse:
-      type: object
-      description: Journal entry line response
-      properties:
-        lineId:
-          type: string
-          format: uuid
-          description: Line UUID
-          example: 01936e60-1234-7a3d-8b6e-6f7890123456
-        lineNumber:
-          type: integer
-          format: int32
-          description: Line sequence number
-          example: 1
-        glAccountId:
-          type: string
-          format: uuid
-          description: GL account UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        accountCode:
-          type: string
-          description: GL account code
-          example: 1100-000
-        accountName:
-          type: string
-          description: GL account name
-          example: Accounts Receivable
-        debitAmount:
-          type: number
-          description: Debit amount
-          example: 1250.0
-        creditAmount:
-          type: number
-          description: Credit amount
-          example: 0.0
-        description:
-          type: string
-          description: Line description
-          example: Recognize receivable
-        dimensions:
-          type: object
-          additionalProperties:
-            type: string
-          description: Optional dimensional attributes
-          example:
-            department: SERVICE
-    JournalEntryResponse:
-      type: object
-      description: Journal entry response payload
-      properties:
-        journalEntryId:
-          type: string
-          format: uuid
-          description: Journal entry UUID
-          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
-        status:
-          type: string
-          description: Journal entry status
-          enum:
-          - DRAFT
-          - PENDING
-          - POSTED
-          - REVERSED
-          example: DRAFT
-        transactionDate:
-          type: string
-          format: date-time
-          description: Transaction date and time
-          example: 2026-01-15T10:30:00
-        description:
-          type: string
-          description: Journal entry description
-          example: Invoice accrual posting
-        sourceEventId:
-          type: string
-          format: uuid
-          description: Source event UUID
-          example: 01936e5c-1234-7a3d-8b6e-123456789012
-        sourceEventType:
-          type: string
-          description: Source event type
-          example: INVOICE_RECEIVED
-        postingRuleSetId:
-          type: string
-          format: uuid
-          description: Posting rule set UUID
-        postingRuleVersionId:
-          type: string
-          format: uuid
-          description: Posting rule version UUID
-        reversalJournalEntryId:
-          type: string
-          format: uuid
-          description: Original journal entry UUID when this entry is a reversal
-        reversedByJournalEntryId:
-          type: string
-          format: uuid
-          description: Reversal journal entry UUID when this entry has been reversed
-        totalDebits:
-          type: number
-          description: Total debits
-          example: 1250.0
-        totalCredits:
-          type: number
-          description: Total credits
-          example: 1250.0
-        isBalanced:
-          type: boolean
-          description: Whether total debits equal total credits
-          example: true
-        lines:
-          type: array
-          description: Journal entry lines
-          items:
-            $ref: "#/components/schemas/JournalEntryLineResponse"
-        createdAt:
-          type: string
-          format: date-time
-          description: Created timestamp
-          example: 2026-01-15T10:31:00Z
-        createdBy:
-          type: string
-          description: Created by username
-          example: accounting.user
-        modifiedAt:
-          type: string
-          format: date-time
-          description: Last modified timestamp
-          example: 2026-01-15T10:32:00Z
-        modifiedBy:
-          type: string
-          description: Last modified by username
-          example: accounting.user
-        postedAt:
-          type: string
-          format: date-time
-          description: Posted timestamp
-          example: 2026-01-15T10:40:00Z
-        postedBy:
-          type: string
-          description: Posted by username
-          example: accounting.manager
-        reversedAt:
-          type: string
-          format: date-time
-          description: Reversed timestamp
-          example: 2026-01-16T08:20:00Z
-    GLAccountUpdateRequest:
-      type: object
-      description: Request payload for updating mutable GL account fields
-      properties:
-        accountName:
-          type: string
-          description: Updated account name
-          example: Accounts Receivable - Trade
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          description: Updated account description
-          example: Primary receivables account
-          maxLength: 500
-          minLength: 0
-    GLAccountResponse:
-      type: object
-      properties:
-        glAccountId:
-          type: string
-          format: uuid
-        accountCode:
-          type: string
-        accountName:
-          type: string
-        accountType:
-          type: string
-          enum:
-          - ASSET
-          - LIABILITY
-          - EQUITY
-          - REVENUE
-          - EXPENSE
-        description:
-          type: string
-        parentAccountId:
-          type: string
-          format: uuid
-        activationDate:
-          type: string
-          format: date-time
-        deactivationDate:
-          type: string
-          format: date-time
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - NOT_YET_ACTIVE
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-        version:
-          type: integer
-          format: int32
-    DefaultGLMappingRequest:
-      type: object
-      properties:
-        eventType:
-          type: string
-          maxLength: 100
-          minLength: 0
-        organizationId:
-          type: string
-          format: uuid
-        debitAccountId:
-          type: string
-          format: uuid
-        creditAccountId:
-          type: string
-          format: uuid
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        active:
-          type: boolean
-      required:
-      - creditAccountId
-      - debitAccountId
-      - eventType
-    DefaultGLMappingResponse:
-      type: object
-      properties:
-        mappingId:
-          type: string
-          format: uuid
-        eventType:
-          type: string
-        organizationId:
-          type: string
-          format: uuid
-        debitAccountId:
-          type: string
-          format: uuid
-        debitAccountCode:
-          type: string
-        debitAccountName:
-          type: string
-        creditAccountId:
-          type: string
-          format: uuid
-        creditAccountCode:
-          type: string
-        creditAccountName:
-          type: string
-        description:
-          type: string
-        active:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        modifiedAt:
-          type: string
-          format: date-time
-        modifiedBy:
-          type: string
-    GoodsReceivedEvent:
-      type: object
-      description: Goods received event from inventory/purchasing system
-      properties:
-        eventId:
-          type: string
-          format: uuid
-          description: Event UUID (idempotency key)
-          example: 01936e5c-1234-7a3d-8b6e-123456789012
-        organizationId:
-          type: string
-          format: uuid
-          description: Organization UUID
-          example: 00000000-0000-4000-a000-000000000010
-        purchaseOrderId:
-          type: string
-          format: uuid
-          description: Purchase order UUID
-          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor UUID
-          example: 01936e5a-7890-7a3d-8b6e-2b3456789012
-        vendorName:
-          type: string
-          description: Vendor name
-          example: Acme Supplies Ltd
-        receivedDate:
-          type: string
-          format: date-time
-          description: Date goods were received
-          example: 2026-01-15T10:30:00
-        lineItems:
-          type: array
-          description: Line items received
-          items:
-            $ref: "#/components/schemas/ReceivedLineItem"
-        dimensions:
-          type: object
-          additionalProperties:
-            type: string
-          description: Optional dimensional context for GL mapping
-          example:
-            businessUnitId: BU-001
-      required:
-      - eventId
-      - lineItems
-      - organizationId
-      - purchaseOrderId
-      - receivedDate
-      - vendorId
-    ReceivedLineItem:
-      type: object
-      description: Line item received from vendor
-      properties:
-        productId:
-          type: string
-          format: uuid
-          description: Product/SKU UUID
-          example: 01936e59-abcd-7a3d-8b6e-3c4567890123
-        description:
-          type: string
-          description: Product description
-          example: Widget Type A
-        quantity:
-          type: number
-          description: Quantity received
-          example: 100.0
-        unitPrice:
-          type: number
-          description: Unit price from PO
-          example: 12.5
-        isInventoryItem:
-          type: boolean
-          description: Is this an inventory item (true) or expense item (false)
-          example: true
-      required:
-      - description
-      - productId
-      - quantity
-      - unitPrice
-    VendorBillResponse:
-      type: object
-      description: Vendor bill details
-      properties:
-        vendorBillId:
-          type: string
-          format: uuid
-          description: Vendor bill UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor UUID
-          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
-        vendorName:
-          type: string
-          description: Vendor name
-          example: Acme Supplies Ltd
-        billNumber:
-          type: string
-          description: Bill number
-          example: BILL-2026-001234
-        billDate:
-          type: string
-          format: date-time
-          description: Bill date
-          example: 2026-01-15T00:00:00
-        dueDate:
-          type: string
-          format: date-time
-          description: Due date
-          example: 2026-02-14T00:00:00
-        totalAmount:
-          type: number
-          description: Total bill amount
-          example: 1200.0
-        status:
-          type: string
-          description: Bill status
-          enum:
-          - PENDING_RECEIPT_MATCH
-          - MATCH_EXCEPTION
-          - APPROVED
-          - REJECTED
-          - PAID
-          - VOIDED
-          example: PENDING_RECEIPT_MATCH
-        originEventId:
-          type: string
-          format: uuid
-          description: Origin event ID (for traceability)
-          example: 01936e5c-1234-7a3d-8b6e-123456789012
-        originEventType:
-          type: string
-          description: Origin event type
-          example: GOODS_RECEIVED
-        journalEntryId:
-          type: string
-          format: uuid
-          description: Journal entry ID (if GL posted)
-          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
-        paymentTransactionId:
-          type: string
-          format: uuid
-          description: Payment transaction ID (if paid)
-          example: 01936e5f-abcd-7a3d-8b6e-5e6789012345
-        createdAt:
-          type: string
-          format: date-time
-          description: Created timestamp
-          example: 2026-01-15T10:30:00Z
-        createdBy:
-          type: string
-          description: Created by user
-          example: system
-        approvalJustification:
-          type: string
-          description: Approval justification (if status = APPROVED)
-          example: Approved by AP manager
-        rejectionReason:
-          type: string
-          description: Rejection reason (if status = REJECTED)
-          example: Incorrect invoice amount
-    ExceptionResolutionRequest:
-      type: object
-      description: Request payload for resolving a vendor bill match exception
-      properties:
-        resolutionAction:
-          type: string
-          description: Resolution action
-          enum:
-          - ACCEPT
-          - VOID
-          - CORRECT
-          example: ACCEPT
-        reason:
-          type: string
-          description: Reason for chosen resolution
-          example: Invoice variance approved by manager
-        operatorId:
-          type: string
-          description: Operator identifier performing resolution
-          example: manager-001
-      required:
-      - operatorId
-      - reason
-      - resolutionAction
-    InvoiceLineItem:
-      type: object
-      description: Invoice line item from vendor
-      properties:
-        productId:
-          type: string
-          format: uuid
-          description: Product/SKU UUID
-          example: 01936e59-abcd-7a3d-8b6e-3c4567890123
-        description:
-          type: string
-          description: Product description
-          example: Widget Type A
-        quantity:
-          type: number
-          description: Invoiced quantity
-          example: 100.0
-        unitPrice:
-          type: number
-          description: Unit price from invoice
-          example: 12.5
-      required:
-      - description
-      - productId
-      - quantity
-      - unitPrice
-    VendorInvoiceReceivedEvent:
-      type: object
-      description: Vendor invoice received event from AP system
-      properties:
-        eventId:
-          type: string
-          format: uuid
-          description: Event UUID (idempotency key)
-          example: 01936e5d-5678-7a3d-8b6e-456789012345
-        organizationId:
-          type: string
-          format: uuid
-          description: Organization UUID
-          example: 00000000-0000-4000-a000-000000000010
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor UUID
-          example: 01936e5a-7890-7a3d-8b6e-2b3456789012
-        invoiceReference:
-          type: string
-          description: Vendor invoice number
-          example: INV-2026-001234
-        invoiceDate:
-          type: string
-          format: date-time
-          description: Invoice date
-          example: 2026-01-16T00:00:00
-        dueDate:
-          type: string
-          format: date-time
-          description: Invoice due date
-          example: 2026-02-15T00:00:00
-        lineItems:
-          type: array
-          description: Invoice line items
-          items:
-            $ref: "#/components/schemas/InvoiceLineItem"
-      required:
-      - eventId
-      - invoiceDate
-      - invoiceReference
-      - lineItems
-      - organizationId
-      - vendorId
-    CandidateSelectionRequest:
-      type: object
-      description: Request payload for selecting a match candidate
-      properties:
-        operatorId:
-          type: string
-          description: Operator identifier performing selection
-          example: advisor-001
-      required:
-      - operatorId
-    PostingCategoryCreateRequest:
-      type: object
-      properties:
-        categoryName:
-          type: string
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        createdBy:
-          type: string
-          maxLength: 50
-          minLength: 0
-      required:
-      - categoryName
-      - createdBy
-    PaymentApplicationReversalRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          maxLength: 1000
-          minLength: 10
-      required:
-      - reason
-    InvoiceApplication:
-      type: object
-      properties:
-        invoiceId:
-          type: string
-          format: uuid
-        amountToApply:
-          type: number
-          minimum: 0.01
-      required:
-      - amountToApply
-      - invoiceId
-    PaymentApplicationRequest:
-      type: object
-      properties:
-        applicationRequestId:
-          type: string
-          maxLength: 100
-          minLength: 0
-        applications:
-          type: array
-          items:
-            $ref: "#/components/schemas/InvoiceApplication"
-      required:
-      - applicationRequestId
-      - applications
-    ApplicationDetail:
-      type: object
-      properties:
-        paymentApplicationId:
-          type: string
-          format: uuid
-        invoiceId:
-          type: string
-          format: uuid
-        appliedAmount:
-          type: number
-        invoiceBalanceBefore:
-          type: number
-        invoiceBalanceAfter:
-          type: number
-        invoiceStatus:
-          type: string
-          enum:
-          - OPEN
-          - PARTIALLY_PAID
-          - PAID_IN_FULL
-          - VOIDED
-          - CANCELLED
-          - UNKNOWN
-    CustomerCreditInfo:
-      type: object
-      properties:
-        creditId:
-          type: string
-          format: uuid
-        amount:
-          type: number
-        createdAt:
-          type: string
-          format: date-time
-    PaymentApplicationResponse:
-      type: object
-      properties:
-        paymentId:
-          type: string
-          format: uuid
-        customerId:
-          type: string
-          format: uuid
-        currency:
-          type: string
-        totalAmount:
-          type: number
-        appliedAmount:
-          type: number
-        remainingAmount:
-          type: number
-        applications:
-          type: array
-          items:
-            $ref: "#/components/schemas/ApplicationDetail"
-        customerCredit:
-          $ref: "#/components/schemas/CustomerCreditInfo"
-        applicationTimestamp:
-          type: string
-          format: date-time
-        applicationRequestId:
-          type: string
-    GLMappingCreateRequest:
-      type: object
-      properties:
-        sourceSystem:
-          type: string
-        externalCode:
-          type: string
-        glAccountId:
-          type: string
-          format: uuid
-        effectiveStartDate:
-          type: string
-          format: date-time
-        effectiveEndDate:
-          type: string
-          format: date-time
-        dimensions:
-          type: object
-          additionalProperties:
-            type: string
-      required:
-      - effectiveStartDate
-      - externalCode
-      - glAccountId
-      - sourceSystem
-    GLMappingCreateResponse:
-      type: object
-      properties:
-        mapping:
-          $ref: "#/components/schemas/GLMappingResponse"
-    GLMappingResponse:
-      type: object
-      properties:
-        glMappingId:
-          type: string
-          format: uuid
-        sourceSystem:
-          type: string
-        externalCode:
-          type: string
-        glAccountId:
-          type: string
-          format: uuid
-        accountCode:
-          type: string
-        accountName:
-          type: string
-        effectiveStartDate:
-          type: string
-          format: date-time
-        effectiveEndDate:
-          type: string
-          format: date-time
-        dimensions:
-          type: object
-          additionalProperties:
-            type: string
-        priority:
-          type: integer
-          format: int32
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-    GLMappingResolveRequest:
-      type: object
-      properties:
-        sourceSystem:
-          type: string
-        externalCode:
-          type: string
-        transactionDate:
-          type: string
-          format: date-time
-      required:
-      - externalCode
-      - sourceSystem
-      - transactionDate
-    GLMappingResolveResponse:
-      type: object
-      properties:
-        glAccountId:
-          type: string
-          format: uuid
-    MappingKeyCreateRequest:
-      type: object
-      properties:
-        postingCategoryId:
-          type: string
-          format: uuid
-        keyName:
-          type: string
-          maxLength: 100
-          minLength: 0
-        description:
-          type: string
-          maxLength: 500
-          minLength: 0
-        createdBy:
-          type: string
-          maxLength: 50
-          minLength: 0
-      required:
-      - createdBy
-      - keyName
-      - postingCategoryId
-    JournalEntryReversalRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-    RegenerateInvoiceFromWorkorderRequest:
-      type: object
-      properties:
-        workorderId:
-          type: string
-          format: uuid
-        idempotencyKey:
-          type: string
-      required:
-      - workorderId
-    InvoiceGenerationResponse:
-      type: object
-      description: Response payload returned after invoice generation.
-      properties:
-        invoiceId:
-          type: string
-          format: uuid
-          description: Generated invoice identifier.
-          example: 550e8400-e29b-41d4-a716-446655440000
-        status:
-          type: string
-          description: Invoice status.
-          example: DRAFT
-        workorderId:
-          type: string
-          format: uuid
-          description: Source workorder identifier.
-          example: 550e8400-e29b-41d4-a716-446655440001
-        estimateId:
-          type: string
-          format: uuid
-          description: Source estimate identifier.
-          example: 550e8400-e29b-41d4-a716-446655440002
-        approvalId:
-          type: string
-          format: uuid
-          description: Approval identifier used for generation.
-          example: 550e8400-e29b-41d4-a716-446655440003
-        subtotal:
-          type: number
-          description: Subtotal amount before tax.
-          example: 120.0
-        taxAmount:
-          type: number
-          description: Tax amount.
-          example: 9.6
-        totalAmount:
-          type: number
-          description: Total amount after tax.
-          example: 129.6
-        createdAt:
-          type: string
-          format: date-time
-          description: Creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
-    GLAccountCreateRequest:
-      type: object
-      properties:
-        accountCode:
-          type: string
-          pattern: "^\\d{4}(-\\d{3})?$"
-        accountName:
-          type: string
-        accountType:
-          type: string
-          enum:
-          - ASSET
-          - LIABILITY
-          - EQUITY
-          - REVENUE
-          - EXPENSE
-        description:
-          type: string
-        parentAccountId:
-          type: string
-          format: uuid
-        activationDate:
-          type: string
-          format: date-time
-      required:
-      - accountCode
-      - accountName
-      - accountType
-      - activationDate
-    GLAccountActivateRequest:
-      type: object
-      properties:
-        effectiveDate:
-          type: string
-          format: date
-      required:
-      - effectiveDate
-    AccountingEventSubmitRequest:
-      type: object
-      description: Request payload for submitting an accounting event for ingestion
-      properties:
-        eventId:
-          type: string
-          format: uuid
-          description: "Optional event UUID (idempotency key). If omitted, service\
-            \ computes idempotency hash."
-          example: 01936e5c-1234-7a3d-8b6e-123456789012
-        eventType:
-          type: string
-          description: Event type identifier
-          example: INVOICE_RECEIVED
-          maxLength: 100
-          minLength: 0
-        organizationId:
-          type: string
-          format: uuid
-          description: Organization UUID
-          example: 00000000-0000-4000-a000-000000000010
-        sourceSystem:
-          type: string
-          description: "Source system name. If omitted, defaults to POS_ACCOUNTING_API."
-          example: POS_ORDER
-          maxLength: 100
-          minLength: 0
-        transactionDate:
-          type: string
-          format: date-time
-          description: "Event transaction timestamp. If omitted, defaults to current\
-            \ time."
-          example: 2026-01-15T10:30:00
-        payload:
-          type: object
-          additionalProperties: {}
-          description: Event-specific payload content
-      required:
-      - eventType
-      - organizationId
-      - payload
-    AccountingEventResponse:
-      type: object
-      properties:
-        eventId:
-          type: string
-          format: uuid
-        organizationId:
-          type: string
-          format: uuid
-        eventType:
-          type: string
-        sourceSystem:
-          type: string
-        transactionDate:
-          type: string
-          format: date-time
-        payload:
-          type: object
-          additionalProperties: {}
-        status:
-          type: string
-          enum:
-          - RECEIVED
-          - PROCESSING
-          - PROCESSED
-          - FAILED
-          - SUSPENDED
-        journalEntryId:
-          type: string
-          format: uuid
-        errorMessage:
-          type: string
-        receivedAt:
-          type: string
-          format: date-time
-        processedAt:
-          type: string
-          format: date-time
-        sequenceNumber:
-          type: integer
-          format: int64
-        failureReasonCode:
-          type: string
-        failureDetails:
-          type: string
-        attemptCount:
-          type: integer
-          format: int32
-        finalPostingReferenceId:
-          type: string
-        resolvedByUserId:
-          type: string
-        mappingVersionAttempted:
-          type: string
-    ReprocessEventRequest:
-      type: object
-      properties:
-        triggeredByUserId:
-          type: string
-        mappingVersionToUse:
-          type: string
-        reprocessingNotes:
-          type: string
-      required:
-      - triggeredByUserId
-    CreateCreditMemoRequest:
-      type: object
-      properties:
-        originalInvoiceId:
-          type: string
-          format: uuid
-        creditAmount:
-          type: number
-          minimum: 0.01
-        reasonCode:
-          type: string
-          maxLength: 50
-          minLength: 0
-        justificationNote:
-          type: string
-          maxLength: 1000
-          minLength: 0
-      required:
-      - creditAmount
-      - originalInvoiceId
-      - reasonCode
-    CreditMemoResponse:
-      type: object
-      properties:
-        creditMemoId:
-          type: string
-          format: uuid
-        originalInvoiceId:
-          type: string
-          format: uuid
-        customerId:
-          type: string
-          format: uuid
-        creditAmount:
-          type: number
-        taxAmountReversed:
-          type: number
-        totalAmount:
-          type: number
-        reasonCode:
-          type: string
-        justificationNote:
-          type: string
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - POSTED
-          - APPLIED
-          - VOIDED
-        creationTimestamp:
-          type: string
-          format: date-time
-        postedTimestamp:
-          type: string
-          format: date-time
-        createdByUserId:
-          type: string
-        priorPeriodAdjustment:
-          type: boolean
-        originalPeriodId:
-          type: string
-        currency:
-          type: string
-        invoiceBalanceAfter:
-          type: number
-    RefundRequest:
-      type: object
-      properties:
-        invoiceId:
-          type: string
-          format: uuid
-        paymentId:
-          type: string
-          format: uuid
-        refundType:
-          type: string
-          enum:
-          - REVERSAL
-          - CREDIT_MEMO
-          - ADJUSTMENT
-        refundAmount:
-          type: number
-        originalPaymentStatus:
-          type: string
-          enum:
-          - PENDING
-          - SETTLED
-          - FAILED
-          - AUTHORIZED
-        actorId:
-          type: string
-        actorRole:
-          type: string
-        reason:
-          type: string
-      required:
-      - actorRole
-      - invoiceId
-      - originalPaymentStatus
-      - paymentId
-      - reason
-      - refundAmount
-      - refundType
-    AuditTrailResponse:
-      type: object
-      properties:
-        auditId:
-          type: string
-          format: uuid
-        exceptionType:
-          type: string
-          enum:
-          - PRICE_OVERRIDE
-          - REFUND
-          - CANCELLATION
-        actorId:
-          type: string
-        actorRole:
-          type: string
-        timestamp:
-          type: string
-          format: date-time
-        reason:
-          type: string
-        authorizationLevel:
-          type: string
-        policyVersion:
-          type: string
-        orderId:
-          type: string
-          format: uuid
-        lineItemId:
-          type: string
-          format: uuid
-        originalPrice:
-          type: number
-        adjustedPrice:
-          type: number
-        overrideAmountOrPercent:
-          type: string
-        forbiddenCategoryCode:
-          type: string
-        policyValidationResult:
-          type: string
-          enum:
-          - APPROVED
-          - REJECTED_FORBIDDEN
-          - REJECTED_THRESHOLD_EXCEEDED
-        invoiceId:
-          type: string
-          format: uuid
-        paymentId:
-          type: string
-          format: uuid
-        refundType:
-          type: string
-          enum:
-          - REVERSAL
-          - CREDIT_MEMO
-          - ADJUSTMENT
-        refundAmount:
-          type: number
-        originalPaymentStatus:
-          type: string
-          enum:
-          - PENDING
-          - SETTLED
-          - FAILED
-          - AUTHORIZED
-        refundMethod:
-          type: string
-          enum:
-          - VOID
-          - CHARGEBACK
-          - CASH_REFUND
-          - CREDIT_MEMO
-        linkedSourceIds:
-          type: string
-        cancellationType:
-          type: string
-          enum:
-          - ORDER_CANCELLED
-          - INVOICE_CANCELLED
-          - PAYMENT_FAILED
-        beforeSnapshot:
-          type: string
-        afterSnapshot:
-          type: string
-        partialPaymentInfo:
-          type: string
-        glReversalStatus:
-          type: string
-        accountingIntent:
-          type: string
-          enum:
-          - REVENUE_ADJUSTMENT
-          - PAYMENT_REVERSAL
-          - CUSTOMER_CREDIT
-          - WRITE_OFF
-          - REVENUE_REVERSAL
-          - PAYMENT_RECOVERY
-        accountingStatus:
-          type: string
-          enum:
-          - PENDING_POSTING
-          - POSTED
-          - RECONCILED
-          - REJECTED
-          - REVERSED
-          - VOIDED
-          - ON_HOLD
-          - DISPUTED
-        expectedAccountingOutcome:
-          type: string
-        sourceEventId:
-          type: string
-          format: uuid
-        sourceDocumentId:
-          type: string
-    PriceOverrideRequest:
-      type: object
-      properties:
-        orderId:
-          type: string
-          format: uuid
-        lineItemId:
-          type: string
-          format: uuid
-        originalPrice:
-          type: number
-        adjustedPrice:
-          type: number
-        actorRole:
-          type: string
-        reason:
-          type: string
-        categoryCode:
-          type: string
-      required:
-      - actorRole
-      - adjustedPrice
-      - lineItemId
-      - orderId
-      - originalPrice
-      - reason
-    CancellationRequest:
-      type: object
-      properties:
-        orderId:
-          type: string
-          format: uuid
-        invoiceId:
-          type: string
-          format: uuid
-        cancellationType:
-          type: string
-          enum:
-          - ORDER_CANCELLED
-          - INVOICE_CANCELLED
-          - PAYMENT_FAILED
-        beforeSnapshot:
-          type: string
-        afterSnapshot:
-          type: string
-        partialPaymentInfo:
-          type: string
-        actorId:
-          type: string
-        actorRole:
-          type: string
-        reason:
-          type: string
-      required:
-      - actorRole
-      - afterSnapshot
-      - beforeSnapshot
-      - cancellationType
-      - reason
-    AllocationLineRequest:
-      type: object
-      description: Allocation line for a specific vendor bill
-      properties:
-        vendorBillId:
-          type: string
-          format: uuid
-          description: Vendor bill UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        appliedAmount:
-          type: number
-          description: Amount to apply to this bill
-          example: 750.0
-          minimum: 0.00
-      required:
-      - appliedAmount
-      - vendorBillId
-    ExecuteAPPaymentRequest:
-      type: object
-      description: Request to execute an AP vendor payment
-      properties:
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor UUID
-          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-        grossAmount:
-          type: number
-          description: Gross payment amount
-          example: 1500.0
-          minimum: 0.01
-        feeAmount:
-          type: number
-          description: Fee amount (if known at capture time)
-          example: 15.0
-        netAmount:
-          type: number
-          description: Net amount deposited (if applicable)
-          example: 1485.0
-        currency:
-          type: string
-          description: ISO 4217 currency code
-          example: USD
-          maxLength: 3
-          minLength: 3
-        paymentRef:
-          type: string
-          description: Unique payment reference (idempotency key)
-          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-          maxLength: 100
-          minLength: 1
-        paymentMethod:
-          type: string
-          description: "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)"
-          enum:
-          - ACH
-          - CHECK
-          - WIRE
-          - CREDIT_CARD
-          - OTHER
-          example: ACH
-        paymentSource:
-          type: string
-          description: "Payment source token or identifier from the payment provider\
-            \ (e.g., Stripe token, bank account ID)"
-          example: tok_visa
-          maxLength: 255
-          minLength: 0
-        memo:
-          type: string
-          description: Optional payment memo/notes
-          example: Monthly supplier payment
-          maxLength: 1000
-          minLength: 0
-        allocations:
-          type: array
-          description: "Optional explicit allocations to vendor bills. If omitted,\
-            \ automatic allocation applied."
-          items:
-            $ref: "#/components/schemas/AllocationLineRequest"
-      required:
-      - currency
-      - grossAmount
-      - paymentMethod
-      - paymentRef
-      - vendorId
-    APPaymentResponse:
-      type: object
-      description: AP Payment response with allocations and GL status
-      properties:
-        paymentId:
-          type: string
-          format: uuid
-          description: Payment UUID
-          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-        paymentRef:
-          type: string
-          description: Payment reference (idempotency key)
-          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor UUID
-          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
-        vendorName:
-          type: string
-          description: Vendor name
-          example: Acme Supplies Ltd
-        grossAmount:
-          type: number
-          description: Gross payment amount
-          example: 1500.0
-        feeAmount:
-          type: number
-          description: Fee amount
-          example: 15.0
-        netAmount:
-          type: number
-          description: Net amount
-          example: 1485.0
-        unappliedAmount:
-          type: number
-          description: Unapplied amount (credit to vendor)
-          example: 0.0
-        currency:
-          type: string
-          description: Currency code
-          example: USD
-        status:
-          type: string
-          description: Payment status
-          enum:
-          - INITIATED
-          - GATEWAY_PENDING
-          - GATEWAY_FAILED
-          - GATEWAY_SUCCEEDED
-          - GL_POST_PENDING
-          - GL_POSTED
-          - GL_POST_FAILED
-          example: GATEWAY_SUCCEEDED
-        gatewayTransactionId:
-          type: string
-          description: Gateway transaction ID
-          example: ch_3QvD2TGxyz123ABC
-        gatewayTimestamp:
-          type: string
-          format: date-time
-          description: Gateway response timestamp
-          example: 2026-02-09T10:30:00Z
-        glJournalEntryId:
-          type: string
-          format: uuid
-          description: GL journal entry ID (once posted)
-          example: 01936e5f-abcd-7a3d-8b6e-5d6789012345
-        glPostedAt:
-          type: string
-          format: date-time
-          description: GL posting timestamp
-          example: 2026-02-09T10:31:00Z
-        glPostError:
-          type: string
-          description: GL posting error message (if failed)
-          example: Account 2000 not found
-        memo:
-          type: string
-          description: Payment memo/notes
-          example: Monthly supplier payment
-        allocations:
-          type: array
-          description: Allocations to vendor bills
-          items:
-            $ref: "#/components/schemas/AllocationLineResponse"
-        createdAt:
-          type: string
-          format: date-time
-          description: Payment created timestamp
-          example: 2026-02-09T10:29:00Z
-        createdBy:
-          type: string
-          description: User who initiated payment
-          example: ap_clerk_1
-    AllocationLineResponse:
-      type: object
-      description: Allocation of payment to a vendor bill
-      properties:
-        allocationId:
-          type: string
-          format: uuid
-          description: Allocation UUID
-          example: 01936e5e-1234-7a3d-8b6e-4c567890abcd
-        vendorBillId:
-          type: string
-          format: uuid
-          description: Vendor bill UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        appliedAmount:
-          type: number
-          description: Amount applied to this bill
-          example: 750.0
-        allocationSequence:
-          type: integer
-          format: int32
-          description: Allocation sequence number
-          example: 1
-    VendorBillMatchCandidateResponse:
-      type: object
-      properties:
-        candidateId:
-          type: string
-          format: uuid
-        invoiceEventId:
-          type: string
-          format: uuid
-        vendorBillId:
-          type: string
-          format: uuid
-        vendorId:
-          type: string
-          format: uuid
-        billNumber:
-          type: string
-        billTotalAmount:
-          type: number
-        matchScore:
-          type: integer
-          format: int32
-        scoreBreakdown:
-          type: string
-        resolved:
-          type: boolean
-        selected:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-    IncomeStatementReport:
-      type: object
-      properties:
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        generatedAt:
-          type: string
-          format: date-time
-        lineItems:
-          type: object
-          additionalProperties:
-            type: number
-        totalRevenue:
-          type: number
-        totalExpenses:
-          type: number
-        netIncome:
-          type: number
-    JournalLineDrilldownResponse:
-      type: object
-      properties:
-        journalEntryId:
-          type: string
-          format: uuid
-        transactionDate:
-          type: string
-          format: date
-        description:
-          type: string
-        debitAmount:
-          type: number
-        creditAmount:
-          type: number
-        sourceEventId:
-          type: string
-          format: uuid
-        sourceEventType:
-          type: string
-    AccountDrilldownResponse:
-      type: object
-      properties:
-        accountId:
-          type: string
-        accountName:
-          type: string
-        balance:
-          type: number
-        statementLineCode:
-          type: string
-    BalanceSheetReport:
-      type: object
-      properties:
-        asOfDate:
-          type: string
-          format: date
-        generatedAt:
-          type: string
-          format: date-time
-        lineItems:
-          type: object
-          additionalProperties:
-            type: number
-        totalAssets:
-          type: number
-        totalLiabilities:
-          type: number
-        totalEquity:
-          type: number
-        balanced:
-          type: boolean
-    PostingRuleSetListResponse:
-      type: object
-      properties:
-        ruleSets:
-          type: array
-          items:
-            $ref: "#/components/schemas/PostingRuleSetResponse"
-        totalElements:
-          type: integer
-          format: int32
-        totalPages:
-          type: integer
-          format: int32
-        currentPage:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-    PostingCategoryListResponse:
-      type: object
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/PostingCategoryResponse"
-        totalCount:
-          type: integer
-          format: int64
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalPages:
-          type: integer
-          format: int32
-    MappingKeyListResponse:
-      type: object
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/MappingKeyResponse"
-        totalCount:
-          type: integer
-          format: int64
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalPages:
-          type: integer
-          format: int32
-    PagedResponseJournalEntryResponse:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/JournalEntryResponse"
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalCount:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/JournalEntryResponse"
-        totalElements:
-          type: integer
-          format: int64
-    JournalEntryTraceabilityResponse:
-      type: object
-      properties:
-        journalEntryId:
-          type: string
-          format: uuid
-        sourceEventId:
-          type: string
-          format: uuid
-        journalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
-        originalJournalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
-        reversalJournalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
-        relatedJournalEntries:
-          type: array
-          items:
-            $ref: "#/components/schemas/JournalEntryResponse"
-    InvoiceStatusResponse:
-      type: object
-      properties:
-        invoiceId:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum:
-          - PAID
-          - PARTIALLY_PAID
-          - UNPAID
-          - FAILED
-          - CHARGEBACK
-        totalPaid:
-          type: number
-        invoiceTotal:
-          type: number
-        remainingBalance:
-          type: number
-        latestTransactionReference:
-          type: string
-        lastUpdated:
-          type: string
-          format: date-time
-    BillingRuleRefResponse:
-      type: object
-      properties:
-        poRequired:
-          type: boolean
-        taxExempt:
-          type: boolean
-        paymentTerms:
-          type: string
-        creditLimit:
-          type: number
-        creditHold:
-          type: boolean
-        invoiceDeliveryMethod:
-          type: string
-        billingAddressId:
-          type: string
-          format: uuid
-        autoPayEnabled:
-          type: boolean
-        discountPolicyRef:
-          type: string
-        currency:
-          type: string
-        extensions:
-          type: object
-          additionalProperties: {}
-    GLAccountListResponse:
-      type: object
-      properties:
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalPages:
-          type: integer
-          format: int32
-        glAccounts:
-          type: array
-          items:
-            $ref: "#/components/schemas/GLAccountResponse"
-        totalElements:
-          type: integer
-          format: int64
-    GLAccountBalanceResponse:
-      type: object
-      properties:
-        glAccountId:
-          type: string
-          format: uuid
-        accountCode:
-          type: string
-        accountName:
-          type: string
-        balance:
-          type: number
-        asOfDate:
-          type: string
-          format: date-time
-    PagedResponseAccountingEventResponse:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountingEventResponse"
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalCount:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountingEventResponse"
-        totalElements:
-          type: integer
-          format: int64
-    ReprocessingAttemptHistoryResponse:
-      type: object
-      properties:
-        attemptId:
-          type: string
-          format: uuid
-        eventId:
-          type: string
-          format: uuid
-        attemptedAt:
-          type: string
-          format: date-time
-        triggeredByUserId:
-          type: string
-        outcome:
-          type: string
-          enum:
-          - SUCCESS
-          - FAILURE
-        outcomeDetails:
-          type: string
-        mappingVersionUsed:
-          type: string
-    DefaultGLMappingListResponse:
+    ColumnMappingApproveRequest:
       type: object
       properties:
         mappings:
           type: array
           items:
-            $ref: "#/components/schemas/DefaultGLMappingResponse"
-        page:
-          type: integer
-          format: int32
-        size:
-          type: integer
-          format: int32
-        totalElements:
+            $ref: "#/components/schemas/ColumnMappingUpdateRequest"
+          minItems: 1
+      required:
+      - mappings
+    ColumnMappingUpdateRequest:
+      type: object
+      properties:
+        mappingId:
+          type: string
+          format: uuid
+        sourceColumn:
+          type: string
+          minLength: 1
+        targetField:
+          type: string
+          minLength: 1
+      required:
+      - sourceColumn
+      - targetField
+    ColumnMappingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        sourceColumn:
+          type: string
+        targetField:
+          type: string
+        confidence:
+          type: number
+          format: double
+        overriddenByUser:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    BulkLoadJobCreateRequest:
+      type: object
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+        domainType:
+          type: string
+          enum:
+          - CATALOG_PRODUCT
+          - INVENTORY_STOCK_COUNT
+          - LOCATION
+          - CUSTOMER
+          - PERSON
+          - BASE_PRICE
+          - VEHICLE
+          - VEHICLE_FITMENT
+        locationId:
+          type: string
+          format: uuid
+      required:
+      - domainType
+      - fileName
+    BulkLoadJobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        operatorId:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+        domainType:
+          type: string
+          enum:
+          - CATALOG_PRODUCT
+          - INVENTORY_STOCK_COUNT
+          - LOCATION
+          - CUSTOMER
+          - PERSON
+          - BASE_PRICE
+          - VEHICLE
+          - VEHICLE_FITMENT
+        status:
+          type: string
+          enum:
+          - CREATED
+          - UPLOADING
+          - DETECTING
+          - MAPPING_REVIEW
+          - DEDUP
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - CANCELLED
+        totalRows:
           type: integer
           format: int64
-        totalPages:
+        processedRows:
           type: integer
-          format: int32
+          format: int64
+        successCount:
+          type: integer
+          format: int64
+        failureCount:
+          type: integer
+          format: int64
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    FileUploadResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        storagePath:
+          type: string
+        fileName:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
     Pageable:
       type: object
       properties:
@@ -5266,7 +679,7 @@ components:
           type: array
           items:
             type: string
-    PageCreditMemoResponse:
+    PageBulkLoadJobResponse:
       type: object
       properties:
         totalElements:
@@ -5281,14 +694,14 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/CreditMemoResponse"
+            $ref: "#/components/schemas/BulkLoadJobResponse"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -5298,7 +711,7 @@ components:
           format: int32
         empty:
           type: boolean
-    Pageablenull:
+    PageableObject:
       type: object
       properties:
         offset:
@@ -5313,10 +726,10 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
-    Sortnull:
+    SortObject:
       type: object
       properties:
         empty:
@@ -5325,54 +738,34 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    VendorBillSummaryResponse:
+    AuditRecordResponse:
       type: object
-      description: Vendor bill summary for payment allocation
       properties:
-        vendorBillId:
+        id:
           type: string
           format: uuid
-          description: Vendor bill UUID
-          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
-        vendorId:
+        jobId:
           type: string
           format: uuid
-          description: Vendor UUID
-          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
-        vendorName:
+        entityType:
           type: string
-          description: Vendor name
-          example: Acme Supplies Ltd
-        billNumber:
+        entityId:
           type: string
-          description: Bill number
-          example: INV-2026-001234
-        billDate:
+          format: uuid
+        rowNumber:
+          type: integer
+          format: int64
+        reviewStatus:
           type: string
-          format: date-time
-          description: Bill date
-          example: 2026-01-15T00:00:00
-        dueDate:
-          type: string
-          format: date-time
-          description: Due date
-          example: 2026-02-14T00:00:00
-        totalAmount:
-          type: number
-          description: Total bill amount
-          example: 1200.0
-        openAmount:
-          type: number
-          description: Open/unpaid amount (eligible for payment)
-          example: 1200.0
-        status:
-          type: string
-          description: Bill status
           enum:
-          - PENDING_RECEIPT_MATCH
-          - MATCH_EXCEPTION
+          - PENDING
           - APPROVED
           - REJECTED
-          - PAID
-          - VOIDED
-          example: APPROVED
+          - CORRECTED
+        reasonCodes:
+          type: string
+        originalValues:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
