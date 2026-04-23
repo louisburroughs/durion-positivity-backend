@@ -54,6 +54,7 @@ public class TusUploadController {
     }
 
     @RequestMapping(value = "/tus", method = RequestMethod.OPTIONS)
+    @PreAuthorize("permitAll()")
     @Operation(summary = "TUS server capabilities", description = "Returns supported TUS version, extensions, and max upload size. No authentication required.")
     @ApiResponse(responseCode = "204", description = "Server capabilities")
     public ResponseEntity<Void> options() {
