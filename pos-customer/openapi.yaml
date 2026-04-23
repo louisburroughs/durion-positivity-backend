@@ -65,6 +65,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
     put:
       tags:
       - Customer API
@@ -102,6 +104,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:edit
+      x-required-permissions:
+      - crm:party:edit
     delete:
       tags:
       - Customer API
@@ -125,6 +129,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:deactivate
+      x-required-permissions:
+      - crm:party:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}:
     get:
       tags:
@@ -161,6 +167,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle:view
+      x-required-permissions:
+      - crm:vehicle:view
     put:
       tags:
       - CRM Vehicles
@@ -204,6 +212,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle:edit
+      x-required-permissions:
+      - crm:vehicle:edit
     delete:
       tags:
       - CRM Vehicles
@@ -235,6 +245,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle:deactivate
+      x-required-permissions:
+      - crm:vehicle:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
     put:
       tags:
@@ -279,6 +291,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle_party_association:edit
+      x-required-permissions:
+      - crm:vehicle_party_association:edit
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -324,6 +338,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_role:assign
+      x-required-permissions:
+      - crm:contact_role:assign
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     put:
       tags:
@@ -361,6 +377,8 @@ paths:
       security:
       - bearerAuth:
         - crm:relationship:update
+      x-required-permissions:
+      - crm:relationship:update
   /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -405,6 +423,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_role:assign
+      x-required-permissions:
+      - crm:contact_role:assign
   /v1/promotions/redemptions:
     post:
       tags:
@@ -432,6 +452,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:RecordRedemption
+      x-required-permissions:
+      - Promotion:RecordRedemption
   /v1/customer/bulk-ingest:
     post:
       tags:
@@ -462,6 +484,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm:
     get:
       tags:
@@ -495,6 +519,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
     post:
       tags:
       - Customer API
@@ -517,6 +543,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm/{customerId}/vehicles:
     post:
       tags:
@@ -554,6 +582,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle:create
+      x-required-permissions:
+      - crm:vehicle:create
   /v1/crm/persons:
     get:
       tags:
@@ -624,6 +654,8 @@ paths:
       security:
       - bearerAuth:
         - crm:person:read
+      x-required-permissions:
+      - crm:person:read
     post:
       tags:
       - CRM Persons
@@ -664,6 +696,8 @@ paths:
       security:
       - bearerAuth:
         - crm:person:create
+      x-required-permissions:
+      - crm:person:create
   /v1/crm/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -693,6 +727,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_preference:view
+      x-required-permissions:
+      - crm:contact_preference:view
     post:
       tags:
       - CRM Communication Preferences
@@ -730,6 +766,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_preference:edit
+      x-required-permissions:
+      - crm:contact_preference:edit
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
@@ -792,6 +830,8 @@ paths:
       security:
       - bearerAuth:
         - crm:relationship:create
+      x-required-permissions:
+      - crm:relationship:create
   /v1/crm/accounts/tierResolve:
     post:
       tags:
@@ -821,6 +861,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties:
     post:
       tags:
@@ -847,6 +889,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm/accounts/parties/{partyId}/vehicles:
     post:
       tags:
@@ -883,6 +927,8 @@ paths:
       security:
       - bearerAuth:
         - crm:vehicle:create
+      x-required-permissions:
+      - crm:vehicle:create
   /v1/crm/accounts/parties/{partyId}/merge:
     post:
       tags:
@@ -919,6 +965,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:merge
+      x-required-permissions:
+      - crm:party:merge
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -948,6 +996,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_preference:view
+      x-required-permissions:
+      - crm:contact_preference:view
     post:
       tags:
       - CRM Accounts
@@ -984,6 +1034,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact_preference:edit
+      x-required-permissions:
+      - crm:contact_preference:edit
   /v1/crm/accounts/parties/search:
     post:
       tags:
@@ -1010,6 +1062,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/promotions/redemptions/by-customer/{customerId}:
     get:
       tags:
@@ -1038,6 +1092,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:ViewRedemption
+      x-required-permissions:
+      - Promotion:ViewRedemption
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -1067,6 +1123,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/snapshot/party/{partyId}:
     get:
       tags:
@@ -1096,6 +1154,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/snapshot/party/{partyId}/billing-rules:
     get:
       tags:
@@ -1135,6 +1195,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/persons/{personId}:
     get:
       tags:
@@ -1178,6 +1240,8 @@ paths:
       security:
       - bearerAuth:
         - crm:person:read
+      x-required-permissions:
+      - crm:person:read
   /v1/crm/parties/{partyId}/contacts:
     get:
       tags:
@@ -1207,6 +1271,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact:view
+      x-required-permissions:
+      - crm:contact:view
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
@@ -1272,6 +1338,8 @@ paths:
       security:
       - bearerAuth:
         - crm:relationship:read
+      x-required-permissions:
+      - crm:relationship:read
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -1301,6 +1369,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties/{partyId}:
     get:
       tags:
@@ -1330,6 +1400,8 @@ paths:
       security:
       - bearerAuth:
         - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties/{partyId}/contacts:
     get:
       tags:
@@ -1359,6 +1431,8 @@ paths:
       security:
       - bearerAuth:
         - crm:contact:view
+      x-required-permissions:
+      - crm:contact:view
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1393,6 +1467,8 @@ paths:
       security:
       - bearerAuth:
         - crm:relationship:delete
+      x-required-permissions:
+      - crm:relationship:delete
 components:
   schemas:
     CustomerDTO:

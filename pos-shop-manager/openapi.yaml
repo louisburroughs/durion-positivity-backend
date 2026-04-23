@@ -44,6 +44,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     put:
       tags:
       - Shop Mobile Unit API
@@ -66,6 +68,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/shop-manager/bays:
     get:
       tags:
@@ -84,6 +88,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     put:
       tags:
       - Shop Bay API
@@ -106,6 +112,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/appointments/{appointmentId}/reschedule:
     put:
       tags:
@@ -156,6 +164,8 @@ paths:
       security:
       - bearerAuth:
         - appointments:reschedule
+      x-required-permissions:
+      - appointments:reschedule
   /v1/shop-manager/{locationId}/mobileUnit:
     post:
       tags:
@@ -189,6 +199,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:create
+      x-required-permissions:
+      - shop:bay:create
   /v1/shop-manager/{locationId}/bays:
     post:
       tags:
@@ -221,6 +233,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:create
+      x-required-permissions:
+      - shop:bay:create
   /v1/appointments:
     post:
       tags:
@@ -279,6 +293,9 @@ paths:
       - bearerAuth:
         - appointments:create
         - shop:schedule:edit
+      x-required-permissions:
+      - appointments:create
+      - shop:schedule:edit
   /v1/appointments/{appointmentId}/conflict-override:
     post:
       tags:
@@ -330,6 +347,9 @@ paths:
       - bearerAuth:
         - shop:schedule:edit
         - appointments:reschedule
+      x-required-permissions:
+      - shop:schedule:edit
+      - appointments:reschedule
   /v1/appointments/{appointmentId}/assignments:
     get:
       tags:
@@ -355,6 +375,9 @@ paths:
       - bearerAuth:
         - appointments:view
         - shop:schedule:view
+      x-required-permissions:
+      - appointments:view
+      - shop:schedule:view
     post:
       tags:
       - assignment-controller
@@ -382,6 +405,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:assign
+      x-required-permissions:
+      - shop:bay:assign
   /v1/shop/audit:
     get:
       tags:
@@ -406,6 +431,9 @@ paths:
       - bearerAuth:
         - shop:schedule:view
         - appointments:view
+      x-required-permissions:
+      - shop:schedule:view
+      - appointments:view
   /v1/shop/audit/{id}:
     get:
       tags:
@@ -429,6 +457,9 @@ paths:
       - bearerAuth:
         - shop:schedule:view
         - appointments:view
+      x-required-permissions:
+      - shop:schedule:view
+      - appointments:view
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -470,6 +501,8 @@ paths:
       security:
       - bearerAuth:
         - shop:schedule:view
+      x-required-permissions:
+      - shop:schedule:view
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       tags:
@@ -510,6 +543,8 @@ paths:
       security:
       - bearerAuth:
         - shop:location:view
+      x-required-permissions:
+      - shop:location:view
   /v1/shop-manager/{locationId}/services/{serviceId}/details:
     get:
       tags:
@@ -550,6 +585,8 @@ paths:
       security:
       - bearerAuth:
         - shop:location:view
+      x-required-permissions:
+      - shop:location:view
   /v1/shop-manager/{locationId}/mobileUnit/{bayId}:
     get:
       tags:
@@ -583,6 +620,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     delete:
       tags:
       - Shop Mobile Unit API
@@ -614,6 +653,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/shop-manager/{locationId}/bays/{bayId}:
     get:
       tags:
@@ -646,6 +687,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     delete:
       tags:
       - Shop Bay API
@@ -677,6 +720,8 @@ paths:
       security:
       - bearerAuth:
         - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/schedules/view:
     get:
       tags:
@@ -760,6 +805,8 @@ paths:
       security:
       - bearerAuth:
         - shop:schedule:view
+      x-required-permissions:
+      - shop:schedule:view
   /v1/appointments/{appointmentId}:
     get:
       tags:
@@ -805,6 +852,9 @@ paths:
       - bearerAuth:
         - appointments:view
         - shop:schedule:view
+      x-required-permissions:
+      - appointments:view
+      - shop:schedule:view
   /v1/appointments/{appointmentId}/cancel:
     delete:
       tags:
@@ -841,6 +891,8 @@ paths:
       security:
       - bearerAuth:
         - appointments:cancel
+      x-required-permissions:
+      - appointments:cancel
 components:
   schemas:
     RescheduleAppointmentRequest:

@@ -49,6 +49,8 @@ paths:
       security:
       - bearerAuth:
         - invoice:billing-rules
+      x-required-permissions:
+      - invoice:billing-rules
     put:
       tags:
       - Billing Rules
@@ -89,6 +91,8 @@ paths:
       security:
       - bearerAuth:
         - invoice:billing-rules
+      x-required-permissions:
+      - invoice:billing-rules
   /v1/invoices:
     post:
       tags:
@@ -112,6 +116,8 @@ paths:
       security:
       - bearerAuth:
         - invoice:manage
+      x-required-permissions:
+      - invoice:manage
   /v1/invoices/{invoiceId}/revert:
     post:
       tags:
@@ -143,6 +149,9 @@ paths:
       security:
       - bearerAuth:
         - invoice:finalize
+      x-required-permissions:
+      - invoice:manage
+      - invoice:finalize
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
@@ -479,6 +488,9 @@ paths:
       security:
       - bearerAuth:
         - invoice:finalize
+      x-required-permissions:
+      - invoice:manage
+      - invoice:finalize
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
@@ -509,6 +521,8 @@ paths:
       security:
       - bearerAuth:
         - invoice:manage
+      x-required-permissions:
+      - invoice:manage
   /v1/invoices/{invoiceId}:
     get:
       tags:
@@ -533,6 +547,8 @@ paths:
       security:
       - bearerAuth:
         - invoice:manage
+      x-required-permissions:
+      - invoice:manage
 components:
   schemas:
     BillingRulesDTO:

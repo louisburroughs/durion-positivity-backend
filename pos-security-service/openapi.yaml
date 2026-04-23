@@ -104,6 +104,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/users/{userId}/roles/{roleId}:
     put:
       tags:
@@ -167,6 +169,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
     delete:
       tags:
       - User Role Management
@@ -229,6 +233,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/users/{id}:
     get:
       tags:
@@ -291,6 +297,8 @@ paths:
       security:
       - bearerAuth:
         - security:user:view
+      x-required-permissions:
+      - security:user:view
     put:
       tags:
       - User API
@@ -358,6 +366,8 @@ paths:
       security:
       - bearerAuth:
         - security:user:edit
+      x-required-permissions:
+      - security:user:edit
     delete:
       tags:
       - User API
@@ -415,6 +425,8 @@ paths:
       security:
       - bearerAuth:
         - security:user:delete
+      x-required-permissions:
+      - security:user:delete
   /v1/users/roles/{roleId}/permissions/{permissionKey}:
     put:
       tags:
@@ -477,6 +489,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
     delete:
       tags:
       - Role Management
@@ -537,6 +551,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/{roleId}/permissions/{permissionKey}:
     put:
       tags:
@@ -599,6 +615,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
     delete:
       tags:
       - Role Management
@@ -659,6 +677,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/users/roles/{roleId}/permissions/grant:
     put:
       tags:
@@ -726,6 +746,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/{roleId}/permissions/grant:
     put:
       tags:
@@ -793,6 +815,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/users/roles/permissions:
     put:
       tags:
@@ -852,6 +876,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/permissions:
     put:
       tags:
@@ -911,6 +937,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:edit
+      x-required-permissions:
+      - security:role:edit
   /v1/audit/events/**:
     put:
       tags:
@@ -960,6 +988,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:create
+      x-required-permissions:
+      - security:audit:create
     delete:
       tags:
       - Audit
@@ -1008,6 +1038,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:create
+      x-required-permissions:
+      - security:audit:create
   /v1/users:
     get:
       tags:
@@ -1063,6 +1095,8 @@ paths:
       security:
       - bearerAuth:
         - security:user:view
+      x-required-permissions:
+      - security:user:view
     post:
       tags:
       - User API
@@ -1122,6 +1156,8 @@ paths:
       security:
       - bearerAuth:
         - security:user:create
+      x-required-permissions:
+      - security:user:create
   /v1/users/{id}/unlock:
     post:
       tags:
@@ -1179,6 +1215,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/expire-credentials:
     post:
       tags:
@@ -1236,6 +1274,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/expire-account:
     post:
       tags:
@@ -1293,6 +1333,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/enable:
     post:
       tags:
@@ -1350,6 +1392,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/disable:
     post:
       tags:
@@ -1407,6 +1451,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/roles/assignments:
     post:
       tags:
@@ -1466,6 +1512,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/users/roles/assignments:
     post:
       tags:
@@ -1525,6 +1573,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/roles:
     get:
       tags:
@@ -1580,6 +1630,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
     post:
       tags:
       - Role Management
@@ -1640,6 +1692,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:create
+      x-required-permissions:
+      - security:role:create
   /v1/users/roles:
     get:
       tags:
@@ -1695,6 +1749,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
     post:
       tags:
       - Role Management
@@ -1755,6 +1811,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:create
+      x-required-permissions:
+      - security:role:create
   /v1/users/principals/{principalId}/roles/{roleId}:
     post:
       tags:
@@ -1819,6 +1877,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/permissions/registerPermissions:
     post:
       tags:
@@ -1881,6 +1941,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:register
+      x-required-permissions:
+      - security:permission:register
   /v1/users/permissions/registerPermissions:
     post:
       tags:
@@ -1943,6 +2005,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:register
+      x-required-permissions:
+      - security:permission:register
   /v1/users/permissions/register:
     post:
       tags:
@@ -2002,6 +2066,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:register
+      x-required-permissions:
+      - security:permission:register
   /v1/permissions/register:
     post:
       tags:
@@ -2061,6 +2127,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:register
+      x-required-permissions:
+      - security:permission:register
   /v1/users/permissions/decode:
     post:
       tags:
@@ -2121,6 +2189,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/decode:
     post:
       tags:
@@ -2181,6 +2251,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/self-registration/review-cases/{caseId}/resolve:
     post:
       tags:
@@ -2248,6 +2320,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:manage
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/auth/token-pair:
     post:
       tags:
@@ -2541,6 +2615,8 @@ paths:
       security:
       - bearerAuth:
         - security:token:issue_internal
+      x-required-permissions:
+      - security:token:issue_internal
   /v1/audit/pricing-snapshots:
     post:
       tags:
@@ -2601,6 +2677,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:create
+      x-required-permissions:
+      - security:audit:create
   /v1/audit/events:
     get:
       tags:
@@ -2692,6 +2770,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:view
+      x-required-permissions:
+      - security:audit:view
     post:
       tags:
       - Audit
@@ -2751,6 +2831,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:create
+      x-required-permissions:
+      - security:audit:create
   /v1/users/{userId}/permissions:
     get:
       tags:
@@ -2814,6 +2896,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/{id}/account-state:
     get:
       tags:
@@ -2875,6 +2959,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:view
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/roles/{id}:
     get:
       tags:
@@ -2935,6 +3021,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
     delete:
       tags:
       - Role Management
@@ -2990,6 +3078,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:delete
+      x-required-permissions:
+      - security:role:delete
   /v1/users/roles/{id}:
     get:
       tags:
@@ -3050,6 +3140,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
     delete:
       tags:
       - Role Management
@@ -3105,6 +3197,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:delete
+      x-required-permissions:
+      - security:role:delete
   /v1/roles/permissions/user/{userId}:
     get:
       tags:
@@ -3168,6 +3262,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/roles/permissions/user/{userId}:
     get:
       tags:
@@ -3231,6 +3327,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/roles/check-permission:
     get:
       tags:
@@ -3301,6 +3399,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/roles/check-permission:
     get:
       tags:
@@ -3371,6 +3471,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/roles/by-name/{name}:
     get:
       tags:
@@ -3430,6 +3532,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
   /v1/roles/by-name/{name}:
     get:
       tags:
@@ -3489,6 +3593,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
   /v1/roles/assignments/user/{userId}:
     get:
       tags:
@@ -3562,6 +3668,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
   /v1/users/roles/assignments/user/{userId}:
     get:
       tags:
@@ -3635,6 +3743,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:view
+      x-required-permissions:
+      - security:role:view
   /v1/users/permissions/{id}:
     get:
       tags:
@@ -3695,6 +3805,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/{id}:
     get:
       tags:
@@ -3755,6 +3867,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/validate/{permissionName}:
     get:
       tags:
@@ -3815,6 +3929,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/validate/{permissionName}:
     get:
       tags:
@@ -3875,6 +3991,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/exists/{permissionName}:
     get:
       tags:
@@ -3934,6 +4052,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/exists/{permissionName}:
     get:
       tags:
@@ -3993,6 +4113,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/domain/{domain}:
     get:
       tags:
@@ -4054,6 +4176,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/domain/{domain}:
     get:
       tags:
@@ -4115,6 +4239,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/catalog-version:
     get:
       tags:
@@ -4279,6 +4405,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions:
     get:
       tags:
@@ -4341,6 +4469,8 @@ paths:
       security:
       - bearerAuth:
         - security:permission:view
+      x-required-permissions:
+      - security:permission:view
   /v1/users/authorization/decision:
     get:
       tags:
@@ -4409,6 +4539,8 @@ paths:
       security:
       - bearerAuth:
         - security:authorization:decide
+      x-required-permissions:
+      - security:authorization:decide
   /v1/self-registration/review-cases:
     get:
       tags:
@@ -4482,6 +4614,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:view
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/self-registration/review-cases/{caseId}:
     get:
       tags:
@@ -4542,6 +4676,8 @@ paths:
       security:
       - bearerAuth:
         - security:user_account_state:view
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/auth/validate:
     get:
       tags:
@@ -4835,6 +4971,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:view
+      x-required-permissions:
+      - security:audit:view
   /v1/audit/events/{eventId}:
     get:
       tags:
@@ -4895,6 +5033,8 @@ paths:
       security:
       - bearerAuth:
         - security:audit:view
+      x-required-permissions:
+      - security:audit:view
   /v1/users/roles/assignments/{assignmentId}:
     delete:
       tags:
@@ -4964,6 +5104,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/roles/assignments/{assignmentId}:
     delete:
       tags:
@@ -5033,6 +5175,8 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
+      x-required-permissions:
+      - security:role:assign
   /v1/auth/revoke:
     delete:
       tags:

@@ -132,6 +132,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:view
+      x-required-permissions:
+      - order:price_override:view
     post:
       tags:
       - Price Overrides
@@ -167,6 +169,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:apply
+      x-required-permissions:
+      - order:price_override:apply
   /v1/orders/price-overrides/{overrideId}/reject:
     post:
       tags:
@@ -217,6 +221,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:reject
+      x-required-permissions:
+      - order:price_override:reject
   /v1/orders/price-overrides/{overrideId}/approve:
     post:
       tags:
@@ -268,6 +274,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:approve
+      x-required-permissions:
+      - order:price_override:approve
   /v1/orders/carts:
     post:
       tags:
@@ -376,6 +384,8 @@ paths:
       security:
       - bearerAuth:
         - order:order:cancel
+      x-required-permissions:
+      - order:order:cancel
   /v1/orders/carts/{orderId}/cancel/retry:
     post:
       tags:
@@ -424,6 +434,8 @@ paths:
       security:
       - bearerAuth:
         - order:order:cancel
+      x-required-permissions:
+      - order:order:cancel
   /v1/orders/carts/{orderId}/source:
     patch:
       tags:
@@ -486,6 +498,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:view
+      x-required-permissions:
+      - order:price_override:view
   /v1/orders/price-overrides/pending:
     get:
       tags:
@@ -505,6 +519,8 @@ paths:
       security:
       - bearerAuth:
         - order:price_override:approve
+      x-required-permissions:
+      - order:price_override:approve
   /v1/orders/carts/{orderId}:
     get:
       tags:

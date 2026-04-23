@@ -62,6 +62,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
     put:
       tags:
       - Products API
@@ -111,6 +114,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/{productId}/msrp/{msrpId}:
     put:
       tags:
@@ -171,6 +177,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:msrp:write
+      x-required-permissions:
+      - catalog:msrp:write
   /v1/products/{productId}/lifecycle:
     get:
       tags:
@@ -204,6 +212,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
         - product:lifecycle:update
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+      - product:lifecycle:update
     put:
       tags:
       - Products API
@@ -261,6 +273,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
         - product:lifecycle:update
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+      - product:lifecycle:update
   /v1/products/uom-conversions/{id}:
     get:
       tags:
@@ -293,6 +309,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
     put:
       tags:
       - UOM Conversion API
@@ -337,6 +356,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
     delete:
       tags:
       - UOM Conversion API
@@ -361,6 +383,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/supplier-costs/{id}:
     get:
       tags:
@@ -390,6 +415,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:supplier_cost:read
+      x-required-permissions:
+      - catalog:supplier_cost:read
     put:
       tags:
       - Supplier Item Cost API
@@ -424,6 +451,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:supplier_cost:write
+      x-required-permissions:
+      - catalog:supplier_cost:write
     delete:
       tags:
       - Supplier Item Cost API
@@ -444,6 +473,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:supplier_cost:write
+      x-required-permissions:
+      - catalog:supplier_cost:write
   /v1/products/price-books/{priceBookId}:
     get:
       tags:
@@ -474,6 +505,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:read
+      x-required-permissions:
+      - catalog:price_book:read
     put:
       tags:
       - Price Book API
@@ -509,6 +542,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:write
+      x-required-permissions:
+      - catalog:price_book:write
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
     put:
       tags:
@@ -551,6 +586,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:write
+      x-required-permissions:
+      - catalog:price_book:write
     delete:
       tags:
       - Price Book API
@@ -577,6 +614,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:write
+      x-required-permissions:
+      - catalog:price_book:write
   /v1/products/items/{itemId}/standard-cost:
     put:
       tags:
@@ -614,6 +653,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_MANAGER
         - inventory.cost.standard.update
+      x-required-permissions:
+      - ADMIN
+      - MANAGER
+      - inventory.cost.standard.update
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -646,6 +689,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
     put:
       tags:
       - Catalog API
@@ -690,6 +736,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
     delete:
       tags:
       - Catalog API
@@ -713,6 +762,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_DELETE
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_DELETE
   /v1/catalog-items/{type}/{catalogId}:
     put:
       tags:
@@ -764,6 +816,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
     delete:
       tags:
       - Catalog Items API
@@ -796,6 +851,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_DELETE
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_DELETE
   /v1/products:
     post:
       tags:
@@ -833,6 +891,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -862,6 +923,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
         - product:lifecycle:update
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+      - product:lifecycle:update
     post:
       tags:
       - Products API
@@ -906,6 +971,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
         - product:lifecycle:update
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+      - product:lifecycle:update
   /v1/products/{productId}/msrp:
     get:
       tags:
@@ -930,6 +999,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:msrp:read
+      x-required-permissions:
+      - catalog:msrp:read
     post:
       tags:
       - Product MSRP API
@@ -977,6 +1048,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:msrp:write
+      x-required-permissions:
+      - catalog:msrp:write
   /v1/products/uom-conversions:
     get:
       tags:
@@ -997,6 +1070,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
     post:
       tags:
       - UOM Conversion API
@@ -1026,6 +1102,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/supplier-costs:
     post:
       tags:
@@ -1060,6 +1139,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:supplier_cost:write
+      x-required-permissions:
+      - catalog:supplier_cost:write
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1097,6 +1178,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
@@ -1148,6 +1232,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - pricing:override:approve
+      x-required-permissions:
+      - ADMIN
+      - pricing:override:approve
   /v1/products/pricing/location-overrides/{overrideId}/approve:
     post:
       tags:
@@ -1199,6 +1286,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - pricing:override:approve
+      x-required-permissions:
+      - ADMIN
+      - pricing:override:approve
   /v1/products/pricing/guardrail-policies:
     post:
       tags:
@@ -1230,6 +1320,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/price-books:
     post:
       tags:
@@ -1259,6 +1352,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:write
+      x-required-permissions:
+      - catalog:price_book:write
   /v1/products/price-books/{priceBookId}/rules:
     get:
       tags:
@@ -1283,6 +1378,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:read
+      x-required-permissions:
+      - catalog:price_book:read
     post:
       tags:
       - Price Book API
@@ -1318,6 +1415,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:write
+      x-required-permissions:
+      - catalog:price_book:write
   /v1/products/price-books/resolve-price:
     post:
       tags:
@@ -1342,6 +1441,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:price_book:read
+      x-required-permissions:
+      - catalog:price_book:read
   /v1/catalogs:
     post:
       tags:
@@ -1373,6 +1474,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/catalog/bulk-ingest:
     post:
       tags:
@@ -1403,6 +1507,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:product:create
+      x-required-permissions:
+      - catalog:product:create
   /v1/catalog-items/{type}:
     post:
       tags:
@@ -1440,6 +1546,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/{productId}/substitutes:
     get:
       tags:
@@ -1474,6 +1583,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/{productId}/msrp/active:
     get:
       tags:
@@ -1510,6 +1622,8 @@ paths:
       security:
       - bearerAuth:
         - catalog:msrp:read
+      x-required-permissions:
+      - catalog:msrp:read
   /v1/products/{productId}/detail:
     get:
       tags:
@@ -1564,6 +1678,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/services/{serviceId}:
     get:
       tags:
@@ -1596,6 +1713,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/services/name/{name}:
     get:
       tags:
@@ -1621,6 +1741,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/search:
     get:
       tags:
@@ -1685,6 +1808,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:
@@ -1725,6 +1851,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/noninventory/{productId}:
     get:
       tags:
@@ -1757,6 +1886,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/noninventory/name/{name}:
     get:
       tags:
@@ -1782,6 +1914,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/name/{name}:
     get:
       tags:
@@ -1807,6 +1942,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
   /v1/products/items/{itemId}/costs:
     get:
       tags:
@@ -1832,6 +1970,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_MANAGER
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - MANAGER
+      - CATALOG_VIEW
   /v1/products/items/{itemId}/costs/audit:
     get:
       tags:
@@ -1857,6 +1999,10 @@ paths:
         - ROLE_ADMIN
         - ROLE_MANAGER
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - MANAGER
+      - CATALOG_VIEW
   /v1/catalogs/name/{name}:
     get:
       tags:
@@ -1882,6 +2028,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
 components:
   schemas:
     ProductUpdateRequestDto:

@@ -59,6 +59,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:status:read
     put:
       tags:
       - Column Mapping API
@@ -102,6 +104,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs:
     get:
       tags:
@@ -127,6 +131,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:status:read
     post:
       tags:
       - Bulk Load Jobs API
@@ -158,6 +164,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/upload:
     post:
       tags:
@@ -202,6 +210,8 @@ paths:
       security:
       - bearerAuth:
         - bulkImport:upload:execute
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/tus:
     post:
       tags:
@@ -244,6 +254,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/process:
     post:
       tags:
@@ -282,6 +294,8 @@ paths:
       security:
       - bearerAuth:
         - bulkImport:upload:execute
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/cancel:
     post:
       tags:
@@ -314,6 +328,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/tus/{uploadId}:
     delete:
       tags:
@@ -344,6 +360,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
+      x-required-permissions:
+      - bulkImport:upload:execute
     head:
       tags:
       - TUS Resumable Upload API
@@ -373,6 +391,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
+      x-required-permissions:
+      - bulkImport:upload:execute
     patch:
       tags:
       - TUS Resumable Upload API
@@ -425,6 +445,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/tus:
     options:
       tags:
@@ -478,6 +500,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:status:read
   /v1/bulk-jobs/{jobId}/error-report:
     get:
       tags:
@@ -512,6 +536,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:status:read
   /v1/bulk-jobs/{jobId}/audit:
     get:
       tags:
@@ -548,6 +574,8 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:status:read
 components:
   schemas:
     ColumnMappingApproveRequest:

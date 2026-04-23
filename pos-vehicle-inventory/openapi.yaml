@@ -527,6 +527,8 @@ paths:
       security:
       - bearerAuth:
         - vehicle-inventory:registry:create
+      x-required-permissions:
+      - vehicle-inventory:registry:create
   /v1/vehicles-legacy:
     get:
       tags:

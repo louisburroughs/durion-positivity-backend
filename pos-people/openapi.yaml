@@ -71,6 +71,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:view
+      x-required-permissions:
+      - people:person:view
     put:
       tags:
       - People API
@@ -108,6 +110,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:edit
+      x-required-permissions:
+      - people:person:edit
     delete:
       tags:
       - People API
@@ -131,6 +135,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:delete
+      x-required-permissions:
+      - people:person:delete
   /v1/people/staffing/assignments/{assignmentId}:
     get:
       tags:
@@ -161,6 +167,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     put:
       tags:
       - People - Staffing Assignments
@@ -209,6 +217,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
     delete:
       tags:
       - People - Staffing Assignments
@@ -231,6 +241,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/employees/{employeeId}:
     get:
       tags:
@@ -261,6 +273,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     put:
       tags:
       - Employee API
@@ -315,6 +329,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people:
     get:
       tags:
@@ -334,6 +350,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:view
+      x-required-permissions:
+      - people:person:view
     post:
       tags:
       - People API
@@ -356,6 +374,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:create
+      x-required-permissions:
+      - people:person:create
   /v1/people/{personUuid}/access/assignments:
     get:
       tags:
@@ -394,6 +414,8 @@ paths:
       security:
       - bearerAuth:
         - people:role:view
+      x-required-permissions:
+      - people:role:view
     post:
       tags:
       - People - Access Control
@@ -436,6 +458,8 @@ paths:
       security:
       - bearerAuth:
         - people:role:assign
+      x-required-permissions:
+      - people:role:assign
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -589,6 +613,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
   /v1/people/user-links:
     post:
       tags:
@@ -636,6 +662,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
   /v1/people/timeEntries/reject:
     post:
       tags:
@@ -672,6 +700,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeEntry:reject
+      x-required-permissions:
+      - people:timeEntry:reject
   /v1/people/timeEntries/approve:
     post:
       tags:
@@ -708,6 +738,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeEntry:approve
+      x-required-permissions:
+      - people:timeEntry:approve
   /v1/people/timeEntries/adjustments:
     post:
       tags:
@@ -750,6 +782,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeAdjustment:create
+      x-required-permissions:
+      - people:timeAdjustment:create
   /v1/people/timeEntries/adjustments/{adjustmentId}/approve:
     post:
       tags:
@@ -791,6 +825,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeAdjustment:approve
+      x-required-permissions:
+      - people:timeAdjustment:approve
   /v1/people/staffing/assignments:
     get:
       tags:
@@ -817,6 +853,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     post:
       tags:
       - People - Staffing Assignments
@@ -858,6 +896,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/resolve:
     post:
       tags:
@@ -881,6 +921,8 @@ paths:
       security:
       - bearerAuth:
         - people:person:create
+      x-required-permissions:
+      - people:person:create
   /v1/people/exceptions:
     get:
       tags:
@@ -906,6 +948,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeException:view
+      x-required-permissions:
+      - people:timeException:view
     post:
       tags:
       - People - Exceptions
@@ -935,6 +979,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeException:create
+      x-required-permissions:
+      - people:timeException:create
   /v1/people/exceptions/{exceptionId}/waive:
     post:
       tags:
@@ -982,6 +1028,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeException:resolve
+      x-required-permissions:
+      - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/resolve:
     post:
       tags:
@@ -1022,6 +1070,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeException:resolve
+      x-required-permissions:
+      - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/acknowledge:
     post:
       tags:
@@ -1057,6 +1107,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeException:acknowledge
+      x-required-permissions:
+      - people:timeException:acknowledge
   /v1/people/employees:
     post:
       tags:
@@ -1099,6 +1151,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:create
+      x-required-permissions:
+      - people:employee:create
   /v1/people/employees/{employeeId}/disable:
     post:
       tags:
@@ -1140,6 +1194,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:deactivate
+      x-required-permissions:
+      - people:employee:deactivate
   /v1/people/bulk-ingest:
     post:
       tags:
@@ -1170,6 +1226,8 @@ paths:
       security:
       - bearerAuth:
         - people:employee:create
+      x-required-permissions:
+      - people:employee:create
   /v1/people/{personUuid}/access/roles:
     get:
       tags:
@@ -1196,6 +1254,8 @@ paths:
       security:
       - bearerAuth:
         - people:role:view
+      x-required-permissions:
+      - people:role:view
   /v1/people/{personId}/users:
     get:
       tags:
@@ -1233,6 +1293,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/users/{userId}/person:
     get:
       tags:
@@ -1264,6 +1326,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/user-links/{personId}:
     get:
       tags:
@@ -1297,6 +1361,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
       tags:
@@ -1323,6 +1389,8 @@ paths:
       security:
       - bearerAuth:
         - people:timeAdjustment:view
+      x-required-permissions:
+      - people:timeAdjustment:view
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     get:
       tags:
@@ -1428,6 +1496,9 @@ paths:
       - bearerAuth:
         - people:time:export:read
         - accounting:time:export
+      x-required-permissions:
+      - people:time:export:read
+      - accounting:time:export
   /v1/people/reports/approvedTime:
     get:
       tags:
@@ -1513,6 +1584,9 @@ paths:
       - bearerAuth:
         - people:time:export:read
         - accounting:time:export
+      x-required-permissions:
+      - people:time:export:read
+      - accounting:time:export
   /v1/people/me/primary-location:
     get:
       tags:
@@ -1537,6 +1611,8 @@ paths:
       security:
       - bearerAuth:
         - people:availability:view
+      x-required-permissions:
+      - people:availability:view
   /v1/people/availability:
     get:
       tags:
@@ -1571,6 +1647,8 @@ paths:
       security:
       - bearerAuth:
         - people:availability:view
+      x-required-permissions:
+      - people:availability:view
   /v1/people/{personUuid}/access/assignments/{roleCode}:
     delete:
       tags:
@@ -1614,6 +1692,8 @@ paths:
       security:
       - bearerAuth:
         - people:role:revoke
+      x-required-permissions:
+      - people:role:revoke
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1637,6 +1717,8 @@ paths:
       security:
       - bearerAuth:
         - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
 components:
   schemas:
     Person:

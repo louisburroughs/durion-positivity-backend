@@ -74,6 +74,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
     put:
       tags:
       - Posting Rules
@@ -117,6 +119,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:create
+      x-required-permissions:
+      - accounting:posting_rules:create
   /v1/accounting/posting-categories/{postingCategoryId}:
     get:
       tags:
@@ -148,6 +152,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting-category:view
+      x-required-permissions:
+      - accounting:posting-category:view
     put:
       tags:
       - Posting Categories
@@ -190,6 +196,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting-category:edit
+      x-required-permissions:
+      - accounting:posting-category:edit
   /v1/accounting/mapping-keys/{mappingKeyId}:
     get:
       tags:
@@ -221,6 +229,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:mapping-key:view
+      x-required-permissions:
+      - accounting:mapping-key:view
     put:
       tags:
       - Mapping Keys
@@ -263,6 +273,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:mapping-key:edit
+      x-required-permissions:
+      - accounting:mapping-key:edit
   /v1/accounting/journal-entries/{journalEntryId}:
     get:
       tags:
@@ -294,6 +306,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
     put:
       tags:
       - Journal Entries
@@ -330,6 +344,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:create
+      x-required-permissions:
+      - accounting:je:create
   /v1/accounting/gl-accounts/{glAccountId}:
     get:
       tags:
@@ -361,6 +377,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
     put:
       tags:
       - GL Accounts
@@ -397,6 +415,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:edit
+      x-required-permissions:
+      - accounting:coa:edit
   /v1/accounting/default-mappings/{id}:
     get:
       tags:
@@ -434,6 +454,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
     put:
       tags:
       - Default GL Mappings
@@ -476,6 +498,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:edit
+      x-required-permissions:
+      - accounting:default-mapping:edit
     delete:
       tags:
       - Default GL Mappings
@@ -500,6 +524,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:delete
+      x-required-permissions:
+      - accounting:default-mapping:delete
   /v1/accounting/vendor-bills:
     post:
       tags:
@@ -529,6 +555,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
       tags:
@@ -567,6 +595,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/match:
     post:
       tags:
@@ -597,6 +627,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
     post:
       tags:
@@ -635,6 +667,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -685,6 +719,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
     post:
       tags:
       - Posting Rules
@@ -713,6 +749,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:create
+      x-required-permissions:
+      - accounting:posting_rules:create
   /v1/accounting/posting-rules/{postingRuleSetId}/publish:
     post:
       tags:
@@ -750,6 +788,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:publish
+      x-required-permissions:
+      - accounting:posting_rules:publish
   /v1/accounting/posting-rules/{postingRuleSetId}/archive:
     post:
       tags:
@@ -787,6 +827,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:archive
+      x-required-permissions:
+      - accounting:posting_rules:archive
   /v1/accounting/posting-categories:
     get:
       tags:
@@ -843,6 +885,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting-category:view
+      x-required-permissions:
+      - accounting:posting-category:view
     post:
       tags:
       - Posting Categories
@@ -871,6 +915,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting-category:create
+      x-required-permissions:
+      - accounting:posting-category:create
   /v1/accounting/posting-categories/{postingCategoryId}/deactivate:
     post:
       tags:
@@ -896,6 +942,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting-category:deactivate
+      x-required-permissions:
+      - accounting:posting-category:deactivate
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
@@ -926,6 +974,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/payments/{paymentId}/reverse:
     post:
       tags:
@@ -957,6 +1007,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/payments/{paymentId}/applications:
     post:
       tags:
@@ -1006,6 +1058,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:payment:apply
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       tags:
@@ -1040,6 +1094,10 @@ paths:
         - accounting:payment:reverse
         - ACCOUNTING_ADMIN
         - AR_MANAGER
+      x-required-permissions:
+      - accounting:payment:reverse
+      - ACCOUNTING_ADMIN
+      - AR_MANAGER
   /v1/accounting/mappings:
     post:
       tags:
@@ -1070,6 +1128,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:gl-mapping:create
+      x-required-permissions:
+      - accounting:gl-mapping:create
   /v1/accounting/mappings/resolve:
     post:
       tags:
@@ -1101,6 +1161,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:gl-mapping:resolve
+      x-required-permissions:
+      - accounting:gl-mapping:resolve
   /v1/accounting/mapping-keys:
     post:
       tags:
@@ -1130,6 +1192,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:mapping-key:create
+      x-required-permissions:
+      - accounting:mapping-key:create
   /v1/accounting/mapping-keys/{mappingKeyId}/deactivate:
     post:
       tags:
@@ -1155,6 +1219,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:mapping-key:deactivate
+      x-required-permissions:
+      - accounting:mapping-key:deactivate
   /v1/accounting/journal-entries:
     get:
       tags:
@@ -1205,6 +1271,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
     post:
       tags:
       - Journal Entries
@@ -1233,6 +1301,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:create
+      x-required-permissions:
+      - accounting:je:create
   /v1/accounting/journal-entries/{journalEntryId}/reverse:
     post:
       tags:
@@ -1270,6 +1340,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:reverse
+      x-required-permissions:
+      - accounting:je:reverse
   /v1/accounting/journal-entries/{journalEntryId}/post:
     post:
       tags:
@@ -1306,6 +1378,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:post
+      x-required-permissions:
+      - accounting:je:post
   /v1/accounting/invoice/invoices:
     post:
       tags:
@@ -1347,6 +1421,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/gl-accounts:
     get:
       tags:
@@ -1404,6 +1480,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
     post:
       tags:
       - GL Accounts
@@ -1432,6 +1510,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:create
+      x-required-permissions:
+      - accounting:coa:create
   /v1/accounting/gl-accounts/{glAccountId}/deactivate:
     post:
       tags:
@@ -1468,6 +1548,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:deactivate
+      x-required-permissions:
+      - accounting:coa:deactivate
   /v1/accounting/gl-accounts/{glAccountId}/archive:
     post:
       tags:
@@ -1504,6 +1586,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:deactivate
+      x-required-permissions:
+      - accounting:coa:deactivate
   /v1/accounting/gl-accounts/{glAccountId}/activate:
     post:
       tags:
@@ -1541,6 +1625,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:edit
+      x-required-permissions:
+      - accounting:coa:edit
   /v1/accounting/events:
     get:
       tags:
@@ -1596,6 +1682,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
     post:
       tags:
       - Accounting Events
@@ -1624,6 +1712,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/events/{eventId}/retry:
     post:
       tags:
@@ -1660,6 +1750,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:retry
+      x-required-permissions:
+      - accounting:events:retry
   /v1/accounting/events/{eventId}/reprocess:
     post:
       tags:
@@ -1710,6 +1802,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:reprocess
+      x-required-permissions:
+      - accounting:events:reprocess
   /v1/accounting/default-mappings:
     get:
       tags:
@@ -1752,6 +1846,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
     post:
       tags:
       - Default GL Mappings
@@ -1786,6 +1882,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:create
+      x-required-permissions:
+      - accounting:default-mapping:create
   /v1/accounting/credit-memos:
     get:
       tags:
@@ -1842,6 +1940,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:credit-memo:read
+      x-required-permissions:
+      - accounting:credit-memo:read
     post:
       tags:
       - Credit Memos
@@ -1885,6 +1985,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:credit-memo:create
+      x-required-permissions:
+      - accounting:credit-memo:create
   /v1/accounting/audit/refund:
     post:
       tags:
@@ -1933,6 +2035,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1982,6 +2086,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/audit/cancellation:
     post:
       tags:
@@ -2023,6 +2129,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2072,6 +2180,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
@@ -2104,6 +2214,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
     get:
       tags:
@@ -2130,6 +2242,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/event/{eventId}:
     get:
       tags:
@@ -2162,6 +2276,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -2215,6 +2331,8 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/drilldown/journal-lines/{accountId}:
     get:
       tags:
@@ -2284,6 +2402,8 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
     get:
       tags:
@@ -2352,6 +2472,8 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/balance-sheet:
     get:
       tags:
@@ -2397,6 +2519,8 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     get:
       tags:
@@ -2450,6 +2574,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
   /v1/accounting/posting-categories/{postingCategoryId}/mapping-keys:
     get:
       tags:
@@ -2519,6 +2645,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:mapping-key:view
+      x-required-permissions:
+      - accounting:mapping-key:view
   /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
@@ -2550,6 +2678,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
   /v1/accounting/invoice/{invoiceId}/status:
     get:
       tags:
@@ -2587,6 +2717,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/invoice/rules/{customerId}:
     get:
       tags:
@@ -2624,6 +2756,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/gl-accounts/{glAccountId}/balance:
     get:
       tags:
@@ -2655,6 +2789,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
   /v1/accounting/events/{eventId}:
     get:
       tags:
@@ -2686,6 +2822,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/{eventId}/reprocessing-history:
     get:
       tags:
@@ -2714,6 +2852,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/{eventId}/processing-log:
     get:
       tags:
@@ -2745,6 +2885,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/default-mappings/search:
     get:
       tags:
@@ -2786,6 +2928,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/default-mappings/resolve:
     get:
       tags:
@@ -2831,6 +2975,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/default-mappings/global:
     get:
       tags:
@@ -2858,6 +3004,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/credit-memos/{creditMemoId}:
     get:
       tags:
@@ -2890,6 +3038,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:credit-memo:read
+      x-required-permissions:
+      - accounting:credit-memo:read
   /v1/accounting/audit/type/{type}:
     get:
       tags:
@@ -2951,6 +3101,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/range:
     get:
       tags:
@@ -3001,6 +3153,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -3043,6 +3197,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -3085,6 +3241,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/by-order/{orderId}:
     get:
       tags:
@@ -3127,6 +3285,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -3193,6 +3353,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
@@ -3226,6 +3388,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/ap/payments/by-ref/{paymentRef}:
     get:
       tags:
@@ -3260,6 +3424,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/ap/bills:
     get:
       tags:
@@ -3298,6 +3464,8 @@ paths:
       security:
       - bearerAuth:
         - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
 components:
   schemas:
     PostingRuleSetCreateRequest:
@@ -5420,14 +5588,14 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/PageableObject"
-        sort:
-          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
           type: boolean
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
         numberOfElements:
           type: integer
           format: int32

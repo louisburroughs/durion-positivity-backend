@@ -69,6 +69,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules:
     get:
       tags:
@@ -112,6 +114,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:View
+      x-required-permissions:
+      - Promotion:View
     post:
       tags:
       - Promotion Eligibility Rules
@@ -160,6 +164,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules/evaluate:
     post:
       tags:
@@ -209,6 +215,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Apply
+      x-required-permissions:
+      - Promotion:Apply
   /v1/promotions/offers/apply:
     post:
       tags:
@@ -251,6 +259,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Apply
+      x-required-permissions:
+      - Promotion:Apply
   /v1/price/restrictions:override:
     post:
       tags:
@@ -293,6 +303,8 @@ paths:
       security:
       - bearerAuth:
         - pricing:restriction:override
+      x-required-permissions:
+      - pricing:restriction:override
   /v1/price/restrictions:evaluate:
     post:
       tags:
@@ -398,6 +410,8 @@ paths:
       security:
       - bearerAuth:
         - pricing:restriction:manage
+      x-required-permissions:
+      - pricing:restriction:manage
   /v1/price/quotes:
     post:
       tags:
@@ -496,6 +510,8 @@ paths:
       security:
       - bearerAuth:
         - pricing:base_price:create
+      x-required-permissions:
+      - pricing:base_price:create
   /v1/promotions/offers/{id}/deactivate:
     patch:
       tags:
@@ -532,6 +548,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{id}/activate:
     patch:
       tags:
@@ -574,6 +592,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{id}:
     get:
       tags:
@@ -610,6 +630,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:View
+      x-required-permissions:
+      - Promotion:View
   /v1/promotions/offers/by-code/{promoCode}:
     get:
       tags:
@@ -645,6 +667,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:View
+      x-required-permissions:
+      - Promotion:View
   /v1/price/snapshots/{snapshotId}:
     get:
       tags:
@@ -754,6 +778,8 @@ paths:
       security:
       - bearerAuth:
         - pricing:restriction:manage
+      x-required-permissions:
+      - pricing:restriction:manage
   /v1/promotions/offers/{promotionId}/rules/{ruleId}:
     delete:
       tags:
@@ -784,6 +810,8 @@ paths:
       security:
       - bearerAuth:
         - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
 components:
   schemas:
     CreatePromotionOfferRequest:
