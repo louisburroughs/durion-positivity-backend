@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/timeEntries")
 @Tag(name = "Time Entry Approval API", description = "Approve/reject time entries (batch)")
 public class TimeEntryApprovalController {
@@ -32,6 +31,8 @@ public class TimeEntryApprovalController {
         @ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
         @PostMapping("/approve")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeEntry:approve" })
         @PreAuthorize("hasAuthority('people:timeEntry:approve')")
         public ResponseEntity<Object> approveTimeEntries(
                         @RequestBody @Valid TimeEntryDecisionBatchRequest request,
@@ -52,6 +53,8 @@ public class TimeEntryApprovalController {
         @ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
         @PostMapping("/reject")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeEntry:reject" })
         @PreAuthorize("hasAuthority('people:timeEntry:reject')")
         public ResponseEntity<Object> rejectTimeEntries(
                         @RequestBody @Valid TimeEntryDecisionBatchRequest request,

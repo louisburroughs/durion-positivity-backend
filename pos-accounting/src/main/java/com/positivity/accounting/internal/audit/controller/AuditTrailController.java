@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.*;
  * REST controller for audit trail operations.
  */
 @RestController
-@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/accounting/audit")
 @RequiredArgsConstructor
 @Slf4j
@@ -61,6 +60,7 @@ public class AuditTrailController {
         })
         @PostMapping("/price-override")
         @EmitEvent(id = "ACCOUNTING_AUDIT_PRICE_OVERRIDE", apiVersion = "1")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:submit" })
         @PreAuthorize("hasAuthority('accounting:events:submit')")
         public ResponseEntity<Object> recordPriceOverride(
                         @Valid @RequestBody PriceOverrideRequest request, HttpServletRequest httpRequest) {
@@ -97,6 +97,7 @@ public class AuditTrailController {
         })
         @PostMapping("/refund")
         @EmitEvent(id = "ACCOUNTING_AUDIT_REFUND", apiVersion = "1")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:submit" })
         @PreAuthorize("hasAuthority('accounting:events:submit')")
         public ResponseEntity<Object> recordRefund(
                         @Valid @RequestBody RefundRequest request, HttpServletRequest httpRequest) {
@@ -132,6 +133,7 @@ public class AuditTrailController {
         })
         @PostMapping("/cancellation")
         @EmitEvent(id = "ACCOUNTING_AUDIT_CANCELLATION", apiVersion = "1")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:submit" })
         @PreAuthorize("hasAuthority('accounting:events:submit')")
         public ResponseEntity<Object> recordCancellation(
                         @Valid @RequestBody CancellationRequest request, HttpServletRequest httpRequest) {
@@ -159,6 +161,7 @@ public class AuditTrailController {
                         @ApiResponse(responseCode = "500", description = "Internal server error")
         })
         @GetMapping({ "/order/{orderId}", "/by-order/{orderId}" })
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
         public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
                         @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
@@ -176,6 +179,7 @@ public class AuditTrailController {
                         @ApiResponse(responseCode = "500", description = "Internal server error")
         })
         @GetMapping("/invoice/{invoiceId}")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
         public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
                         @Parameter(description = "Invoice ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID invoiceId) {
@@ -193,6 +197,7 @@ public class AuditTrailController {
                         @ApiResponse(responseCode = "500", description = "Internal server error")
         })
         @GetMapping("/type/{type}")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
         public ResponseEntity<List<AuditTrailResponse>> getByType(
                         @Parameter(description = "Exception type", required = true) @PathVariable ExceptionType type,
@@ -213,6 +218,7 @@ public class AuditTrailController {
                         @ApiResponse(responseCode = "500", description = "Internal server error")
         })
         @GetMapping("/actor/{actorId}")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
         public ResponseEntity<List<AuditTrailResponse>> getByActor(
                         @Parameter(description = "Actor (User) ID", required = true, example = "person-12345") @PathVariable String actorId,
@@ -232,6 +238,7 @@ public class AuditTrailController {
                         @ApiResponse(responseCode = "500", description = "Internal server error")
         })
         @GetMapping("/range")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
         public ResponseEntity<List<AuditTrailResponse>> getByDateRange(
                         @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,

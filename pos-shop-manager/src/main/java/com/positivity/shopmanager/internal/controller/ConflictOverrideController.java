@@ -25,7 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code @PreAuthorize} on {@link ConflictOverrideService}.
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:schedule:edit",
+        "appointments:reschedule" })
 @RequestMapping("/v1/appointments/{appointmentId}/conflict-override")
 @Tag(name = "Conflict Override API", description = "Operations for appointment conflict override decisions")
 public class ConflictOverrideController {

@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/employees")
 @RequiredArgsConstructor
 @Tag(name = "Employee API", description = "Employee profile and offboarding operations")
@@ -40,6 +39,8 @@ public class EmployeeController {
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "409", description = "Duplicate employee")
     @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:employee:create" })
     @PreAuthorize("hasAuthority('people:employee:create')")
     public ResponseEntity<EmployeeProfileDto> createEmployee(
             @Valid @RequestBody @NonNull CreateEmployeeRequest request) {
@@ -54,6 +55,8 @@ public class EmployeeController {
     @ApiResponse(responseCode = "404", description = "Employee not found")
     @ApiResponse(responseCode = "409", description = "Duplicate employee")
     @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:employee:edit" })
     @PreAuthorize("hasAuthority('people:employee:edit')")
     public ResponseEntity<EmployeeProfileDto> updateEmployee(
             @PathVariable UUID employeeId, @Valid @RequestBody @NonNull UpdateEmployeeRequest request) {
@@ -65,6 +68,8 @@ public class EmployeeController {
     @Operation(summary = "Get employee profile", description = "Retrieves an employee profile by employee ID.")
     @ApiResponse(responseCode = "200", description = "Employee found")
     @ApiResponse(responseCode = "404", description = "Employee not found")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:employee:view" })
     @PreAuthorize("hasAuthority('people:employee:view')")
     public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(employeeService.getEmployee(employeeId));
@@ -76,6 +81,8 @@ public class EmployeeController {
     @ApiResponse(responseCode = "200", description = "Employee disabled")
     @ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
     @ApiResponse(responseCode = "404", description = "Employee not found")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:employee:deactivate" })
     @PreAuthorize("hasAuthority('people:employee:deactivate')")
     public ResponseEntity<EmployeeProfileDto> disableEmployee(
             @PathVariable UUID employeeId, @RequestBody(required = false) DisableEmployeeRequestDto request) {

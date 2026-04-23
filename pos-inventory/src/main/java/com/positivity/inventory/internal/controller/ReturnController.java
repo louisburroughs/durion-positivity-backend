@@ -21,7 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "inventory:adjustment:create" })
 @RequestMapping("/v1/inventory/returns")
 @RequiredArgsConstructor
 @Tag(name = "Returns", description = "Inventory return-to-stock endpoints")
@@ -32,7 +33,8 @@ public class ReturnController {
         @PostMapping
         @EmitEvent(id = "INVENTORY_RETURN_TO_STOCK_CREATE", apiVersion = "1")
         @PreAuthorize("hasAuthority('inventory:adjustment:create')")
-        @Operation(summary = "Return items to stock", description = "Returns issued parts to inventory and records resulting return movement")
+        @Operation(summary = "Return items to stock", description = "Returns issued parts to inventory and records resulting return movement", tags = {
+                        "Returns" })
         @ApiResponse(responseCode = "201", description = "Return recorded", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required return authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

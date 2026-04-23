@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/cycleCountPlans")
 @RequiredArgsConstructor
 @Tag(name = "Cycle Count Plans", description = "Cycle count plan management endpoints")
@@ -34,8 +33,11 @@ public class CycleCountPlanController {
 
         @PostMapping
         @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:cycle_count:initiate" })
         @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
-        @Operation(summary = "Create cycle count plan", description = "Creates a cycle count plan and returns its configuration details.")
+        @Operation(summary = "Create cycle count plan", description = "Creates a cycle count plan and returns its configuration details.", tags = {
+                        "Cycle Count Plans" })
         @ApiResponse(responseCode = "201", description = "Cycle count plan created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure")
         @ApiResponse(responseCode = "403", description = "User lacks required permission")
@@ -47,8 +49,11 @@ public class CycleCountPlanController {
         }
 
         @GetMapping("/{planId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:cycle_count:view" })
         @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
-        @Operation(summary = "Get cycle count plan", description = "Returns a cycle count plan by identifier.")
+        @Operation(summary = "Get cycle count plan", description = "Returns a cycle count plan by identifier.", tags = {
+                        "Cycle Count Plans" })
         @ApiResponse(responseCode = "200", description = "Cycle count plan returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
         @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
         public ResponseEntity<CycleCountPlanResponse> getPlan(

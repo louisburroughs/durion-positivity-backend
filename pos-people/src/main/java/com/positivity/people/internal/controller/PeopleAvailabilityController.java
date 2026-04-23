@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "People Availability API", description = "Operations for querying people availability")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "people:availability:view" })
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 public class PeopleAvailabilityController {

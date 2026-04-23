@@ -40,7 +40,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "Workorder Labor API", description = "Endpoints for tracking labor performed on workorders")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 @Slf4j
@@ -63,6 +62,8 @@ public class WorkorderLaborController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start labor request", required = true, content = @Content(schema = @Schema(implementation = StartLaborRequest.class), examples = @ExampleObject(name = "startLabor", value = "{\"technicianId\":\"550e8400-e29b-41d4-a716-446655440120\",\"notes\":\"Starting diagnostic work\"}")))
         @PostMapping("/{workorderId}/services/{serviceId}/labor/start")
         @EmitEvent(id = "WORKORDER_LABOR_START", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         public ResponseEntity<WorkorderLaborEntryResponse> startLaborSession(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
@@ -113,6 +114,8 @@ public class WorkorderLaborController {
         })
         @PostMapping("/{workorderId}/labor/{entryId}/stop")
         @EmitEvent(id = "WORKORDER_LABOR_STOP", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         public ResponseEntity<WorkorderLaborEntryResponse> stopLaborSession(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
@@ -149,6 +152,8 @@ public class WorkorderLaborController {
                         @ApiResponse(responseCode = "403", description = "Permission denied")
         })
         @GetMapping("/{workorderId}/labor")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:view" })
         @PreAuthorize("hasAuthority('workorder:labor:view')")
         public ResponseEntity<List<WorkorderLaborEntryResponse>> getLaborHistory(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId) {
@@ -175,6 +180,8 @@ public class WorkorderLaborController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Adjust labor request", required = true, content = @Content(schema = @Schema(implementation = AdjustLaborRequest.class), examples = @ExampleObject(name = "adjustLabor", value = "{\"hoursWorked\":2.5,\"adjustmentReason\":\"Corrected after timesheet review\"}")))
         @PutMapping("/{workorderId}/labor/{entryId}/adjust")
         @EmitEvent(id = "WORKORDER_LABOR_ADJUST", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         public ResponseEntity<WorkorderLaborEntryResponse> adjustLaborHours(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,

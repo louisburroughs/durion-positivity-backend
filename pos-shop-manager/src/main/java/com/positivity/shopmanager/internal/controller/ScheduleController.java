@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Schedule API", description = "Read-only schedule view operations for shop management UI")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:schedule:view" })
 @RequestMapping("/v1")
 @RequiredArgsConstructor
 public class ScheduleController {

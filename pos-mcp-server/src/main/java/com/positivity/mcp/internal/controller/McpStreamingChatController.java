@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:stream" })
 @RequestMapping("/v1/mcp")
 public class McpStreamingChatController {
 

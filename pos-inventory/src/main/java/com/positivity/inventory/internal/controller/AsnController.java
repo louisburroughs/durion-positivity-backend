@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
 @Tag(name = "ASN", description = "Advanced Shipping Notice and goods receipt endpoints")
@@ -36,9 +35,12 @@ public class AsnController {
         private final AsnService asnService;
 
         @PostMapping("/asns")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:asn:create" })
         @PreAuthorize("hasAuthority('inventory:asn:create')")
         @EmitEvent(id = "INVENTORY_ASN_CREATE", apiVersion = "1")
-        @Operation(summary = "Create ASN", description = "Creates an advanced shipping notice for inbound inventory")
+        @Operation(summary = "Create ASN", description = "Creates an advanced shipping notice for inbound inventory", tags = {
+                        "ASN" })
         @ApiResponse(responseCode = "201", description = "ASN created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AsnResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required ASN create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -57,9 +59,11 @@ public class AsnController {
         }
 
         @GetMapping("/asns/{asnId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:asn:view" })
         @PreAuthorize("hasAuthority('inventory:asn:view')")
         @EmitEvent(id = "INVENTORY_ASN_GET", apiVersion = "1")
-        @Operation(summary = "Get ASN", description = "Retrieves an ASN by identifier")
+        @Operation(summary = "Get ASN", description = "Retrieves an ASN by identifier", tags = { "ASN" })
         @ApiResponse(responseCode = "200", description = "ASN returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AsnResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required ASN view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "ASN not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -69,9 +73,12 @@ public class AsnController {
         }
 
         @PostMapping("/goods-receipts")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:goods_receipt:create" })
         @PreAuthorize("hasAuthority('inventory:goods_receipt:create')")
         @EmitEvent(id = "INVENTORY_GOODS_RECEIPT_CREATE", apiVersion = "1")
-        @Operation(summary = "Create goods receipt", description = "Creates a goods receipt for an inbound shipment")
+        @Operation(summary = "Create goods receipt", description = "Creates a goods receipt for an inbound shipment", tags = {
+                        "ASN" })
         @ApiResponse(responseCode = "201", description = "Goods receipt created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GoodsReceiptResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required goods receipt create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -92,9 +99,12 @@ public class AsnController {
         }
 
         @GetMapping("/goods-receipts/{receiptId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:goods_receipt:view" })
         @PreAuthorize("hasAuthority('inventory:goods_receipt:view')")
         @EmitEvent(id = "INVENTORY_GOODS_RECEIPT_GET", apiVersion = "1")
-        @Operation(summary = "Get goods receipt", description = "Retrieves a goods receipt by identifier")
+        @Operation(summary = "Get goods receipt", description = "Retrieves a goods receipt by identifier", tags = {
+                        "ASN" })
         @ApiResponse(responseCode = "200", description = "Goods receipt returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GoodsReceiptResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required goods receipt view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Goods receipt not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

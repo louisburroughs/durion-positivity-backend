@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "inventory:allocations:reallocate" })
 @RequestMapping("/v1/inventory/allocations")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('inventory:allocations:reallocate')")
@@ -31,7 +32,8 @@ public class ReallocationController {
 
         @PostMapping("/reallocate")
         @EmitEvent(id = "INVENTORY_ALLOCATION_REALLOCATE", apiVersion = "1")
-        @Operation(summary = "Reallocate inventory allocations", description = "Rebalances existing allocations for a stock item based on priority and available inventory")
+        @Operation(summary = "Reallocate inventory allocations", description = "Rebalances existing allocations for a stock item based on priority and available inventory", tags = {
+                        "Reallocation" })
         @ApiResponse(responseCode = "200", description = "Reallocation completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReallocateResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required reallocation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

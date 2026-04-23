@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/supplier-costs")
 @Tag(name = "Supplier Item Cost API", description = "Manage supplier item costs with volume tiers")
 public class SupplierItemCostController {
@@ -39,6 +38,8 @@ public class SupplierItemCostController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "catalog:supplier_cost:write" })
     @Operation(summary = "Create supplier cost structure")
     @ApiResponse(responseCode = "201", description = "Created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid payload")
@@ -51,6 +52,8 @@ public class SupplierItemCostController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('catalog:supplier_cost:read')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "catalog:supplier_cost:read" })
     @Operation(summary = "Get supplier cost structure")
     @ApiResponse(responseCode = "200", description = "Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "404", description = "Not found")
@@ -60,6 +63,8 @@ public class SupplierItemCostController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "catalog:supplier_cost:write" })
     @Operation(summary = "Update supplier cost structure")
     @ApiResponse(responseCode = "200", description = "Updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostDto.class)))
     @ApiResponse(responseCode = "404", description = "Not found")
@@ -72,6 +77,8 @@ public class SupplierItemCostController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('catalog:supplier_cost:write')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "catalog:supplier_cost:write" })
     @Operation(summary = "Delete supplier cost structure")
     @ApiResponse(responseCode = "204", description = "Deleted")
     @ApiResponse(responseCode = "404", description = "Not found")

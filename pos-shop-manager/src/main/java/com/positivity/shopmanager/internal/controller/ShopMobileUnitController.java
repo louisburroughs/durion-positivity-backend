@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Shop Mobile Unit API", description = "Operations for managing mobile units within shop locations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class ShopMobileUnitController {
@@ -32,6 +31,7 @@ public class ShopMobileUnitController {
         @Operation(summary = "Get mobile units", description = "List all mobile units or get a specific mobile unit detail by locationId and bayId.")
         @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
         @GetMapping({ "/mobileUnit", "/{locationId}/mobileUnit/{bayId}" })
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:view" })
         @PreAuthorize("hasAuthority('shop:bay:view')")
         public ResponseEntity<Object> getMobileUnits(
                         @Parameter(description = "Location ID (optional for specific mobile unit)") @PathVariable(required = false) Long locationId,
@@ -48,6 +48,7 @@ public class ShopMobileUnitController {
         @ApiResponse(responseCode = "200", description = "Mobile unit created successfully.")
         @EmitEvent(id = "SHOP_MOBILE_UNIT_CREATE", apiVersion = "1")
         @PostMapping("/{locationId}/mobileUnit")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:create" })
         @PreAuthorize("hasAuthority('shop:bay:create')")
         public ResponseEntity<Object> createMobileUnit(
                         @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
@@ -61,6 +62,7 @@ public class ShopMobileUnitController {
         @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
         @EmitEvent(id = "SHOP_MOBILE_UNIT_MANAGE", apiVersion = "1")
         @PutMapping("/mobileUnit")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:edit" })
         @PreAuthorize("hasAuthority('shop:bay:edit')")
         public ResponseEntity<Object> manageMobileUnits(
                         @Parameter(description = "Mobile unit management request body") @RequestBody(required = false) Object request) {
@@ -73,6 +75,7 @@ public class ShopMobileUnitController {
         @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully.")
         @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
         @DeleteMapping("/{locationId}/mobileUnit/{bayId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:edit" })
         @PreAuthorize("hasAuthority('shop:bay:edit')")
         @EmitEvent(id = "SHOP_MOBILE_UNIT_DELETE", apiVersion = "1")
         public ResponseEntity<Void> deleteMobileUnit(

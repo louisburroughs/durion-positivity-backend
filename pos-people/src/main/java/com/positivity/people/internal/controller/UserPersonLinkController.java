@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people")
 @Tag(name = "User-Person Linking API", description = "Link authentication users to person records")
 public class UserPersonLinkController {
@@ -38,6 +37,8 @@ public class UserPersonLinkController {
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @ApiResponse(responseCode = "404", description = "Person not found")
         @ApiResponse(responseCode = "409", description = "User already linked to different person")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:write" })
         @PreAuthorize("hasAuthority('people:userLink:write')")
         public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
                         @Valid @RequestBody LinkUserToPersonRequest request) {
@@ -59,6 +60,8 @@ public class UserPersonLinkController {
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @ApiResponse(responseCode = "404", description = "Person not found")
         @ApiResponse(responseCode = "409", description = "User already linked to different person")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:write" })
         @PreAuthorize("hasAuthority('people:userLink:write')")
         public ResponseEntity<UserPersonLinkResponse> createUserPersonLink(
                         @Valid @RequestBody CreateUserLinkRequest request) {
@@ -76,6 +79,8 @@ public class UserPersonLinkController {
         @Operation(summary = "Unlink user from person", description = "Remove the link between a user and person")
         @ApiResponse(responseCode = "204", description = "Link deleted successfully")
         @ApiResponse(responseCode = "404", description = "Link not found")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:write" })
         @PreAuthorize("hasAuthority('people:userLink:write')")
         public ResponseEntity<Void> unlinkUserFromPerson(
                         @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
@@ -88,6 +93,8 @@ public class UserPersonLinkController {
         @Operation(summary = "Get person by user ID", description = "Retrieve the person record linked to a user")
         @ApiResponse(responseCode = "200", description = "Person found", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
         @ApiResponse(responseCode = "404", description = "Link or person not found")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:view" })
         @PreAuthorize("hasAuthority('people:userLink:view')")
         public ResponseEntity<PersonResponse> getPersonByUserId(
                         @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
@@ -100,6 +107,8 @@ public class UserPersonLinkController {
         @Operation(summary = "Get users linked to person", description = "Retrieve all user IDs linked to a person record")
         @ApiResponse(responseCode = "200", description = "User IDs returned")
         @ApiResponse(responseCode = "404", description = "Person not found")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:view" })
         @PreAuthorize("hasAuthority('people:userLink:view')")
         public ResponseEntity<List<UUID>> getUserIdsByPersonId(
                         @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
@@ -113,6 +122,8 @@ public class UserPersonLinkController {
         @Operation(summary = "Get links by person ID", description = "Retrieve user-person links for person")
         @ApiResponse(responseCode = "200", description = "Links found", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
         @ApiResponse(responseCode = "404", description = "Link or person not found")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:userLink:view" })
         @PreAuthorize("hasAuthority('people:userLink:view')")
         public ResponseEntity<List<UserPersonLinkResponse>> getLinkByPersonId(
                         @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {

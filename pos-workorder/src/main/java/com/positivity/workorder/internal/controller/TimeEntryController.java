@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Time Entry API", description = "Endpoints for approving and rejecting submitted time entries")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/timeEntries")
 @RequiredArgsConstructor
 public class TimeEntryController {
@@ -25,6 +24,7 @@ public class TimeEntryController {
 
     @PostMapping("/{timeEntryId}/approve")
     @EmitEvent(id = "WORKORDER_TIME_ENTRY_APPROVED", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "TimeEntry:Approve" })
     @PreAuthorize("hasAuthority('TimeEntry:Approve')")
     @Operation(summary = "Approve a time entry in SUBMITTED state")
     public ResponseEntity<TimeEntryResponse> approveTimeEntry(@PathVariable UUID timeEntryId) {
@@ -33,6 +33,7 @@ public class TimeEntryController {
 
     @PostMapping("/{timeEntryId}/reject")
     @EmitEvent(id = "WORKORDER_TIME_ENTRY_REJECTED", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "TimeEntry:Reject" })
     @PreAuthorize("hasAuthority('TimeEntry:Reject')")
     @Operation(summary = "Reject a time entry in SUBMITTED state")
     public ResponseEntity<TimeEntryResponse> rejectTimeEntry(

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "inventory:on_hand:view" })
 @RequestMapping("/v1/inventory/locations")
 @Tag(name = "Inventory Locations", description = "Read inventory facts for storage locations")
 public class LocationInventoryInquiryController {
@@ -30,7 +30,8 @@ public class LocationInventoryInquiryController {
 
     @GetMapping("/{locationId}/inventory-inquiry")
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @Operation(summary = "Get location inventory summary", description = "Returns on-hand quantity aggregated for a storage location.")
+    @Operation(summary = "Get location inventory summary", description = "Returns on-hand quantity aggregated for a storage location.", tags = {
+            "Inventory Locations" })
     @ApiResponse(responseCode = "200", description = "Location inventory returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid location identifier")
     public ResponseEntity<LocationInventoryInquiryResponse> getLocationInventory(

@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Travel Segment API", description = "Endpoints for capturing mobile travel segments")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:labor:add" })
 @RequestMapping("/v1/workorders/travelSegments")
 @RequiredArgsConstructor
 public class TravelSegmentController {

@@ -9,6 +9,7 @@ import com.positivity.location.internal.dto.LocationBulkIngestRecord;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.service.LocationService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -23,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "bearerAuth", scopes = { "location:write" })
 @RequestMapping("/v1/locations")
 @RequiredArgsConstructor
 @Slf4j

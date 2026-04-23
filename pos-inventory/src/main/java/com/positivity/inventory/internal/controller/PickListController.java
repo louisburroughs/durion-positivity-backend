@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/pick-lists")
 @RequiredArgsConstructor
 @Tag(name = "Pick Lists", description = "Pick list and pick task management endpoints")
@@ -44,8 +43,11 @@ public class PickListController {
 
         @PostMapping
         @EmitEvent(id = "INVENTORY_PICK_LIST_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:create" })
         @PreAuthorize("hasAuthority('inventory:pick_list:create')")
-        @Operation(summary = "Create pick list", description = "Creates a pick list for a workorder and returns generated pick tasks")
+        @Operation(summary = "Create pick list", description = "Creates a pick list for a workorder and returns generated pick tasks", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "201", description = "Pick list created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PickListResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -56,8 +58,11 @@ public class PickListController {
         }
 
         @GetMapping("/{pickListId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-        @Operation(summary = "Get pick list", description = "Retrieves a pick list by identifier")
+        @Operation(summary = "Get pick list", description = "Retrieves a pick list by identifier", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick list returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PickListResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Pick list not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -67,8 +72,11 @@ public class PickListController {
         }
 
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-        @Operation(summary = "List pick lists for workorder", description = "Returns pick lists linked to the provided workorder identifier")
+        @Operation(summary = "List pick lists for workorder", description = "Returns pick lists linked to the provided workorder identifier", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick lists returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PickListResponse.class))))
         @ApiResponse(responseCode = "400", description = "Invalid workorder identifier", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -79,8 +87,11 @@ public class PickListController {
 
         @PostMapping("/{pickListId}/release")
         @EmitEvent(id = "INVENTORY_PICK_LIST_RELEASE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
-        @Operation(summary = "Release pick list", description = "Releases a pick list so picking tasks can be executed")
+        @Operation(summary = "Release pick list", description = "Releases a pick list so picking tasks can be executed", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick list released", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PickListResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Pick list not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -91,8 +102,11 @@ public class PickListController {
 
         @PostMapping("/{pickListId}/tasks/{taskId}/confirm")
         @EmitEvent(id = "INVENTORY_PICK_TASK_CONFIRM", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
-        @Operation(summary = "Confirm pick task", description = "Confirms a pick task using scanned SKU and location data")
+        @Operation(summary = "Confirm pick task", description = "Confirms a pick task using scanned SKU and location data", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick task confirmed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PickTaskResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick task authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -111,8 +125,11 @@ public class PickListController {
         }
 
         @GetMapping("/{pickListId}/tasks")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-        @Operation(summary = "List pick tasks for pick list", description = "Returns all pick tasks associated with a pick list")
+        @Operation(summary = "List pick tasks for pick list", description = "Returns all pick tasks associated with a pick list", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick tasks returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PickTaskResponse.class))))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Pick list not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -123,8 +140,11 @@ public class PickListController {
 
         @PatchMapping("/{pickListId}/status")
         @EmitEvent(id = "INVENTORY_PICK_LIST_STATUS_UPDATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
-        @Operation(summary = "Update pick list status", description = "Updates pick list lifecycle status")
+        @Operation(summary = "Update pick list status", description = "Updates pick list lifecycle status", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "200", description = "Pick list status updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PickListResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -141,8 +161,11 @@ public class PickListController {
 
         @DeleteMapping("/{pickListId}")
         @EmitEvent(id = "INVENTORY_PICK_LIST_CANCEL", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
-        @Operation(summary = "Cancel pick list", description = "Cancels a pick list and marks pending tasks as cancelled")
+        @Operation(summary = "Cancel pick list", description = "Cancels a pick list and marks pending tasks as cancelled", tags = {
+                        "Pick Lists" })
         @ApiResponse(responseCode = "204", description = "Pick list cancelled")
         @ApiResponse(responseCode = "403", description = "User lacks required pick list authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Pick list not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

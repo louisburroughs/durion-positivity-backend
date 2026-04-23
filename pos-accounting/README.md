@@ -37,14 +37,14 @@ General-ledger accounting service for the Durion POS platform. Manages chart of 
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `pos.accounting.credit-memo.revenue-account-id` | required | GL account for revenue reversals |
-| `pos.accounting.credit-memo.tax-payable-account-id` | required | GL account for tax payable reversals |
-| `pos.accounting.credit-memo.ar-account-id` | required | GL account for AR reductions |
-| `pos.accounting.kafka.enabled` | `false` | Enable Kafka consumer for payment events |
-| `pos.accounting.kafka.payments-topic` | `payment.cleared.v1` | Kafka topic for cleared payments |
-| `stripe.api-key` | required | Stripe API key for payment processing |
+| Property                                            | Default              | Description                              |
+| --------------------------------------------------- | -------------------- | ---------------------------------------- |
+| `pos.accounting.credit-memo.revenue-account-id`     | required             | GL account for revenue reversals         |
+| `pos.accounting.credit-memo.tax-payable-account-id` | required             | GL account for tax payable reversals     |
+| `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
+| `pos.accounting.kafka.enabled`                      | `false`              | Enable Kafka consumer for payment events |
+| `pos.accounting.kafka.payments-topic`               | `payment.cleared.v1` | Kafka topic for cleared payments         |
+| `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 
 ## Dependencies
 
@@ -55,6 +55,7 @@ General-ledger accounting service for the Durion POS platform. Manages chart of 
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
+
 - `V1__baseline_accounting_schema.sql` — full schema baseline
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data
 

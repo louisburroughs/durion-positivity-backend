@@ -45,30 +45,30 @@ paths:
         "201":
           description: Promotion offer created.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "400":
           description: Invalid promotion offer request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "409":
           description: Promotion code already exists.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules:
     get:
       tags:
@@ -88,7 +88,7 @@ paths:
         "200":
           description: Eligibility rules returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -96,7 +96,7 @@ paths:
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -104,14 +104,14 @@ paths:
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EligibilityRuleResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
     post:
       tags:
       - Promotion Eligibility Rules
@@ -136,30 +136,30 @@ paths:
         "201":
           description: Eligibility rule created.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityRuleResponse"
         "400":
           description: Invalid eligibility rule request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityRuleResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityRuleResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityRuleResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules/evaluate:
     post:
       tags:
@@ -185,30 +185,30 @@ paths:
         "200":
           description: Eligibility evaluation result returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityDecisionResponse"
         "400":
           description: Invalid evaluation request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityDecisionResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityDecisionResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EligibilityDecisionResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Apply
   /v1/promotions/offers/apply:
     post:
       tags:
@@ -227,30 +227,30 @@ paths:
         "200":
           description: Promotion offer applied.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApplyPromotionResponse"
         "400":
           description: Invalid promotion application request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApplyPromotionResponse"
         "404":
           description: Promotion offer not found or not eligible.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApplyPromotionResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApplyPromotionResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Apply
   /v1/price/restrictions:override:
     post:
       tags:
@@ -269,29 +269,30 @@ paths:
         "200":
           description: Override issued. Returns overrideId and expiresAt.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionOverrideResponse"
         "400":
           description: Invalid request body.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionOverrideResponse"
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionOverrideResponse"
         "403":
           description: Insufficient permissions to override restrictions.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionOverrideResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:restriction:override
   /v1/price/restrictions:evaluate:
     post:
       tags:
@@ -310,25 +311,25 @@ paths:
         "200":
           description: Evaluation results per product.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
         "400":
           description: Invalid request body.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
         "503":
           description: Restriction evaluation service unavailable (commit path only).
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
       security:
@@ -343,7 +344,7 @@ paths:
         "200":
           description: List of restriction rules.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -351,7 +352,7 @@ paths:
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -373,29 +374,30 @@ paths:
         "201":
           description: Restriction rule created.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "400":
           description: Invalid request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "403":
           description: Insufficient permissions.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:restriction:manage
   /v1/price/quotes:
     post:
       tags:
@@ -414,19 +416,19 @@ paths:
         "200":
           description: Price quote calculated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceQuoteResponse"
         "400":
           description: Invalid quote request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceQuoteResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceQuoteResponse"
       security:
@@ -447,19 +449,19 @@ paths:
         "501":
           description: Not yet implemented.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "400":
           description: Invalid request body.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "500":
           description: Internal server error.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
@@ -482,17 +484,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:base_price:create
   /v1/promotions/offers/{id}/deactivate:
     patch:
       tags:
@@ -511,24 +514,24 @@ paths:
         "200":
           description: Promotion offer deactivated.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
   /v1/promotions/offers/{id}/activate:
     patch:
       tags:
@@ -547,30 +550,30 @@ paths:
         "200":
           description: Promotion offer activated.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "409":
           description: Promotion offer cannot be activated in current state.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
   /v1/promotions/offers/{id}:
     get:
       tags:
@@ -589,24 +592,24 @@ paths:
         "200":
           description: Promotion offer returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
   /v1/promotions/offers/by-code/{promoCode}:
     get:
       tags:
@@ -624,24 +627,24 @@ paths:
         "200":
           description: Promotion offer returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "404":
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionOfferResponse"
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
   /v1/price/snapshots/{snapshotId}:
     get:
       tags:
@@ -660,19 +663,19 @@ paths:
         "200":
           description: Pricing snapshot returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PricingSnapshotResponse"
         "404":
           description: Pricing snapshot not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PricingSnapshotResponse"
         "403":
           description: Forbidden.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PricingSnapshotResponse"
       security:
@@ -694,19 +697,19 @@ paths:
         "200":
           description: Restriction rule found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "404":
           description: Restriction rule not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
       security:
@@ -727,29 +730,30 @@ paths:
         "200":
           description: Restriction rule deactivated.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "401":
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "403":
           description: Insufficient permissions.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
         "404":
           description: Restriction rule not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RestrictionRuleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:restriction:manage
   /v1/promotions/offers/{promotionId}/rules/{ruleId}:
     delete:
       tags:
@@ -778,8 +782,8 @@ paths:
         "403":
           description: Forbidden.
       security:
-      - bearerAuth: []
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
 components:
   schemas:
     CreatePromotionOfferRequest:
@@ -1595,3 +1599,8 @@ components:
           type: string
           description: Pricing policy version used
           example: 2026.03.1
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

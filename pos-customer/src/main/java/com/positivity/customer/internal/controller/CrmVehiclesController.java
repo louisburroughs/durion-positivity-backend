@@ -36,7 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "CRM Vehicles", description = "Vehicle management operations for customers")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm")
 @RequiredArgsConstructor
 public class CrmVehiclesController {
@@ -53,6 +52,8 @@ public class CrmVehiclesController {
                         @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content)
         })
         @PostMapping("/{customerId}/vehicles")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_CREATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE_LEGACY", apiVersion = "1")
         public ResponseEntity<VehicleResponse> createVehicles(
@@ -71,6 +72,8 @@ public class CrmVehiclesController {
                         @ApiResponse(responseCode = "404", description = "Customer or vehicle not found", content = @Content)
         })
         @PutMapping("/{customerId}/vehicles/{vehicleId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_UPDATE", apiVersion = "1")
         public ResponseEntity<VehicleResponse> updateVehicles(
@@ -89,6 +92,8 @@ public class CrmVehiclesController {
                         @ApiResponse(responseCode = "404", description = "Customer or vehicle not found", content = @Content)
         })
         @DeleteMapping("/{customerId}/vehicles/{vehicleId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_DEACTIVATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_DEACTIVATE + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_DELETE", apiVersion = "1")
         public ResponseEntity<Void> deleteVehicle(
@@ -107,6 +112,8 @@ public class CrmVehiclesController {
                         @ApiResponse(responseCode = "404", description = "Customer or vehicle not found", content = @Content)
         })
         @PutMapping("/{customerId}/vehicles/{vehicleId}/transfer")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_PARTY_ASSOC_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_PARTY_ASSOC_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_TRANSFER", apiVersion = "1")
         public ResponseEntity<VehicleResponse> transferVehicles(
@@ -124,6 +131,8 @@ public class CrmVehiclesController {
                         @ApiResponse(responseCode = "404", description = "Customer or vehicle not found", content = @Content)
         })
         @GetMapping("/{customerId}/vehicles/{vehicleId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
         public ResponseEntity<VehicleResponse> getVehiclesForCustomer(
                         @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,

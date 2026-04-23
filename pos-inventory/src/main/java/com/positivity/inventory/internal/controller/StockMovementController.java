@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Stock Movements", description = "Inventory ledger movement recording and adjustment endpoints")
 public class StockMovementController {
 
@@ -44,9 +43,12 @@ public class StockMovementController {
         }
 
         @PostMapping("/v1/inventory/stock-movements")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:stock_movement:create" })
         @PreAuthorize("hasAuthority('inventory:stock_movement:create')")
         @EmitEvent(id = "INVENTORY_STOCK_MOVEMENT_CREATE", apiVersion = "1")
-        @Operation(summary = "Record a stock movement", description = "Records a RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movement in the inventory ledger.")
+        @Operation(summary = "Record a stock movement", description = "Records a RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movement in the inventory ledger.", tags = {
+                        "Stock Movements" })
         @ApiResponse(responseCode = "201", description = "Movement recorded")
         @ApiResponse(responseCode = "400", description = "Validation failure")
         @ApiResponse(responseCode = "422", description = "Insufficient stock")
@@ -63,9 +65,12 @@ public class StockMovementController {
         }
 
         @PostMapping("/v1/inventory/adjustments")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:adjustment:create" })
         @PreAuthorize("hasAuthority('inventory:adjustment:create')")
         @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_CREATE", apiVersion = "1")
-        @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.")
+        @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.", tags = {
+                        "Stock Movements" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "201", description = "Adjustment request created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AdjustmentRequestResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
@@ -83,9 +88,12 @@ public class StockMovementController {
         }
 
         @PostMapping("/v1/inventory/adjustments/{adjustmentRequestId}/approve")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:adjustment:approve" })
         @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
         @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_APPROVE", apiVersion = "1")
-        @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.")
+        @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.", tags = {
+                        "Stock Movements" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Adjustment approved"),
                         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),

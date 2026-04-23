@@ -31,7 +31,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/receiving")
 @RequiredArgsConstructor
 @Slf4j
@@ -42,9 +41,12 @@ public class ReceivingController {
         private final ReceivingService receivingService;
 
         @PostMapping("/sessions")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:receiving:create" })
         @PreAuthorize("hasAuthority('inventory:receiving:create')")
         @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_CREATE", apiVersion = "1")
-        @Operation(summary = "Create receiving session", description = "Creates a receiving session from a source document (PO/ASN) using MANUAL or SCAN entry mode")
+        @Operation(summary = "Create receiving session", description = "Creates a receiving session from a source document (PO/ASN) using MANUAL or SCAN entry mode", tags = {
+                        "Receiving" })
         @ApiResponse(responseCode = "201", description = "Receiving session created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivingSessionResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure or source document already fully received", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required receiving:create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -60,9 +62,12 @@ public class ReceivingController {
         }
 
         @GetMapping("/sessions/{sessionId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:receiving:view" })
         @PreAuthorize("hasAuthority('inventory:receiving:view')")
         @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_GET", apiVersion = "1")
-        @Operation(summary = "Get receiving session", description = "Retrieves receiving session details by session identifier")
+        @Operation(summary = "Get receiving session", description = "Retrieves receiving session details by session identifier", tags = {
+                        "Receiving" })
         @ApiResponse(responseCode = "200", description = "Receiving session found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivingSessionResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required receiving:view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Receiving session not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -79,9 +84,12 @@ public class ReceivingController {
          * ADR-0018: actorUserId from authenticated security context.
          */
         @PostMapping("/sessions/{sessionId}/receive")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:receiving:complete" })
         @PreAuthorize("hasAuthority('inventory:receiving:complete')")
         @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_COMPLETE", apiVersion = "1")
-        @Operation(summary = "Receive items into staging", description = "Records received quantities for receiving session lines and generates receipt ledger/variance records")
+        @Operation(summary = "Receive items into staging", description = "Records received quantities for receiving session lines and generates receipt ledger/variance records", tags = {
+                        "Receiving" })
         @ApiResponse(responseCode = "200", description = "Items received successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceiveItemsResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required receiving:complete authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -107,9 +115,12 @@ public class ReceivingController {
          * atomically.
          */
         @PostMapping("/sessions/{sessionId}/lines/{lineId}/cross-dock")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:receiving:complete", "inventory:issue:parts" })
         @PreAuthorize("hasAuthority('inventory:receiving:complete') and hasAuthority('inventory:issue:parts')")
         @EmitEvent(id = "INVENTORY_RECEIVING_CROSSDOCK", apiVersion = "1")
-        @Operation(summary = "Cross-dock receiving line to workorder", description = "Cross-docks received quantity from a session line directly to a workorder line with atomic receipt and issue ledger events")
+        @Operation(summary = "Cross-dock receiving line to workorder", description = "Cross-docks received quantity from a session line directly to a workorder line with atomic receipt and issue ledger events", tags = {
+                        "Receiving" })
         @ApiResponse(responseCode = "200", description = "Cross-dock completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CrossDockResponse.class)))
         @ApiResponse(responseCode = "400", description = "Invalid request or closed workorder", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required authority or part-match override permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

@@ -45,7 +45,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/persons")
 @RequiredArgsConstructor
 @Tag(name = "CRM Persons", description = "Individual person management APIs")
@@ -68,6 +67,7 @@ public class CrmPersonController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:create" })
     @PreAuthorize("hasAuthority('crm:person:create')")
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
     @Operation(summary = "Create a new person", description = "Creates an individual person record in the CRM system")
@@ -97,6 +97,7 @@ public class CrmPersonController {
      * @return the person details
      */
     @GetMapping("/{personId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:read" })
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_GET", apiVersion = "1")
     @Operation(summary = "Get a person by ID", description = "Retrieves an individual person record by their unique identifier")
@@ -124,6 +125,7 @@ public class CrmPersonController {
      * @return list of matching persons
      */
     @GetMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:read" })
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_SEARCH", apiVersion = "1")
     @Operation(summary = "Search persons", description = "Searches for persons matching the specified criteria")

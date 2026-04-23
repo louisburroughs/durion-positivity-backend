@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Work Session API", description = "Endpoints for managing technician work sessions and break segments")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/workSessions")
 @RequiredArgsConstructor
 public class WorkSessionController {
@@ -38,6 +37,8 @@ public class WorkSessionController {
         @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields or work order not found")
         @PostMapping("/start")
         @EmitEvent(id = "WORKORDER_WORK_SESSION_START", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "timekeeping:work_session:create" })
         @PreAuthorize("hasAuthority('timekeeping:work_session:create')")
         public ResponseEntity<WorkSessionResponse> startWorkSession(
                         @Valid @RequestBody StartWorkSessionRequest request) {
@@ -52,6 +53,8 @@ public class WorkSessionController {
         @ApiResponse(responseCode = "404", description = "Work session not found")
         @PostMapping("/{workSessionId}/stop")
         @EmitEvent(id = "WORKORDER_WORK_SESSION_STOP", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "timekeeping:work_session:stop" })
         @PreAuthorize("hasAuthority('timekeeping:work_session:stop')")
         public ResponseEntity<WorkSessionResponse> stopWorkSession(
                         @Parameter(description = "ID of the work session to stop", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,
@@ -66,6 +69,8 @@ public class WorkSessionController {
         @ApiResponse(responseCode = "404", description = "Work session not found")
         @PostMapping("/{workSessionId}/breaks")
         @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_START", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "timekeeping:work_session:break_start" })
         @PreAuthorize("hasAuthority('timekeeping:work_session:break_start')")
         public ResponseEntity<BreakSegmentResponse> addBreakSegment(
                         @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,
@@ -80,6 +85,8 @@ public class WorkSessionController {
         @ApiResponse(responseCode = "404", description = "Work session or break segment not found")
         @PostMapping("/{workSessionId}/breaks/{breakSegmentId}/stop")
         @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_STOP", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "timekeeping:work_session:break_stop" })
         @PreAuthorize("hasAuthority('timekeeping:work_session:break_stop')")
         public ResponseEntity<BreakSegmentResponse> stopBreakSegment(
                         @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,

@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Change Request API", description = "Endpoints for managing additional work requests and approvals")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 public class ChangeRequestController {
@@ -45,6 +44,8 @@ public class ChangeRequestController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Change request details including items", required = true, content = @Content(schema = @Schema(implementation = CreateChangeRequestDTO.class), examples = @ExampleObject(name = "createChangeRequest", value = "{\"description\":\"Customer requested additional diagnostics\",\"approvalGated\":true}")))
         @PostMapping("/{workorderId}/changeRequests")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:create" })
         @PreAuthorize("hasAuthority('workorder:change_request:create')")
         public ResponseEntity<ChangeRequestResponse> createChangeRequest(
                         @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
@@ -68,6 +69,8 @@ public class ChangeRequestController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval details including user ID and note", required = true, content = @Content(schema = @Schema(implementation = ApproveChangeRequestDTO.class), examples = @ExampleObject(name = "approveChangeRequest", value = "{\"approvedBy\":\"550e8400-e29b-41d4-a716-446655440100\",\"approvalNote\":\"Approved after customer confirmation\"}")))
         @PostMapping("/changeRequests/{changeId}/approve")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_APPROVE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:approve" })
         @PreAuthorize("hasAuthority('workorder:change_request:approve')")
         public ResponseEntity<ChangeRequestResponse> approveChangeRequest(
                         @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
@@ -90,6 +93,8 @@ public class ChangeRequestController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Decline details including note", required = true, content = @Content(schema = @Schema(implementation = DeclineChangeRequestDTO.class), examples = @ExampleObject(name = "declineChangeRequest", value = "{\"approvalNote\":\"Declined by customer\"}")))
         @PostMapping("/changeRequests/{changeId}/decline")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DECLINE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:decline" })
         @PreAuthorize("hasAuthority('workorder:change_request:decline')")
         public ResponseEntity<ChangeRequestResponse> declineChangeRequest(
                         @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
@@ -109,6 +114,7 @@ public class ChangeRequestController {
         @ApiResponse(responseCode = "404", description = "Change request not found")
         @PostMapping("/changeRequests/{changeId}/acknowledgeDenial")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<Void> recordCustomerDenialAcknowledgment(
                         @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
@@ -130,6 +136,8 @@ public class ChangeRequestController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Emergency override details including manager ID and reason", required = true, content = @Content(schema = @Schema(implementation = EmergencyOverrideDTO.class), examples = @ExampleObject(name = "emergencyOverride", value = "{\"managerId\":\"550e8400-e29b-41d4-a716-446655440110\",\"exceptionReason\":\"Safety-critical repair authorized\"}")))
         @PostMapping("/changeRequests/{changeId}/emergency-override")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:emergency_override" })
         @PreAuthorize("hasAuthority('workorder:change_request:emergency_override')")
         public ResponseEntity<ChangeRequestResponse> applyEmergencyOverride(
                         @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
@@ -147,6 +155,8 @@ public class ChangeRequestController {
         @ApiResponse(responseCode = "200", description = "Change request found")
         @ApiResponse(responseCode = "404", description = "Change request not found")
         @GetMapping("/changeRequests/{changeId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:view" })
         @PreAuthorize("hasAuthority('workorder:change_request:view')")
         public ResponseEntity<ChangeRequestResponse> getChangeRequestById(
                         @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
@@ -162,6 +172,8 @@ public class ChangeRequestController {
         @ApiResponse(responseCode = "200", description = "List of change requests returned")
         @GetMapping("/{workorderId}/changeRequests")
         @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_LIST", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:change_request:view" })
         @PreAuthorize("hasAuthority('workorder:change_request:view')")
         public ResponseEntity<List<ChangeRequestResponse>> getChangeRequestsByWorkorder(
                         @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -173,6 +185,7 @@ public class ChangeRequestController {
         @Operation(summary = "Check if work order can be closed", description = "Verify all declined emergency/safety items have customer denial acknowledgment")
         @ApiResponse(responseCode = "200", description = "Returns true if work order can be closed, false otherwise")
         @GetMapping("/{workorderId}/canClose")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<Boolean> canCloseWorkorder(
                         @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {

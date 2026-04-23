@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/uom-conversions")
 @Tag(name = "UOM Conversion API", description = "Unit of measure conversion API")
 public class UomConversionController {
@@ -38,6 +37,8 @@ public class UomConversionController {
         private final UomConversionService uomConversionService;
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PostMapping
         @Operation(summary = "Create UOM conversion", description = "Creates a new unit-of-measure conversion record.", operationId = "createUomConversion")
         @ApiResponse(responseCode = "201", description = "Conversion created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
@@ -48,6 +49,8 @@ public class UomConversionController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
         @GetMapping
         @Operation(summary = "List active conversions", description = "Returns all active unit-of-measure conversion records.", operationId = "listUomConversions")
         @ApiResponse(responseCode = "200", description = "Conversions listed", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
@@ -56,6 +59,8 @@ public class UomConversionController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
         @GetMapping("/{id}")
         @Operation(summary = "Get conversion", description = "Retrieves a unit-of-measure conversion by its ID.", operationId = "getUomConversionById")
         @ApiResponse(responseCode = "200", description = "Conversion found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
@@ -65,6 +70,8 @@ public class UomConversionController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PutMapping("/{id}")
         @Operation(summary = "Update conversion factor", description = "Updates the conversion factor and mutable fields for an existing conversion.", operationId = "updateUomConversion")
         @ApiResponse(responseCode = "200", description = "Conversion updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
@@ -78,6 +85,8 @@ public class UomConversionController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @DeleteMapping("/{id}")
         @Operation(summary = "Deactivate conversion", description = "Deactivates a conversion so it is excluded from active conversion results.", operationId = "deactivateUomConversion")
         @ApiResponse(responseCode = "204", description = "Conversion deactivated")

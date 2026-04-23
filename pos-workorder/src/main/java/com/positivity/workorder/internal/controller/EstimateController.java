@@ -50,7 +50,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/estimates")
 @RequiredArgsConstructor
 @Slf4j
@@ -68,6 +67,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_ESTIMATE_LIST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getAllEstimates() {
         return estimateService.getAllEstimates();
@@ -77,6 +78,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateResponse> getEstimateById(
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -90,6 +93,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/customer/{customerId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByCustomer(
             @Parameter(description = "ID of the customer", example = "550e8400-e29b-41d4-a716-446655440010") @PathVariable UUID customerId) {
@@ -100,6 +105,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/shop/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
@@ -110,6 +117,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/location/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByLocation(
             @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
@@ -127,6 +136,8 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Estimate creation request with customer and vehicle IDs", required = true, content = @Content(schema = @Schema(implementation = CreateEstimateRequest.class), examples = @ExampleObject(name = "createEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"vehicleId\":\"550e8400-e29b-41d4-a716-446655440011\",\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\"}")))
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:create" })
     @PreAuthorize("hasAuthority('workorder:estimate:create')")
     public ResponseEntity<Object> createEstimate(
             @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
@@ -191,6 +202,8 @@ public class EstimateController {
 
     @PatchMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PATCH", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:edit" })
     @PreAuthorize("hasAuthority('workorder:estimate:edit')")
     public ResponseEntity<Object> patchEstimateStatus(
             @PathVariable UUID estimateId, @RequestBody Map<String, Object> patchRequest) {
@@ -225,6 +238,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:decline" })
     @PreAuthorize("hasAuthority('workorder:estimate:decline')")
     public ResponseEntity<EstimateResponse> declineEstimate(
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -243,6 +258,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:reopen" })
     @PreAuthorize("hasAuthority('workorder:estimate:reopen')")
     public ResponseEntity<EstimateResponse> reopenEstimate(
             @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -264,6 +281,8 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID, signature capture, and optional selective line item approvals", required = true, content = @Content(schema = @Schema(implementation = ApproveEstimateRequest.class), examples = @ExampleObject(name = "approveEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved estimate\",\"purchaseOrderNumber\":\"PO-12345\"}")))
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:approve" })
     @PreAuthorize("hasAuthority('workorder:estimate:approve')")
     public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -300,6 +319,8 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/promote")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PROMOTE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:promote" })
     @PreAuthorize("hasAuthority('workorder:estimate:promote')")
     public ResponseEntity<WorkorderResponse> promoteEstimateToWorkorder(
             @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -445,6 +466,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found")
     @PostMapping("/{estimateId}/submit-for-approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:submit" })
     @PreAuthorize("hasAuthority('workorder:estimate:submit')")
     public ResponseEntity<EstimateResponse> submitForApproval(
             @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -467,6 +490,8 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:delete" })
     @PreAuthorize("hasAuthority('workorder:estimate:delete')")
     public ResponseEntity<Void> deleteEstimate(
             @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -488,6 +513,8 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Line item details", required = true, content = @Content(schema = @Schema(implementation = AddEstimateItemRequest.class), examples = @ExampleObject(name = "addEstimateItem", value = "{\"itemType\":\"LABOR\",\"description\":\"Brake inspection\",\"quantity\":1,\"unitPrice\":129.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PostMapping("/{estimateId}/items")
     @EmitEvent(id = "ESTIMATE_ITEM_ADD", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate_item:add" })
     @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
     public ResponseEntity<EstimateItemResponse> addEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -529,6 +556,8 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated item fields", required = true, content = @Content(schema = @Schema(implementation = UpdateEstimateItemRequest.class), examples = @ExampleObject(name = "updateEstimateItem", value = "{\"description\":\"Brake inspection and adjustment\",\"quantity\":1,\"unitPrice\":149.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PatchMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_UPDATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate_item:edit" })
     @PreAuthorize("hasAuthority('workorder:estimate_item:edit')")
     public ResponseEntity<EstimateItemResponse> updateEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -557,6 +586,8 @@ public class EstimateController {
     })
     @DeleteMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate_item:delete" })
     @PreAuthorize("hasAuthority('workorder:estimate_item:delete')")
     public ResponseEntity<Void> deleteEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
@@ -585,6 +616,8 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:calculate" })
     @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
     public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -617,6 +650,8 @@ public class EstimateController {
     })
     @GetMapping("/{estimateId}/summary")
     @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -639,6 +674,8 @@ public class EstimateController {
     })
     @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
     @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate:view" })
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<byte[]> generateEstimatePdf(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
@@ -666,6 +703,8 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/snapshots")
     @EmitEvent(id = "ESTIMATE_SNAPSHOT_CREATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:estimate_snapshot:create" })
     @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,

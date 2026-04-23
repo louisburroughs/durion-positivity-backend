@@ -44,13 +44,14 @@ paths:
         "200":
           description: Coverage rules returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/CoverageRuleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:read
     put:
       tags:
       - Mobile Unit API
@@ -75,7 +76,7 @@ paths:
         "200":
           description: Coverage rules replaced successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -83,13 +84,14 @@ paths:
         "404":
           description: Mobile unit not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/CoverageRuleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:manage
   /v1/locations/{locationId}:
     get:
       tags:
@@ -110,17 +112,18 @@ paths:
         "200":
           description: Location found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
         "404":
           description: Location not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
     put:
       tags:
       - Location API
@@ -146,17 +149,18 @@ paths:
         "200":
           description: Location updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
         "404":
           description: Location not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
     delete:
       tags:
       - Location API
@@ -178,7 +182,8 @@ paths:
         "404":
           description: Location not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
     patch:
       tags:
       - Location API
@@ -204,17 +209,18 @@ paths:
         "200":
           description: Location patched successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
         "404":
           description: Location not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/locations/{locationId}/defaults:
     get:
       tags:
@@ -240,17 +246,18 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":
           description: Location not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
     put:
       tags:
       - Site Defaults API
@@ -281,23 +288,24 @@ paths:
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":
           description: Location not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/travel-buffer-policies:
     get:
       tags:
@@ -308,13 +316,14 @@ paths:
         "200":
           description: Travel buffer policies listed
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:travel-buffer-policy:read
     post:
       tags:
       - Travel Buffer Policy API
@@ -330,11 +339,12 @@ paths:
         "201":
           description: Travel buffer policy created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:travel-buffer-policy:manage
   /v1/service-areas:
     get:
       tags:
@@ -345,13 +355,14 @@ paths:
         "200":
           description: Service areas listed
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ServiceAreaResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:service-area:read
     post:
       tags:
       - Service Area API
@@ -367,11 +378,12 @@ paths:
         "201":
           description: Service area created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ServiceAreaResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:service-area:manage
   /v1/mobile-units:
     get:
       tags:
@@ -398,11 +410,12 @@ paths:
         "200":
           description: Mobile units retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageMobileUnitResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:read
     post:
       tags:
       - Mobile Unit API
@@ -419,11 +432,12 @@ paths:
         "201":
           description: Mobile unit created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MobileUnitResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:manage
   /v1/locations:
     get:
       tags:
@@ -435,13 +449,14 @@ paths:
         "200":
           description: List of locations returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
     post:
       tags:
       - Location API
@@ -458,11 +473,12 @@ paths:
         "201":
           description: Location created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/locations/{siteId}/storage-locations:
     get:
       tags:
@@ -505,11 +521,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageStorageLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
     post:
       tags:
       - storage-location-controller
@@ -531,11 +548,12 @@ paths:
         "201":
           description: Created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/locations/{locationId}/bays:
     get:
       tags:
@@ -578,11 +596,12 @@ paths:
         "200":
           description: Bays retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageBayResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:bay:read
     post:
       tags:
       - Bay API
@@ -607,11 +626,12 @@ paths:
         "201":
           description: Bay created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BayResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:bay:manage
   /v1/locations/{childId}/parents/{parentId}:
     post:
       tags:
@@ -646,11 +666,12 @@ paths:
         "200":
           description: Parent relationship added successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationParentResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/locations/bulk-ingest:
     post:
       tags:
@@ -669,17 +690,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/travel-buffer-policies/{id}:
     patch:
       tags:
@@ -703,23 +725,24 @@ paths:
         "200":
           description: Travel buffer policy patched
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
         "400":
           description: Invalid travel buffer policy id
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
         "404":
           description: Travel buffer policy not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:travel-buffer-policy:manage
   /v1/service-areas/{id}:
     patch:
       tags:
@@ -743,23 +766,24 @@ paths:
         "200":
           description: Service area patched
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ServiceAreaResponse"
         "400":
           description: Invalid service area id
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ServiceAreaResponse"
         "404":
           description: Service area not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ServiceAreaResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:service-area:manage
   /v1/mobile-units/{id}:
     get:
       tags:
@@ -779,17 +803,18 @@ paths:
         "200":
           description: Mobile unit returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MobileUnitResponse"
         "404":
           description: Mobile unit not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MobileUnitResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:read
     patch:
       tags:
       - Mobile Unit API
@@ -814,11 +839,12 @@ paths:
         "200":
           description: Mobile units managed successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MobileUnitResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:manage
   /v1/locations/{siteId}/storage-locations/{storageLocationId}:
     get:
       tags:
@@ -841,11 +867,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
     patch:
       tags:
       - storage-location-controller
@@ -873,11 +900,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:write
   /v1/locations/{locationId}/bays/{bayId}:
     get:
       tags:
@@ -902,17 +930,18 @@ paths:
         "200":
           description: Bay retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BayResponse"
         "404":
           description: Bay not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BayResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:bay:read
     patch:
       tags:
       - Bay API
@@ -940,11 +969,12 @@ paths:
         "200":
           description: Bay updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BayResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:bay:manage
   /v1/storage-locations/{storageLocationId}/validation:
     get:
       tags:
@@ -965,23 +995,24 @@ paths:
         "200":
           description: Validation payload returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
         "400":
           description: Invalid storageLocationId format
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
         "403":
           description: Forbidden - missing location:read authority
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
   /v1/mobile-units:eligible:
     get:
       tags:
@@ -1010,13 +1041,14 @@ paths:
         "200":
           description: Eligible mobile units returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EligibleMobileUnitResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:mobile-unit:read
   /v1/locations/{locationId}/validation:
     get:
       tags:
@@ -1037,11 +1069,12 @@ paths:
         "200":
           description: Validation result returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationValidationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
   /v1/locations/{locationId}/responsible-person:
     get:
       tags:
@@ -1062,17 +1095,18 @@ paths:
         "200":
           description: Responsible person found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PersonDTO"
         "404":
           description: Responsible person not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PersonDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
   /v1/locations/{locationId}/children:
     get:
       tags:
@@ -1099,13 +1133,14 @@ paths:
         "200":
           description: List of child locations returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
   /v1/locations/roster:
     get:
       tags:
@@ -1138,11 +1173,12 @@ paths:
         "200":
           description: Location roster returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageLocationRef"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
   /v1/locations/parents:
     get:
       tags:
@@ -1154,13 +1190,14 @@ paths:
         "200":
           description: List of location parents returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationParentResponseDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - location:read
 components:
   schemas:
     CoverageRuleResponse:
@@ -2014,3 +2051,8 @@ components:
           format: int32
         empty:
           type: boolean
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

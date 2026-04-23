@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/tax")
 @Tag(name = "Tax", description = "Tax calculation API")
 public class TaxController {
@@ -44,6 +44,7 @@ public class TaxController {
         @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
         @ApiResponse(responseCode = "400", description = "Invalid tax calculation request")
         @ApiResponse(responseCode = "500", description = "Tax calculation failed")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "tax:calculate" })
         public ResponseEntity<TaxCalculationResponse> calculateTax(
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "International tax calculation request", content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "US destination example", value = "{\"lineItems\":[{\"lineItemId\":\"1\",\"description\":\"Oil Change Service\",\"quantity\":1,\"unitPrice\":89.99,\"taxExempt\":false}],\"destinationAddress\":{\"countryCode\":\"US\",\"regionCode\":\"CA\",\"city\":\"Los Angeles\",\"postalCode\":\"90001\",\"line1\":\"123 Main St\"},\"currencyCode\":\"USD\",\"locale\":\"en-US\",\"referenceId\":\"550e8400-e29b-41d4-a716-446655440000\",\"referenceType\":\"ESTIMATE\"}"))) @Valid @RequestBody TaxCalculationRequest request) {
                 log.info(
@@ -82,6 +83,7 @@ public class TaxController {
         @PreAuthorize("hasAuthority('tax:mode:view')")
         @Operation(summary = "Get tax service mode", description = "Check if the tax service is currently in test mode or production mode")
         @ApiResponse(responseCode = "200", description = "Tax service mode retrieved successfully")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "tax:mode:view" })
         public ResponseEntity<ModeResponse> getMode() {
                 boolean testMode = taxCalculationService.isTestMode();
                 return ResponseEntity.ok(new ModeResponse(testMode ? "test" : "production", testMode));

@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people")
 @Tag(name = "People - Access Control", description = "APIs for managing person-to-role assignments for access control and permissions (CAP-120)")
 public class PersonAccessController {
@@ -43,6 +42,8 @@ public class PersonAccessController {
         @EmitEvent(id = "PEOPLE_ACCESS_ROLES_LIST", apiVersion = "1")
         @Operation(summary = "Get available roles", description = "Retrieve list of roles that can be assigned to people")
         @ApiResponse(responseCode = "200", description = "Roles retrieved successfully")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:role:view" })
         @PreAuthorize("hasAuthority('people:role:view')")
         public ResponseEntity<List<RoleDto>> getRoles(@PathVariable UUID personUuid) {
                 return ResponseEntity.ok(peopleAccessControlService.getAvailableRolesForPerson(personUuid));
@@ -52,6 +53,8 @@ public class PersonAccessController {
         @EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENTS_LIST", apiVersion = "1")
         @Operation(summary = "Get role assignments", description = "Retrieve role assignments for a person with optional history and date filtering")
         @ApiResponse(responseCode = "200", description = "Assignments retrieved successfully")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:role:view" })
         @PreAuthorize("hasAuthority('people:role:view')")
         public ResponseEntity<List<UserRoleDto>> getAssignments(
                         @PathVariable UUID personUuid,
@@ -69,6 +72,8 @@ public class PersonAccessController {
                         @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
                         @ApiResponse(responseCode = "404", description = "Person or role not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
         })
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:role:assign" })
         @PreAuthorize("hasAuthority('people:role:assign')")
         public ResponseEntity<UserRoleDto> createAssignment(
                         @PathVariable UUID personUuid, @Valid @RequestBody PersonRoleAssignmentRequest request) {
@@ -90,6 +95,8 @@ public class PersonAccessController {
         @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
         @ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
         @ApiResponse(responseCode = "404", description = "Person or role assignment not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:role:revoke" })
         @PreAuthorize("hasAuthority('people:role:revoke')")
         public ResponseEntity<Void> revokeAssignment(
                         @PathVariable UUID personUuid,

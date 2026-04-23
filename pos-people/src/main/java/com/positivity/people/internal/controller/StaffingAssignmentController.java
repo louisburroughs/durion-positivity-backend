@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "People - Staffing Assignments", description = "Person-to-location staffing assignment operations (CAP-119)")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/staffing/assignments")
 @RequiredArgsConstructor
 public class StaffingAssignmentController {
@@ -43,6 +42,8 @@ public class StaffingAssignmentController {
         @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
         @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_CREATE", apiVersion = "1")
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:employee:edit" })
         @PreAuthorize("hasAuthority('people:employee:edit')")
         public ResponseEntity<StaffingAssignmentResponse> createAssignment(
                         @Valid @RequestBody @NonNull CreateStaffingAssignmentRequest request,
@@ -55,6 +56,8 @@ public class StaffingAssignmentController {
         @Operation(summary = "List assignments for person", description = "Returns all staffing assignments for the specified person.")
         @ApiResponse(responseCode = "200", description = "List of assignments.")
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:employee:view" })
         @PreAuthorize("hasAuthority('people:employee:view')")
         public List<StaffingAssignmentResponse> getAssignments(@RequestParam @NonNull UUID personId) {
                 return staffingAssignmentService.findByPersonId(personId);
@@ -64,6 +67,8 @@ public class StaffingAssignmentController {
         @ApiResponse(responseCode = "200", description = "Assignment found.")
         @ApiResponse(responseCode = "404", description = "Assignment not found.")
         @GetMapping("/{assignmentId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:employee:view" })
         @PreAuthorize("hasAuthority('people:employee:view')")
         public ResponseEntity<StaffingAssignmentResponse> getAssignment(@PathVariable @NonNull UUID assignmentId) {
                 return staffingAssignmentService
@@ -79,6 +84,8 @@ public class StaffingAssignmentController {
         @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
         @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_UPDATE", apiVersion = "1")
         @PutMapping("/{assignmentId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:employee:edit" })
         @PreAuthorize("hasAuthority('people:employee:edit')")
         public ResponseEntity<StaffingAssignmentResponse> updateAssignment(
                         @PathVariable @NonNull UUID assignmentId,
@@ -95,6 +102,8 @@ public class StaffingAssignmentController {
         @ApiResponse(responseCode = "404", description = "Assignment not found.")
         @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_END", apiVersion = "1")
         @DeleteMapping("/{assignmentId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:employee:edit" })
         @PreAuthorize("hasAuthority('people:employee:edit')")
         public ResponseEntity<Void> endAssignment(@PathVariable @NonNull UUID assignmentId) {
                 staffingAssignmentService.end(assignmentId);

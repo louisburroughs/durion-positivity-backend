@@ -55,11 +55,13 @@ paths:
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
     put:
       tags:
       - Products API
@@ -90,23 +92,25 @@ paths:
         "400":
           description: Validation error
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/{productId}/msrp/{msrpId}:
     put:
       tags:
@@ -143,29 +147,30 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "404":
           description: MSRP record not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "409":
           description: Temporal overlap or optimistic locking conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:msrp:write
   /v1/products/{productId}/lifecycle:
     get:
       tags:
@@ -191,11 +196,14 @@ paths:
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+        - product:lifecycle:update
     put:
       tags:
       - Products API
@@ -227,29 +235,32 @@ paths:
         "400":
           description: Validation error
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "403":
           description: Missing override permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "409":
           description: Lifecycle business rule conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+        - product:lifecycle:update
   /v1/products/uom-conversions/{id}:
     get:
       tags:
@@ -275,11 +286,13 @@ paths:
         "404":
           description: Conversion not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
     put:
       tags:
       - UOM Conversion API
@@ -311,17 +324,19 @@ paths:
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
         "404":
           description: Conversion not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
     delete:
       tags:
       - UOM Conversion API
@@ -343,7 +358,9 @@ paths:
         "404":
           description: Conversion not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/supplier-costs/{id}:
     get:
       tags:
@@ -367,11 +384,12 @@ paths:
         "404":
           description: Not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:supplier_cost:read
     put:
       tags:
       - Supplier Item Cost API
@@ -400,11 +418,12 @@ paths:
         "404":
           description: Not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:supplier_cost:write
     delete:
       tags:
       - Supplier Item Cost API
@@ -423,7 +442,8 @@ paths:
         "404":
           description: Not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:supplier_cost:write
   /v1/products/price-books/{priceBookId}:
     get:
       tags:
@@ -448,11 +468,12 @@ paths:
         "404":
           description: Price book not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:read
     put:
       tags:
       - Price Book API
@@ -482,11 +503,12 @@ paths:
         "404":
           description: Price book not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:write
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
     put:
       tags:
@@ -523,11 +545,12 @@ paths:
         "409":
           description: Rule conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:write
     delete:
       tags:
       - Price Book API
@@ -552,7 +575,8 @@ paths:
         "204":
           description: Rule deactivated
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:write
   /v1/products/items/{itemId}/standard-cost:
     put:
       tags:
@@ -582,11 +606,14 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_MANAGER
+        - inventory.cost.standard.update
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -612,11 +639,13 @@ paths:
         "404":
           description: Catalog not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
     put:
       tags:
       - Catalog API
@@ -648,17 +677,19 @@ paths:
         "400":
           description: Invalid request body
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
         "404":
           description: Catalog not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
     delete:
       tags:
       - Catalog API
@@ -679,7 +710,9 @@ paths:
         "404":
           description: Catalog not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_DELETE
   /v1/catalog-items/{type}/{catalogId}:
     put:
       tags:
@@ -718,17 +751,19 @@ paths:
         "400":
           description: Invalid item type or request body
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
         "404":
           description: Catalog item not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
     delete:
       tags:
       - Catalog Items API
@@ -758,7 +793,9 @@ paths:
         "404":
           description: Catalog item not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_DELETE
   /v1/products:
     post:
       tags:
@@ -783,17 +820,19 @@ paths:
         "400":
           description: Validation error
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -813,13 +852,16 @@ paths:
         "200":
           description: Replacements listed
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ReplacementOption"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+        - product:lifecycle:update
     post:
       tags:
       - Products API
@@ -844,23 +886,26 @@ paths:
         "201":
           description: Replacement added successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
         "400":
           description: Validation error
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReplacementOption"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+        - product:lifecycle:update
   /v1/products/{productId}/msrp:
     get:
       tags:
@@ -883,7 +928,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:msrp:read
     post:
       tags:
       - Product MSRP API
@@ -913,23 +959,24 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "409":
           description: Temporal overlap conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:msrp:write
   /v1/products/uom-conversions:
     get:
       tags:
@@ -947,7 +994,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/UomConversionDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
     post:
       tags:
       - UOM Conversion API
@@ -970,11 +1019,13 @@ paths:
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/supplier-costs:
     post:
       tags:
@@ -997,17 +1048,18 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
         "409":
           description: Duplicate supplier and item combination
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:supplier_cost:write
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1032,17 +1084,19 @@ paths:
         "400":
           description: Guardrail validation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
@@ -1075,23 +1129,25 @@ paths:
         "400":
           description: Invalid rejection request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - pricing:override:approve
   /v1/products/pricing/location-overrides/{overrideId}/approve:
     post:
       tags:
@@ -1124,23 +1180,25 @@ paths:
         "400":
           description: Invalid approval request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - pricing:override:approve
   /v1/products/pricing/guardrail-policies:
     post:
       tags:
@@ -1165,11 +1223,13 @@ paths:
         "400":
           description: Invalid policy payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/price-books:
     post:
       tags:
@@ -1193,11 +1253,12 @@ paths:
         "400":
           description: Invalid payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:write
   /v1/products/price-books/{priceBookId}/rules:
     get:
       tags:
@@ -1220,7 +1281,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:read
     post:
       tags:
       - Price Book API
@@ -1250,11 +1312,12 @@ paths:
         "409":
           description: Rule conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:write
   /v1/products/price-books/resolve-price:
     post:
       tags:
@@ -1277,7 +1340,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResolvePriceResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:price_book:read
   /v1/catalogs:
     post:
       tags:
@@ -1302,11 +1366,13 @@ paths:
         "400":
           description: Invalid request body
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/catalog/bulk-ingest:
     post:
       tags:
@@ -1325,17 +1391,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:product:create
   /v1/catalog-items/{type}:
     post:
       tags:
@@ -1366,11 +1433,13 @@ paths:
         "400":
           description: Invalid item type or request body
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
   /v1/products/{productId}/substitutes:
     get:
       tags:
@@ -1396,13 +1465,15 @@ paths:
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/{productId}/msrp/active:
     get:
       tags:
@@ -1433,11 +1504,12 @@ paths:
         "404":
           description: No active MSRP for date
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - catalog:msrp:read
   /v1/products/{productId}/detail:
     get:
       tags:
@@ -1473,23 +1545,25 @@ paths:
         "400":
           description: Invalid location ID
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
         "500":
           description: Unexpected server error while retrieving product details
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/services/{serviceId}:
     get:
       tags:
@@ -1515,11 +1589,13 @@ paths:
         "404":
           description: Service not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/services/name/{name}:
     get:
       tags:
@@ -1542,7 +1618,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/search:
     get:
       tags:
@@ -1600,11 +1678,13 @@ paths:
         "400":
           description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:
@@ -1638,11 +1718,13 @@ paths:
         "404":
           description: No pricing context found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/noninventory/{productId}:
     get:
       tags:
@@ -1668,11 +1750,13 @@ paths:
         "404":
           description: Non-inventory product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/noninventory/name/{name}:
     get:
       tags:
@@ -1695,7 +1779,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/name/{name}:
     get:
       tags:
@@ -1718,7 +1804,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/products/items/{itemId}/costs:
     get:
       tags:
@@ -1740,7 +1828,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_MANAGER
+        - ROLE_CATALOG_VIEW
   /v1/products/items/{itemId}/costs/audit:
     get:
       tags:
@@ -1762,7 +1853,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ItemCostAuditDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_MANAGER
+        - ROLE_CATALOG_VIEW
   /v1/catalogs/name/{name}:
     get:
       tags:
@@ -1785,7 +1879,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
 components:
   schemas:
     ProductUpdateRequestDto:
@@ -3262,3 +3358,8 @@ components:
           type: string
         reasonCode:
           type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

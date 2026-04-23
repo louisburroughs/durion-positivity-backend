@@ -41,7 +41,6 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #41
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/audit")
 @RequiredArgsConstructor
 @Tag(name = "Audit", description = "Audit event and pricing snapshot endpoints with immutable write-once behavior")
@@ -52,6 +51,8 @@ public class AuditController {
 
         @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
         @PostMapping("/events")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:create" })
         @PreAuthorize("hasAuthority('security:audit:create')")
         @Operation(summary = "Create audit event", description = "Creates an immutable audit event record and returns the generated event identifier.")
         @ApiResponse(responseCode = "201", description = "Audit event created")
@@ -67,6 +68,8 @@ public class AuditController {
         }
 
         @GetMapping("/events/{eventId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:view" })
         @PreAuthorize("hasAuthority('security:audit:view')")
         @Operation(summary = "Get audit event", description = "Returns a previously recorded audit event by its event identifier.")
         @ApiResponse(responseCode = "200", description = "Audit event returned successfully")
@@ -76,6 +79,8 @@ public class AuditController {
         }
 
         @GetMapping("/events")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:view" })
         @PreAuthorize("hasAuthority('security:audit:view')")
         @Operation(summary = "Search audit events", description = "Searches audit events by event type alone or by entity identity with an optional time range.")
         @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
@@ -107,6 +112,8 @@ public class AuditController {
         }
 
         @DeleteMapping("/events/**")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:create" })
         @PreAuthorize("hasAuthority('security:audit:create')")
         @Operation(summary = "Delete audit events not allowed", description = "Audit events are immutable and cannot be deleted once recorded.")
         @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
@@ -115,6 +122,8 @@ public class AuditController {
         }
 
         @PutMapping("/events/**")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:create" })
         @PreAuthorize("hasAuthority('security:audit:create')")
         @Operation(summary = "Update audit events not allowed", description = "Audit events are immutable and cannot be modified after creation.")
         @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
@@ -124,6 +133,8 @@ public class AuditController {
 
         @EmitEvent(id = "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE", apiVersion = "1")
         @PostMapping("/pricing-snapshots")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:create" })
         @PreAuthorize("hasAuthority('security:audit:create')")
         @Operation(summary = "Create pricing snapshot", description = "Creates an immutable pricing snapshot record for later audit and traceability.")
         @ApiResponse(responseCode = "201", description = "Pricing snapshot created")
@@ -138,6 +149,8 @@ public class AuditController {
         }
 
         @GetMapping("/pricing-snapshots/{snapshotId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:audit:view" })
         @PreAuthorize("hasAuthority('security:audit:view')")
         @Operation(summary = "Get pricing snapshot", description = "Returns an immutable pricing snapshot by its snapshot identifier.")
         @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")

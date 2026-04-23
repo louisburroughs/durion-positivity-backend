@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #42
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "security:role:assign" })
 @RequestMapping("/v1/users/principals")
 @RequiredArgsConstructor
 @Tag(name = "Principal Role Management", description = "Assign roles to principals for RBAC matrix operations")

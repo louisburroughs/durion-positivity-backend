@@ -22,7 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "inventory:putaway:execute" })
 @RequestMapping("/v1/inventory/putaway")
 @RequiredArgsConstructor
 @Tag(name = "Putaway Execution", description = "Execute putaway tasks with validation and audit events")
@@ -33,7 +34,8 @@ public class PutawayExecuteController {
         @PostMapping("/tasks/{taskId}/execute")
         @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
         @PreAuthorize("hasAuthority('inventory:putaway:execute')")
-        @Operation(summary = "Execute putaway task", description = "Executes a putaway task by moving SKU quantity from source location to destination location.")
+        @Operation(summary = "Execute putaway task", description = "Executes a putaway task by moving SKU quantity from source location to destination location.", tags = {
+                        "Putaway Execution" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Putaway executed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PutawayExecutionResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Bad request - invalid task ID or request payload"),

@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+    "vehicle-fitment:hint:create" })
 @RequestMapping("/v1/fitments")
 @RequiredArgsConstructor
 @Slf4j

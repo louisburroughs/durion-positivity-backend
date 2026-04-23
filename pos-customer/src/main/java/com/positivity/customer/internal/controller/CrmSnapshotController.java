@@ -29,7 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "CRM Snapshots", description = "Consolidated CRM data snapshots")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                CrmPermissionRegistry.PARTY_VIEW })
 @RequestMapping("/v1/crm/snapshot")
 public class CrmSnapshotController {
 

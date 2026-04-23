@@ -38,7 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "CRM Communication Preferences", description = "Communication preferences and consent flag management")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/parties")
 public class CrmCommunicationPreferencesController {
 
@@ -63,6 +62,8 @@ public class CrmCommunicationPreferencesController {
                         @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
         })
         @GetMapping("/{partyId}/communicationPreferences")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
         @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
         public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
@@ -92,6 +93,8 @@ public class CrmCommunicationPreferencesController {
                         @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
         })
         @PostMapping("/{partyId}/communicationPreferences")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
         @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
         public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(

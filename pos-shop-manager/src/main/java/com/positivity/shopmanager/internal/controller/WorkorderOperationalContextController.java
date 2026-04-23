@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @Tag(name = "Workorder Operational Context API", description = "Read-only operational context view for workorders")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:schedule:view" })
 @RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class WorkorderOperationalContextController {

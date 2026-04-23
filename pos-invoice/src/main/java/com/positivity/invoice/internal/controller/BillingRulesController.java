@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.dto.BillingRulesDTO;
 import com.positivity.invoice.service.BillingRulesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.regex.Pattern;
@@ -26,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * CAP:092 - Preferences & Billing Rules
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "bearerAuth", scopes = { "invoice:billing-rules" })
 @RequestMapping("/v1/billing/rules")
 @Tag(name = "Billing Rules", description = "Manage billing rules for commercial accounts")
 @PreAuthorize("hasAuthority('invoice:billing-rules')")

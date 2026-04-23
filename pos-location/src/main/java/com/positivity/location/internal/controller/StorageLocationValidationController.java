@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Validation endpoint for inter-service storage location checks.
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "bearerAuth", scopes = { "location:read" })
 @RequestMapping("/v1/storage-locations")
 @RequiredArgsConstructor
 public class StorageLocationValidationController {

@@ -78,7 +78,8 @@ public class JwtController {
         @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "Forbidden: internal admin context required", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ApiError.class)))
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:token:issue_internal" })
         @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
         @PreAuthorize("hasAuthority('security:token:issue_internal')")
         @PostMapping("/internal/token")

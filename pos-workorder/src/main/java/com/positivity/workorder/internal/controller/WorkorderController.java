@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 @Slf4j
@@ -48,6 +47,8 @@ public class WorkorderController {
         @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
         @GetMapping
         @EmitEvent(id = "WORKORDER_LIST", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:view" })
         @PreAuthorize("hasAuthority('workorder:workorder:view')")
         public List<WorkorderResponse> getAllWorkorders() {
                 return workorderService.getAllWorkorders().stream()
@@ -59,6 +60,8 @@ public class WorkorderController {
         @ApiResponse(responseCode = "200", description = "Work order found and returned.")
         @ApiResponse(responseCode = "404", description = "Work order not found.")
         @GetMapping("/{workorderId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:view" })
         @PreAuthorize("hasAuthority('workorder:workorder:view')")
         public ResponseEntity<WorkorderResponse> getWorkorderById(
                         @Parameter(description = "ID of the work order to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -74,6 +77,7 @@ public class WorkorderController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Work order creation request", required = true, content = @Content(schema = @Schema(implementation = CreateWorkorderRequest.class), examples = @ExampleObject(name = "createWorkorder", value = "{\"estimateId\":\"550e8400-e29b-41d4-a716-446655440001\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\"}")))
         @PostMapping
         @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<WorkorderResponse> createWorkorder(
                         @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
@@ -89,6 +93,7 @@ public class WorkorderController {
         @ApiResponse(responseCode = "404", description = "Work order not found.")
         @DeleteMapping("/{workorderId}")
         @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<Void> deleteWorkorder(
                         @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -99,6 +104,7 @@ public class WorkorderController {
         @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
         @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
         @GetMapping("/{workorderId}/transitions")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
                         @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -111,6 +117,7 @@ public class WorkorderController {
         @Operation(summary = "Get snapshot history", description = "Retrieve the snapshot history for a work order.")
         @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
         @GetMapping("/{workorderId}/snapshots")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
                         @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -128,6 +135,8 @@ public class WorkorderController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID and signature capture", required = true, content = @Content(schema = @Schema(implementation = ApproveWorkorderRequest.class), examples = @ExampleObject(name = "approveWorkorder", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved by customer\"}")))
         @PostMapping("/{workorderId}/approval")
         @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:approve" })
         @PreAuthorize("hasAuthority('workorder:workorder:approve')")
         public ResponseEntity<WorkorderResponse> approveWorkorder(
                         @Parameter(description = "ID of the work order to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
@@ -153,6 +162,8 @@ public class WorkorderController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Complete workorder request", required = true, content = @Content(schema = @Schema(implementation = CompleteWorkorderRequest.class), examples = @ExampleObject(name = "completeWorkorder", value = "{\"completionNotes\":\"Completed and verified\"}")))
         @PostMapping("/{workorderId}/complete")
         @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:complete" })
         @PreAuthorize("hasAuthority('workorder:workorder:complete')")
         public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
                         @Parameter(description = "ID of the work order to complete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
@@ -190,6 +201,8 @@ public class WorkorderController {
         @ApiResponse(responseCode = "409", description = "Work order is not in COMPLETED state.")
         @PostMapping("/{workorderId}/generate-invoice")
         @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:generate_invoice" })
         @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
         public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
                         @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
@@ -204,6 +217,8 @@ public class WorkorderController {
         @ApiResponse(responseCode = "200", description = "Completion preconditions evaluated successfully.")
         @ApiResponse(responseCode = "404", description = "Work order not found.")
         @GetMapping("/{workorderId}/completion-preconditions")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:complete" })
         @PreAuthorize("hasAuthority('workorder:workorder:complete')")
         public ResponseEntity<CompletionPreconditionsResponse> getCompletionPreconditions(
                         @Parameter(description = "ID of the workorder to validate", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
@@ -238,6 +253,8 @@ public class WorkorderController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reopen workorder request", required = true, content = @Content(schema = @Schema(implementation = ReopenWorkorderRequest.class), examples = @ExampleObject(name = "reopenWorkorder", value = "{\"reopenReason\":\"Customer requested additional work\"}")))
         @PostMapping("/{workorderId}/reopen")
         @EmitEvent(id = "WORKORDER_REOPEN", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:reopen_completed" })
         @PreAuthorize("hasAuthority('workorder:workorder:reopen_completed')")
         public ResponseEntity<ReopenWorkorderResponse> reopenWorkorder(
                         @Parameter(description = "ID of the completed workorder to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,

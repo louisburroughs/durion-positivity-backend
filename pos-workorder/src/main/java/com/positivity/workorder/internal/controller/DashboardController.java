@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+        "workorder:dashboard:view" })
 @RequestMapping("/v1/workexec/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Daily Dispatch Board Dashboard", description = "Dispatch board aggregation and conflict detection")

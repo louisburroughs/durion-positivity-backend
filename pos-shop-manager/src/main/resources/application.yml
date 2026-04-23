@@ -60,6 +60,7 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
+  default-produces-media-type: application/json
 pos:
   crm:
     customer-base-url: ${POS_CRM_CUSTOMER_BASE_URL:http://localhost:8080/v1/customers}

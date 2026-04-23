@@ -10,4 +10,9 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 paths: {}
-components: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

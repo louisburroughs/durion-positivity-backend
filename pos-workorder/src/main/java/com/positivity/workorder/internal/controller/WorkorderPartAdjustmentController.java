@@ -35,7 +35,6 @@ import org.springframework.web.bind.annotation.*;
  * - Query adjustment history
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/{workorderId}/parts")
 @Tag(name = "Workorder Part Adjustments", description = "Part substitutions, returns, and corrections")
 public class WorkorderPartAdjustmentController {
@@ -54,6 +53,8 @@ public class WorkorderPartAdjustmentController {
          * Substitute one part for another.
          */
         @PostMapping("/substitute")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
         @Operation(summary = "Substitute part", description = "Replace one part with another. Original part preserved for history.")
@@ -89,6 +90,8 @@ public class WorkorderPartAdjustmentController {
          * Return unused part quantity.
          */
         @PostMapping("/returnUnused")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
         @Operation(summary = "Return unused quantity", description = "Return unused part quantity beyond normal return flow")
@@ -122,6 +125,8 @@ public class WorkorderPartAdjustmentController {
          * Correct part quantity (administrative correction).
          */
         @PostMapping("/correct")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
         @Operation(summary = "Correct part quantity", description = "Administrative correction for data entry errors")
@@ -156,6 +161,8 @@ public class WorkorderPartAdjustmentController {
          * partId is provided.
          */
         @GetMapping("/adjustments")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:view" })
         @PreAuthorize("hasAuthority('workorder:parts:view')")
         @Operation(summary = "Get part adjustment history", description = "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder")
         @ApiResponse(responseCode = "200", description = "Adjustment history retrieved successfully (newest first)", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))

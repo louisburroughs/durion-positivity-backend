@@ -31,3 +31,12 @@ pos:
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://localhost:8085}
     api-secret: ${POS_EVENTS_API_SECRET:}
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  default-produces-media-type: application/json

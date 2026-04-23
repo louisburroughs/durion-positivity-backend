@@ -7,8 +7,3 @@
 [WARNING] 
 [WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
 [WARNING] 
-[INFO] 
-[INFO] -------------------< com.positivity:pos-mcp-server >--------------------
-[INFO] Building pos-mcp-server 0.1.0-SNAPSHOT
-[INFO]   from pom.xml
-[INFO] --------------------------------[ jar ]---------------------------------

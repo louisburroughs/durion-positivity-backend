@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "People Reports API", description = "Reporting endpoints for people and attendance data")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/reports")
 @RequiredArgsConstructor
 public class PeopleReportsController {
@@ -38,6 +37,8 @@ public class PeopleReportsController {
         @ApiResponse(responseCode = "500", description = "Unexpected server error")
         @EmitEvent(id = "REPORT_ATTENDANCE_VS_JOBTIME_GENERATED", apiVersion = "1")
         @GetMapping("/attendanceJobtimeDiscrepancy")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:time:export:read", "accounting:time:export" })
         @PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
         public ResponseEntity<List<AttendanceDiscrepancyReportResponse>> getAttendanceDiscrepancyReport(
                         @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam LocalDate startDate,
@@ -63,6 +64,8 @@ public class PeopleReportsController {
         @ApiResponse(responseCode = "503", description = "Dependent service unavailable")
         @ApiResponse(responseCode = "500", description = "Unexpected server error")
         @EmitEvent(id = "PEOPLE_TIME_APPROVED_EXPORT_READ", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:time:export:read", "accounting:time:export" })
         @PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
         @GetMapping("/approvedTime")
         public ResponseEntity<List<ApprovedTimeExportResponse>> getApprovedTimeForExport(

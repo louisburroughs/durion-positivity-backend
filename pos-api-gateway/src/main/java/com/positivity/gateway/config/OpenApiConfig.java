@@ -1,6 +1,7 @@
 package com.positivity.gateway.config;
 
 import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -78,6 +79,11 @@ public class OpenApiConfig {
                                 .servers(List.of(new Server()
                                                 .url(gatewayHost)
                                                 .description("API Gateway - All services routed through this endpoint")))
-                                .components(new Components().addParameters("X-API-Version", apiVersionParam));
+                                .components(new Components()
+                                                .addParameters("X-API-Version", apiVersionParam)
+                                                .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                                                        .type(SecurityScheme.Type.HTTP)
+                                                        .scheme("bearer")
+                                                        .bearerFormat("JWT")));
         }
 }

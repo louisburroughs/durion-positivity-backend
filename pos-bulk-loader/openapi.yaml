@@ -42,7 +42,7 @@ paths:
         "200":
           description: Mappings returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -50,13 +50,15 @@ paths:
         "403":
           description: Job does not belong to the authenticated operator
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ColumnMappingResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
     put:
       tags:
       - Column Mapping API
@@ -83,7 +85,7 @@ paths:
         "200":
           description: Mappings approved
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -91,13 +93,15 @@ paths:
         "403":
           description: Job does not belong to the authenticated operator
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ColumnMappingResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
   /v1/bulk-jobs:
     get:
       tags:
@@ -116,11 +120,13 @@ paths:
         "200":
           description: Jobs listed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageBulkLoadJobResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
     post:
       tags:
       - Bulk Load Jobs API
@@ -139,17 +145,19 @@ paths:
         "201":
           description: Job created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "409":
           description: Operator already has an active job
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
   /v1/bulk-jobs/{jobId}/upload:
     post:
       tags:
@@ -182,17 +190,18 @@ paths:
         "200":
           description: File uploaded and content detected
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FileUploadResponse"
         "404":
           description: Job not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FileUploadResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/tus:
     post:
       tags:
@@ -232,7 +241,9 @@ paths:
         "413":
           description: Upload-Length exceeds server maximum
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - permitAll
   /v1/bulk-jobs/{jobId}/process:
     post:
       tags:
@@ -253,23 +264,24 @@ paths:
         "200":
           description: Job transitioned to PROCESSING
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "404":
           description: Job not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "409":
           description: Invalid state transition
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/cancel:
     post:
       tags:
@@ -289,17 +301,19 @@ paths:
         "200":
           description: Job cancelled
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "409":
           description: Job is already in terminal state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
   /v1/tus/{uploadId}:
     delete:
       tags:
@@ -327,7 +341,9 @@ paths:
         "412":
           description: Unsupported TUS version
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - permitAll
     head:
       tags:
       - TUS Resumable Upload API
@@ -354,7 +370,9 @@ paths:
         "412":
           description: Unsupported TUS version
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - permitAll
     patch:
       tags:
       - TUS Resumable Upload API
@@ -404,7 +422,9 @@ paths:
         "415":
           description: Content-Type must be application/offset+octet-stream
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - permitAll
   /v1/tus:
     options:
       tags:
@@ -417,7 +437,9 @@ paths:
         "204":
           description: Server capabilities
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - permitAll
   /v1/bulk-jobs/{jobId}:
     get:
       tags:
@@ -437,23 +459,25 @@ paths:
         "200":
           description: Job found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "403":
           description: Job does not belong to the authenticated operator
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
         "404":
           description: Job not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkLoadJobResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
   /v1/bulk-jobs/{jobId}/error-report:
     get:
       tags:
@@ -473,19 +497,21 @@ paths:
         "200":
           description: CSV error report downloaded
           content:
-            '*/*':
+            application/json:
               schema:
                 type: string
                 format: binary
         "403":
           description: Job does not belong to the authenticated operator
           content:
-            '*/*':
+            application/json:
               schema:
                 type: string
                 format: binary
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
   /v1/bulk-jobs/{jobId}/audit:
     get:
       tags:
@@ -505,7 +531,7 @@ paths:
         "200":
           description: Audit records returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -513,13 +539,15 @@ paths:
         "403":
           description: Job does not belong to the authenticated operator
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditRecordResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
 components:
   schemas:
     ColumnMappingApproveRequest:
@@ -769,3 +797,8 @@ components:
         createdAt:
           type: string
           format: date-time
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "WIP Dashboard", description = "Endpoints for Work-In-Progress status visibility")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:wip:view" })
 @RequestMapping("/v1/workexec/wip")
 @RequiredArgsConstructor
 @Slf4j

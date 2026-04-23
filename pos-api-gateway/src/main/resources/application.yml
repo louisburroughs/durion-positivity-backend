@@ -224,6 +224,7 @@ springdoc:
       - name: Workorder
         url: /workorder/v3/api-docs
 
+  default-produces-media-type: application/json
 logging:
   level:
     root: INFO

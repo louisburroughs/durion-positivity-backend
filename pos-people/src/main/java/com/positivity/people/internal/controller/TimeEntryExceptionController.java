@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/exceptions")
 @Tag(name = "People - Exceptions", description = "Time entry exception APIs")
 public class TimeEntryExceptionController {
@@ -31,6 +30,8 @@ public class TimeEntryExceptionController {
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
         @PostMapping(consumes = "application/json", produces = "application/json")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeException:create" })
         @PreAuthorize("hasAuthority('people:timeException:create')")
         public ResponseEntity<TimeEntryExceptionResponse> createException(
                         @Valid @RequestBody TimeEntryExceptionRequest req) {
@@ -41,6 +42,8 @@ public class TimeEntryExceptionController {
         @Operation(summary = "List exceptions, optional filter by employeeId", description = "Retrieve all exceptions or filter by a specific employee ID.")
         @ApiResponse(responseCode = "200", description = "List returned")
         @GetMapping(produces = "application/json")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeException:view" })
         @PreAuthorize("hasAuthority('people:timeException:view')")
         public ResponseEntity<List<TimeEntryException>> listByEmployee(
                         @RequestParam(required = false) String employeeId) {
@@ -53,6 +56,8 @@ public class TimeEntryExceptionController {
         @ApiResponse(responseCode = "404", description = "Exception not found")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
         @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeException:acknowledge" })
         @PreAuthorize("hasAuthority('people:timeException:acknowledge')")
         public ResponseEntity<Object> acknowledgeException(
                         @PathVariable java.util.UUID exceptionId,
@@ -68,6 +73,8 @@ public class TimeEntryExceptionController {
         @ApiResponse(responseCode = "404", description = "Exception not found")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
         @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeException:resolve" })
         @PreAuthorize("hasAuthority('people:timeException:resolve')")
         public ResponseEntity<Object> resolveException(
                         @PathVariable java.util.UUID exceptionId,
@@ -86,6 +93,8 @@ public class TimeEntryExceptionController {
         @ApiResponse(responseCode = "404", description = "Exception not found")
         @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
         @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "people:timeException:resolve" })
         @PreAuthorize("hasAuthority('people:timeException:resolve')")
         public ResponseEntity<Object> waiveException(
                         @PathVariable java.util.UUID exceptionId,

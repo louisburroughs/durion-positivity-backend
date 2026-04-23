@@ -39,7 +39,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workexec")
 @RequiredArgsConstructor
 @Slf4j
@@ -54,6 +53,8 @@ public class WorkexecTimeTrackingController {
         private final WorkexecTimeTrackingService service;
 
         @GetMapping("/job-time-totals")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:view" })
         @PreAuthorize("hasAuthority('workorder:labor:view')")
         @Operation(summary = "Get job time totals", description = "Retrieve aggregated tracked hours for a date range, timezone, and optional location/technicians")
         @ApiResponse(responseCode = "200", description = "Job time totals returned successfully")
@@ -92,6 +93,8 @@ public class WorkexecTimeTrackingController {
 
         @PostMapping("/labor-performed")
         @EmitEvent(id = "WORKEXEC_LABOR_PERFORMED_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         @Operation(summary = "Create labor performed entry", description = "Create a labor-performed record with idempotency support")
         @ApiResponse(responseCode = "201", description = "Labor entry created successfully", content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedResponse.class)))
@@ -134,6 +137,8 @@ public class WorkexecTimeTrackingController {
         }
 
         @GetMapping("/time-entries/timer/active")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:view" })
         @PreAuthorize("hasAuthority('workorder:labor:view')")
         @Operation(summary = "Get active timers", description = "Retrieve active timer entries for the authenticated mechanic")
         @ApiResponse(responseCode = "200", description = "Active timers returned successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
@@ -153,6 +158,8 @@ public class WorkexecTimeTrackingController {
 
         @PostMapping("/time-entries/timer/start")
         @EmitEvent(id = "WORKEXEC_TIMER_START", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         @Operation(summary = "Start timer", description = "Start a workexec timer entry for the authenticated mechanic")
         @ApiResponse(responseCode = "201", description = "Timer started successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
@@ -190,6 +197,8 @@ public class WorkexecTimeTrackingController {
 
         @PostMapping("/time-entries/timer/stop")
         @EmitEvent(id = "WORKEXEC_TIMER_STOP", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:labor:add" })
         @PreAuthorize("hasAuthority('workorder:labor:add')")
         @Operation(summary = "Stop timers", description = "Stop active timer entries for the authenticated mechanic")
         @ApiResponse(responseCode = "200", description = "Timers stopped successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerStopResponse.class)))

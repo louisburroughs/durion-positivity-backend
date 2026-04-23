@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "inventory:location:admin" })
 @RequestMapping("/v1/inventory/locations")
 @Tag(name = "Inventory Management", description = "Operations related to inventory location management")
 public class InventoryLocationDeactivationController {
@@ -38,7 +39,8 @@ public class InventoryLocationDeactivationController {
         @EmitEvent(id = "INVENTORY_LOCATION_DEACTIVATE", apiVersion = "1")
         @PreAuthorize("hasAuthority('inventory:location:admin')")
         @Operation(summary = "Deactivate a storage location", description = "Deactivate a storage location with atomic stock transfer to a destination location (Option B). "
-                        + "If the location contains active inventory, a destination location must be specified.")
+                        + "If the location contains active inventory, a destination location must be specified.", tags = {
+                                        "Inventory Management" })
         @ApiResponse(responseCode = "200", description = "Deactivation completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = DeactivateLocationResponse.class)))
         @ApiResponse(responseCode = "400", description = "Bad request - invalid parameters or destination required")
         @ApiResponse(responseCode = "404", description = "Location not found")

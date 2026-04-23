@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/catalog-items")
 @Tag(name = "Catalog Items API", description = "API for managing catalog items by type")
 public class CatalogItemController {
@@ -33,6 +32,8 @@ public class CatalogItemController {
         private final CatalogServiceImpl catalogService;
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PostMapping("/{type}")
         @Operation(summary = "Add a new catalog item", description = "Adds a new product, service, or non-inventory product to the catalog.")
         @ApiResponse(responseCode = "201", description = "Catalog item created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogItemResponseDto.class)))
@@ -45,6 +46,8 @@ public class CatalogItemController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PutMapping("/{type}/{catalogId}")
         @Operation(summary = "Update an existing catalog item", description = "Updates an existing product, service, or non-inventory product in the catalog.")
         @ApiResponse(responseCode = "200", description = "Catalog item updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogItemResponseDto.class)))
@@ -62,6 +65,8 @@ public class CatalogItemController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_DELETE" })
         @DeleteMapping("/{type}/{catalogId}")
         @Operation(summary = "Delete a catalog item", description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
         @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully")

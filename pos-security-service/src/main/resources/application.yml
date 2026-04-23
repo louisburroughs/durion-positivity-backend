@@ -56,6 +56,7 @@ springdoc:
   swagger-ui:
     enabled: true
 
+  default-produces-media-type: application/json
 pos:
   security:
     lockout:

@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/purchase-orders")
 @RequiredArgsConstructor
 @Tag(name = "Purchase Orders", description = "Purchase order creation, lifecycle, and receiving endpoints")
@@ -44,9 +43,12 @@ public class PurchaseOrderController {
         private final PurchaseOrderService purchaseOrderService;
 
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:create" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CREATE", apiVersion = "1")
-        @Operation(summary = "Create purchase order", description = "Creates a purchase order with requested line items")
+        @Operation(summary = "Create purchase order", description = "Creates a purchase order with requested line items", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "201", description = "Purchase order created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -59,9 +61,12 @@ public class PurchaseOrderController {
         }
 
         @GetMapping("/{poId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:view" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_GET", apiVersion = "1")
-        @Operation(summary = "Get purchase order", description = "Retrieves a purchase order by identifier")
+        @Operation(summary = "Get purchase order", description = "Retrieves a purchase order by identifier", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase order returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -71,9 +76,12 @@ public class PurchaseOrderController {
         }
 
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:view" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_LIST", apiVersion = "1")
-        @Operation(summary = "List purchase orders", description = "Lists purchase orders using filter and pagination parameters")
+        @Operation(summary = "List purchase orders", description = "Lists purchase orders using filter and pagination parameters", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase orders returned")
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<Page<PurchaseOrderResponse>> listPurchaseOrders(
@@ -82,9 +90,12 @@ public class PurchaseOrderController {
         }
 
         @PostMapping("/{poId}/approve")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:approve" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_APPROVE", apiVersion = "1")
-        @Operation(summary = "Approve purchase order", description = "Approves a purchase order and transitions it to an approvable state")
+        @Operation(summary = "Approve purchase order", description = "Approves a purchase order and transitions it to an approvable state", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase order approved", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order approval authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -105,9 +116,12 @@ public class PurchaseOrderController {
         }
 
         @PostMapping("/{poId}/revisions")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:create" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_REVISE", apiVersion = "1")
-        @Operation(summary = "Revise purchase order", description = "Creates a revision for an existing purchase order")
+        @Operation(summary = "Revise purchase order", description = "Creates a revision for an existing purchase order", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase order revised", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -122,9 +136,12 @@ public class PurchaseOrderController {
         }
 
         @PostMapping("/{poId}/cancel")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:approve" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CANCEL", apiVersion = "1")
-        @Operation(summary = "Cancel purchase order", description = "Cancels a purchase order that is no longer needed")
+        @Operation(summary = "Cancel purchase order", description = "Cancels a purchase order that is no longer needed", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase order cancelled", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order approval authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -137,9 +154,12 @@ public class PurchaseOrderController {
         }
 
         @PostMapping("/{poId}/receive")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:purchase_order:receive" })
         @PreAuthorize("hasAuthority('inventory:purchase_order:receive')")
         @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_RECEIVE", apiVersion = "1")
-        @Operation(summary = "Receive purchase order", description = "Receives approved purchase order quantities and posts resulting ledger movements")
+        @Operation(summary = "Receive purchase order", description = "Receives approved purchase order quantities and posts resulting ledger movements", tags = {
+                        "Purchase Orders" })
         @ApiResponse(responseCode = "200", description = "Purchase order received", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivePurchaseOrderResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required purchase order receive authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

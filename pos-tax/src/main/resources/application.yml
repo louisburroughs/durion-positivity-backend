@@ -43,6 +43,7 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+  default-produces-media-type: application/json
 # Tax service configuration
 pos:
   tax:

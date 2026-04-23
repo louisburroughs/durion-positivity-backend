@@ -36,7 +36,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "CRM Contacts", description = "Contact point and role management for parties")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/parties")
 public class CrmContactsController {
 
@@ -61,6 +60,8 @@ public class CrmContactsController {
             @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
     })
     @GetMapping("/{partyId}/contacts")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            CrmPermissionRegistry.CONTACT_VIEW })
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
     @EmitEvent(id = "CRM_CONTACTS_LIST", apiVersion = "1")
     public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
@@ -89,6 +90,8 @@ public class CrmContactsController {
             @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
     })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            CrmPermissionRegistry.CONTACT_ROLE_ASSIGN })
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
     @EmitEvent(id = "CRM_CONTACT_ROLES_UPDATE", apiVersion = "1")
     public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(

@@ -31,7 +31,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/v1/accounting")
-@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Mapping Keys", description = "Manage mapping keys for GL mapping taxonomy")
 @Validated
 public class MappingKeyController {
@@ -40,8 +39,8 @@ public class MappingKeyController {
 
     // Allowed sort fields for listMappingKeysByCategory to prevent injection
     // attacks
-    private static final Set<String> ALLOWED_SORT_FIELDS =
-            Set.of("keyName", "keyCode", "description", "isActive", "createdAt", "updatedAt");
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("keyName", "keyCode", "description", "isActive",
+            "createdAt", "updatedAt");
 
     private final MappingKeyService mappingKeyService;
 
@@ -50,8 +49,10 @@ public class MappingKeyController {
     }
 
     @PostMapping("/mapping-keys")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:mapping-key:create" })
     @PreAuthorize("hasAuthority('accounting:mapping-key:create')")
-    @Operation(summary = "Create mapping key", description = "Create a new mapping key for a posting category.")
+    @Operation(summary = "Create mapping key", description = "Create a new mapping key for a posting category.", tags = {
+            "Mapping Keys" })
     @ApiResponse(responseCode = "201", description = "Mapping key created")
     @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_CREATE", apiVersion = "1")
@@ -62,8 +63,10 @@ public class MappingKeyController {
     }
 
     @GetMapping("/mapping-keys/{mappingKeyId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:mapping-key:view" })
     @PreAuthorize("hasAuthority('accounting:mapping-key:view')")
-    @Operation(summary = "Get mapping key", description = "Retrieve a mapping key by identifier.")
+    @Operation(summary = "Get mapping key", description = "Retrieve a mapping key by identifier.", tags = {
+            "Mapping Keys" })
     @ApiResponse(responseCode = "200", description = "Mapping key returned")
     @ApiResponse(responseCode = "404", description = "Mapping key not found")
     public ResponseEntity<MappingKeyResponse> getMappingKey(
@@ -74,8 +77,10 @@ public class MappingKeyController {
     }
 
     @PutMapping("/mapping-keys/{mappingKeyId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:mapping-key:edit" })
     @PreAuthorize("hasAuthority('accounting:mapping-key:edit')")
-    @Operation(summary = "Update mapping key", description = "Update an existing mapping key.")
+    @Operation(summary = "Update mapping key", description = "Update an existing mapping key.", tags = {
+            "Mapping Keys" })
     @ApiResponse(responseCode = "200", description = "Mapping key updated")
     @ApiResponse(responseCode = "404", description = "Mapping key not found")
     @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
@@ -89,10 +94,10 @@ public class MappingKeyController {
     }
 
     @GetMapping("/posting-categories/{postingCategoryId}/mapping-keys")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:mapping-key:view" })
     @PreAuthorize("hasAuthority('accounting:mapping-key:view')")
-    @Operation(
-            summary = "List mapping keys by category",
-            description = "Retrieve paginated mapping keys for a posting category.")
+    @Operation(summary = "List mapping keys by category", description = "Retrieve paginated mapping keys for a posting category.", tags = {
+            "Mapping Keys" })
     @ApiResponse(responseCode = "200", description = "Mapping keys listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Posting category not found")
@@ -111,14 +116,15 @@ public class MappingKeyController {
             log.warn("Invalid sort field '{}' requested, defaulting to '{}'", sort, sanitizedSort);
         }
 
-        MappingKeyListResponse response =
-                mappingKeyService.listMappingKeysByCategory(postingCategoryId, page, size, sanitizedSort, isActive);
+        MappingKeyListResponse response = mappingKeyService.listMappingKeysByCategory(postingCategoryId, page, size,
+                sanitizedSort, isActive);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/mapping-keys/{mappingKeyId}/deactivate")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:mapping-key:deactivate" })
     @PreAuthorize("hasAuthority('accounting:mapping-key:deactivate')")
-    @Operation(summary = "Deactivate mapping key", description = "Deactivate a mapping key.")
+    @Operation(summary = "Deactivate mapping key", description = "Deactivate a mapping key.", tags = { "Mapping Keys" })
     @ApiResponse(responseCode = "204", description = "Mapping key deactivated")
     @ApiResponse(responseCode = "404", description = "Mapping key not found")
     @ApiResponse(responseCode = "409", description = "Cannot deactivate - active mappings exist")

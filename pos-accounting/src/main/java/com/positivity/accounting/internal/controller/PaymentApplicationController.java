@@ -38,7 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/v1/accounting")
-@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @Tag(name = "Payment Applications", description = "Manage payment applications to invoices (AR)")
 @Validated
@@ -47,8 +46,10 @@ public class PaymentApplicationController {
     private final PaymentApplicationService paymentApplicationService;
 
     @PostMapping("/payments/{paymentId}/void")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:pay" })
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
-    @Operation(summary = "Void payment", description = "Void a payment before settlement.")
+    @Operation(summary = "Void payment", description = "Void a payment before settlement.", tags = {
+            "Payment Applications" })
     @ApiResponse(responseCode = "204", description = "Payment voided")
     @ApiResponse(responseCode = "404", description = "Payment not found")
     @ApiResponse(responseCode = "409", description = "Payment already applied; reverse applications first")
@@ -62,8 +63,10 @@ public class PaymentApplicationController {
     }
 
     @PostMapping("/payments/{paymentId}/reverse")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:pay" })
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
-    @Operation(summary = "Reverse payment", description = "Reverse a previously applied payment.")
+    @Operation(summary = "Reverse payment", description = "Reverse a previously applied payment.", tags = {
+            "Payment Applications" })
     @ApiResponse(responseCode = "204", description = "Payment applications reversed")
     @ApiResponse(responseCode = "404", description = "Payment not found")
     @ApiResponse(responseCode = "409", description = "Payment has no applications to reverse")
@@ -94,8 +97,10 @@ public class PaymentApplicationController {
      * @return application response with details
      */
     @PostMapping("/payments/{paymentId}/applications")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:payment:apply" })
     @PreAuthorize("hasAuthority('accounting:payment:apply')")
-    @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.")
+    @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.", tags = {
+            "Payment Applications" })
     @ApiResponse(responseCode = "201", description = "Payment applied successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request or insufficient funds")
     @ApiResponse(responseCode = "404", description = "Payment not found")
@@ -136,10 +141,11 @@ public class PaymentApplicationController {
      * @return 204 No Content on success
      */
     @PostMapping("/payment-applications/{applicationId}/reverse")
+    @SecurityRequirement(name = "bearerAuth", scopes = {
+            "accounting:payment:reverse", "ACCOUNTING_ADMIN", "AR_MANAGER" })
     @PreAuthorize("hasAnyAuthority('accounting:payment:reverse', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
-    @Operation(
-            summary = "Reverse payment application",
-            description = "Reverse a payment application with compensating transaction (no deletion).")
+    @Operation(summary = "Reverse payment application", description = "Reverse a payment application with compensating transaction (no deletion).", tags = {
+            "Payment Applications" })
     @ApiResponse(responseCode = "204", description = "Payment application reversed")
     @ApiResponse(responseCode = "400", description = "Invalid request or already reversed")
     @ApiResponse(responseCode = "404", description = "Payment application not found")
@@ -164,8 +170,7 @@ public class PaymentApplicationController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

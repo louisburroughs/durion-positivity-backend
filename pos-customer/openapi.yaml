@@ -53,17 +53,18 @@ paths:
         "200":
           description: Customer found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CustomerDTO"
         "404":
           description: Customer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CustomerDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
     put:
       tags:
       - Customer API
@@ -89,17 +90,18 @@ paths:
         "200":
           description: Customer updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CustomerDTO"
         "404":
           description: Customer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CustomerDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:edit
     delete:
       tags:
       - Customer API
@@ -121,7 +123,8 @@ paths:
         "404":
           description: Customer not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}:
     get:
       tags:
@@ -148,7 +151,7 @@ paths:
         "200":
           description: Vehicle found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "403":
@@ -156,7 +159,8 @@ paths:
         "404":
           description: Customer or vehicle not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle:view
     put:
       tags:
       - CRM Vehicles
@@ -188,7 +192,7 @@ paths:
         "200":
           description: Vehicle updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "400":
@@ -198,7 +202,8 @@ paths:
         "404":
           description: Customer or vehicle not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle:edit
     delete:
       tags:
       - CRM Vehicles
@@ -228,7 +233,8 @@ paths:
         "404":
           description: Customer or vehicle not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
     put:
       tags:
@@ -261,7 +267,7 @@ paths:
         "200":
           description: Vehicle transferred successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "400":
@@ -271,7 +277,8 @@ paths:
         "404":
           description: Customer or vehicle not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle_party_association:edit
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -305,7 +312,7 @@ paths:
         "200":
           description: Roles updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UpdateContactRolesResponse"
         "400":
@@ -315,7 +322,8 @@ paths:
         "404":
           description: Party or contact not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_role:assign
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     put:
       tags:
@@ -351,7 +359,8 @@ paths:
         "403":
           description: Forbidden - missing required permission
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:relationship:update
   /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -384,7 +393,7 @@ paths:
         "200":
           description: Roles updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UpdateContactRolesResponse"
         "404":
@@ -394,7 +403,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_role:assign
   /v1/promotions/redemptions:
     post:
       tags:
@@ -412,7 +422,7 @@ paths:
         "201":
           description: Promotion redemption recorded
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PromotionRedemptionResponse"
         "409":
@@ -420,7 +430,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - Promotion:RecordRedemption
   /v1/customer/bulk-ingest:
     post:
       tags:
@@ -439,17 +450,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:create
   /v1/crm:
     get:
       tags:
@@ -477,11 +489,12 @@ paths:
         "200":
           description: Page of customers returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageCustomerDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
     post:
       tags:
       - Customer API
@@ -498,11 +511,12 @@ paths:
         "201":
           description: Customer created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CustomerDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:create
   /v1/crm/{customerId}/vehicles:
     post:
       tags:
@@ -528,7 +542,7 @@ paths:
         "201":
           description: Vehicle created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "400":
@@ -538,7 +552,8 @@ paths:
         "404":
           description: Customer not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle:create
   /v1/crm/persons:
     get:
       tags:
@@ -585,7 +600,7 @@ paths:
         "200":
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -593,7 +608,7 @@ paths:
         "401":
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -601,13 +616,14 @@ paths:
         "403":
           description: Forbidden - missing required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/GetPersonResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:person:read
     post:
       tags:
       - CRM Persons
@@ -624,29 +640,30 @@ paths:
         "201":
           description: Person created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePersonResponse"
         "400":
           description: Invalid request - validation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePersonResponse"
         "401":
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePersonResponse"
         "403":
           description: Forbidden - missing required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePersonResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:person:create
   /v1/crm/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -666,7 +683,7 @@ paths:
         "200":
           description: Preferences retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
         "403":
@@ -674,7 +691,8 @@ paths:
         "404":
           description: Party not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_preference:view
     post:
       tags:
       - CRM Communication Preferences
@@ -700,7 +718,7 @@ paths:
         "200":
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
         "400":
@@ -710,7 +728,8 @@ paths:
         "404":
           description: Party not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_preference:edit
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
@@ -737,41 +756,42 @@ paths:
         "201":
           description: Relationship created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "400":
           description: Invalid request - validation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "404":
           description: Party or person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "409":
           description: Conflict - overlapping relationship exists
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "401":
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "403":
           description: Forbidden - missing required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreatePartyRelationshipResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:relationship:create
   /v1/crm/accounts/tierResolve:
     post:
       tags:
@@ -789,7 +809,7 @@ paths:
         "200":
           description: Tier resolved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ResolveAccountTierResponse"
         "400":
@@ -799,7 +819,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/accounts/parties:
     post:
       tags:
@@ -816,7 +837,7 @@ paths:
         "201":
           description: Account created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateCommercialAccountResponse"
         "400":
@@ -824,7 +845,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:create
   /v1/crm/accounts/parties/{partyId}/vehicles:
     post:
       tags:
@@ -849,7 +871,7 @@ paths:
         "201":
           description: Vehicle created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateVehicleForPartyResponse"
         "404":
@@ -859,7 +881,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:vehicle:create
   /v1/crm/accounts/parties/{partyId}/merge:
     post:
       tags:
@@ -884,7 +907,7 @@ paths:
         "200":
           description: Parties merged successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MergePartiesResponse"
         "404":
@@ -894,7 +917,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:merge
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -914,7 +938,7 @@ paths:
         "200":
           description: Preferences retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
         "404":
@@ -922,7 +946,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_preference:view
     post:
       tags:
       - CRM Accounts
@@ -947,7 +972,7 @@ paths:
         "200":
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
         "404":
@@ -957,7 +982,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact_preference:edit
   /v1/crm/accounts/parties/search:
     post:
       tags:
@@ -974,7 +1000,7 @@ paths:
         "200":
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SearchPartiesResponse"
         "400":
@@ -982,7 +1008,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/promotions/redemptions/by-customer/{customerId}:
     get:
       tags:
@@ -1009,7 +1036,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - Promotion:ViewRedemption
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -1029,7 +1057,7 @@ paths:
         "200":
           description: Success
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CrmSnapshotDTO"
         "404":
@@ -1037,7 +1065,8 @@ paths:
         "403":
           description: Access denied
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/snapshot/party/{partyId}:
     get:
       tags:
@@ -1057,7 +1086,7 @@ paths:
         "200":
           description: Success
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CrmSnapshotDTO"
         "404":
@@ -1065,7 +1094,8 @@ paths:
         "403":
           description: Access denied
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/snapshot/party/{partyId}/billing-rules:
     get:
       tags:
@@ -1087,23 +1117,24 @@ paths:
         "200":
           description: Billing rules returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRuleRef"
         "403":
           description: Caller lacks PARTY_VIEW authority
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRuleRef"
         "404":
           description: Party not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRuleRef"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/persons/{personId}:
     get:
       tags:
@@ -1123,29 +1154,30 @@ paths:
         "200":
           description: Person found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
         "404":
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
         "401":
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
         "403":
           description: Forbidden - missing required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:person:read
   /v1/crm/parties/{partyId}/contacts:
     get:
       tags:
@@ -1165,7 +1197,7 @@ paths:
         "200":
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetContactsWithRolesResponse"
         "403":
@@ -1173,7 +1205,8 @@ paths:
         "404":
           description: Party not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact:view
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
@@ -1215,29 +1248,30 @@ paths:
         "200":
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
         "404":
           description: Party not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
         "401":
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
         "403":
           description: Forbidden - missing required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:relationship:read
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -1257,7 +1291,7 @@ paths:
         "200":
           description: Tier retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetAccountTierResponse"
         "404":
@@ -1265,7 +1299,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/accounts/parties/{partyId}:
     get:
       tags:
@@ -1285,7 +1320,7 @@ paths:
         "200":
           description: Party details retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetPartyResponse"
         "404":
@@ -1293,7 +1328,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:party:view
   /v1/crm/accounts/parties/{partyId}/contacts:
     get:
       tags:
@@ -1313,7 +1349,7 @@ paths:
         "200":
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/GetContactsWithRolesResponse"
         "404":
@@ -1321,7 +1357,8 @@ paths:
         "403":
           description: Forbidden - insufficient permissions
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:contact:view
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1354,7 +1391,8 @@ paths:
         "403":
           description: Forbidden - missing required permission
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - crm:relationship:delete
 components:
   schemas:
     CustomerDTO:
@@ -2638,3 +2676,8 @@ components:
           type: string
         modifiedAt:
           type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

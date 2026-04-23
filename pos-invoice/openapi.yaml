@@ -37,17 +37,18 @@ paths:
         "200":
           description: Billing rules found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
         "404":
           description: No billing rules configured for this party
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:billing-rules
     put:
       tags:
       - Billing Rules
@@ -70,23 +71,24 @@ paths:
         "200":
           description: Billing rules updated
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
         "201":
           description: Billing rules created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
         "400":
           description: Invalid billing rules data
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BillingRulesDTO"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:billing-rules
   /v1/invoices:
     post:
       tags:
@@ -104,11 +106,12 @@ paths:
         "201":
           description: Invoice created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:manage
   /v1/invoices/{invoiceId}/revert:
     post:
       tags:
@@ -134,11 +137,12 @@ paths:
         "200":
           description: Invoice reverted to DRAFT
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:finalize
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
@@ -161,7 +165,7 @@ paths:
         "201":
           description: Created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReceiptResponse"
       security:
@@ -194,7 +198,7 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReceiptResponse"
       security:
@@ -281,31 +285,31 @@ paths:
         "201":
           description: Payment intent created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "400":
           description: Invalid or missing required fields
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "403":
           description: Insufficient permissions
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "422":
           description: Payment method declined
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "503":
           description: Payment gateway unavailable
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
       security:
@@ -375,25 +379,25 @@ paths:
         "201":
           description: Refund created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RefundPaymentResponse"
         "404":
           description: Payment intent not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RefundPaymentResponse"
         "409":
           description: Invalid payment state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RefundPaymentResponse"
         "422":
           description: Refund window expired or insufficient refundable amount
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/RefundPaymentResponse"
       security:
@@ -427,19 +431,19 @@ paths:
         "200":
           description: Payment captured
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "403":
           description: Insufficient permissions
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
         "404":
           description: Payment intent not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InitiatePaymentResponse"
       security:
@@ -469,11 +473,12 @@ paths:
         "200":
           description: Invoice finalized
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:finalize
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
@@ -498,11 +503,12 @@ paths:
         "200":
           description: Adjustment applied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:manage
   /v1/invoices/{invoiceId}:
     get:
       tags:
@@ -521,11 +527,12 @@ paths:
         "200":
           description: Invoice found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - invoice:manage
 components:
   schemas:
     BillingRulesDTO:
@@ -1013,3 +1020,8 @@ components:
       - authorizedBy
       - reason
       - type
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

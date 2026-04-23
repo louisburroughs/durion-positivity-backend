@@ -59,17 +59,18 @@ paths:
         "200":
           description: Person found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Person"
         "404":
           description: Person not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Person"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:view
     put:
       tags:
       - People API
@@ -95,17 +96,18 @@ paths:
         "200":
           description: Person updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Person"
         "404":
           description: Person not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Person"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:edit
     delete:
       tags:
       - People API
@@ -127,7 +129,8 @@ paths:
         "404":
           description: Person not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:delete
   /v1/people/staffing/assignments/{assignmentId}:
     get:
       tags:
@@ -146,17 +149,18 @@ paths:
         "200":
           description: Assignment found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "404":
           description: Assignment not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:view
     put:
       tags:
       - People - Staffing Assignments
@@ -181,29 +185,30 @@ paths:
         "200":
           description: Assignment updated.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "400":
           description: Validation error.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "404":
           description: Assignment not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "409":
           description: Overlapping assignment exists.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:edit
     delete:
       tags:
       - People - Staffing Assignments
@@ -224,7 +229,8 @@ paths:
         "404":
           description: Assignment not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:edit
   /v1/people/employees/{employeeId}:
     get:
       tags:
@@ -243,17 +249,18 @@ paths:
         "200":
           description: Employee found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "404":
           description: Employee not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:view
     put:
       tags:
       - Employee API
@@ -278,35 +285,36 @@ paths:
         "200":
           description: Employee updated
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "404":
           description: Employee not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "409":
           description: Duplicate employee
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "422":
           description: Semantic validation failure
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:edit
   /v1/people:
     get:
       tags:
@@ -318,13 +326,14 @@ paths:
         "200":
           description: List of people returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Person"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:view
     post:
       tags:
       - People API
@@ -341,11 +350,12 @@ paths:
         "201":
           description: Person created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Person"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:create
   /v1/people/{personUuid}/access/assignments:
     get:
       tags:
@@ -376,13 +386,14 @@ paths:
         "200":
           description: Assignments retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/UserRoleDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:role:view
     post:
       tags:
       - People - Access Control
@@ -407,7 +418,7 @@ paths:
         "201":
           description: Role assignment created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
         "400":
@@ -423,7 +434,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:role:assign
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -444,13 +456,13 @@ paths:
         "200":
           description: Break stopped successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakDto"
         "404":
           description: Work session or break not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakDto"
       security:
@@ -475,13 +487,13 @@ paths:
         "200":
           description: Break started successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakDto"
         "404":
           description: Work session not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakDto"
       security:
@@ -503,7 +515,7 @@ paths:
         "200":
           description: Work session stopped successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionDto"
       security:
@@ -525,7 +537,7 @@ paths:
         "200":
           description: Work session started successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionDto"
       security:
@@ -547,35 +559,36 @@ paths:
         "201":
           description: Link created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "200":
           description: Link already exists and is returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:write
   /v1/people/user-links:
     post:
       tags:
@@ -593,35 +606,36 @@ paths:
         "201":
           description: Link created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "200":
           description: Link already exists and is returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:write
   /v1/people/timeEntries/reject:
     post:
       tags:
@@ -646,17 +660,18 @@ paths:
         "200":
           description: Time entries rejected successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "400":
           description: Invalid request - rejectionReason required for all decisions
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeEntry:reject
   /v1/people/timeEntries/approve:
     post:
       tags:
@@ -681,17 +696,18 @@ paths:
         "200":
           description: Time entries approved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "400":
           description: Invalid request - decisions required
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeEntry:approve
   /v1/people/timeEntries/adjustments:
     post:
       tags:
@@ -732,7 +748,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeAdjustment:create
   /v1/people/timeEntries/adjustments/{adjustmentId}/approve:
     post:
       tags:
@@ -772,7 +789,8 @@ paths:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeAdjustment:approve
   /v1/people/staffing/assignments:
     get:
       tags:
@@ -791,13 +809,14 @@ paths:
         "200":
           description: List of assignments.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/StaffingAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:view
     post:
       tags:
       - People - Staffing Assignments
@@ -815,29 +834,30 @@ paths:
         "201":
           description: Assignment created.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "400":
           description: Validation error.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "404":
           description: Location or person not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
         "409":
           description: Overlapping assignment exists.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:edit
   /v1/people/resolve:
     post:
       tags:
@@ -855,11 +875,12 @@ paths:
         "200":
           description: Person resolved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ResolvePersonResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:person:create
   /v1/people/exceptions:
     get:
       tags:
@@ -883,7 +904,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/TimeEntryException"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeException:view
     post:
       tags:
       - People - Exceptions
@@ -911,7 +933,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeEntryExceptionResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeException:create
   /v1/people/exceptions/{exceptionId}/waive:
     post:
       tags:
@@ -957,7 +980,8 @@ paths:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/resolve:
     post:
       tags:
@@ -996,7 +1020,8 @@ paths:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/acknowledge:
     post:
       tags:
@@ -1030,7 +1055,8 @@ paths:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeException:acknowledge
   /v1/people/employees:
     post:
       tags:
@@ -1049,29 +1075,30 @@ paths:
         "201":
           description: Employee created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "409":
           description: Duplicate employee
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "422":
           description: Semantic validation failure
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:create
   /v1/people/employees/{employeeId}/disable:
     post:
       tags:
@@ -1095,23 +1122,24 @@ paths:
         "200":
           description: Employee disabled
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "400":
           description: Employee cannot be disabled
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
         "404":
           description: Employee not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EmployeeProfileDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:deactivate
   /v1/people/bulk-ingest:
     post:
       tags:
@@ -1130,17 +1158,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:employee:create
   /v1/people/{personUuid}/access/roles:
     get:
       tags:
@@ -1159,13 +1188,14 @@ paths:
         "200":
           description: Roles retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/RoleDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:role:view
   /v1/people/{personId}/users:
     get:
       tags:
@@ -1185,7 +1215,7 @@ paths:
         "200":
           description: User IDs returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1194,14 +1224,15 @@ paths:
         "404":
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:view
   /v1/people/users/{userId}/person:
     get:
       tags:
@@ -1221,17 +1252,18 @@ paths:
         "200":
           description: Person found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PersonResponse"
         "404":
           description: Link or person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PersonResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:view
   /v1/people/user-links/{personId}:
     get:
       tags:
@@ -1251,19 +1283,20 @@ paths:
         "200":
           description: Links found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Link or person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/UserPersonLinkResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
       tags:
@@ -1288,7 +1321,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/TimeEntryAdjustment"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:timeAdjustment:view
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     get:
       tags:
@@ -1353,7 +1387,7 @@ paths:
         "200":
           description: Report generated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1361,7 +1395,7 @@ paths:
         "400":
           description: Invalid parameters
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1369,7 +1403,7 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1377,7 +1411,7 @@ paths:
         "503":
           description: Dependent service unavailable
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1385,13 +1419,15 @@ paths:
         "500":
           description: Unexpected server error
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:time:export:read
+        - accounting:time:export
   /v1/people/reports/approvedTime:
     get:
       tags:
@@ -1436,7 +1472,7 @@ paths:
         "200":
           description: Approved time rows retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1444,7 +1480,7 @@ paths:
         "400":
           description: Invalid parameters
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1452,7 +1488,7 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1460,7 +1496,7 @@ paths:
         "503":
           description: Dependent service unavailable
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1468,13 +1504,15 @@ paths:
         "500":
           description: Unexpected server error
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ApprovedTimeExportResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:time:export:read
+        - accounting:time:export
   /v1/people/me/primary-location:
     get:
       tags:
@@ -1487,17 +1525,18 @@ paths:
         "200":
           description: Primary location resolved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PrimaryLocationResponse"
         "404":
           description: No active location assignment found for current user.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PrimaryLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:availability:view
   /v1/people/availability:
     get:
       tags:
@@ -1524,13 +1563,14 @@ paths:
         "200":
           description: Availability data returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/PeopleAvailabilityResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:availability:view
   /v1/people/{personUuid}/access/assignments/{roleCode}:
     delete:
       tags:
@@ -1572,7 +1612,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:role:revoke
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1594,7 +1635,8 @@ paths:
         "404":
           description: Link not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - people:userLink:write
 components:
   schemas:
     Person:
@@ -2694,3 +2736,8 @@ components:
         availableOn:
           type: string
           format: date
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

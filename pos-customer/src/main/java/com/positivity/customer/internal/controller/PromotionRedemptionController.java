@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Promotion Redemptions", description = "Operations for recording and querying promotion redemptions")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/promotions/redemptions")
 public class PromotionRedemptionController {
 
@@ -43,6 +42,8 @@ public class PromotionRedemptionController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "Promotion:RecordRedemption" })
         @PreAuthorize("hasAuthority('Promotion:RecordRedemption')")
         @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
         public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
@@ -55,6 +56,8 @@ public class PromotionRedemptionController {
         @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class))))
         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         @GetMapping("/by-customer/{customerId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "Promotion:ViewRedemption" })
         @PreAuthorize("hasAuthority('Promotion:ViewRedemption')")
         @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")
         public ResponseEntity<List<PromotionRedemptionResponse>> getRedemptionsByCustomer(

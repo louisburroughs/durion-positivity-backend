@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @Tag(name = "User API", description = "Endpoints for user management and authentication")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
 public class UserController {
@@ -32,6 +31,8 @@ public class UserController {
         @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
         @ApiResponse(responseCode = "201", description = "User created successfully.")
         @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:user:create" })
         @PreAuthorize("hasAuthority('security:user:create')")
         @PostMapping
         public ResponseEntity<UserDto> createUser(@RequestBody Map<String, Object> payload) {
@@ -45,6 +46,8 @@ public class UserController {
 
         @Operation(summary = "Get all users", description = "Retrieve a list of all users.")
         @ApiResponse(responseCode = "200", description = "List of users returned successfully.")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:user:view" })
         @PreAuthorize("hasAuthority('security:user:view')")
         @GetMapping
         public List<UserDto> getAllUsers() {
@@ -54,6 +57,8 @@ public class UserController {
         @Operation(summary = "Get user by ID", description = "Retrieve a user by their unique ID.")
         @ApiResponse(responseCode = "200", description = "User found and returned.")
         @ApiResponse(responseCode = "404", description = "User not found.")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:user:view" })
         @PreAuthorize("hasAuthority('security:user:view')")
         @GetMapping("/{id}")
         public ResponseEntity<UserDto> getUserById(
@@ -67,6 +72,8 @@ public class UserController {
         @ApiResponse(responseCode = "200", description = "User updated successfully.")
         @ApiResponse(responseCode = "404", description = "User not found.")
         @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:user:edit" })
         @PreAuthorize("hasAuthority('security:user:edit')")
         @PutMapping("/{id}")
         public ResponseEntity<UserDto> updateUser(
@@ -80,6 +87,8 @@ public class UserController {
         @ApiResponse(responseCode = "204", description = "User deleted successfully.")
         @ApiResponse(responseCode = "404", description = "User not found.")
         @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:user:delete" })
         @PreAuthorize("hasAuthority('security:user:delete')")
         @DeleteMapping("/{id}")
         public ResponseEntity<Void> deleteUser(
@@ -92,6 +101,8 @@ public class UserController {
         @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
         @ApiResponse(responseCode = "404", description = "User not found.")
         @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:assign" })
         @PreAuthorize("hasAuthority('security:role:assign')")
         @PutMapping("/{username}/roles")
         public ResponseEntity<UserDto> assignRoles(

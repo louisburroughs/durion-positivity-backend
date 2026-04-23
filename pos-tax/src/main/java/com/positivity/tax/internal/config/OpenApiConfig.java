@@ -1,5 +1,7 @@
 package com.positivity.tax.internal.config;
 
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -16,6 +18,11 @@ public class OpenApiConfig {
                         .title("POS Tax Service API")
                         .version("1.0")
                         .description("Tax calculation service with external API passthrough and test mode support")
-                        .contact(new Contact().name("Durion Support Services").email("platform@durionpos.org")));
+                        .contact(new Contact().name("Durion Support Services").email("platform@durionpos.org")))
+                .components(new Components()
+                        .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")));
     }
 }

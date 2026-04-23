@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/catalogs")
 @Tag(name = "Catalog API", description = "API for managing catalogs")
 public class CatalogController {
@@ -34,6 +33,8 @@ public class CatalogController {
         private final CatalogService catalogService;
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
         @GetMapping("/{catalogId}")
         @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
         @ApiResponse(responseCode = "200", description = "Successfully retrieved catalog", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
@@ -47,6 +48,8 @@ public class CatalogController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
         @GetMapping("/name/{name}")
         @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
         @ApiResponse(responseCode = "200", description = "Successfully retrieved catalogs", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
@@ -56,6 +59,8 @@ public class CatalogController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PostMapping
         @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
         @ApiResponse(responseCode = "201", description = "Catalog created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
@@ -67,6 +72,8 @@ public class CatalogController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
         @PutMapping("/{catalogId}")
         @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
         @ApiResponse(responseCode = "200", description = "Catalog updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
@@ -83,6 +90,8 @@ public class CatalogController {
         }
 
         @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_DELETE" })
         @DeleteMapping("/{catalogId}")
         @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
         @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")

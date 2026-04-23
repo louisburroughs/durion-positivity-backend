@@ -73,17 +73,18 @@ paths:
         "200":
           description: Assignment retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "404":
           description: Workorder not found or no assignment exists
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:view
     put:
       tags:
       - Technician Assignment API
@@ -126,29 +127,30 @@ paths:
         "200":
           description: Technician reassigned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "400":
           description: Invalid state transition or no current assignment
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:assign-technician
     post:
       tags:
       - Technician Assignment API
@@ -190,29 +192,30 @@ paths:
         "200":
           description: Technician assigned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "400":
           description: Invalid state transition
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
         "404":
           description: Workorder or technician not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:assign-technician
   /v1/workorders/{workorderId}/labor/{entryId}/adjust:
     put:
       tags:
@@ -262,29 +265,30 @@ paths:
         "200":
           description: Labor hours adjusted successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "400":
           description: Invalid hours value
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "404":
           description: Labor entry not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workexec/approvalConfigurations/{approvalId}:
     get:
       tags:
@@ -305,17 +309,18 @@ paths:
         "200":
           description: Configuration found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
         "404":
           description: Configuration not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:view
     put:
       tags:
       - Approval Configuration API
@@ -342,17 +347,18 @@ paths:
         "200":
           description: Configuration updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
         "404":
           description: Configuration not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:edit
     delete:
       tags:
       - Approval Configuration API
@@ -374,7 +380,8 @@ paths:
         "404":
           description: Configuration not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:delete
   /v1/workorders:
     get:
       tags:
@@ -386,13 +393,14 @@ paths:
         "200":
           description: List of work orders returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:view
     post:
       tags:
       - Work Order API
@@ -427,7 +435,7 @@ paths:
           description: "Work order created successfully, or existing work order returned\
             \ if idempotency key was previously processed."
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
       security:
@@ -448,7 +456,7 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -479,29 +487,30 @@ paths:
         "200":
           description: "Work started, context locked"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderStartResponse"
         "400":
           description: Cannot start workorder due to pending change requests
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderStartResponse"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderStartResponse"
         "409":
           description: Work already started
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderStartResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:start
   /v1/workorders/{workorderId}/services/{serviceId}/labor/start:
     post:
       tags:
@@ -551,35 +560,36 @@ paths:
         "201":
           description: Labor session started successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "200":
           description: Idempotent request - existing session returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "400":
           description: Invalid state - active session exists or invalid status
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "404":
           description: Workorder or service not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/{workorderId}/reopen:
     post:
       tags:
@@ -613,23 +623,24 @@ paths:
         "200":
           description: Workorder reopened successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReopenWorkorderResponse"
         "400":
           description: Workorder cannot be reopened or reason missing.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReopenWorkorderResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReopenWorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:reopen_completed
   /v1/workorders/{workorderId}/picked-items:consume:
     post:
       tags:
@@ -655,29 +666,30 @@ paths:
         "200":
           description: Picked items consumed successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ConsumePickedItemsResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:consume
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan:
     post:
       tags:
@@ -711,29 +723,30 @@ paths:
         "200":
           description: Scan resolved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ResolveScanResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Workorder or pick task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:complete:
     post:
       tags:
@@ -767,23 +780,24 @@ paths:
         "200":
           description: Pick task completed successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Workorder or pick task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}/lines/{pickLineId}:confirm:
     post:
       tags:
@@ -825,35 +839,36 @@ paths:
         "200":
           description: Pick line confirmed successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: "Workorder, pick task, or pick line not found"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "422":
           description: Scan mismatch or domain validation error from pos-inventory
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/workorders/{workorderId}/parts/substitute:
     post:
       tags:
@@ -892,29 +907,30 @@ paths:
         "201":
           description: Part substituted successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: "Invalid request (part already consumed, etc.)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "409":
           description: Idempotency conflict
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/parts/return:
     post:
       tags:
@@ -951,23 +967,24 @@ paths:
         "201":
           description: Parts returned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -1006,23 +1023,24 @@ paths:
         "201":
           description: Unused quantity returned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -1060,29 +1078,30 @@ paths:
         "201":
           description: Parts issued successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (negative quantity, etc.)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "409":
           description: Idempotency conflict (duplicate key)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/parts/correct:
     post:
       tags:
@@ -1121,23 +1140,24 @@ paths:
         "201":
           description: Part quantity corrected successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/parts/consume:
     post:
       tags:
@@ -1175,23 +1195,24 @@ paths:
         "201":
           description: Parts consumption recorded successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (exceeds issued quantity, etc.)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:add
   /v1/workorders/{workorderId}/operationalContext/override:
     post:
       tags:
@@ -1217,23 +1238,24 @@ paths:
         "200":
           description: Override applied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
         "409":
           description: Context locked (work started)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:operationalContext:override
   /v1/workorders/{workorderId}/labor/{entryId}/stop:
     post:
       tags:
@@ -1269,29 +1291,30 @@ paths:
         "200":
           description: Labor session stopped successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "400":
           description: Session already stopped
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
         "404":
           description: Labor entry not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/{workorderId}/generate-invoice:
     post:
       tags:
@@ -1322,23 +1345,24 @@ paths:
           description: Invoice generated successfully or existing invoice returned
             for idempotent replay.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
         "409":
           description: Work order is not in COMPLETED state.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:generate_invoice
   /v1/workorders/{workorderId}/complete:
     post:
       tags:
@@ -1372,23 +1396,24 @@ paths:
         "200":
           description: Work order completed successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CompleteWorkorderResponse"
         "400":
           description: Invalid state transition or work order already completed.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CompleteWorkorderResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CompleteWorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:complete
   /v1/workorders/{workorderId}/changeRequests:
     get:
       tags:
@@ -1409,13 +1434,14 @@ paths:
         "200":
           description: List of change requests returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:view
     post:
       tags:
       - Change Request API
@@ -1460,24 +1486,25 @@ paths:
           description: "Change request created successfully, or existing change request\
             \ returned if idempotency key was previously processed"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "400":
           description: "Invalid request - missing description, no items, or validation\
             \ failed"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "404":
           description: Work order not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:create
   /v1/workorders/{workorderId}/approval:
     post:
       tags:
@@ -1516,24 +1543,25 @@ paths:
         "200":
           description: Work order approved successfully with signature captured.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "400":
           description: Work order cannot be approved in current state or customer
             ID mismatch.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:approve
   /v1/workorders/workSessions/{workSessionId}/stop:
     post:
       tags:
@@ -1561,23 +1589,24 @@ paths:
         "200":
           description: Work session stopped successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
         "400":
           description: Invalid request - work session not active or validation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
         "404":
           description: Work session not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - timekeeping:work_session:stop
   /v1/workorders/workSessions/{workSessionId}/breaks:
     post:
       tags:
@@ -1604,23 +1633,24 @@ paths:
         "201":
           description: Break segment started successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
         "400":
           description: Invalid request - work session not active or validation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
         "404":
           description: Work session not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - timekeeping:work_session:break_start
   /v1/workorders/workSessions/{workSessionId}/breaks/{breakSegmentId}/stop:
     post:
       tags:
@@ -1650,23 +1680,24 @@ paths:
         "200":
           description: Break segment stopped successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
         "400":
           description: Break segment not active or work session invalid
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
         "404":
           description: Work session or break segment not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BreakSegmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - timekeeping:work_session:break_stop
   /v1/workorders/workSessions/start:
     post:
       tags:
@@ -1685,18 +1716,19 @@ paths:
         "201":
           description: Work session started successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
         "400":
           description: Invalid request - missing required fields or work order not
             found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkSessionResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - timekeeping:work_session:create
   /v1/workorders/travelSegments/{travelSegmentId}/stop:
     post:
       tags:
@@ -1720,11 +1752,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelSegmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/travelSegments/{travelSegmentId}/adjustments:
     post:
       tags:
@@ -1748,11 +1781,12 @@ paths:
         "201":
           description: Created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelSegmentAdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/travelSegments/submit/{mobileWorkAssignmentId}:
     post:
       tags:
@@ -1776,13 +1810,14 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/TravelSegmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/travelSegments/start:
     post:
       tags:
@@ -1799,11 +1834,12 @@ paths:
         "201":
           description: Created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TravelSegmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workorders/timeEntries/{timeEntryId}/reject:
     post:
       tags:
@@ -1827,11 +1863,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TimeEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - TimeEntry:Reject
   /v1/workorders/timeEntries/{timeEntryId}/approve:
     post:
       tags:
@@ -1849,11 +1886,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TimeEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - TimeEntry:Approve
   /v1/workorders/estimates:
     get:
       tags:
@@ -1865,13 +1903,14 @@ paths:
         "200":
           description: List of estimates returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
     post:
       tags:
       - Estimate API
@@ -1907,36 +1946,37 @@ paths:
         "201":
           description: Estimate created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "400":
           description: Invalid request - missing required fields.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "403":
           description: Forbidden - user does not have ESTIMATE_CREATE permission.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "409":
           description: Conflict - estimate could not be created due to state or integrity
             constraints.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "500":
           description: Internal server error - unexpected estimate creation failure.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:create
   /v1/workorders/estimates/{estimateId}/submit-for-approval:
     post:
       tags:
@@ -1960,23 +2000,24 @@ paths:
         "200":
           description: Estimate submitted for approval successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "400":
           description: Estimate is incomplete or not in DRAFT state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:submit
   /v1/workorders/estimates/{estimateId}/snapshots:
     post:
       tags:
@@ -2005,23 +2046,24 @@ paths:
         "200":
           description: Snapshot created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateSnapshotResponse"
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateSnapshotResponse"
         "409":
           description: Snapshot creation failed
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateSnapshotResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate_snapshot:create
   /v1/workorders/estimates/{estimateId}/reopen:
     post:
       tags:
@@ -2043,23 +2085,24 @@ paths:
         "200":
           description: Estimate reopened successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "400":
           description: Estimate cannot be reopened (not declined or expired).
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "404":
           description: Estimate not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:reopen
   /v1/workorders/estimates/{estimateId}/promote:
     post:
       tags:
@@ -2091,29 +2134,30 @@ paths:
         "200":
           description: Workorder created successfully from estimate
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "400":
           description: Validation error - estimate not in correct state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "409":
           description: Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:promote
   /v1/workorders/estimates/{estimateId}/items:
     post:
       tags:
@@ -2152,29 +2196,30 @@ paths:
         "200":
           description: Line item added successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "400":
           description: Validation error or invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "409":
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate_item:add
   /v1/workorders/estimates/{estimateId}/decline:
     post:
       tags:
@@ -2203,23 +2248,24 @@ paths:
         "200":
           description: Estimate declined successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "400":
           description: Estimate cannot be declined in current state.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "404":
           description: Estimate not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:decline
   /v1/workorders/estimates/{estimateId}/calculate:
     post:
       tags:
@@ -2242,26 +2288,27 @@ paths:
         "200":
           description: Totals calculated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
                 additionalProperties: {}
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
                 additionalProperties: {}
         "409":
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
                 additionalProperties: {}
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:calculate
   /v1/workorders/estimates/{estimateId}/approval:
     post:
       tags:
@@ -2304,24 +2351,25 @@ paths:
         "200":
           description: Estimate approved successfully with signature captured.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "400":
           description: "Estimate cannot be approved in current state, customer ID\
             \ mismatch, or PO required but not provided."
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "404":
           description: Estimate not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:approve
   /v1/workorders/estimates/from-appointment:
     post:
       tags:
@@ -2340,31 +2388,31 @@ paths:
         "201":
           description: Estimate created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
         "200":
           description: Existing estimate returned (idempotent)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
         "400":
           description: Missing or invalid required fields
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
         "401":
           description: Unauthenticated
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
       security:
@@ -2404,29 +2452,30 @@ paths:
         "200":
           description: Emergency override applied successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "400":
           description: Cannot apply override - invalid state or missing reason
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "403":
           description: Insufficient permissions - Manager role required
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "404":
           description: Change request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:emergency_override
   /v1/workorders/changeRequests/{changeId}/decline:
     post:
       tags:
@@ -2461,23 +2510,24 @@ paths:
         "200":
           description: Change request declined successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "400":
           description: Cannot decline - invalid state or missing note
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "404":
           description: Change request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:decline
   /v1/workorders/changeRequests/{changeId}/approve:
     post:
       tags:
@@ -2512,23 +2562,24 @@ paths:
         "200":
           description: Change request approved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "400":
           description: Cannot approve - invalid state or missing approval note
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "404":
           description: Change request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:approve
   /v1/workorders/changeRequests/{changeId}/acknowledgeDenial:
     post:
       tags:
@@ -2566,23 +2617,24 @@ paths:
         "200":
           description: Timers stopped successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerStopResponse"
         "400":
           description: Missing or invalid authenticated user id
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "409":
           description: Conflict while stopping timers
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2609,35 +2661,36 @@ paths:
         "201":
           description: Timer started successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
         "200":
           description: Idempotent replay returned existing timer
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
         "400":
           description: Missing or invalid authenticated user id
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "404":
           description: Referenced resource not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "409":
           description: Conflict while starting timer
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workexec/labor-performed:
     post:
       tags:
@@ -2673,35 +2726,36 @@ paths:
         "201":
           description: Labor entry created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
         "200":
           description: Idempotent replay returned existing labor entry
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
         "400":
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "404":
           description: Related resource not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "409":
           description: Conflict while recording labor
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:add
   /v1/workexec/approvalConfigurations:
     post:
       tags:
@@ -2720,11 +2774,12 @@ paths:
         "200":
           description: Configuration created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:create
   /v1/workorders/estimates/{estimateId}:
     get:
       tags:
@@ -2745,17 +2800,18 @@ paths:
         "200":
           description: Estimate found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
         "404":
           description: Estimate not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
     delete:
       tags:
       - Estimate API
@@ -2777,7 +2833,8 @@ paths:
         "404":
           description: Estimate not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:delete
     patch:
       tags:
       - Estimate API
@@ -2800,11 +2857,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:edit
   /v1/workorders/estimates/{estimateId}/items/{itemId}:
     delete:
       tags:
@@ -2838,7 +2896,8 @@ paths:
         "409":
           description: Estimate not in DRAFT status (INVALID_STATE)
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate_item:delete
     patch:
       tags:
       - Estimate API
@@ -2882,29 +2941,30 @@ paths:
         "200":
           description: Line item updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "400":
           description: Validation error or invalid request
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "404":
           description: Estimate or item not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
         "409":
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateItemResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate_item:edit
   /v1/workorders/{workorderId}:
     get:
       tags:
@@ -2925,17 +2985,18 @@ paths:
         "200":
           description: Work order found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:view
     delete:
       tags:
       - Work Order API
@@ -2978,7 +3039,7 @@ paths:
         "200":
           description: Transition history returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -3005,7 +3066,7 @@ paths:
         "200":
           description: Snapshot history returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -3039,11 +3100,12 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
   /v1/workorders/{workorderId}/pick-list:
     get:
       tags:
@@ -3063,23 +3125,24 @@ paths:
         "200":
           description: Pick list retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickListResponse"
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
   /v1/workorders/{workorderId}/pick-list/tasks:
     get:
       tags:
@@ -3107,17 +3170,18 @@ paths:
         "403":
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
   /v1/workorders/{workorderId}/parts/usageHistory:
     get:
       tags:
@@ -3145,19 +3209,20 @@ paths:
         "200":
           description: Usage history retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:view
   /v1/workorders/{workorderId}/parts/adjustments:
     get:
       tags:
@@ -3185,19 +3250,20 @@ paths:
         "200":
           description: Adjustment history retrieved successfully (newest first)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:parts:view
   /v1/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -3217,13 +3283,13 @@ paths:
         "200":
           description: Operational context returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/OperationalContextResponse"
       security:
@@ -3248,7 +3314,7 @@ paths:
         "200":
           description: Labor history retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -3256,13 +3322,14 @@ paths:
         "403":
           description: Permission denied
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderLaborEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:view
   /v1/workorders/{workorderId}/detail:
     get:
       tags:
@@ -3292,13 +3359,13 @@ paths:
         "200":
           description: Workorder detail retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderDetailResponse"
         "404":
           description: Workorder not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderDetailResponse"
       security:
@@ -3324,17 +3391,18 @@ paths:
         "200":
           description: Completion preconditions evaluated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CompletionPreconditionsResponse"
         "404":
           description: Work order not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CompletionPreconditionsResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:complete
   /v1/workorders/{workorderId}/canClose:
     get:
       tags:
@@ -3356,7 +3424,7 @@ paths:
         "200":
           description: "Returns true if work order can be closed, false otherwise"
           content:
-            '*/*':
+            application/json:
               schema:
                 type: boolean
       security:
@@ -3383,17 +3451,18 @@ paths:
         "200":
           description: Summary retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateSummaryResponse"
         "404":
           description: Estimate not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/EstimateSummaryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workorders/estimates/{estimateId}/pdf:
     get:
       tags:
@@ -3432,7 +3501,8 @@ paths:
                 type: string
                 format: byte
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -3453,13 +3523,14 @@ paths:
         "200":
           description: List of estimates returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workorders/estimates/location/{locationId}:
     get:
       tags:
@@ -3480,13 +3551,14 @@ paths:
         "200":
           description: List of estimates returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workorders/estimates/customer/{customerId}:
     get:
       tags:
@@ -3507,13 +3579,14 @@ paths:
         "200":
           description: List of estimates returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/EstimateResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workorders/changeRequests/{changeId}:
     get:
       tags:
@@ -3534,17 +3607,18 @@ paths:
         "200":
           description: Change request found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
         "404":
           description: Change request not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ChangeRequestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:change_request:view
   /v1/workexec:
     get:
       tags:
@@ -3556,13 +3630,14 @@ paths:
         "200":
           description: List of configurations returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ApprovalConfigurationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:view
   /v1/workexec/wip:
     get:
       tags:
@@ -3595,11 +3670,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageWorkorderStatusView"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:wip:view
   /v1/workexec/wip/{workorderId}:
     get:
       tags:
@@ -3620,11 +3696,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderStatusDetail"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:wip:view
   /v1/workexec/time-entries/timer/active:
     get:
       tags:
@@ -3636,17 +3713,18 @@ paths:
         "200":
           description: Active timers returned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
         "400":
           description: Missing or invalid authenticated user id
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:view
   /v1/workexec/job-time-totals:
     get:
       tags:
@@ -3702,17 +3780,18 @@ paths:
         "200":
           description: Job time totals returned successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
         "400":
           description: Invalid request parameters
           content:
-            '*/*':
+            application/json:
               schema:
                 type: object
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:labor:view
   /v1/workexec/estimates/search:
     get:
       tags:
@@ -3745,11 +3824,12 @@ paths:
         "200":
           description: Page of estimate summaries returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PageEstimateSummaryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:estimate:view
   /v1/workexec/dashboard/today:
     get:
       tags:
@@ -3774,11 +3854,12 @@ paths:
         "200":
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/DashboardResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:dashboard:view
   /v1/workexec/approvalConfigurations/applicable:
     get:
       tags:
@@ -3807,17 +3888,18 @@ paths:
         "200":
           description: Configuration found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
         "404":
           description: No configuration found (default will be used).
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:approval_config:view
 components:
   schemas:
     AssignmentHistoryEntry:
@@ -7003,3 +7085,8 @@ components:
           type: string
         estimatedLaborHours:
           type: number
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 public class PersonController {
@@ -38,6 +37,7 @@ public class PersonController {
     @Operation(summary = "Get all people", description = "Retrieve a list of all people.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
     @GetMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "people:person:view" })
     @PreAuthorize("hasAuthority('people:person:view')")
     public List<Person> getAllPeople() {
         return personService.getAllPeople();
@@ -47,6 +47,7 @@ public class PersonController {
     @ApiResponse(responseCode = "200", description = "Person found and returned.")
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @GetMapping("/{personId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "people:person:view" })
     @PreAuthorize("hasAuthority('people:person:view')")
     public ResponseEntity<Person> getPersonById(
             @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
@@ -60,6 +61,8 @@ public class PersonController {
     @ApiResponse(responseCode = "201", description = "Person created successfully.")
     @EmitEvent(id = "PEOPLE_PERSON_CREATE", apiVersion = "1")
     @PostMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:person:create" })
     @PreAuthorize("hasAuthority('people:person:create')")
     public ResponseEntity<Person> createPerson(
             @Parameter(description = "Person object to be created") @Valid @RequestBody Person person) {
@@ -71,6 +74,8 @@ public class PersonController {
     @ApiResponse(responseCode = "200", description = "Person resolved successfully.")
     @EmitEvent(id = "PEOPLE_PERSON_RESOLVE", apiVersion = "1")
     @PostMapping("/resolve")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:person:create" })
     @PreAuthorize("hasAuthority('people:person:create')")
     public ResponseEntity<ResolvePersonResponse> resolvePerson(
             @Parameter(description = "Resolve criteria") @Valid @RequestBody ResolvePersonRequest request) {
@@ -83,6 +88,7 @@ public class PersonController {
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @EmitEvent(id = "PEOPLE_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "people:person:edit" })
     @PreAuthorize("hasAuthority('people:person:edit')")
     public ResponseEntity<Person> updatePerson(
             @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId,
@@ -100,6 +106,8 @@ public class PersonController {
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @EmitEvent(id = "PEOPLE_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:person:delete" })
     @PreAuthorize("hasAuthority('people:person:delete')")
     public ResponseEntity<Void> deletePerson(
             @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {

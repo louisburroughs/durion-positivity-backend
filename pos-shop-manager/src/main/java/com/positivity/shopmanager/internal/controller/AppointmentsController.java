@@ -29,7 +29,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @Slf4j
 @Tag(name = "Appointments API", description = "Operations for creating and loading appointments in shop management")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1")
 @RequiredArgsConstructor
 public class AppointmentsController {
@@ -43,6 +42,8 @@ public class AppointmentsController {
         @ApiResponse(responseCode = "501", description = "Not implemented.")
         @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
         @PostMapping("/appointments")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "appointments:create", "shop:schedule:edit" })
         @PreAuthorize("hasAnyAuthority('appointments:create','shop:schedule:edit')")
         public ResponseEntity<AppointmentResponse> createAppointment(
                         @Parameter(description = "Appointment creation request body") @Valid @RequestBody AppointmentCreateRequest request,
@@ -66,6 +67,8 @@ public class AppointmentsController {
         @ApiResponse(responseCode = "404", description = "Appointment not found.")
         @ApiResponse(responseCode = "501", description = "Not implemented.")
         @GetMapping("/appointments/{appointmentId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "appointments:view",
+                        "shop:schedule:view" })
         @PreAuthorize("hasAnyAuthority('appointments:view','shop:schedule:view')")
         public ResponseEntity<AppointmentResponse> getAppointment(
                         @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId,
@@ -84,6 +87,8 @@ public class AppointmentsController {
         @ApiResponse(responseCode = "404", description = "Appointment not found.")
         @ApiResponse(responseCode = "409", description = "Appointment state conflict — appointment is not in a reschedulable status.")
         @PutMapping("/appointments/{appointmentId}/reschedule")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "appointments:reschedule" })
         @PreAuthorize("hasAuthority('appointments:reschedule')")
         @EmitEvent(id = "SHOPMGR_APPOINTMENT_RESCHEDULE", apiVersion = "1")
         public ResponseEntity<AppointmentResponse> rescheduleAppointment(
@@ -95,6 +100,8 @@ public class AppointmentsController {
         @ApiResponse(responseCode = "200", description = "Appointment cancelled successfully.")
         @ApiResponse(responseCode = "409", description = "Appointment state conflict.")
         @DeleteMapping("/appointments/{appointmentId}/cancel")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "appointments:cancel" })
         @PreAuthorize("hasAuthority('appointments:cancel')")
         @EmitEvent(id = "SHOPMGR_APPOINTMENT_CANCEL", apiVersion = "1")
         public ResponseEntity<AppointmentResponse> cancelAppointment(

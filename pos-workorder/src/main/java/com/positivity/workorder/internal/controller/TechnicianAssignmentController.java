@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "Technician Assignment API", description = "Endpoints for assigning technicians to workorders")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 @Slf4j
@@ -59,6 +58,8 @@ public class TechnicianAssignmentController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Assign technician request", required = true, content = @Content(schema = @Schema(implementation = AssignTechnicianRequest.class), examples = @ExampleObject(name = "assignTechnician", value = "{\"technicianId\":\"550e8400-e29b-41d4-a716-446655440120\",\"assignedByUserId\":\"550e8400-e29b-41d4-a716-446655440100\",\"notes\":\"Primary technician assigned\"}")))
         @PostMapping("/{workorderId}/technician")
         @EmitEvent(id = "WORKORDER_TECHNICIAN_ASSIGN", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:assign-technician" })
         @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
         public ResponseEntity<TechnicianAssignmentResponse> assignTechnician(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
@@ -112,6 +113,8 @@ public class TechnicianAssignmentController {
         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reassign technician request", required = true, content = @Content(schema = @Schema(implementation = ReassignTechnicianRequest.class), examples = @ExampleObject(name = "reassignTechnician", value = "{\"newTechnicianId\":\"550e8400-e29b-41d4-a716-446655440121\",\"reassignedByUserId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reason\":\"Scheduling conflict\",\"notes\":\"Reassigned due to availability\"}")))
         @PutMapping("/{workorderId}/technician")
         @EmitEvent(id = "WORKORDER_TECHNICIAN_REASSIGN", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:assign-technician" })
         @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
         public ResponseEntity<TechnicianAssignmentResponse> reassignTechnician(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
@@ -166,6 +169,8 @@ public class TechnicianAssignmentController {
                         @ApiResponse(responseCode = "404", description = "Workorder not found or no assignment exists")
         })
         @GetMapping("/{workorderId}/technician")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:workorder:view" })
         @PreAuthorize("hasAuthority('workorder:workorder:view')")
         public ResponseEntity<TechnicianAssignmentResponse> getTechnicianAssignment(
                         @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId) {

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * The agent has role-specific tools, Exa web search, and RAG.
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:execute" })
 @RequestMapping("/v1/mcp")
 public class McpChatController {
 

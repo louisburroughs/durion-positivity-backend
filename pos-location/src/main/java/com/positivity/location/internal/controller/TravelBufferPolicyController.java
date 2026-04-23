@@ -6,6 +6,7 @@ import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.service.TravelBufferPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "Travel Buffer Policy API", description = "Operations for managing travel buffer policies")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/travel-buffer-policies")
 @RequiredArgsConstructor
 public class TravelBufferPolicyController {
@@ -39,6 +39,7 @@ public class TravelBufferPolicyController {
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:travel-buffer-policy:manage')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:travel-buffer-policy:manage" })
     @PostMapping
     public ResponseEntity<TravelBufferPolicyResponse> create(@RequestBody TravelBufferPolicyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(travelBufferPolicyService.create(request));
@@ -47,6 +48,7 @@ public class TravelBufferPolicyController {
     @Operation(summary = "List travel buffer policies")
     @ApiResponse(responseCode = "200", description = "Travel buffer policies listed")
     @PreAuthorize("hasAuthority('location:travel-buffer-policy:read')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:travel-buffer-policy:read" })
     @GetMapping
     public ResponseEntity<List<TravelBufferPolicyResponse>> list() {
         return ResponseEntity.ok(travelBufferPolicyService.list());
@@ -58,6 +60,7 @@ public class TravelBufferPolicyController {
     @ApiResponse(responseCode = "404", description = "Travel buffer policy not found")
     @PreAuthorize("hasAuthority('location:travel-buffer-policy:manage')")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_PATCH", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:travel-buffer-policy:manage" })
     @PatchMapping("/{id}")
     public ResponseEntity<TravelBufferPolicyResponse> patch(
             @PathVariable String id, @RequestBody Map<String, Object> patch) {

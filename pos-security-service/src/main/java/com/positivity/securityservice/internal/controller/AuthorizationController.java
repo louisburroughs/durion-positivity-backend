@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #42
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "security:authorization:decide" })
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
 @Tag(name = "Authorization", description = "Authorization decision endpoints for principal permissions")

@@ -8,6 +8,7 @@ import com.positivity.location.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @Tag(name = "Mobile Unit API", description = "Operations for managing mobile units within locations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/mobile-units")
 @RequiredArgsConstructor
 public class MobileUnitController {
@@ -43,6 +43,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:manage" })
     @PostMapping
     public ResponseEntity<MobileUnitResponse> createMobileUnit(
             @Parameter(description = "Mobile unit creation request body") @RequestBody MobileUnitRequest request) {
@@ -53,6 +54,7 @@ public class MobileUnitController {
     @Operation(summary = "List mobile units", description = "List mobile units with pagination.")
     @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
     @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:read" })
     @GetMapping
     public ResponseEntity<Page<MobileUnitResponse>> listMobileUnits(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
@@ -63,6 +65,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "200", description = "Mobile unit returned.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:read" })
     @GetMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> getMobileUnitById(
             @Parameter(description = "Mobile unit ID") @PathVariable UUID id) {
@@ -76,6 +79,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:manage" })
     @PatchMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> patchMobileUnit(
             @PathVariable UUID id, @RequestBody Map<String, Object> patch) {
@@ -87,6 +91,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:manage" })
     @PutMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> replaceCoverageRules(
             @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
@@ -98,6 +103,7 @@ public class MobileUnitController {
     @Operation(summary = "Get coverage rules", description = "Get coverage rules for a mobile unit.")
     @ApiResponse(responseCode = "200", description = "Coverage rules returned.")
     @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:read" })
     @GetMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> getCoverageRules(@PathVariable UUID id) {
         return ResponseEntity.ok(mobileUnitService.getCoverageRules(id));

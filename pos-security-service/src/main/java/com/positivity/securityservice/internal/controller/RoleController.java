@@ -37,7 +37,6 @@ import org.springframework.web.bind.annotation.*;
  * user role assignments.
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping({ "/v1/roles", "/v1/users/roles" })
 @RequiredArgsConstructor
 @Slf4j
@@ -53,6 +52,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_CREATE", apiVersion = "1")
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:create" })
         @PreAuthorize("hasAuthority('security:role:create')")
         @Operation(summary = "Create a new role", description = "Creates a new role with the specified name and description")
         @ApiResponse(responseCode = "201", description = "Role created")
@@ -75,6 +76,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_PERMISSION_GRANT", apiVersion = "1")
         @PutMapping("/{roleId}/permissions/grant")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:edit" })
         @PreAuthorize("hasAuthority('security:role:edit')")
         @Operation(summary = "Grant permission to a role", description = "Grants a single permission to the specified role and returns the updated role")
         @ApiResponse(responseCode = "200", description = "Permission granted to role")
@@ -95,6 +98,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_PERMISSION_REVOKE", apiVersion = "1")
         @DeleteMapping("/{roleId}/permissions/{permissionKey}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:edit" })
         @PreAuthorize("hasAuthority('security:role:edit')")
         @Operation(summary = "Revoke permission from a role", description = "Removes the specified permission from the role")
         @ApiResponse(responseCode = "204", description = "Permission revoked from role")
@@ -110,6 +115,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_PERMISSION_ASSIGN", apiVersion = "1")
         @PutMapping("/{roleId}/permissions/{permissionKey}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:edit" })
         @PreAuthorize("hasAuthority('security:role:edit')")
         @Operation(summary = "Assign permission to a role by key", description = "Assigns the permission identified by path key to the specified role")
         @ApiResponse(responseCode = "204", description = "Permission assigned to role")
@@ -125,6 +132,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_PERMISSIONS_UPDATE", apiVersion = "1")
         @PutMapping("/permissions")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:edit" })
         @PreAuthorize("hasAuthority('security:role:edit')")
         @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
         @ApiResponse(responseCode = "200", description = "Role permissions updated")
@@ -139,6 +148,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_CREATE", apiVersion = "1")
         @PostMapping("/assignments")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:assign" })
         @PreAuthorize("hasAuthority('security:role:assign')")
         @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
         @ApiResponse(responseCode = "201", description = "Role assignment created")
@@ -152,6 +163,8 @@ public class RoleController {
          * Get effective role assignments for a user
          */
         @GetMapping("/assignments/user/{userId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:view" })
         @PreAuthorize("hasAuthority('security:role:view')")
         @Operation(summary = "Get user role assignments", description = "Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked")
         @ApiResponse(responseCode = "200", description = "Role assignments returned successfully")
@@ -168,6 +181,8 @@ public class RoleController {
          * Get all permissions for a user
          */
         @GetMapping("/permissions/user/{userId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:permission:view" })
         @PreAuthorize("hasAuthority('security:permission:view')")
         @Operation(summary = "Get user permissions (legacy path)", description = "Returns all permissions for a user from their role assignments")
         @ApiResponse(responseCode = "200", description = "User permissions returned successfully")
@@ -181,6 +196,8 @@ public class RoleController {
          * Check if a user has a specific permission
          */
         @GetMapping("/check-permission")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:permission:view" })
         @PreAuthorize("hasAuthority('security:permission:view')")
         @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
         @ApiResponse(responseCode = "200", description = "Permission check completed")
@@ -200,6 +217,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
         @DeleteMapping("/assignments/{assignmentId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:assign" })
         @PreAuthorize("hasAuthority('security:role:assign')")
         @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted")
         @ApiResponse(responseCode = "204", description = "Role assignment revoked")
@@ -217,6 +236,8 @@ public class RoleController {
          * Get all roles
          */
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:view" })
         @PreAuthorize("hasAuthority('security:role:view')")
         @Operation(summary = "Get all roles", description = "Returns all roles in the system")
         @ApiResponse(responseCode = "200", description = "Roles returned successfully")
@@ -228,6 +249,8 @@ public class RoleController {
          * Get role by name.
          */
         @GetMapping("/by-name/{name}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:view" })
         @PreAuthorize("hasAuthority('security:role:view')")
         @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
         @ApiResponse(responseCode = "200", description = "Role returned successfully")
@@ -240,6 +263,8 @@ public class RoleController {
          * Story #62: Get role by UUID.
          */
         @GetMapping("/{id}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:view" })
         @PreAuthorize("hasAuthority('security:role:view')")
         @Operation(summary = "Get role by ID", description = "Returns a specific role by its UUID")
         @ApiResponse(responseCode = "200", description = "Role returned successfully")
@@ -256,6 +281,8 @@ public class RoleController {
          */
         @EmitEvent(id = "SECURITY_ROLE_DELETE", apiVersion = "1")
         @DeleteMapping("/{id}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "security:role:delete" })
         @PreAuthorize("hasAuthority('security:role:delete')")
         @Operation(summary = "Delete a role", description = "Deletes a role by UUID and removes its associations")
         @ApiResponse(responseCode = "204", description = "Role deleted")

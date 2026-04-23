@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Shop API", description = "Endpoints for shop management, technicians, and services")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:location:view" })
 @RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class ShopController {

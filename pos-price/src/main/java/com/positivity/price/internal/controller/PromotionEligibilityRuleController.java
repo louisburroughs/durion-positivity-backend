@@ -9,7 +9,6 @@ import com.positivity.price.internal.dto.PromotionEligibilityRuleMapper;
 import com.positivity.price.service.EligibilityEvaluationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -27,10 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Controller for promotion eligibility rule operations. Issue: #96 */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/promotions/offers/{promotionId}/rules")
 @Tag(name = "Promotion Eligibility Rules", description = "Promotion eligibility rule management and evaluation operations")
-@SecurityRequirement(name = "BearerAuth")
 public class PromotionEligibilityRuleController {
 
         private final EligibilityEvaluationService eligibilityEvaluationService;
@@ -41,6 +38,8 @@ public class PromotionEligibilityRuleController {
 
         @PostMapping
         @EmitEvent(id = "PROMOTION_RULE_CREATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "Promotion:Manage" })
         @PreAuthorize("hasAuthority('Promotion:Manage')")
         @Operation(summary = "Add eligibility rule to promotion offer", description = "Creates and attaches a new eligibility rule to the specified promotion offer.")
         @ApiResponse(responseCode = "201", description = "Eligibility rule created.")
@@ -57,6 +56,7 @@ public class PromotionEligibilityRuleController {
         }
 
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "Promotion:View" })
         @PreAuthorize("hasAuthority('Promotion:View')")
         @Operation(summary = "List eligibility rules for promotion offer", description = "Returns all eligibility rules configured for the specified promotion offer.")
         @ApiResponse(responseCode = "200", description = "Eligibility rules returned.")
@@ -71,6 +71,8 @@ public class PromotionEligibilityRuleController {
 
         @DeleteMapping("/{ruleId}")
         @EmitEvent(id = "PROMOTION_RULE_DELETE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "Promotion:Manage" })
         @PreAuthorize("hasAuthority('Promotion:Manage')")
         @Operation(summary = "Delete eligibility rule", description = "Deletes an eligibility rule from the specified promotion offer.")
         @ApiResponse(responseCode = "204", description = "Eligibility rule deleted.")
@@ -84,6 +86,7 @@ public class PromotionEligibilityRuleController {
 
         @PostMapping("/evaluate")
         @EmitEvent(id = "PROMOTION_RULE_EVALUATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "Promotion:Apply" })
         @PreAuthorize("hasAuthority('Promotion:Apply')")
         @Operation(summary = "Evaluate promotion eligibility", description = "Evaluates whether a promotion offer is eligible for the provided evaluation context.")
         @ApiResponse(responseCode = "200", description = "Eligibility evaluation result returned.")

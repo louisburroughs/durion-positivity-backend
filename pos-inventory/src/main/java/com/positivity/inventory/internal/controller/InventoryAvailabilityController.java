@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/inventory/availability")
 @Tag(name = "Inventory Availability", description = "Inventory availability read/write endpoints")
 public class InventoryAvailabilityController {
@@ -42,8 +41,11 @@ public class InventoryAvailabilityController {
         }
 
         @GetMapping("/{productId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:on_hand:view" })
         @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-        @Operation(summary = "Query inventory availability", description = "Returns per-location availability for a product.")
+        @Operation(summary = "Query inventory availability", description = "Returns per-location availability for a product.", tags = {
+                        "Inventory Availability" })
         @ApiResponse(responseCode = "200", description = "Availability returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = LocationAvailabilityDto.class))))
         @ApiResponse(responseCode = "400", description = "Invalid product identifier")
         // Issue #48: Expose on-hand and ATP grouped by location.
@@ -55,8 +57,11 @@ public class InventoryAvailabilityController {
 
         @GetMapping("/query")
         @EmitEvent(id = "INVENTORY_AVAILABILITY_QUERY", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:on_hand:view", "inventory:on_hand:search" })
         @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
-        @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.")
+        @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.", tags = {
+                        "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
@@ -76,8 +81,11 @@ public class InventoryAvailabilityController {
 
         @GetMapping("/lead-time")
         @EmitEvent(id = "INVENTORY_LEAD_TIME_QUERY", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:on_hand:view", "inventory:on_hand:search" })
         @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
-        @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.")
+        @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.", tags = {
+                        "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
@@ -109,9 +117,12 @@ public class InventoryAvailabilityController {
          */
         @PostMapping("/{productId}")
         @EmitEvent(id = "INVENTORY_AVAILABILITY_UPDATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:adjustment:create", "inventory:adjustment:approve" })
         @PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve')")
         @Operation(summary = "Update inventory availability", description = "Not implemented by design. Availability is derived from ledger events and is read-only via this endpoint. "
-                        + "Use POST /v1/inventory/stock-movements or POST /v1/inventory/adjustments for inventory changes.")
+                        + "Use POST /v1/inventory/stock-movements or POST /v1/inventory/adjustments for inventory changes.", tags = {
+                                        "Inventory Availability" })
         @ApiResponse(responseCode = "200", description = "Availability updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryAvailabilityResponse.class)))
         @ApiResponse(responseCode = "501", description = "Not implemented")
         public ResponseEntity<InventoryAvailabilityResponse> updateInventoryAvailability(

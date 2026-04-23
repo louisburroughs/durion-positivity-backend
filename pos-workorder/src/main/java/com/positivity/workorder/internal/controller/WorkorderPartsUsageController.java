@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.*;
  * as well as query usage history.
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/{workorderId}/parts")
 @Tag(name = "Workorder Parts Usage", description = "Track parts issue, consumption, and returns")
 public class WorkorderPartsUsageController {
@@ -44,6 +43,8 @@ public class WorkorderPartsUsageController {
          * Issue parts to a workorder.
          */
         @PostMapping("/issue")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_ISSUE", apiVersion = "1")
         @Operation(summary = "Issue parts to workorder", description = "Issue parts from inventory, reserving them for consumption on the workorder")
@@ -67,6 +68,8 @@ public class WorkorderPartsUsageController {
          * Consume parts on a workorder.
          */
         @PostMapping("/consume")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_CONSUME", apiVersion = "1")
         @Operation(summary = "Consume parts on workorder", description = "Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.")
@@ -95,6 +98,8 @@ public class WorkorderPartsUsageController {
          * Return unused parts to inventory.
          */
         @PostMapping("/return")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:add" })
         @PreAuthorize("hasAuthority('workorder:parts:add')")
         @EmitEvent(id = "WORKORDER_PART_RETURN", apiVersion = "1")
         @Operation(summary = "Return unused parts to inventory", description = "Return unused parts after partial consumption or service completion")
@@ -124,6 +129,8 @@ public class WorkorderPartsUsageController {
          * partLineId is provided.
          */
         @GetMapping("/usageHistory")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:view" })
         @PreAuthorize("hasAuthority('workorder:parts:view')")
         @Operation(summary = "Get parts usage history", description = "Retrieve usage history (issue, consume, return events) for parts on the workorder")
         @ApiResponse(responseCode = "200", description = "Usage history retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))

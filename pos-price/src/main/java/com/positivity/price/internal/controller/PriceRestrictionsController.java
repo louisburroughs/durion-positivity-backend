@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Price Restrictions", description = "Price restriction evaluation and override operations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price")
 public class PriceRestrictionsController {
 
@@ -45,6 +44,7 @@ public class PriceRestrictionsController {
         @ApiResponse(responseCode = "401", description = "Authentication required.")
         @ApiResponse(responseCode = "503", description = "Restriction evaluation service unavailable (commit path only).")
         @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("isAuthenticated()")
         @PostMapping("/restrictions:evaluate")
         public ResponseEntity<RestrictionEvaluationResponse> evaluateRestrictions(
@@ -61,6 +61,8 @@ public class PriceRestrictionsController {
         @ApiResponse(responseCode = "401", description = "Authentication required.")
         @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions.")
         @EmitEvent(id = "PRICE_RESTRICTIONS_OVERRIDE", apiVersion = "1")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "pricing:restriction:override" })
         @PreAuthorize("hasAuthority('pricing:restriction:override')")
         @PostMapping("/restrictions:override")
         public ResponseEntity<RestrictionOverrideResponse> overrideRestrictions(

@@ -63,6 +63,7 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
+  default-produces-media-type: application/json
 pos:
   customer:
     base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8084}

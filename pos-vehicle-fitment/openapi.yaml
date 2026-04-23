@@ -37,13 +37,13 @@ paths:
         "200":
           description: Hint retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
         "404":
           description: Hint not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
       security:
@@ -72,19 +72,19 @@ paths:
         "200":
           description: Hint updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
         "400":
           description: Invalid request data
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
         "404":
           description: Hint not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
       security:
@@ -127,19 +127,19 @@ paths:
         "201":
           description: Hint created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
         "400":
           description: Invalid request data
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
         "404":
           description: Product not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/HintResponse"
       security:
@@ -161,13 +161,13 @@ paths:
         "200":
           description: Products filtered successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FilterProductsResponse"
         "400":
           description: Invalid request data
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FilterProductsResponse"
       security:
@@ -190,17 +190,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - vehicle-fitment:hint:create
   /v1/vehicle-fitment/vehicle-types/{makeId}:
     get:
       tags:
@@ -221,7 +222,7 @@ paths:
         "200":
           description: List of vehicle types returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -248,7 +249,7 @@ paths:
         "200":
           description: List of models returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -266,7 +267,7 @@ paths:
         "200":
           description: List of manufacturers returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -293,7 +294,7 @@ paths:
         "200":
           description: List of makes returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -319,7 +320,7 @@ paths:
         "200":
           description: Hints retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -617,3 +618,8 @@ components:
       required:
       - id
       - name
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

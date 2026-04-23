@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/products/{productId}/msrp")
 @Tag(name = "Product MSRP API", description = "Manage MSRP values with effective dates")
 public class ProductMsrpController {
@@ -42,6 +41,8 @@ public class ProductMsrpController {
         private final ProductMsrpService productMsrpService;
 
         @PreAuthorize("hasAuthority('catalog:msrp:write')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "catalog:msrp:write" })
         @PostMapping
         @Operation(summary = "Create MSRP", description = "Creates a product MSRP record with effective date constraints.")
         @ApiResponse(responseCode = "201", description = "MSRP created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
@@ -57,6 +58,8 @@ public class ProductMsrpController {
         }
 
         @PreAuthorize("hasAuthority('catalog:msrp:write')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "catalog:msrp:write" })
         @PutMapping("/{msrpId}")
         @Operation(summary = "Update MSRP", description = "Updates a non-historical MSRP record.")
         @ApiResponse(responseCode = "200", description = "MSRP updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
@@ -73,6 +76,8 @@ public class ProductMsrpController {
         }
 
         @PreAuthorize("hasAuthority('catalog:msrp:read')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "catalog:msrp:read" })
         @GetMapping("/active")
         @Operation(summary = "Get active MSRP", description = "Returns MSRP active for the provided asOf date (or today).")
         @ApiResponse(responseCode = "200", description = "Active MSRP returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
@@ -89,6 +94,8 @@ public class ProductMsrpController {
         }
 
         @PreAuthorize("hasAuthority('catalog:msrp:read')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "catalog:msrp:read" })
         @GetMapping
         @Operation(summary = "List MSRP history", description = "Returns all MSRP records for a product.")
         @ApiResponse(responseCode = "200", description = "MSRP records returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))

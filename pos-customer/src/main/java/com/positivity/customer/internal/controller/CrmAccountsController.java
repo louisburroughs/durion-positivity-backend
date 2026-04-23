@@ -46,7 +46,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "CRM Accounts", description = "Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/accounts")
 public class CrmAccountsController {
 
@@ -67,6 +66,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @GetMapping("/{accountId}/tier")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_GET", apiVersion = "1")
         public ResponseEntity<GetAccountTierResponse> getAccountTier(
@@ -89,6 +90,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/tierResolve")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_RESOLVE", apiVersion = "1")
         public ResponseEntity<ResolveAccountTierResponse> resolveAccountTier(
@@ -111,6 +114,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/parties")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_CREATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_PARTY_CREATE", apiVersion = "1")
         public ResponseEntity<CreateCommercialAccountResponse> createCommercialAccount(
@@ -127,6 +132,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @GetMapping("/parties/{partyId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         public ResponseEntity<GetPartyResponse> getParty(
                         @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
@@ -144,6 +151,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/parties/search")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         @EmitEvent(id = "CUSTOMER_PARTY_SEARCH", apiVersion = "1")
         public ResponseEntity<SearchPartiesResponse> searchParties(
@@ -161,6 +170,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/parties/{partyId}/merge")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_MERGE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_MERGE + "')")
         @EmitEvent(id = "CUSTOMER_PARTY_MERGE", apiVersion = "1")
         public ResponseEntity<MergePartiesResponse> mergeParties(
@@ -180,6 +191,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @GetMapping("/parties/{partyId}/contacts")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
         public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
                         @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
@@ -196,6 +209,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PutMapping("/parties/{partyId}/contacts/{contactId}/roles")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_ROLE_ASSIGN })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
         @EmitEvent(id = "CUSTOMER_CONTACT_ROLE_UPDATE", apiVersion = "1")
         public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
@@ -216,6 +231,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @GetMapping("/parties/{partyId}/communicationPreferences")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
         public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
                         @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
@@ -232,6 +249,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/parties/{partyId}/communicationPreferences")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT", apiVersion = "1")
         public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
@@ -253,6 +272,8 @@ public class CrmAccountsController {
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/parties/{partyId}/vehicles")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.VEHICLE_CREATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE", apiVersion = "1")
         public ResponseEntity<CreateVehicleForPartyResponse> createVehicleForParty(

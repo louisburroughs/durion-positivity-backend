@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                "inventory:shortages:resolve" })
 @RequestMapping("/v1/inventory/allocations/shortages")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('inventory:shortages:resolve')")
@@ -31,7 +32,8 @@ public class ShortageController {
 
         @PostMapping("/resolve")
         @EmitEvent(id = "INVENTORY_SHORTAGE_RESOLVE", apiVersion = "1")
-        @Operation(summary = "Resolve shortage", description = "Returns candidate shortage resolution options from substitutes and external availability")
+        @Operation(summary = "Resolve shortage", description = "Returns candidate shortage resolution options from substitutes and external availability", tags = {
+                        "Shortage Resolution" })
         @ApiResponse(responseCode = "200", description = "Resolution options returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ShortageResolutionResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required shortage resolution authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))

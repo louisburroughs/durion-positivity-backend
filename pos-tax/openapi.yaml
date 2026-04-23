@@ -50,26 +50,27 @@ paths:
                   referenceType: ESTIMATE
         required: true
       responses:
-        "500":
-          description: Tax calculation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/TaxCalculationResponse"
         "200":
           description: Tax calculated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TaxCalculationResponse"
         "400":
           description: Invalid tax calculation request
           content:
-            '*/*':
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCalculationResponse"
+        "500":
+          description: Tax calculation failed
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/TaxCalculationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - tax:calculate
   /v1/tax/mode:
     get:
       tags:
@@ -82,11 +83,12 @@ paths:
         "200":
           description: Tax service mode retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ModeResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - tax:mode:view
 components:
   schemas:
     TaxAddress:
@@ -97,6 +99,7 @@ components:
           type: string
           description: Country code in ISO 3166-1 alpha-2 format
           example: US
+          minLength: 1
         regionCode:
           type: string
           description: Region/subdivision code (typically ISO 3166-2 subdivision part)
@@ -108,15 +111,16 @@ components:
         postalCode:
           type: string
           description: Postal/ZIP code
-          example: "90001"
+          example: '"90001"'
+          minLength: 1
         line1:
           type: string
           description: Primary street address line
-          example: 123 Main St
+          example: '"123 Main St"'
         line2:
           type: string
           description: Secondary address line
-          example: Suite 200
+          example: '"Suite 200"'
       required:
       - countryCode
       - postalCode
@@ -146,6 +150,7 @@ components:
           description: Line items to calculate tax for
           items:
             $ref: "#/components/schemas/TaxLineItem"
+          minItems: 1
         destinationAddress:
           $ref: "#/components/schemas/TaxAddress"
           description: Destination address used to determine applicable tax jurisdictions
@@ -200,8 +205,10 @@ components:
       properties:
         lineItemId:
           type: string
+          minLength: 1
         description:
           type: string
+          minLength: 1
         quantity:
           type: number
         unitPrice:
@@ -224,7 +231,8 @@ components:
         lineItemId:
           type: string
           description: Line item identifier
-          example: "1"
+          example: '"1"'
+          minLength: 1
         subtotal:
           type: number
           description: Line subtotal before tax
@@ -335,15 +343,15 @@ components:
         postalCode:
           type: string
           description: Postal/ZIP code
-          example: "90001"
+          example: '"90001"'
         line1:
           type: string
           description: Primary street address line
-          example: 123 Main St
+          example: '"123 Main St"'
         line2:
           type: string
           description: Secondary address line
-          example: Suite 200
+          example: '"Suite 200"'
         taxRate:
           type: number
           description: Tax rate as percentage points
@@ -380,3 +388,8 @@ components:
           type: string
         testMode:
           type: boolean
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

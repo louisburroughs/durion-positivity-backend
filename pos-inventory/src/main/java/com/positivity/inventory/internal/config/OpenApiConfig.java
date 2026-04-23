@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.config;
 
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -27,6 +29,11 @@ public class OpenApiConfig {
                                                                 .description("Cycle count submission and recount operations"),
                                                 new Tag()
                                                                 .name("Cycle Count Query")
-                                                                .description("Query endpoints for cycle count tasks and history")));
+                                                                .description("Query endpoints for cycle count tasks and history")))
+                                .components(new Components()
+                                        .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                                                .type(SecurityScheme.Type.HTTP)
+                                                .scheme("bearer")
+                                                .bearerFormat("JWT")));
         }
 }

@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/timeEntries")
 @Tag(name = "People TimeEntries", description = "Time entry adjustments and related APIs")
 public class TimeEntryAdjustmentController {
@@ -40,6 +39,8 @@ public class TimeEntryAdjustmentController {
     @ApiResponse(responseCode = "409", description = "Invalid time entry state for adjustment")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE", apiVersion = "1")
     @PostMapping(value = "/adjustments", consumes = "application/json", produces = "application/json")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:timeAdjustment:create" })
     @PreAuthorize("hasAuthority('people:timeAdjustment:create')")
     public ResponseEntity<TimeEntryAdjustmentResponse> createAdjustment(
             @Valid @RequestBody TimeEntryAdjustmentRequest req) {
@@ -50,6 +51,8 @@ public class TimeEntryAdjustmentController {
     @Operation(summary = "List adjustments for a time entry", description = "Retrieve all adjustments associated with a specific time entry.")
     @ApiResponse(responseCode = "200", description = "List returned")
     @GetMapping(value = "/{timeEntryId}/adjustments", produces = "application/json")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:timeAdjustment:view" })
     @PreAuthorize("hasAuthority('people:timeAdjustment:view')")
     public ResponseEntity<List<TimeEntryAdjustment>> listForTimeEntry(@PathVariable UUID timeEntryId) {
         List<TimeEntryAdjustment> list = adjustmentService.listForTimeEntry(timeEntryId);
@@ -62,6 +65,8 @@ public class TimeEntryAdjustmentController {
     @ApiResponse(responseCode = "404", description = "Adjustment not found")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE", apiVersion = "1")
     @PostMapping(value = "/adjustments/{adjustmentId}/approve", produces = "application/json")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "people:timeAdjustment:approve" })
     @PreAuthorize("hasAuthority('people:timeAdjustment:approve')")
     public ResponseEntity<Object> approveAdjustment(
             @PathVariable java.util.UUID adjustmentId,

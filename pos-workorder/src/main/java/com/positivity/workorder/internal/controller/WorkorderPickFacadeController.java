@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/{workorderId}")
 @Tag(name = "Workorder Pick Facade", description = "Browser-facing pick list and pick task endpoints for workorder fulfillment")
 public class WorkorderPickFacadeController {
@@ -42,6 +41,8 @@ public class WorkorderPickFacadeController {
         }
 
         @GetMapping("/pick-list")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
         @Operation(summary = "Get pick list for workorder")
         @ApiResponse(responseCode = "200", description = "Pick list retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPickListResponse.class)))
@@ -55,6 +56,8 @@ public class WorkorderPickFacadeController {
         }
 
         @GetMapping("/pick-list/tasks")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
         @Operation(summary = "Get pick tasks for workorder")
         @ApiResponse(responseCode = "200", description = "Pick tasks retrieved successfully", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WorkorderPickTaskResponse.class))))
@@ -69,6 +72,8 @@ public class WorkorderPickFacadeController {
         }
 
         @PostMapping("/pick-tasks/{pickTaskId}:resolve-scan")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
         @EmitEvent(id = "WORKORDER_PICK_FACADE_RESOLVE_SCAN", apiVersion = "1")
         @Operation(summary = "Resolve scan for pick task")
@@ -86,6 +91,8 @@ public class WorkorderPickFacadeController {
         }
 
         @PostMapping("/pick-tasks/{pickTaskId}/lines/{pickLineId}:confirm")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
         @EmitEvent(id = "WORKORDER_PICK_FACADE_CONFIRM_LINE", apiVersion = "1")
         @Operation(summary = "Confirm pick line quantity")
@@ -106,6 +113,8 @@ public class WorkorderPickFacadeController {
         }
 
         @PostMapping("/pick-tasks/{pickTaskId}:complete")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
         @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
         @Operation(summary = "Complete pick task")

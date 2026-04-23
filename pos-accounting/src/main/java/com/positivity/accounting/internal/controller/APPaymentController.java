@@ -52,7 +52,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/v1/accounting/ap")
-@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "AP Payments", description = "Accounts Payable vendor payment operations")
 @RequiredArgsConstructor
 @Validated
@@ -64,12 +63,13 @@ public class APPaymentController {
         @EmitEvent(id = "AP_PAYMENT_EXECUTE", apiVersion = "1")
         @Operation(summary = "Execute vendor payment", description = "Execute a vendor payment with optional explicit allocations to bills. "
                         + "Idempotent using paymentRef: same ref + same payload returns existing payment; "
-                        + "same ref + different payload yields 409 conflict.")
+                        + "same ref + different payload yields 409 conflict.", tags = { "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned")
         @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)")
         @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc.")
         @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload")
         @ApiResponse(responseCode = "500", description = "Payment gateway failure")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:pay" })
         @PreAuthorize("hasAuthority('accounting:ap:pay')")
         public @NonNull ResponseEntity<APPaymentResponse> executePayment(
                         @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
@@ -95,9 +95,11 @@ public class APPaymentController {
         }
 
         @GetMapping("/payments/{paymentId}")
-        @Operation(summary = "Get payment details", description = "Retrieve AP payment details including allocations and GL posting status.")
+        @Operation(summary = "Get payment details", description = "Retrieve AP payment details including allocations and GL posting status.", tags = {
+                        "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Payment found")
         @ApiResponse(responseCode = "404", description = "Payment not found")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:view" })
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPayment(
                         @PathVariable @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull UUID paymentId) {
@@ -109,9 +111,11 @@ public class APPaymentController {
         }
 
         @GetMapping("/payments/by-ref/{paymentRef}")
-        @Operation(summary = "Get payment by reference", description = "Retrieve AP payment details by paymentRef (idempotency key).")
+        @Operation(summary = "Get payment by reference", description = "Retrieve AP payment details by paymentRef (idempotency key).", tags = {
+                        "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Payment found")
         @ApiResponse(responseCode = "404", description = "Payment not found")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:view" })
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
                         @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NotBlank @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters") @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters") @NonNull String paymentRef) {
@@ -123,9 +127,11 @@ public class APPaymentController {
         }
 
         @GetMapping("/bills")
-        @Operation(summary = "List eligible vendor bills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.")
+        @Operation(summary = "List eligible vendor bills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.", tags = {
+                        "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
         @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:view" })
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<List<VendorBillSummaryResponse>> listBills(
                         @RequestParam @Parameter(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = true) @NonNull UUID vendorId) {

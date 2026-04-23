@@ -1,1 +1,0 @@
-./pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/AuthController.java

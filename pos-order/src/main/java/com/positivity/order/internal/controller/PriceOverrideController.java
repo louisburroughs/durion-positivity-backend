@@ -41,7 +41,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "Price Overrides", description = "Price override management with approval workflow")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/orders/price-overrides")
 @RequiredArgsConstructor
 @Slf4j
@@ -55,11 +54,14 @@ public class PriceOverrideController {
          * Apply a price override to an order line.
          * Requires order:price_override:apply permission.
          */
-        @Operation(summary = "Apply price override", description = "Apply a price override to an order line. May require approval based on override amount.")
+        @Operation(summary = "Apply price override", description = "Apply a price override to an order line. May require approval based on override amount.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "201", description = "Override created", content = @Content(schema = @Schema(implementation = PriceOverrideResult.class)))
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @ApiResponse(responseCode = "403", description = "Insufficient permissions")
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPLY })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPLY + "')")
         @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPLY", apiVersion = "1")
         public ResponseEntity<PriceOverrideResult> applyPriceOverride(
@@ -75,12 +77,15 @@ public class PriceOverrideController {
          * Approve a pending price override.
          * Requires order:price_override:approve permission.
          */
-        @Operation(summary = "Approve price override", description = "Approve a pending price override. Validates approver permission level.")
+        @Operation(summary = "Approve price override", description = "Approve a pending price override. Validates approver permission level.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
         @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
         @ApiResponse(responseCode = "403", description = "Insufficient approval permissions")
         @ApiResponse(responseCode = "404", description = "Override not found")
         @PostMapping("/{overrideId}/approve")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPROVE })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
         @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPROVE", apiVersion = "1")
         public ResponseEntity<PriceOverrideDetail> approvePriceOverride(
@@ -99,12 +104,15 @@ public class PriceOverrideController {
          * Reject a pending price override.
          * Requires order:price_override:reject permission.
          */
-        @Operation(summary = "Reject price override", description = "Reject a pending price override with a reason.")
+        @Operation(summary = "Reject price override", description = "Reject a pending price override with a reason.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
         @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
         @ApiResponse(responseCode = "403", description = "Insufficient rejection permissions")
         @ApiResponse(responseCode = "404", description = "Override not found")
         @PostMapping("/{overrideId}/reject")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_REJECT })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_REJECT + "')")
         @EmitEvent(id = "ORDER_PRICE_OVERRIDE_REJECT", apiVersion = "1")
         public ResponseEntity<PriceOverrideDetail> rejectPriceOverride(
@@ -124,10 +132,13 @@ public class PriceOverrideController {
          * Get a specific price override by ID.
          * Requires order:price_override:view permission.
          */
-        @Operation(summary = "Get price override", description = "Retrieve a specific price override by ID.")
+        @Operation(summary = "Get price override", description = "Retrieve a specific price override by ID.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "200", description = "Override found", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
         @ApiResponse(responseCode = "404", description = "Override not found")
         @GetMapping("/{overrideId}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_VIEW })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
         public ResponseEntity<PriceOverrideDetail> getOverride(
                         @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId) {
@@ -139,10 +150,13 @@ public class PriceOverrideController {
          * Get all price overrides for an order.
          * Requires order:price_override:view permission.
          */
-        @Operation(summary = "Get price overrides", description = "Retrieve price overrides by order ID, status, or date range. At least one filter parameter is required.")
+        @Operation(summary = "Get price overrides", description = "Retrieve price overrides by order ID, status, or date range. At least one filter parameter is required.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "200", description = "Overrides retrieved")
         @ApiResponse(responseCode = "400", description = "No filter parameter provided")
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_VIEW })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
         @EmitEvent(id = "ORDER_PRICE_OVERRIDE_SEARCH", apiVersion = "1")
         public ResponseEntity<List<PriceOverrideDetail>> getOverridesByOrder(
@@ -170,9 +184,12 @@ public class PriceOverrideController {
          * Get all pending approval overrides.
          * Requires order:price_override:approve permission.
          */
-        @Operation(summary = "Get pending approvals", description = "Retrieve all price overrides awaiting approval.")
+        @Operation(summary = "Get pending approvals", description = "Retrieve all price overrides awaiting approval.", tags = {
+                        "Price Overrides" })
         @ApiResponse(responseCode = "200", description = "Pending overrides retrieved")
         @GetMapping("/pending")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        PriceOverridePermissions.PRICE_OVERRIDE_APPROVE })
         @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
         @EmitEvent(id = "ORDER_PRICE_OVERRIDE_LIST_PENDING", apiVersion = "1")
         public ResponseEntity<List<PriceOverrideDetail>> getPendingApprovals() {

@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:estimate:view" })
 @RequestMapping("/v1/workexec/estimates")
 @Tag(name = "Estimate Search", description = "Estimate search and retrieval")
 @RequiredArgsConstructor

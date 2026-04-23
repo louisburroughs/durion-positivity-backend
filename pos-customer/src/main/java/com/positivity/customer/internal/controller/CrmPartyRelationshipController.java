@@ -54,7 +54,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm/commercial-accounts/{partyId}")
 @RequiredArgsConstructor
 @Tag(name = "CRM Party Relationships", description = "Commercial account relationship management APIs")
@@ -79,6 +78,8 @@ public class CrmPartyRelationshipController {
          */
         @PostMapping("/relationships")
         @ResponseStatus(HttpStatus.CREATED)
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "crm:relationship:create" })
         @PreAuthorize("hasAuthority('crm:relationship:create')")
         @EmitEvent(id = "CRM_RELATIONSHIP_CREATE", apiVersion = "1")
         @Operation(summary = "Create a party relationship", description = "Creates a relationship between a commercial account and an individual person")
@@ -119,6 +120,8 @@ public class CrmPartyRelationshipController {
          * @return contacts with their roles and details
          */
         @GetMapping("/contacts")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "crm:relationship:read" })
         @PreAuthorize("hasAuthority('crm:relationship:read')")
         @EmitEvent(id = "CRM_ACCOUNT_CONTACTS_GET", apiVersion = "1")
         @Operation(summary = "Get contacts for a commercial account", description = "Retrieves all individuals associated with a commercial account with their roles")
@@ -153,6 +156,8 @@ public class CrmPartyRelationshipController {
          */
         @PutMapping("/relationships/{relationshipId}/primary-billing")
         @ResponseStatus(HttpStatus.NO_CONTENT)
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "crm:relationship:update" })
         @PreAuthorize("hasAuthority('crm:relationship:update')")
         @EmitEvent(id = "CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE", apiVersion = "1")
         @Operation(summary = "Designate primary billing contact", description = "Sets a relationship as the primary billing contact, demoting any existing primary")
@@ -188,6 +193,8 @@ public class CrmPartyRelationshipController {
          */
         @DeleteMapping("/relationships/{relationshipId}")
         @ResponseStatus(HttpStatus.NO_CONTENT)
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "crm:relationship:delete" })
         @PreAuthorize("hasAuthority('crm:relationship:delete')")
         @EmitEvent(id = "CRM_RELATIONSHIP_DEACTIVATE", apiVersion = "1")
         @Operation(summary = "Deactivate a party relationship", description = "Soft-deletes a relationship by setting its effective end date")

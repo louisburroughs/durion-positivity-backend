@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "Customer API", description = "Operations related to customers")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/crm")
 public class CustomerController {
 
@@ -47,6 +46,8 @@ public class CustomerController {
         @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
         @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
         @GetMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         public Page<CustomerDTO> getAllCustomers(
                         @Parameter(description = "Customer type filter: PERSON or COMMERCIAL", example = "PERSON") @RequestParam(required = false, defaultValue = "PERSON") String customerType,
@@ -64,6 +65,8 @@ public class CustomerController {
         @ApiResponse(responseCode = "200", description = "Customer found and returned.")
         @ApiResponse(responseCode = "404", description = "Customer not found.")
         @GetMapping("/{id}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_VIEW })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         public ResponseEntity<CustomerDTO> getCustomerById(
                         @Parameter(description = "ID of the customer to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
@@ -79,6 +82,8 @@ public class CustomerController {
         @Operation(summary = "Create a new customer", description = "Add a new customer to the system.")
         @ApiResponse(responseCode = "201", description = "Customer created successfully.")
         @PostMapping
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_CREATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_CUSTOMER_CREATE", apiVersion = "1")
         public ResponseEntity<CustomerDTO> createCustomer(
@@ -94,6 +99,8 @@ public class CustomerController {
         @ApiResponse(responseCode = "200", description = "Customer updated successfully.")
         @ApiResponse(responseCode = "404", description = "Customer not found.")
         @PutMapping("/{id}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_CUSTOMER_UPDATE", apiVersion = "1")
         public ResponseEntity<CustomerDTO> updateCustomer(
@@ -111,6 +118,8 @@ public class CustomerController {
         @ApiResponse(responseCode = "204", description = "Customer deleted successfully.")
         @ApiResponse(responseCode = "404", description = "Customer not found.")
         @DeleteMapping("/{id}")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_DEACTIVATE })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_DEACTIVATE + "')")
         @EmitEvent(id = "CUSTOMER_CUSTOMER_DELETE", apiVersion = "1")
         public ResponseEntity<Void> deleteCustomer(

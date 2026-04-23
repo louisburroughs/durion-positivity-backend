@@ -44,7 +44,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/v1/accounting/events")
-@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Accounting Events", description = "Ingest and manage accounting events for journal processing.")
 @Validated
 public class EventIngestionController {
@@ -57,8 +56,10 @@ public class EventIngestionController {
     }
 
     @GetMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
     @PreAuthorize("hasAuthority('accounting:events:view')")
-    @Operation(summary = "List events", description = "Retrieve paginated accounting events with optional filters.")
+    @Operation(summary = "List events", description = "Retrieve paginated accounting events with optional filters.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "200", description = "Events listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
@@ -78,8 +79,10 @@ public class EventIngestionController {
     }
 
     @GetMapping("/{eventId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
     @PreAuthorize("hasAuthority('accounting:events:view')")
-    @Operation(summary = "Get event", description = "Retrieve details for an accounting event.")
+    @Operation(summary = "Get event", description = "Retrieve details for an accounting event.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "200", description = "Event returned")
     @ApiResponse(responseCode = "404", description = "Event not found")
     public ResponseEntity<AccountingEventResponse> getEvent(
@@ -90,8 +93,10 @@ public class EventIngestionController {
     }
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:submit" })
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    @Operation(summary = "Submit event", description = "Submit a new accounting event for processing.")
+    @Operation(summary = "Submit event", description = "Submit a new accounting event for processing.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "202", description = "Event accepted for processing")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
@@ -103,8 +108,10 @@ public class EventIngestionController {
     }
 
     @PostMapping("/{eventId}/retry")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:retry" })
     @PreAuthorize("hasAuthority('accounting:events:retry')")
-    @Operation(summary = "Retry event processing", description = "Retry processing for a failed accounting event.")
+    @Operation(summary = "Retry event processing", description = "Retry processing for a failed accounting event.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "202", description = "Retry requested")
     @ApiResponse(responseCode = "404", description = "Event not found")
     @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
@@ -117,11 +124,10 @@ public class EventIngestionController {
     }
 
     @PostMapping("/{eventId}/reprocess")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:reprocess" })
     @PreAuthorize("hasAuthority('accounting:events:reprocess')")
-    @Operation(
-            summary = "Reprocess suspended event",
-            description =
-                    "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.")
+    @Operation(summary = "Reprocess suspended event", description = "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Event not found")
@@ -132,21 +138,20 @@ public class EventIngestionController {
             @Valid @RequestBody ReprocessEventRequest request) {
         try {
             AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
-            HttpStatus status =
-                    AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK : HttpStatus.ACCEPTED;
+            HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK
+                    : HttpStatus.ACCEPTED;
             return ResponseEntity.status(status).body(response);
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException _) {
             // BR-3: Idempotency violation or invalid state - treat as conflict
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
     }
 
     @GetMapping("/{eventId}/reprocessing-history")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
     @PreAuthorize("hasAuthority('accounting:events:view')")
-    @Operation(
-            summary = "Get reprocessing history",
-            description =
-                    "Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.")
+    @Operation(summary = "Get reprocessing history", description = "Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "200", description = "Reprocessing history returned (may be empty list)")
     public ResponseEntity<List<ReprocessingAttemptHistoryResponse>> getReprocessingHistory(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
@@ -160,10 +165,10 @@ public class EventIngestionController {
     }
 
     @GetMapping("/{eventId}/processing-log")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
     @PreAuthorize("hasAuthority('accounting:events:view')")
-    @Operation(
-            summary = "Get event processing log",
-            description = "Retrieve the processing log for an accounting event.")
+    @Operation(summary = "Get event processing log", description = "Retrieve the processing log for an accounting event.", tags = {
+            "Accounting Events" })
     @ApiResponse(responseCode = "200", description = "Processing log returned")
     @ApiResponse(responseCode = "404", description = "Event not found")
     public ResponseEntity<String> getEventProcessingLog(

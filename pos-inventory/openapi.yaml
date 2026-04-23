@@ -90,14 +90,15 @@ paths:
         "501":
           description: Not implemented
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:location:view
     put:
       tags:
       - Inventory Sites
@@ -126,7 +127,8 @@ paths:
         "501":
           description: Not implemented
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:location:admin
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -149,7 +151,8 @@ paths:
         "422":
           description: Insufficient stock
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:stock_movement:create
   /v1/inventory/returns:
     post:
       tags:
@@ -190,7 +193,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/reservations:
     post:
       tags:
@@ -232,7 +236,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/reservations/{allocationId}/promote:
     post:
       tags:
@@ -287,7 +292,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/replenishment/policies:
     get:
       tags:
@@ -305,7 +311,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReplenishmentPolicyResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
     post:
       tags:
       - Replenishment
@@ -328,11 +335,12 @@ paths:
         "400":
           description: Validation failure
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ReplenishmentPolicyResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/receiving/sessions:
     post:
       tags:
@@ -374,7 +382,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:receiving:create
   /v1/inventory/receiving/sessions/{sessionId}/receive:
     post:
       tags:
@@ -424,7 +433,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:receiving:complete
   /v1/inventory/receiving/sessions/{sessionId}/lines/{lineId}/cross-dock:
     post:
       tags:
@@ -481,7 +491,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:receiving:complete
+        - inventory:issue:parts
   /v1/inventory/putaway/tasks/{taskId}/execute:
     post:
       tags:
@@ -513,29 +525,30 @@ paths:
         "400":
           description: Bad request - invalid task ID or request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "403":
           description: Forbidden - insufficient authority
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "404":
           description: Putaway task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "422":
           description: Validation failed for putaway execution
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:putaway:execute
   /v1/inventory/putaway/tasks/{taskId}/claim:
     post:
       tags:
@@ -560,11 +573,12 @@ paths:
         "404":
           description: Putaway task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:putaway:claim
   /v1/inventory/putaway/tasks/generate:
     post:
       tags:
@@ -590,13 +604,14 @@ paths:
         "400":
           description: Validation failure
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:putaway:generate
   /v1/inventory/purchase-orders:
     get:
       tags:
@@ -619,7 +634,7 @@ paths:
         "200":
           description: Purchase orders returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PagePurchaseOrderResponse"
         "403":
@@ -629,7 +644,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:view
     post:
       tags:
       - Purchase Orders
@@ -662,7 +678,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:create
   /v1/inventory/purchase-orders/{poId}/revisions:
     post:
       tags:
@@ -716,7 +733,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:create
   /v1/inventory/purchase-orders/{poId}/receive:
     post:
       tags:
@@ -771,7 +789,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:receive
   /v1/inventory/purchase-orders/{poId}/cancel:
     post:
       tags:
@@ -813,7 +832,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:approve
   /v1/inventory/purchase-orders/{poId}/approve:
     post:
       tags:
@@ -867,7 +887,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:approve
   /v1/inventory/pickingLists/{id}/confirm:
     post:
       tags:
@@ -893,7 +914,8 @@ paths:
         "501":
           description: Not implemented
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/inventory/pick-lists:
     get:
       tags:
@@ -931,7 +953,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
     post:
       tags:
       - Pick Lists
@@ -965,7 +988,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:create
   /v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm:
     post:
       tags:
@@ -1027,7 +1051,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/inventory/pick-lists/{pickListId}/release:
     post:
       tags:
@@ -1063,7 +1088,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -1096,23 +1122,24 @@ paths:
         "400":
           description: Bad request - invalid parameters or destination required
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
           description: Location not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "409":
           description: Conflict - business rule violation
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:location:admin
   /v1/inventory/goods-receipts:
     post:
       tags:
@@ -1159,7 +1186,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:goods_receipt:create
   /v1/inventory/cycleCountPlans:
     post:
       tags:
@@ -1183,17 +1211,18 @@ paths:
         "400":
           description: Validation failure
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
         "403":
           description: User lacks required permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:initiate
   /v1/inventory/cycleCountAdjustments:
     get:
       tags:
@@ -1219,13 +1248,15 @@ paths:
         "200":
           description: Adjustments retrieved
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:view
+        - inventory:adjustment:approve
     post:
       tags:
       - Cycle Count Adjustments
@@ -1243,17 +1274,18 @@ paths:
         "201":
           description: Adjustment created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "400":
           description: Invalid request or no variance detected
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/cycleCountAdjustments/{adjustmentId}/reject:
     post:
       tags:
@@ -1280,23 +1312,24 @@ paths:
         "200":
           description: Adjustment rejected
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "400":
           description: Adjustment not found or not in rejectable state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "403":
           description: User lacks required approval permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/{adjustmentId}/approve:
     post:
       tags:
@@ -1327,23 +1360,24 @@ paths:
         "200":
           description: Adjustment approved and posted
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "400":
           description: Adjustment not found or not in approvable state
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "403":
           description: User lacks required approval permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:approve
   /v1/inventory/cycleCount/submit:
     post:
       tags:
@@ -1369,17 +1403,18 @@ paths:
         "400":
           description: Invalid request or quantity
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "404":
           description: Task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:complete
   /v1/inventory/cycleCount/recount:
     post:
       tags:
@@ -1405,23 +1440,24 @@ paths:
         "400":
           description: Invalid request or recount limit exceeded
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "403":
           description: Insufficient permission
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "404":
           description: Task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:complete
   /v1/inventory/consumption:
     post:
       tags:
@@ -1462,14 +1498,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/bulk-ingest:
     post:
       tags:
       - Inventory Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record
-        results.
+      summary: Bulk ingest inventory adjustments
+      description: Processes a batch of inventory adjustment records and creates adjustment
+        requests for each accepted row.
       operationId: bulkIngest
       requestBody:
         content:
@@ -1481,17 +1518,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/availability/{productId}:
     get:
       tags:
@@ -1519,13 +1557,14 @@ paths:
         "400":
           description: Invalid product identifier
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationAvailabilityDto"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
     post:
       tags:
       - Inventory Availability
@@ -1557,11 +1596,13 @@ paths:
         "501":
           description: Not implemented
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
+        - inventory:adjustment:approve
   /v1/inventory/asns:
     post:
       tags:
@@ -1601,7 +1642,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:asn:create
   /v1/inventory/allocations/shortages/resolve:
     post:
       tags:
@@ -1642,7 +1684,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:shortages:resolve
   /v1/inventory/allocations/reallocate:
     post:
       tags:
@@ -1683,7 +1726,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:allocations:reallocate
   /v1/inventory/adjustments:
     post:
       tags:
@@ -1718,7 +1762,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -1768,7 +1813,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:approve
   /v1/inventory/pick-lists/{pickListId}/status:
     patch:
       tags:
@@ -1817,7 +1863,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/inventory/replenishment/tasks:
     get:
       tags:
@@ -1835,7 +1882,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReplenishmentTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
   /v1/inventory/receiving/sessions/{sessionId}:
     get:
       tags:
@@ -1871,7 +1919,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:receiving:view
   /v1/inventory/putaway/tasks:
     get:
       tags:
@@ -1889,7 +1938,8 @@ paths:
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:putaway:view
   /v1/inventory/purchase-orders/{poId}:
     get:
       tags:
@@ -1925,7 +1975,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:purchase_order:view
   /v1/inventory/pick-lists/{pickListId}:
     get:
       tags:
@@ -1961,7 +2012,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
     delete:
       tags:
       - Pick Lists
@@ -1992,7 +2044,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:execute
   /v1/inventory/pick-lists/{pickListId}/tasks:
     get:
       tags:
@@ -2030,7 +2083,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:pick_list:view
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -2056,11 +2110,12 @@ paths:
         "400":
           description: Invalid location identifier
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationInventoryInquiryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
   /v1/inventory/goods-receipts/{receiptId}:
     get:
       tags:
@@ -2096,7 +2151,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:goods_receipt:view
   /v1/inventory/cycleCountPlans/{planId}:
     get:
       tags:
@@ -2122,11 +2178,12 @@ paths:
         "404":
           description: Cycle count plan not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:view
   /v1/inventory/cycleCountAdjustments/{adjustmentId}:
     get:
       tags:
@@ -2146,17 +2203,19 @@ paths:
         "200":
           description: Adjustment found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
         "404":
           description: Adjustment not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:view
+        - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/pending:
     get:
       tags:
@@ -2168,13 +2227,15 @@ paths:
         "200":
           description: Pending adjustments retrieved
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:view
+        - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/pending/count:
     get:
       tags:
@@ -2186,12 +2247,14 @@ paths:
         "200":
           description: Count retrieved
           content:
-            '*/*':
+            application/json:
               schema:
                 type: integer
                 format: int64
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:view
+        - inventory:adjustment:approve
   /v1/inventory/cycleCount/task/{taskId}:
     get:
       tags:
@@ -2218,11 +2281,12 @@ paths:
         "404":
           description: Task not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:view
   /v1/inventory/cycleCount/task/{taskId}/history:
     get:
       tags:
@@ -2248,7 +2312,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/CountEntryResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:view
   /v1/inventory/cycleCount/auditor/{auditorId}/tasks:
     get:
       tags:
@@ -2272,7 +2337,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:cycle_count:view
   /v1/inventory/availability/query:
     get:
       tags:
@@ -2335,7 +2401,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
+        - inventory:on_hand:search
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -2390,7 +2458,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:on_hand:view
+        - inventory:on_hand:search
   /v1/inventory/asns/{asnId}:
     get:
       tags:
@@ -2426,7 +2496,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:asn:view
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -2459,7 +2530,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - inventory:adjustment:create
 components:
   schemas:
     RecordMovementRequest:
@@ -4132,12 +4204,12 @@ components:
     PagePurchaseOrderResponse:
       type: object
       properties:
-        totalPages:
-          type: integer
-          format: int32
         totalElements:
           type: integer
           format: int64
+        totalPages:
+          type: integer
+          format: int32
         size:
           type: integer
           format: int32
@@ -4347,3 +4419,8 @@ components:
           type: string
           format: date-time
           description: Timestamp when lead-time data was last refreshed
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

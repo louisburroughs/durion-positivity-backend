@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders/{workorderId}")
 @Tag(name = "Workorder Picked Items", description = "Browser-facing picked items and consume endpoints for workorder fulfillment")
 public class WorkorderPickedItemsController {
@@ -39,6 +38,8 @@ public class WorkorderPickedItemsController {
         }
 
         @GetMapping("/picked-items")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
         @Operation(summary = "Get picked items for workorder")
         @ApiResponse(responseCode = "200", description = "Picked items retrieved successfully", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WorkorderPickedItemResponse.class))))
@@ -52,6 +53,8 @@ public class WorkorderPickedItemsController {
         }
 
         @PostMapping("/picked-items:consume")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "workorder:parts:consume" })
         @PreAuthorize("hasAuthority('workorder:parts:consume')")
         @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
         @Operation(summary = "Consume picked items into workorder")

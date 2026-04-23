@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
 @Tag(name = "Operational Context", description = "Workorder execution context operations")
@@ -32,6 +31,7 @@ public class OperationalContextController {
     private final WorkorderService workorderService;
 
     @GetMapping("/{workorderId}/operationalContext")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get operational context for workorder", description = "Returns the current operational context for a workorder, including flags and source data used to drive execution decisions.")
     @ApiResponse(responseCode = "200", description = "Operational context returned")
@@ -41,6 +41,8 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/operationalContext/override")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "workorder:operationalContext:override" })
     @PreAuthorize("hasAuthority('workorder:operationalContext:override')")
     @EmitEvent(id = "WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE", apiVersion = "1")
     @Operation(summary = "Manager override of operational context", description = "Applies a manager-authorized override to operational context values before work starts; request is rejected once context is locked.")
@@ -53,6 +55,7 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/start")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:start" })
     @PreAuthorize("hasAuthority('workorder:start')")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @Operation(summary = "Start work on workorder, locking operational context", description = "Transitions the workorder into active execution and locks operational context to prevent further overrides.")

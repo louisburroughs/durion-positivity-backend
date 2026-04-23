@@ -29,7 +29,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+    CrmPermissionRegistry.PARTY_CREATE })
 @RequestMapping("/v1/customer")
 @RequiredArgsConstructor
 @Slf4j

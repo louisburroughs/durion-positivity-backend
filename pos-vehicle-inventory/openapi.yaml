@@ -41,13 +41,13 @@ paths:
         "200":
           description: Preferences found and returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: No preferences found for this vehicle
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
       security:
@@ -77,25 +77,25 @@ paths:
         "200":
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "201":
           description: Preferences created successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: Vehicle not found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "400":
           description: Invalid preference data
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
       security:
@@ -146,13 +146,13 @@ paths:
         "200":
           description: Preferences merged successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: No existing preferences to merge into
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
       security:
@@ -177,13 +177,13 @@ paths:
         "200":
           description: Vehicle found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -213,13 +213,13 @@ paths:
         "200":
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -265,13 +265,13 @@ paths:
         "200":
           description: Vehicle found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -300,13 +300,13 @@ paths:
         "200":
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -351,13 +351,13 @@ paths:
         "200":
           description: Vehicle retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
       security:
@@ -386,19 +386,19 @@ paths:
         "200":
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "400":
           description: Invalid vehicle request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
       security:
@@ -458,13 +458,13 @@ paths:
         "200":
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
         "400":
           description: Invalid search query
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
       security:
@@ -486,13 +486,13 @@ paths:
         "200":
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
         "400":
           description: Invalid search query
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
       security:
@@ -515,17 +515,18 @@ paths:
         "200":
           description: Batch processed (check per-record success/failure in response)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
         "400":
           description: Invalid request payload
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - vehicle-inventory:registry:create
   /v1/vehicles-legacy:
     get:
       tags:
@@ -537,7 +538,7 @@ paths:
         "200":
           description: List of vehicles returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -560,7 +561,7 @@ paths:
         "200":
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -582,7 +583,7 @@ paths:
         "200":
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
       security:
@@ -604,13 +605,13 @@ paths:
         "201":
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "400":
           description: Invalid vehicle request.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
       security:
@@ -635,13 +636,13 @@ paths:
         "200":
           description: Vehicle retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
         "404":
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
       security:
@@ -1059,3 +1060,8 @@ components:
         updatedByUserId:
           type: string
           format: uuid
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
