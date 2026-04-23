@@ -14,8 +14,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                "inventory:pick_list:execute" })
 @RequestMapping("/v1/inventory/pickingLists")
 @Tag(name = "Picking Lists", description = "Picking list command endpoints")
 public class PickingListController {
@@ -25,6 +23,8 @@ public class PickingListController {
         @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
         @Operation(summary = "Confirm picking list", description = "Confirms a picking list and commits consumption. Stub implementation.", tags = {
                         "Picking Lists" })
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:pick_list:execute" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Picking list confirmed"),
                         @ApiResponse(responseCode = "501", description = "Not implemented")

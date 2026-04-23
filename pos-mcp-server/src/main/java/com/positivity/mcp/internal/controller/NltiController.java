@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "nlti:request:submit" })
 @RequestMapping("/v1/nlt")
 @Tag(name = "NLTI", description = "Natural Language Task Interface")
-class NltiController {
+public class NltiController {
 
         private final NltiRequestService nltiRequestService;
 

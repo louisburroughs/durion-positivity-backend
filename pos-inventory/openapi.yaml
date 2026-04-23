@@ -97,8 +97,9 @@ paths:
                   type: string
                   format: uuid
       security:
-      - bearerAuth:
-        - inventory:location:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:location:view
     put:
       tags:
       - Inventory Sites
@@ -127,8 +128,9 @@ paths:
         "501":
           description: Not implemented
       security:
-      - bearerAuth:
-        - inventory:location:admin
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -151,8 +153,9 @@ paths:
         "422":
           description: Insufficient stock
       security:
-      - bearerAuth:
-        - inventory:stock_movement:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:stock_movement:create
   /v1/inventory/returns:
     post:
       tags:
@@ -193,8 +196,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/reservations:
     post:
       tags:
@@ -236,8 +240,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/reservations/{allocationId}/promote:
     post:
       tags:
@@ -292,8 +297,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/replenishment/policies:
     get:
       tags:
@@ -311,8 +317,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReplenishmentPolicyResponse"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
     post:
       tags:
       - Replenishment
@@ -339,8 +346,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReplenishmentPolicyResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/receiving/sessions:
     post:
       tags:
@@ -382,8 +390,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:receiving:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:receiving:create
   /v1/inventory/receiving/sessions/{sessionId}/receive:
     post:
       tags:
@@ -433,8 +442,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:receiving:complete
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:receiving:complete
   /v1/inventory/receiving/sessions/{sessionId}/lines/{lineId}/cross-dock:
     post:
       tags:
@@ -491,9 +501,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:receiving:complete
-        - inventory:issue:parts
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:receiving:complete
+      - inventory:issue:parts
   /v1/inventory/putaway/tasks/{taskId}/execute:
     post:
       tags:
@@ -547,8 +558,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
       security:
-      - bearerAuth:
-        - inventory:putaway:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:putaway:execute
   /v1/inventory/putaway/tasks/{taskId}/claim:
     post:
       tags:
@@ -577,8 +589,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:putaway:claim
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:putaway:claim
   /v1/inventory/putaway/tasks/generate:
     post:
       tags:
@@ -610,8 +623,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:putaway:generate
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:putaway:generate
   /v1/inventory/purchase-orders:
     get:
       tags:
@@ -644,8 +658,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:view
     post:
       tags:
       - Purchase Orders
@@ -678,8 +693,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:create
   /v1/inventory/purchase-orders/{poId}/revisions:
     post:
       tags:
@@ -733,8 +749,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:create
   /v1/inventory/purchase-orders/{poId}/receive:
     post:
       tags:
@@ -789,8 +806,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:receive
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:receive
   /v1/inventory/purchase-orders/{poId}/cancel:
     post:
       tags:
@@ -832,8 +850,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:approve
   /v1/inventory/purchase-orders/{poId}/approve:
     post:
       tags:
@@ -887,8 +906,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:approve
   /v1/inventory/pickingLists/{id}/confirm:
     post:
       tags:
@@ -914,8 +934,9 @@ paths:
         "501":
           description: Not implemented
       security:
-      - bearerAuth:
-        - inventory:pick_list:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:execute
   /v1/inventory/pick-lists:
     get:
       tags:
@@ -953,8 +974,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:view
     post:
       tags:
       - Pick Lists
@@ -988,8 +1010,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:create
   /v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm:
     post:
       tags:
@@ -1051,8 +1074,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:execute
   /v1/inventory/pick-lists/{pickListId}/release:
     post:
       tags:
@@ -1088,8 +1112,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:execute
   /v1/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -1138,8 +1163,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
       security:
-      - bearerAuth:
-        - inventory:location:admin
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/goods-receipts:
     post:
       tags:
@@ -1186,8 +1212,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:goods_receipt:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:goods_receipt:create
   /v1/inventory/cycleCountPlans:
     post:
       tags:
@@ -1221,8 +1248,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:initiate
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:initiate
   /v1/inventory/cycleCountAdjustments:
     get:
       tags:
@@ -1254,9 +1282,10 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:view
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:view
+      - inventory:adjustment:approve
     post:
       tags:
       - Cycle Count Adjustments
@@ -1284,8 +1313,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/cycleCountAdjustments/{adjustmentId}/reject:
     post:
       tags:
@@ -1328,8 +1358,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/{adjustmentId}/approve:
     post:
       tags:
@@ -1376,8 +1407,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:approve
   /v1/inventory/cycleCount/submit:
     post:
       tags:
@@ -1413,8 +1445,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CountResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:complete
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:complete
   /v1/inventory/cycleCount/recount:
     post:
       tags:
@@ -1456,8 +1489,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CountResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:complete
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:complete
   /v1/inventory/consumption:
     post:
       tags:
@@ -1498,8 +1532,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/bulk-ingest:
     post:
       tags:
@@ -1528,8 +1563,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/BulkIngestResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/availability/{productId}:
     get:
       tags:
@@ -1563,8 +1599,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/LocationAvailabilityDto"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
     post:
       tags:
       - Inventory Availability
@@ -1600,9 +1637,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
+      - inventory:adjustment:approve
   /v1/inventory/asns:
     post:
       tags:
@@ -1642,8 +1680,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:asn:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:asn:create
   /v1/inventory/allocations/shortages/resolve:
     post:
       tags:
@@ -1684,8 +1723,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:shortages:resolve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:shortages:resolve
   /v1/inventory/allocations/reallocate:
     post:
       tags:
@@ -1726,8 +1766,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:allocations:reallocate
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:allocations:reallocate
   /v1/inventory/adjustments:
     post:
       tags:
@@ -1762,8 +1803,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -1813,8 +1855,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:approve
   /v1/inventory/pick-lists/{pickListId}/status:
     patch:
       tags:
@@ -1863,8 +1906,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:execute
   /v1/inventory/replenishment/tasks:
     get:
       tags:
@@ -1882,8 +1926,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReplenishmentTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/receiving/sessions/{sessionId}:
     get:
       tags:
@@ -1919,8 +1964,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:receiving:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:receiving:view
   /v1/inventory/putaway/tasks:
     get:
       tags:
@@ -1938,8 +1984,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:putaway:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:putaway:view
   /v1/inventory/purchase-orders/{poId}:
     get:
       tags:
@@ -1975,8 +2022,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:purchase_order:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:purchase_order:view
   /v1/inventory/pick-lists/{pickListId}:
     get:
       tags:
@@ -2012,8 +2060,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:view
     delete:
       tags:
       - Pick Lists
@@ -2044,8 +2093,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:execute
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:execute
   /v1/inventory/pick-lists/{pickListId}/tasks:
     get:
       tags:
@@ -2083,8 +2133,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:pick_list:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:pick_list:view
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -2114,8 +2165,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/LocationInventoryInquiryResponse"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/goods-receipts/{receiptId}:
     get:
       tags:
@@ -2151,8 +2203,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:goods_receipt:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:goods_receipt:view
   /v1/inventory/cycleCountPlans/{planId}:
     get:
       tags:
@@ -2182,8 +2235,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/cycleCountAdjustments/{adjustmentId}:
     get:
       tags:
@@ -2213,9 +2267,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:view
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:view
+      - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/pending:
     get:
       tags:
@@ -2233,9 +2288,10 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdjustmentResponse"
       security:
-      - bearerAuth:
-        - inventory:adjustment:view
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:view
+      - inventory:adjustment:approve
   /v1/inventory/cycleCountAdjustments/pending/count:
     get:
       tags:
@@ -2252,9 +2308,10 @@ paths:
                 type: integer
                 format: int64
       security:
-      - bearerAuth:
-        - inventory:adjustment:view
-        - inventory:adjustment:approve
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:view
+      - inventory:adjustment:approve
   /v1/inventory/cycleCount/task/{taskId}:
     get:
       tags:
@@ -2285,8 +2342,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/cycleCount/task/{taskId}/history:
     get:
       tags:
@@ -2312,8 +2370,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CountEntryResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/cycleCount/auditor/{auditorId}/tasks:
     get:
       tags:
@@ -2337,8 +2396,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
       security:
-      - bearerAuth:
-        - inventory:cycle_count:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/availability/query:
     get:
       tags:
@@ -2401,9 +2461,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
-        - inventory:on_hand:search
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
+      - inventory:on_hand:search
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -2458,9 +2519,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:on_hand:view
-        - inventory:on_hand:search
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:on_hand:view
+      - inventory:on_hand:search
   /v1/inventory/asns/{asnId}:
     get:
       tags:
@@ -2496,8 +2558,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:asn:view
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:asn:view
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -2530,8 +2593,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - inventory:adjustment:create
+      - bearerAuth: []
+      x-required-permissions:
+      - inventory:adjustment:create
 components:
   schemas:
     RecordMovementRequest:

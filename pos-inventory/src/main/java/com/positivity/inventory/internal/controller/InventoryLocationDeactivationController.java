@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                "inventory:location:admin" })
 @RequestMapping("/v1/inventory/locations")
 @Tag(name = "Inventory Management", description = "Operations related to inventory location management")
 public class InventoryLocationDeactivationController {
@@ -38,6 +36,8 @@ public class InventoryLocationDeactivationController {
         @PostMapping("/{locationId}/deactivate")
         @EmitEvent(id = "INVENTORY_LOCATION_DEACTIVATE", apiVersion = "1")
         @PreAuthorize("hasAuthority('inventory:location:admin')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        "inventory:location:admin" })
         @Operation(summary = "Deactivate a storage location", description = "Deactivate a storage location with atomic stock transfer to a destination location (Option B). "
                         + "If the location contains active inventory, a destination location must be specified.", tags = {
                                         "Inventory Management" })
