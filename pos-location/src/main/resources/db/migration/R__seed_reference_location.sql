@@ -148,3 +148,32 @@ ON CONFLICT (code) DO NOTHING;
 INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
 VALUES ('407617dd-f4f6-fec6-50e4-4221bdf102c8'::uuid, 'Default 15m', 'MINUTES', 15, NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
+VALUES ('01960002-0000-7000-8000-000000000001'::uuid, 'Standard Suburban', 'MINUTES', 20, NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
+VALUES ('01960002-0000-7000-8000-000000000002'::uuid, 'Extended Rural', 'MINUTES', 35, NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+-- Location types
+INSERT INTO location_type (id, name, description, created_at, updated_at)
+VALUES ('01960001-0000-7000-8000-000000000001'::uuid, 'Service Center', 'Customer-facing vehicle service location', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO location_type (id, name, description, created_at, updated_at)
+VALUES ('01960001-0000-7000-8000-000000000002'::uuid, 'Warehouse', 'Parts and inventory storage facility', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO location_type (id, name, description, created_at, updated_at)
+VALUES ('01960001-0000-7000-8000-000000000003'::uuid, 'Distribution Center', 'Regional distribution hub', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO location_type (id, name, description, created_at, updated_at)
+VALUES ('01960001-0000-7000-8000-000000000004'::uuid, 'Corporate HQ', 'Corporate headquarters location', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO location_type (id, name, description, created_at, updated_at)
+VALUES ('01960001-0000-7000-8000-000000000005'::uuid, 'Mobile Unit Base', 'Base of operations for mobile service units', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
