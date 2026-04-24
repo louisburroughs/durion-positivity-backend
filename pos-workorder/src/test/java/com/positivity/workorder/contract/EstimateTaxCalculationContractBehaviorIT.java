@@ -14,7 +14,7 @@ import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.path.json.JsonPath;
-import io.restassured.response.Response;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.UUID;
@@ -53,7 +53,7 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
         UUID estimateId = seedDraftEstimateWithItems();
 
         // When: Requesting calculation
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
@@ -80,8 +80,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
     void shouldProduceIdempotentCalculationResults() {
         UUID estimateId = seedDraftEstimateWithItems();
 
-        Response firstResponse = calculateResponse(estimateId);
-        Response secondResponse = calculateResponse(estimateId);
+        MockMvcResponse firstResponse = calculateResponse(estimateId);
+        MockMvcResponse secondResponse = calculateResponse(estimateId);
 
         JsonPath firstBody = firstResponse.jsonPath();
         JsonPath secondBody = secondResponse.jsonPath();
@@ -158,7 +158,7 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
@@ -180,7 +180,7 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
         // Future: taxAmount calculated by pos-accounting based on jurisdiction
     }
 
-    private Response calculateResponse(UUID estimateId) {
+    private MockMvcResponse calculateResponse(UUID estimateId) {
         return givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)

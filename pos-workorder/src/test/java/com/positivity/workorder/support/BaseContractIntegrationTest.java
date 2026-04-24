@@ -2,15 +2,14 @@ package com.positivity.workorder.support;
 
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
+import io.restassured.module.mockmvc.RestAssuredMockMvc;
+import io.restassured.module.mockmvc.specification.MockMvcRequestSpecification;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,7 +40,7 @@ public abstract class BaseContractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
-    private static final String TEST_BEARER_TOKEN = buildTestOnlyBearerToken(SYSTEM_USER_ID);
+    protected static final String TEST_BEARER_TOKEN = buildTestOnlyBearerToken(SYSTEM_USER_ID);
 
     protected static final String TEST_AUTHORITIES = String.join(
             ",",
@@ -96,13 +95,10 @@ public abstract class BaseContractIntegrationTest {
             "TimeEntry:Approve",
             "TimeEntry:Reject");
 
-    @LocalServerPort
-    private int port;
-
     @BeforeEach
     void configureRestAssuredDefaults() {
         purgeTestData();
-        RestAssured.port = port;
+        RestAssuredMockMvc.mockMvc(mockMvc);
     }
 
     /**
@@ -124,8 +120,8 @@ public abstract class BaseContractIntegrationTest {
         }
     }
 
-    protected RequestSpecification givenWithGatewayAuth() {
-        return RestAssured.given()
+    protected MockMvcRequestSpecification givenWithGatewayAuth() {
+        return RestAssuredMockMvc.given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
                 .header("X-User-Id", SYSTEM_USER_ID)

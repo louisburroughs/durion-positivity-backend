@@ -13,7 +13,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -94,7 +94,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """, testTechnicianId, testServiceEntityId, testProductEntityId);
 
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response =givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -148,7 +148,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 """, testTechnicianId, testServiceEntityId);
 
         // First request - creates change request
-        Response firstResponse = givenWithGatewayAuth()
+        MockMvcResponse firstResponse =givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -168,7 +168,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
         // NOTE: This test will currently FAIL because idempotency is not yet
         // implemented
         // Once idempotency is implemented, this test should pass
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse =givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -366,7 +366,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """, testTechnicianId, testServiceEntityId);
 
-        Response createResponse = givenWithGatewayAuth()
+        MockMvcResponse createResponse =givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(requestBody)
                 .when()

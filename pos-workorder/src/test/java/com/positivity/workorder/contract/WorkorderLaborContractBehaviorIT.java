@@ -26,7 +26,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -103,7 +103,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> startRequest =
                 Map.of("technicianId", testTechnicianId.toString(), "notes", "Beginning brake pad replacement");
 
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(startRequest)
                 .when()
@@ -262,7 +262,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         BigDecimal firstHoursWorked = BigDecimal.valueOf(hoursWorkedValue.doubleValue());
 
         // Then: Second request with same key returns same result
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .when()
@@ -295,7 +295,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 "hoursWorked", "3.5",
                 "adjustmentReason", "Manual correction for unpaid break time");
 
-        Response adjustResponse = givenWithGatewayAuth()
+        MockMvcResponse adjustResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(adjustRequest)
                 .when()
@@ -405,7 +405,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         return workorder.getId();
     }
 
-    private BigDecimal decimalValue(Response response, String field) {
+    private BigDecimal decimalValue(MockMvcResponse response, String field) {
         Object raw = response.jsonPath().get(field);
         if (raw instanceof Number number) {
             return BigDecimal.valueOf(number.doubleValue());

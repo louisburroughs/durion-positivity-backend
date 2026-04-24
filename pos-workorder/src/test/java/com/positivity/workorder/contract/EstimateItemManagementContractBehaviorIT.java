@@ -8,7 +8,7 @@ import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -50,7 +50,7 @@ class EstimateItemManagementContractBehaviorIT extends BaseContractIntegrationTe
         // And: The estimate exists and is in DRAFT status
         // When/Then: Adding a part item succeeds if estimate exists, or returns 404 if
         // missing in test data
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(request)
                 .when()

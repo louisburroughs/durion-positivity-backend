@@ -21,9 +21,9 @@ import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
+import io.restassured.module.mockmvc.RestAssuredMockMvc;
+import io.restassured.module.mockmvc.specification.MockMvcRequestSpecification;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -305,10 +305,12 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
 
     // ========== TEST DATA SEEDERS ==========
 
-    private RequestSpecification givenWithAuthorities(String... authorities) {
-        return RestAssured.given()
+    private MockMvcRequestSpecification givenWithAuthorities(String... authorities) {
+        return RestAssuredMockMvc.given()
                 .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
                 .header("X-User-Id", SYSTEM_USER_ID)
+                .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", String.join(",", authorities));
     }
 
