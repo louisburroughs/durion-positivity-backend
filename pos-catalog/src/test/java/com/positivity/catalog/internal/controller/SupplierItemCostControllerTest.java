@@ -29,7 +29,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(SupplierItemCostController.class)
+@WebMvcTest(SupplierItemCostListController.class)
 @Import({ TestSecurityConfig.class, CatalogExceptionHandler.class })
 @ActiveProfiles("test")
 @SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
@@ -56,7 +56,7 @@ class SupplierItemCostControllerTest {
     lenient().when(clock.instant()).thenReturn(Instant.EPOCH);
   }
 
-  // ─── GET /v1/products/supplier-costs?itemId={uuid} — 200 OK ─────────────
+  // ─── GET /v1/catalog/supplier-item-costs?itemId={uuid} — 200 OK ──────────
 
   @Test
   void listCostStructures_withItemId_returns200() throws Exception {
@@ -68,14 +68,14 @@ class SupplierItemCostControllerTest {
     when(supplierItemCostService.listCostStructures(eq(ITEM_ID), isNull(), any(Pageable.class)))
         .thenReturn(new PageImpl<>(List.of(dto)));
 
-    mockMvc.perform(get("/v1/products/supplier-costs")
+    mockMvc.perform(get("/v1/catalog/supplier-item-costs")
         .header("X-Authorities", "catalog:supplier_cost:read")
         .param("itemId", ITEM_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(COST_ID.toString()));
   }
 
-  // ─── GET /v1/products/supplier-costs?supplierId={uuid} — 200 OK ─────────
+  // ─── GET /v1/catalog/supplier-item-costs?supplierId={uuid} — 200 OK ───────
 
   @Test
   void listCostStructures_withSupplierId_returns200() throws Exception {
@@ -87,21 +87,21 @@ class SupplierItemCostControllerTest {
     when(supplierItemCostService.listCostStructures(isNull(), eq(SUPPLIER_ID), any(Pageable.class)))
         .thenReturn(new PageImpl<>(List.of(dto)));
 
-    mockMvc.perform(get("/v1/products/supplier-costs")
+    mockMvc.perform(get("/v1/catalog/supplier-item-costs")
         .header("X-Authorities", "catalog:supplier_cost:read")
         .param("supplierId", SUPPLIER_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(COST_ID.toString()));
   }
 
-  // ─── GET /v1/products/supplier-costs — 400 Bad Request (no filters) ──────
+  // ─── GET /v1/catalog/supplier-item-costs — 400 Bad Request (no filters) ───
 
   @Test
   void listCostStructures_withNoFilters_returns400() throws Exception {
     doThrow(new CatalogValidationException("MISSING_FILTER: At least one of itemId or supplierId must be provided"))
         .when(supplierItemCostService).listCostStructures(isNull(), isNull(), any(Pageable.class));
 
-    mockMvc.perform(get("/v1/products/supplier-costs")
+    mockMvc.perform(get("/v1/catalog/supplier-item-costs")
         .header("X-Authorities", "catalog:supplier_cost:read"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("MISSING_FILTER")));

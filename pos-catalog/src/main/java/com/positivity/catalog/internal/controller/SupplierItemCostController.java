@@ -13,8 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,7 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -62,23 +59,6 @@ public class SupplierItemCostController {
     @ApiResponse(responseCode = "404", description = "Not found")
     public ResponseEntity<SupplierItemCostDto> getCostStructure(@Parameter(required = true) @PathVariable UUID id) {
         return ResponseEntity.ok(supplierItemCostService.getCostStructure(id));
-    }
-
-    @GetMapping
-    @PreAuthorize("hasAuthority('catalog:supplier_cost:read')")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "catalog:supplier_cost:read" })
-    @Operation(summary = "List supplier cost structures", description = "Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.")
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class)))
-    @ApiResponse(responseCode = "400", description = "At least one filter is required")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-    public ResponseEntity<Page<SupplierItemCostDto>> listCostStructures(
-            @Parameter(description = "Filter by catalog item ID") @RequestParam(required = false) UUID itemId,
-            @Parameter(description = "Filter by supplier ID") @RequestParam(required = false) UUID supplierId,
-            Pageable pageable) {
-        return ResponseEntity.ok(supplierItemCostService.listCostStructures(itemId, supplierId, pageable));
     }
 
     @PutMapping("/{id}")
