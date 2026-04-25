@@ -176,4 +176,40 @@ class BulkLoadJobControllerTest {
                                 .header("X-Authorities", "bulkImport:upload:execute"))
                                 .andExpect(status().isForbidden());
         }
+
+        // ─── POST /v1/bulk-jobs/{jobId}/retry ────────────────────────────────────
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void retryJob_whenFailed_returns200() throws Exception {
+                BulkLoadJobResponse response = BulkLoadJobResponse.builder()
+                                .id(JOB_ID)
+                                .operatorId("test-operator")
+                                .status(JobStatus.CREATED)
+                                .build();
+
+                when(bulkLoadJobService.retryJob(JOB_ID, "test-operator")).thenReturn(response);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/retry", JOB_ID))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(JOB_ID.toString()))
+                                .andExpect(jsonPath("$.status").value("CREATED"));
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void retryJob_whenNotFailed_returns409() throws Exception {
+                when(bulkLoadJobService.retryJob(JOB_ID, "test-operator"))
+                                .thenThrow(new IllegalStateException("Job can only be retried from FAILED state"));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/retry", JOB_ID))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void retryJob_withoutExecuteAuthority_returns403() throws Exception {
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/retry", JOB_ID)
+                                .header("X-Authorities", "bulkImport:status:read"))
+                                .andExpect(status().isForbidden());
+        }
 }

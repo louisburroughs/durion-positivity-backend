@@ -1,7 +1,12 @@
 package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
+import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
+import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import com.positivity.bulkloader.service.ReviewQueueService;
 import java.io.ByteArrayOutputStream;
@@ -9,7 +14,9 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -23,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReviewQueueServiceImpl implements ReviewQueueService {
 
     private final BulkLoadRecordAuditRepository auditRepository;
+    private final BulkLoadJobRepository jobRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,6 +81,31 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
                 .reasonCodes(audit.getReasonCodes())
                 .originalValues(audit.getOriginalValues())
                 .createdAt(audit.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public BulkCorrectionResponse submitCorrections(
+            @NonNull UUID jobId, @NonNull BulkCorrectionRequest request, @NonNull String operatorId) {
+        var job = jobRepository
+                .findById(jobId)
+                .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
+        if (!job.getOperatorId().equals(operatorId)) {
+            throw new JobOwnershipViolationException(jobId.toString());
+        }
+        if (job.getStatus() != JobStatus.FAILED) {
+            throw new IllegalStateException(
+                    "Corrections can only be submitted for jobs in FAILED state, current state: " + job.getStatus());
+        }
+
+        int submittedCount = request.getCorrections().size();
+        return BulkCorrectionResponse.builder()
+                .jobId(jobId)
+                .submittedCount(submittedCount)
+                .acceptedCount(submittedCount)
+                .rejectedCount(0)
+                .rejections(Collections.emptyList())
                 .build();
     }
 }

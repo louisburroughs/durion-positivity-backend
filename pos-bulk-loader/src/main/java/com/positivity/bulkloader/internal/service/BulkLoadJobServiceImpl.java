@@ -116,6 +116,24 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     @Override
     @Transactional
+    public BulkLoadJobResponse retryJob(@NonNull UUID jobId, @NonNull String operatorId) {
+        BulkLoadJob job = findOrThrow(jobId);
+        if (!job.getOperatorId().equals(operatorId)) {
+            throw new JobOwnershipViolationException(jobId.toString());
+        }
+        if (job.getStatus() != JobStatus.FAILED) {
+            throw new IllegalStateException(
+                    "Job can only be retried from FAILED state, current state: " + job.getStatus());
+        }
+
+        job.setStatus(JobStatus.CREATED);
+        job.setStartedAt(null);
+        job.setCompletedAt(null);
+        return toResponse(jobRepository.save(job));
+    }
+
+    @Override
+    @Transactional
     public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId, @Nullable String authorizationHeader) {
         BulkLoadJob job = findOrThrow(jobId);
         if (!job.getOperatorId().equals(operatorId)) {
