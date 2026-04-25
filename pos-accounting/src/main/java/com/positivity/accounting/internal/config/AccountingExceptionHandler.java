@@ -8,6 +8,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.NoSuchElementException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -29,7 +30,7 @@ public class AccountingExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    @ExceptionHandler({AuthenticationException.class, AuthenticationCredentialsNotFoundException.class})
+    @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
     public ResponseEntity<ApiError> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required", request);
     }
@@ -37,6 +38,11 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<ApiError> handleNotFound(NoSuchElementException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateEventException.class)
