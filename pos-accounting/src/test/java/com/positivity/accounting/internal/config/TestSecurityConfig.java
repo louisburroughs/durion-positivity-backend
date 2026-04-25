@@ -75,7 +75,8 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("accounting:mapping-key:view"),
             new SimpleGrantedAuthority("accounting:mapping-key:create"),
             new SimpleGrantedAuthority("accounting:mapping-key:edit"),
-            new SimpleGrantedAuthority("accounting:mapping-key:deactivate"));
+            new SimpleGrantedAuthority("accounting:mapping-key:deactivate"),
+            new SimpleGrantedAuthority("accounting:report:export"));
 
     /**
      * Replaces the production gateway filter chain with a permissive one that
