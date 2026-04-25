@@ -35,7 +35,11 @@ public class CrmBillingTermsController {
   @Operation(summary = "List billing terms", description = "Returns the reference list of all available billing terms. "
       + "This is a static reference endpoint; it does not vary per party or account.")
   @ApiResponse(responseCode = "200", description = "Billing terms retrieved successfully")
+  @ApiResponse(responseCode = "401", description = "Authentication required")
+  @ApiResponse(responseCode = "403", description = "Forbidden - missing authority " + CrmPermissionRegistry.PARTY_VIEW)
   @GetMapping("/billing-terms")
+  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+      CrmPermissionRegistry.PARTY_VIEW })
   @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
   public ResponseEntity<List<BillingTermsRef>> listBillingTerms() {
     return ResponseEntity.ok(BILLING_TERMS);
