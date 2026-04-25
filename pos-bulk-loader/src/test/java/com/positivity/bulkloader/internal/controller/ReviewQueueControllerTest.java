@@ -198,6 +198,19 @@ class ReviewQueueControllerTest {
         }
 
         @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void submitCorrections_withEmptyCorrections_returns400() throws Exception {
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "corrections": []
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
         void submitCorrections_whenNotOwner_returns403() throws Exception {
                 BulkCorrectionItem item = BulkCorrectionItem.builder()
                                 .auditRecordId(AUDIT_ID)
