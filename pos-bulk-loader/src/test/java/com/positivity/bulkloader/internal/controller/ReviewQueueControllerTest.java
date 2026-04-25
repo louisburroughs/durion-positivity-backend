@@ -16,6 +16,7 @@ import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
 import com.positivity.bulkloader.internal.enums.ReviewStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ReviewQueueService;
 import java.util.Collections;
@@ -110,7 +111,7 @@ class ReviewQueueControllerTest {
 
         @Test
         @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
-        void submitCorrections_whenValid_returns202() throws Exception {
+        void submitCorrections_whenValid_returns201() throws Exception {
                 BulkCorrectionItem item = BulkCorrectionItem.builder()
                                 .auditRecordId(AUDIT_ID)
                                 .correctedData(Map.of("sku", "PROD-001"))
@@ -132,7 +133,7 @@ class ReviewQueueControllerTest {
                 mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections", JOB_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isAccepted())
+                                .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.jobId").value(JOB_ID.toString()))
                                 .andExpect(jsonPath("$.submittedCount").value(1))
                                 .andExpect(jsonPath("$.acceptedCount").value(1));
@@ -194,5 +195,26 @@ class ReviewQueueControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void submitCorrections_whenNotOwner_returns403() throws Exception {
+                BulkCorrectionItem item = BulkCorrectionItem.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .correctedData(Map.of("sku", "PROD-001"))
+                                .build();
+                BulkCorrectionRequest request = BulkCorrectionRequest.builder()
+                                .corrections(List.of(item))
+                                .build();
+
+                when(reviewQueueService.submitCorrections(eq(JOB_ID), any(), eq("other-operator")))
+                                .thenThrow(new JobOwnershipViolationException(JOB_ID.toString()));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header("X-User", "other-operator")
+                                .header("X-Authorities", "bulkImport:upload:execute")
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
         }
 }

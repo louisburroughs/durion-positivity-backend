@@ -212,4 +212,25 @@ class BulkLoadJobControllerTest {
                                 .header("X-Authorities", "bulkImport:status:read"))
                                 .andExpect(status().isForbidden());
         }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void retryJob_whenNotFound_returns404() throws Exception {
+                when(bulkLoadJobService.retryJob(JOB_ID, "test-operator"))
+                                .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/retry", JOB_ID))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void retryJob_whenNotOwner_returns403() throws Exception {
+                when(bulkLoadJobService.retryJob(JOB_ID, "other-operator"))
+                                .thenThrow(new JobOwnershipViolationException(JOB_ID.toString()));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/retry", JOB_ID)
+                                .header("X-User", "other-operator")
+                                .header("X-Authorities", "bulkImport:upload:execute"))
+                                .andExpect(status().isForbidden());
+        }
 }

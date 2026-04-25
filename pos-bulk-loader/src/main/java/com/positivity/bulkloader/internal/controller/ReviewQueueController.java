@@ -70,7 +70,7 @@ public class ReviewQueueController {
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")
     @Operation(summary = "Submit corrected records for a bulk load job", description = "Submits corrected data for one or more error records from a bulk import audit. The job must be in FAILED state to accept corrections. Returns 409 if the job is not in a correctable state.")
-    @ApiResponse(responseCode = "202", description = "Corrections accepted for processing")
+    @ApiResponse(responseCode = "201", description = "Corrections submitted successfully")
     @ApiResponse(responseCode = "400", description = "Invalid correction request")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
@@ -78,7 +78,7 @@ public class ReviewQueueController {
     public ResponseEntity<BulkCorrectionResponse> submitCorrections(
             @PathVariable @NonNull UUID jobId,
             @Valid @RequestBody @NonNull BulkCorrectionRequest request) {
-        return ResponseEntity.status(HttpStatus.ACCEPTED)
+        return ResponseEntity.status(HttpStatus.CREATED)
                 .body(reviewQueueService.submitCorrections(jobId, request, currentOperatorId()));
     }
 
