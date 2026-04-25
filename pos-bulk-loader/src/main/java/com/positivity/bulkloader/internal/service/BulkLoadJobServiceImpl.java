@@ -126,9 +126,18 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
                     "Job can only be retried from FAILED state, current state: " + job.getStatus());
         }
 
+        long activeCount = jobRepository.countByOperatorIdAndStatusIn(operatorId, ACTIVE_STATUSES);
+        if (activeCount > 0) {
+            throw new IllegalStateException("Operator already has an active bulk load job in progress");
+        }
+
         job.setStatus(JobStatus.CREATED);
         job.setStartedAt(null);
         job.setCompletedAt(null);
+        job.setProcessedRows(0L);
+        job.setSuccessCount(0L);
+        job.setFailureCount(0L);
+        job.setTotalRows(null);
         return toResponse(jobRepository.save(job));
     }
 
