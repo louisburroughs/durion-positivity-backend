@@ -16,6 +16,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -73,6 +74,7 @@ public class ReportExportController {
       @AuthenticationPrincipal UserDetails principal) {
 
     String operatorId = (principal != null) ? principal.getUsername() : "unknown";
+    validateDateRange(request);
     ReportExportResponse response = reportExportService.requestExport(request, operatorId);
     return ResponseEntity.status(201).body(response);
   }
@@ -108,9 +110,16 @@ public class ReportExportController {
   @ApiResponse(responseCode = "401", description = "Unauthorized")
   @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
   public ResponseEntity<Page<ReportExportResponse>> getExportHistory(
-      @PageableDefault(size = 20, sort = "requestedAt") Pageable pageable) {
+      @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
     Page<ReportExportResponse> page = reportExportService.getExportHistory(pageable);
     return ResponseEntity.ok(page);
+  }
+
+  private void validateDateRange(ReportExportRequest request) {
+    if (request.getStartDate() != null && request.getEndDate() != null
+        && request.getEndDate().isBefore(request.getStartDate())) {
+      throw new IllegalArgumentException("endDate must be on or after startDate");
+    }
   }
 }

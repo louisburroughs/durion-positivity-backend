@@ -8,7 +8,6 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.NoSuchElementException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -40,9 +39,9 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
     }
 
-    @ExceptionHandler(NoSuchElementException.class)
-    public ResponseEntity<ApiError> handleNotFound(NoSuchElementException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateEventException.class)

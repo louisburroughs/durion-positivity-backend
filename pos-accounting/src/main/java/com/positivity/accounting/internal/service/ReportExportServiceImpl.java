@@ -6,7 +6,8 @@ import com.positivity.accounting.internal.enums.ExportStatus;
 import com.positivity.accounting.service.ReportExportService;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.NoSuchElementException;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.NonNull;
@@ -15,7 +16,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Stub implementation of {@link ReportExportService}.
@@ -66,7 +70,7 @@ public class ReportExportServiceImpl implements ReportExportService {
   public ReportExportResponse getExportStatus(@NonNull UUID exportId) {
     ReportExportResponse response = exportStore.get(exportId);
     if (response == null) {
-      throw new NoSuchElementException("No export found with ID: " + exportId);
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No export found with ID: " + exportId);
     }
     return response;
   }
@@ -74,15 +78,33 @@ public class ReportExportServiceImpl implements ReportExportService {
   @Override
   @NonNull
   public Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable) {
+    Sort sort = pageable.getSort();
+    Comparator<ReportExportResponse> comparator;
+    if (sort.isSorted()) {
+      Sort.Order order = sort.iterator().next();
+      if (!"requestedAt".equals(order.getProperty())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
+      }
+      comparator = order.isAscending()
+          ? Comparator.comparing(ReportExportResponse::getRequestedAt)
+          : (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+    } else {
+      comparator = (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+    }
+
     var all = exportStore.values().stream()
-        .sorted((a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt()))
+        .sorted(comparator)
         .toList();
 
     int total = all.size();
-    int start = (int) pageable.getOffset();
-    int end = Math.min(start + pageable.getPageSize(), total);
-
-    var page = (start >= total) ? java.util.List.<ReportExportResponse>of() : all.subList(start, end);
+    long offset = pageable.getOffset();
+    if (offset >= total) {
+      return new PageImpl<>(List.of(), pageable, total);
+    }
+    int start = Math.toIntExact(offset);
+    int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
+    var page = all.subList(start, end);
     return new PageImpl<>(page, pageable, total);
   }
 }

@@ -17,7 +17,6 @@ import com.positivity.accounting.service.ReportExportService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,11 +28,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -128,6 +129,36 @@ class ReportExportControllerTest {
           .content("{}"))
           .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("should return 400 when endDate is before startDate")
+    void requestExport_whenEndDateBeforeStartDate_returns400() throws Exception {
+      ReportExportRequest invalidRange = ReportExportRequest.builder()
+          .format(ExportFormat.CSV)
+          .reportType("JOURNAL_LINES")
+          .startDate(LocalDate.of(2025, 3, 31))
+          .endDate(LocalDate.of(2025, 1, 1))
+          .organizationId(ORG_ID)
+          .build();
+
+      mockMvc.perform(post(BASE_URL)
+          .header("X-Authorities", TEST_AUTHORITIES)
+          .header("X-User", TEST_USER)
+          .contentType(MediaType.APPLICATION_JSON)
+          .content(objectMapper.writeValueAsString(invalidRange)))
+          .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("should return 403 when caller lacks accounting:report:export authority")
+    void requestExport_whenUnauthorized_returns403() throws Exception {
+      mockMvc.perform(post(BASE_URL)
+          .header("X-Authorities", "accounting:read")
+          .header("X-User", TEST_USER)
+          .contentType(MediaType.APPLICATION_JSON)
+          .content(objectMapper.writeValueAsString(validRequest)))
+          .andExpect(status().isForbidden());
+    }
   }
 
   @Nested
@@ -152,7 +183,7 @@ class ReportExportControllerTest {
     @DisplayName("should return 404 when export job is not found")
     void getExportStatus_whenNotFound_returns404() throws Exception {
       when(reportExportService.getExportStatus(EXPORT_ID))
-          .thenThrow(new NoSuchElementException("Export not found: " + EXPORT_ID));
+          .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Export not found: " + EXPORT_ID));
 
       mockMvc.perform(get(BASE_URL + "/{exportId}", EXPORT_ID)
           .header("X-Authorities", TEST_AUTHORITIES)

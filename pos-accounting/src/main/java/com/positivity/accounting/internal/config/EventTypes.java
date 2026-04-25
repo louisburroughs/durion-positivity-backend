@@ -226,7 +226,7 @@ public final class EventTypes {
                                 EventTypeRegistration.fastRead(
                                                 "ACCOUNTING_REPORT_EXPORT_STATUS", "Get report export status by ID")
                                                 .build(),
-                                EventTypeRegistration.fastRead(
+                                EventTypeRegistration.search(
                                                 "ACCOUNTING_REPORT_EXPORT_LIST", "List report export history")
                                                 .build());
         }
