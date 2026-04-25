@@ -669,6 +669,87 @@ paths:
         - accounting:ap:pay
       x-required-permissions:
       - accounting:ap:pay
+  /v1/accounting/reports/export:
+    get:
+      tags:
+      - Financial Reporting
+      summary: List export history
+      description: "List all async report export jobs, paginated and sorted by most-recent\
+        \ first."
+      operationId: getExportHistory
+      parameters:
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Export history returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageReportExportResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageReportExportResponse"
+        "403":
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageReportExportResponse"
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
+    post:
+      tags:
+      - Financial Reporting
+      summary: Request async report export
+      description: Submit an asynchronous report export job. Returns immediately with
+        PENDING status.
+      operationId: requestExport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportExportRequest"
+        required: true
+      responses:
+        "201":
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "403":
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -2521,6 +2602,51 @@ paths:
         - reporting:view:financial-statements
       x-required-permissions:
       - reporting:view:financial-statements
+  /v1/accounting/reports/export/{exportId}:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Get export status
+      description: Poll the current status of an async report export job.
+      operationId: getExportStatus
+      parameters:
+      - name: exportId
+        in: path
+        description: Export job UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Export status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "403":
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+        "404":
+          description: Export job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportExportResponse"
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     get:
       tags:
@@ -4052,6 +4178,8 @@ components:
       type: object
       description: Line item received from vendor
       properties:
+        inventoryItem:
+          type: boolean
         productId:
           type: string
           format: uuid
@@ -4273,6 +4401,97 @@ components:
           minLength: 1
       required:
       - operatorId
+    ReportExportRequest:
+      type: object
+      description: Request payload for exporting a financial report
+      properties:
+        format:
+          type: string
+          description: Export format
+          enum:
+          - PDF
+          - CSV
+          - XLSX
+          - JSON
+          example: CSV
+        reportType:
+          type: string
+          description: Report type key
+          example: JOURNAL_LINES
+          maxLength: 100
+          minLength: 0
+        startDate:
+          type: string
+          format: date
+          description: "Period start date (inclusive, YYYY-MM-DD)"
+          example: 2026-01-01
+        endDate:
+          type: string
+          format: date
+          description: "Period end date (inclusive, YYYY-MM-DD)"
+          example: 2026-03-31
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization UUID to scope the export
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        filename:
+          type: string
+          description: Optional output filename without extension
+          example: journal-lines-q1-2026
+          maxLength: 150
+          minLength: 0
+      required:
+      - endDate
+      - format
+      - organizationId
+      - reportType
+      - startDate
+    ReportExportResponse:
+      type: object
+      description: Async report export job state
+      properties:
+        exportId:
+          type: string
+          format: uuid
+          description: Unique export job identifier
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        status:
+          type: string
+          description: Current export status
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+          example: PENDING
+        requestedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when the export was requested
+          example: 2026-04-25T10:00:00Z
+        completedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when export completed (null if not finished)
+          example: 2026-04-25T10:00:05Z
+        downloadUrl:
+          type: string
+          description: Download URL (only present when status is COMPLETED)
+          example: https://storage.example.com/exports/export-abc.csv
+        format:
+          type: string
+          description: Export format
+          enum:
+          - PDF
+          - CSV
+          - XLSX
+          - JSON
+          example: CSV
+        reportType:
+          type: string
+          description: Report type that was exported
+          example: JOURNAL_LINES
     PostingCategoryCreateRequest:
       type: object
       properties:
@@ -5298,6 +5517,80 @@ components:
           type: number
         balanced:
           type: boolean
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PageReportExportResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportExportResponse"
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
     PostingRuleSetListResponse:
       type: object
       properties:
@@ -5554,21 +5847,6 @@ components:
         totalPages:
           type: integer
           format: int32
-    Pageable:
-      type: object
-      properties:
-        page:
-          type: integer
-          format: int32
-          minimum: 0
-        size:
-          type: integer
-          format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
     PageCreditMemoResponse:
       type: object
       properties:
@@ -5588,45 +5866,18 @@ components:
         number:
           type: integer
           format: int32
-        first:
-          type: boolean
-        last:
-          type: boolean
         pageable:
           $ref: "#/components/schemas/PageableObject"
         sort:
           $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
         empty:
-          type: boolean
-    PageableObject:
-      type: object
-      properties:
-        offset:
-          type: integer
-          format: int64
-        paged:
-          type: boolean
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/SortObject"
-        unpaged:
-          type: boolean
-    SortObject:
-      type: object
-      properties:
-        empty:
-          type: boolean
-        sorted:
-          type: boolean
-        unsorted:
           type: boolean
     VendorBillSummaryResponse:
       type: object
