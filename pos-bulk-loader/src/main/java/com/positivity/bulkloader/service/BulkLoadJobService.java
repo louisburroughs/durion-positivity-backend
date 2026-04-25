@@ -20,5 +20,7 @@ public interface BulkLoadJobService {
 
     BulkLoadJobResponse cancelJob(@NonNull UUID jobId, @NonNull String operatorId);
 
+    BulkLoadJobResponse retryJob(@NonNull UUID jobId, @NonNull String operatorId);
+
     void startProcessing(@NonNull UUID jobId, @NonNull String operatorId, @Nullable String authorizationHeader);
 }

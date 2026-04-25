@@ -11,6 +11,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import java.util.NoSuchElementException;
@@ -161,6 +162,61 @@ class BulkLoadJobServiceImplTest {
         assertThatThrownBy(() -> service.cancelJob(JOB_ID, OPERATOR_ID))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("terminal state");
+    }
+
+    // ─── retryJob ────────────────────────────────────────────────────────────
+
+    @Test
+    void retryJob_happyPath_resetsCountersAndSetsCreated() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
+        when(jobRepository.save(any(BulkLoadJob.class))).thenReturn(saved);
+
+        BulkLoadJobResponse response = service.retryJob(JOB_ID, OPERATOR_ID);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(job.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(job.getProcessedRows()).isZero();
+        assertThat(job.getSuccessCount()).isZero();
+        assertThat(job.getFailureCount()).isZero();
+        assertThat(job.getTotalRows()).isNull();
+        verify(jobRepository).save(job);
+    }
+
+    @Test
+    void retryJob_whenJobNotOwned_throwsOwnershipViolation() {
+        BulkLoadJob job = savedJob(JOB_ID, "other-operator", JobStatus.FAILED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(JobOwnershipViolationException.class);
+    }
+
+    @Test
+    void retryJob_whenJobNotFailed_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.PROCESSING);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FAILED state");
+    }
+
+    @Test
+    void retryJob_whenOperatorHasActiveJob_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("active bulk load job");
     }
 
     // ─── getJob ──────────────────────────────────────────────────────────────

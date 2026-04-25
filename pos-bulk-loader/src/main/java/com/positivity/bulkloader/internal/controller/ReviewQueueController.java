@@ -1,11 +1,15 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ReviewQueueService;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +25,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -57,6 +64,22 @@ public class ReviewQueueController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"error-report-" + jobId + ".csv\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(report);
+    }
+
+    @PostMapping("/{jobId}/corrections")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")
+    @Operation(summary = "Submit corrected records for a bulk load job", description = "Submits corrected data for one or more error records from a bulk import audit. The job must be in FAILED state to accept corrections. Returns 409 if the job is not in a correctable state.")
+    @ApiResponse(responseCode = "201", description = "Corrections submitted successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid correction request")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
+    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(responseCode = "409", description = "Job is not in a state that accepts corrections")
+    public ResponseEntity<BulkCorrectionResponse> submitCorrections(
+            @PathVariable @NonNull UUID jobId,
+            @Valid @RequestBody @NonNull BulkCorrectionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(reviewQueueService.submitCorrections(jobId, request, currentOperatorId()));
     }
 
     private String currentOperatorId() {
