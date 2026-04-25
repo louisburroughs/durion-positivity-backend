@@ -32,8 +32,10 @@ public interface ReportExportService {
    *
    * @param exportId export job UUID
    * @return current export job state
-   * @throws java.util.NoSuchElementException when no export exists for the given
-   *                                          ID
+   * @throws org.springframework.web.server.ResponseStatusException with HTTP 404
+   *                                                                when no export
+   *                                                                exists for the
+   *                                                                given ID
    */
   @NonNull
   ReportExportResponse getExportStatus(@NonNull UUID exportId);

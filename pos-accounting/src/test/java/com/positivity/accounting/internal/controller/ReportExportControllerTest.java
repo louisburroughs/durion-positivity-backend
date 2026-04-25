@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -146,7 +147,9 @@ class ReportExportControllerTest {
           .header("X-User", TEST_USER)
           .contentType(MediaType.APPLICATION_JSON)
           .content(objectMapper.writeValueAsString(invalidRange)))
-          .andExpect(status().isBadRequest());
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+          .andExpect(jsonPath("$.message", containsString("endDate")));
     }
 
     @Test
@@ -210,6 +213,15 @@ class ReportExportControllerTest {
           .andExpect(jsonPath("$.content[0].exportId").value(EXPORT_ID.toString()))
           .andExpect(jsonPath("$.content[0].status").value("PENDING"))
           .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("should return 403 when caller lacks accounting:report:export authority")
+    void getExportHistory_whenUnauthorized_returns403() throws Exception {
+      mockMvc.perform(get(BASE_URL)
+          .header("X-Authorities", "accounting:read")
+          .header("X-User", TEST_USER))
+          .andExpect(status().isForbidden());
     }
   }
 }
