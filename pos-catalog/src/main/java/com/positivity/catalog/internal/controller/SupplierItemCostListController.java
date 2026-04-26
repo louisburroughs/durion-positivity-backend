@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/v1/catalog/supplier-item-costs")
-@Tag(name = "Supplier Item Cost API", description = "Query supplier item cost structures")
+@Tag(name = "Supplier Item Cost List API", description = "Query supplier item cost structures")
 public class SupplierItemCostListController {
 
   private final SupplierItemCostService supplierItemCostService;

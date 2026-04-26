@@ -21,8 +21,6 @@ tags:
   description: "Manage standard, last, and average item costs"
 - name: Supplier Item Cost API
   description: Manage supplier item costs with volume tiers
-- name: Supplier Item Cost API
-  description: Query supplier item cost structures
 - name: Product MSRP API
   description: Manage MSRP values with effective dates
 - name: Catalog API
@@ -31,6 +29,8 @@ tags:
   description: "Manage price books, pricing rules, and resolution"
 - name: Catalog Items API
   description: API for managing catalog items by type
+- name: Supplier Item Cost List API
+  description: Query supplier item cost structures
 paths:
   /v1/products/{productId}:
     get:
@@ -2192,7 +2192,7 @@ paths:
   /v1/catalog/supplier-item-costs:
     get:
       tags:
-      - Supplier Item Cost API
+      - Supplier Item Cost List API
       summary: List supplier cost structures
       description: Returns a paginated list of supplier cost structures. At least
         one of itemId or supplierId must be provided.
@@ -3960,10 +3960,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: "#/components/schemas/SortObject"
         pageable:
           $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -3981,14 +3981,14 @@ components:
           format: int64
         paged:
           type: boolean
-        sort:
-          $ref: "#/components/schemas/SortObject"
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
     SortObject:
@@ -4019,10 +4019,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: "#/components/schemas/SortObject"
         pageable:
           $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
