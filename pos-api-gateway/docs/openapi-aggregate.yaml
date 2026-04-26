@@ -121,6 +121,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1publish
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1versions
+  /v1/accounting/reports/export:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
+  /v1/accounting/reports/export/{exportId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}
   /v1/accounting/reports/financial/balance-sheet:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1balance-sheet
   /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
@@ -151,12 +155,16 @@ paths:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1audit
   /v1/bulk-jobs/{jobId}/cancel:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1cancel
+  /v1/bulk-jobs/{jobId}/corrections:
+    $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1corrections
   /v1/bulk-jobs/{jobId}/error-report:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1error-report
   /v1/bulk-jobs/{jobId}/mappings:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1mappings
   /v1/bulk-jobs/{jobId}/process:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1process
+  /v1/bulk-jobs/{jobId}/retry:
+    $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1retry
   /v1/bulk-jobs/{jobId}/tus:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs~1{jobId}~1tus
   /v1/bulk-jobs/{jobId}/upload:
@@ -171,6 +179,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1{type}~1{catalogId}
   /v1/catalog/bulk-ingest:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1bulk-ingest
+  /v1/catalog/supplier-item-costs:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-item-costs
   /v1/catalogs:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalogs
   /v1/catalogs/name/{name}:
@@ -263,6 +273,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1tierResolve
   /v1/crm/accounts/{accountId}/tier:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1{accountId}~1tier
+  /v1/crm/billing-terms:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1billing-terms
   /v1/crm/commercial-accounts/{partyId}/contacts:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1commercial-accounts~1{partyId}~1contacts
   /v1/crm/commercial-accounts/{partyId}/relationships:

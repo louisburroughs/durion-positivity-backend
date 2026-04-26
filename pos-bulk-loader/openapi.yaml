@@ -256,6 +256,54 @@ paths:
         - permitAll
       x-required-permissions:
       - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}/retry:
+    post:
+      tags:
+      - Bulk Load Jobs API
+      summary: Retry a failed bulk load job
+      description: "Retries a bulk load job that has reached the FAILED state, resetting\
+        \ it to CREATED and re-queuing it for processing. The operator can only retry\
+        \ their own jobs. Returns 409 if the job is not in FAILED state."
+      operationId: retryJob
+      parameters:
+      - name: jobId
+        in: path
+        description: ID of the failed bulk load job to retry
+        required: true
+        schema:
+          type: string
+          default: ""
+      responses:
+        "200":
+          description: Job reset and re-queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+        "403":
+          description: Job does not belong to the authenticated operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+        "409":
+          description: Job is not in FAILED state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkLoadJobResponse"
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/process:
     post:
       tags:
@@ -294,6 +342,65 @@ paths:
       security:
       - bearerAuth:
         - bulkImport:upload:execute
+      x-required-permissions:
+      - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}/corrections:
+    post:
+      tags:
+      - Review Queue API
+      summary: Submit corrected records for a bulk load job
+      description: Submits corrected data for one or more error records from a bulk
+        import audit. The job must be in FAILED state to accept corrections. Returns
+        409 if the job is not in a correctable state.
+      operationId: submitCorrections
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCorrectionRequest"
+        required: true
+      responses:
+        "201":
+          description: Corrections submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCorrectionResponse"
+        "400":
+          description: Invalid correction request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCorrectionResponse"
+        "403":
+          description: Job does not belong to the authenticated operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCorrectionResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCorrectionResponse"
+        "409":
+          description: Job is not in a state that accepts corrections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCorrectionResponse"
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
       x-required-permissions:
       - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/cancel:
@@ -720,6 +827,80 @@ components:
         sizeBytes:
           type: integer
           format: int64
+    BulkCorrectionItem:
+      type: object
+      default: null
+      description: A single corrected data record for a failed audit entry
+      properties:
+        auditRecordId:
+          type: string
+          format: uuid
+          default: ""
+          description: ID of the audit record being corrected
+          example: 00000000-0000-0000-0000-000000000001
+        correctedData:
+          type: object
+          additionalProperties:
+            type: string
+          default: ""
+          description: Map of field names to their corrected values
+          example:
+            sku: PROD-001
+            price: "19.99"
+      required:
+      - auditRecordId
+      - correctedData
+    BulkCorrectionRequest:
+      type: object
+      default: null
+      description: Request to submit corrected data records for a failed bulk load
+        job
+      properties:
+        corrections:
+          type: array
+          default: ""
+          description: "List of correction items, one per audit record to correct"
+          items:
+            $ref: "#/components/schemas/BulkCorrectionItem"
+          minItems: 1
+      required:
+      - corrections
+    BulkCorrectionResponse:
+      type: object
+      default: null
+      description: Result of a bulk correction submission
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          default: ""
+          description: The bulk load job ID
+          example: 00000000-0000-0000-0000-000000000001
+        submittedCount:
+          type: integer
+          format: int32
+          default: ""
+          description: Total number of corrections submitted
+          example: 5
+        acceptedCount:
+          type: integer
+          format: int32
+          default: ""
+          description: Number of corrections accepted for processing
+          example: 5
+        rejectedCount:
+          type: integer
+          format: int32
+          default: ""
+          description: Number of corrections rejected
+          example: 0
+        rejections:
+          type: array
+          default: ""
+          description: "Rejection detail messages for each rejected correction, if\
+            \ any"
+          items:
+            type: string
     Pageable:
       type: object
       properties:

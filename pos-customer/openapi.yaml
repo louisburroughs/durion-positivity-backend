@@ -1340,6 +1340,44 @@ paths:
         - crm:relationship:read
       x-required-permissions:
       - crm:relationship:read
+  /v1/crm/billing-terms:
+    get:
+      tags:
+      - CRM Accounts
+      summary: List billing terms
+      description: Returns the reference list of all available billing terms. This
+        is a static reference endpoint; it does not vary per party or account.
+      operationId: listBillingTerms
+      responses:
+        "200":
+          description: Billing terms retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingTermsRef"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingTermsRef"
+        "403":
+          description: Forbidden - missing authority crm:party:view
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingTermsRef"
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -2695,6 +2733,23 @@ components:
         phone:
           type: string
           description: Primary phone number
+    BillingTermsRef:
+      type: object
+      description: Billing term reference entry
+      properties:
+        code:
+          type: string
+          description: Billing term code identifier
+          example: NET_30
+        label:
+          type: string
+          description: Human-readable label
+          example: Net 30
+        netDays:
+          type: integer
+          format: int32
+          description: Net payment days. Negative values indicate prepayment is required.
+          example: 30
     GetAccountTierResponse:
       type: object
       description: Account tier information response

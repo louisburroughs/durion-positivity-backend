@@ -4356,14 +4356,14 @@ components:
         number:
           type: integer
           format: int32
-        first:
-          type: boolean
-        last:
-          type: boolean
         pageable:
           $ref: "#/components/schemas/PageableObject"
         sort:
           $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
