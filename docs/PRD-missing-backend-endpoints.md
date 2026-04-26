@@ -1,57 +1,168 @@
-# PRD: Missing Backend Endpoints Blocking SDK Migration
+# PRD: Backend Contract Parity for Angular SDK Migration
 
-**Status:** Ready for Development
-**Date:** 2026-04-25
+**Status:** Execution-ready for issue 320
+**Date:** 2026-04-26
 **Owner:** Platform API
-**Related:** `../durion-positivity-frontend/docs/sdk-migration-analysis.md`
+**Related:** `louisburroughs/durion#320`, `../durion-positivity-frontend/docs/PRD-sdk-migration-completion.md`
 
 ---
 
-## Problem
+## Problem Statement
 
-The Angular frontend (`durion-positivity-frontend`) is mid-migration from direct
-`HttpClient` calls to using the typed Angular SDK (`durion-positivity-sdk-angular`).
-That migration is blocked in five specific areas where the frontend is calling endpoints
-that do not exist in `durion-positivity-backend`.
+Issue 320 is broader than the original missing-endpoints backlog. The remaining B-class
+blockers in the Angular SDK migration include:
 
-These are not SDK generation failures. The SDK generator reads `pos-*/openapi.yaml`
-files, which are produced by `scripts/generate-openapi.sh` from the live SpringDoc spec.
-If a controller endpoint is not in the backend, it will not appear in the OpenAPI file,
-and therefore will not appear in the SDK. The correct fix is to implement the missing
-backend endpoints — the SDK and frontend can then catch up in subsequent steps.
+- backend endpoints that do not exist yet
+- backend endpoints that exist but are not represented correctly in OpenAPI
+- backend endpoints whose parameters or schemas are underspecified relative to real
+  frontend behavior
+- backend ownership gaps where a cross-domain operation exists but is not modeled in the
+  correct module spec
 
-**Current symptom in the frontend:** five families of direct `ApiBaseService` calls
-remain in `accounting.service.ts`, `crm.service.ts`, `product-catalog.service.ts`, and
-`bulk-import.service.ts` because their corresponding SDK methods do not exist. Those
-calls will return HTTP 404 at runtime.
+When any of those conditions exist, the generated Angular SDK cannot become the
+authoritative transport boundary for the frontend. The result is persistent direct
+`ApiBaseService` usage, cast-based adaptation in frontend services, and delayed Wave 3
+and Wave 4 migration work.
+
+The backend PRD therefore covers the full backend-owned parity surface for issue 320,
+not only the original five missing endpoint groups.
+
+---
+
+## Solution
+
+Deliver backend contract parity for every backend-owned blocker in issue 320.
+
+For each affected module, the backend work is complete only when:
+
+- the real operation exists and is owned by the correct module
+- the OpenAPI contract captures the full supported parameter and schema surface
+- the regenerated Angular SDK exposes the correct method signatures and types
+- the frontend can migrate away from the corresponding direct transport call without
+  inventing compatibility shims
+
+This keeps backend work aligned to contract truth instead of treating the SDK generator
+or frontend casts as the place where contract mismatches should be hidden.
 
 ---
 
 ## Scope
 
-This PRD covers implementation of five missing backend endpoint groups across four
-modules. Each group has a dedicated section with acceptance criteria, contract shape,
-and OpenAPI annotation requirements.
+This PRD covers backend-owned contract parity work across the blocker groups identified
+in issue 320. That includes both new endpoint implementation and OpenAPI/schema
+correction for existing operations.
 
 Modules affected:
 
-| Module            | Work                                               |
-| ----------------- | -------------------------------------------------- |
-| `pos-accounting`  | Async report export: request, status poll, history |
-| `pos-customer`    | Billing terms reference list                       |
-| `pos-catalog`     | Supplier cost structure collection GET             |
-| `pos-bulk-loader` | Job retry; correction record submission            |
+| Module                 | Workstream                                                                 |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `pos-security-service` | permissions, audit event filters, audit exports                            |
+| `pos-shop-manager`     | ownership and OpenAPI coverage for shop audit endpoints                    |
+| `pos-bulk-loader`      | correction contract parity and any missing correction or retry surfaces    |
+| `pos-inventory`        | availability, locations, ledger, putaway, replenishment, returns, shortage |
+| `pos-catalog`          | supplier cost list                                                         |
+| `pos-accounting`       | event list filters, processing-log schema, AP bill list, export paths      |
+| `pos-customer`         | billing terms, duplicate-check, billing-rules update                       |
 
 ---
 
-## Non-Goals
+## User Stories
+
+1. As a backend developer, I want every issue-320 blocker classified as missing
+   endpoint, incomplete OpenAPI, wrong parameter surface, or wrong schema, so that I can
+   fix the correct layer first.
+2. As an OpenAPI maintainer, I want existing operations to expose the real query and
+   body contracts, so that generated SDKs stop dropping supported frontend behavior.
+3. As an SDK maintainer, I want each regenerated package to reflect the actual backend
+   module ownership, so that the correct service class is generated for each business
+   flow.
+4. As a frontend consumer, I want backend contracts to preserve current supported
+   behavior unless an explicit product decision changes it, so that migration is not a
+   hidden feature rewrite.
+5. As a security engineer, I want permissions, audit search, and export flows modeled
+   explicitly, so that security pages can migrate to generated clients safely.
+6. As an inventory engineer, I want lookup, ledger, putaway, replenishment, returns,
+   and shortage endpoints represented correctly in OpenAPI, so that the largest
+   remaining transport surface can move to generated clients.
+7. As an accounting engineer, I want timekeeping export and event-management contracts
+   separated clearly from financial reporting, so that the generated SDK reflects the
+   correct business domain.
+8. As a CRM engineer, I want dedicated duplicate-check and billing-rules operations, so
+   that incompatible response shapes are not overloaded into general-purpose endpoints.
+9. As a release engineer, I want backend module tests, OpenAPI regeneration, SDK
+   regeneration, and frontend migration to operate as one delivery chain, so that stale
+   generated packages do not block downstream work.
+10. As a platform architect, I want issue 320 closure measured by contract parity rather
+    than just endpoint count, so that the SDK becomes the authoritative frontend
+    boundary.
+
+---
+
+## Implementation Decisions
+
+- The unit of delivery is the blocker group, not the repository. A blocker is not closed
+  when only backend code lands; it closes only after OpenAPI regeneration, SDK
+  regeneration, and frontend adoption succeed.
+- Existing endpoints should be corrected in OpenAPI before the frontend is asked to
+  adapt around missing parameters or wrong schemas.
+- New endpoint implementation is required only when the business flow truly lacks a
+  backend operation. Do not create duplicate endpoints to preserve frontend drift.
+- Cross-domain ownership must be explicit. If an operation belongs in shop-manager,
+  accounting, or another bounded context, the contract must be generated from that
+  module rather than stranded in an unrelated SDK package.
+- The first detailed endpoint specifications retained in this document are the original
+  missing-endpoint groups. Additional blocker groups below are tracked as contract
+  correction workstreams that must be implemented with the same annotation and
+  regeneration rigor.
+- OpenAPI is the source of truth for generated clients. Frontend casts or local adapter
+  logic are not acceptable substitutes for backend schema fidelity.
+
+---
+
+## Testing Decisions
+
+- Good backend tests verify external behavior, contract exposure, and OpenAPI fidelity,
+  not internal implementation details.
+- Every backend blocker closure must have module-level test coverage for the operation
+  and a regenerated `openapi.yaml` that exposes the corrected contract.
+- SDK regeneration is part of verification, not a follow-up courtesy step. The backend
+  work is incomplete if regeneration produces the wrong types or missing methods.
+- Prior art should come from existing controller tests, OpenAPI generation workflows,
+  and generated SDK build checks already used by other modules.
+- Where a blocker resolves a schema mismatch rather than adding a new endpoint, tests
+  must prove the corrected parameter or response shape, not just endpoint reachability.
+
+---
+
+## Out of Scope
 
 - Frontend migration work — that follows from these endpoints existing.
-- SDK generation — runs as a defined step after backend delivery (see Pipeline section).
-- Changes to existing, working endpoints.
-- `pos-security-service` changes — security `createRole`/`createUser`/`getAllPermissions`
-  are already in the SDK; the frontend migration for those is a Category A fix (no
-  backend work required).
+- Published SDK registry and package-distribution work covered by the publication
+  transition PRD.
+- Changes to existing, working endpoints that are unrelated to issue 320 blocker
+  closure.
+- Frontend-only model deletion and final `ApiBaseService` retirement.
+
+---
+
+## Backend Workstream Matrix
+
+Use this matrix to decide whether a blocker requires new controller code, OpenAPI
+correction, or ownership clarification.
+
+| Blocker Group     | Primary module                   | Backend action                                                                                          |
+| ----------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| B-1, B-3, B-4     | `pos-security-service`           | Expand permission and audit-event parameter coverage; add audit export operations                       |
+| B-2               | `pos-shop-manager`               | Confirm ownership and expose `/shop/audit` through the correct module spec                              |
+| B-5               | `pos-bulk-loader`                | Decide whether bulk correction contract supersedes single-record correction or add a distinct operation |
+| B-6 through B-12  | `pos-inventory`                  | Add or correct availability, locations, ledger, putaway, replenishment, returns, and shortage contracts |
+| B-13              | `pos-catalog`                    | Add supplier cost list operation                                                                        |
+| B-14, B-15        | `pos-inventory` or `pos-catalog` | Resolve parameter semantics and location inventory schema parity                                        |
+| B-16 through B-20 | `pos-accounting`                 | Correct event filters, processing-log schema, AP bill list, export paths, and event-envelope contract   |
+| B-21, B-22        | `pos-customer`                   | Add duplicate-check and billing-rules update operations                                                 |
+
+Any workstream that changes request or response shape must update the spec and survive
+SDK regeneration before it is considered closed.
 
 ---
 
@@ -143,7 +254,7 @@ methods. Remove the corresponding local type definitions if they duplicate SDK m
 
 ---
 
-## Endpoint Specifications
+## Detailed Endpoint Specifications
 
 ---
 
@@ -444,6 +555,34 @@ Add `@EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")`.
 
 ---
 
+## Build Plan
+
+Execute backend-owned blocker work in the same sequence for every module.
+
+1. Resolve the business decision first when the blocker reveals a real semantic mismatch.
+2. Implement or correct the backend controller and DTO contract.
+3. Run the affected module tests.
+4. Regenerate the module OpenAPI spec and inspect the diff.
+5. Regenerate the affected Angular SDK package and build the SDK workspace.
+6. Hand off the regenerated contract to the frontend migration PR for adoption.
+
+Recommended commands:
+
+```bash
+# durion-positivity-backend
+./mvnw -pl <module> -am test --no-transfer-progress
+scripts/generate-openapi.sh <module>
+
+# durion-positivity-sdk-angular
+scripts/generate-openapi.sh --module <sdk-module>
+npm run build
+```
+
+For blockers that touch multiple modules, keep PRs module-scoped where possible so each
+OpenAPI diff and SDK regeneration remains reviewable.
+
+---
+
 ## Acceptance Criteria
 
 ### Per endpoint
@@ -485,19 +624,21 @@ Add `@EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")`.
 
 ## Delivery Order
 
-Implement as four independent PRs (one per module). There are no cross-module
-dependencies. Run the full generation pipeline after each PR merges.
+Implement as small module-scoped PRs grouped by blocker family. There are a few
+cross-module dependencies, so prefer the order that validates the closure workflow and
+unlocks the most frontend migration surface.
 
-| PR  | Module            | Endpoints                         | SDK package       |
-| --- | ----------------- | --------------------------------- | ----------------- |
-| 1   | `pos-catalog`     | Supplier cost list                | `sdk-catalog`     |
-| 2   | `pos-customer`    | Billing terms list                | `sdk-customer`    |
-| 3   | `pos-bulk-loader` | Job retry + correction submission | `sdk-bulk-loader` |
-| 4   | `pos-accounting`  | Export request, status, history   | `sdk-accounting`  |
+| Order | Module(s)                                  | Focus                                                                     | SDK package(s)                     |
+| ----- | ------------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------- |
+| 1     | `pos-security-service`, `pos-shop-manager` | permissions, audit ownership, audit filters, audit exports                | `sdk-security`, `sdk-shop-manager` |
+| 2     | `pos-bulk-loader`                          | correction and retry parity                                               | `sdk-bulk-loader`                  |
+| 3     | `pos-catalog`, `pos-customer`              | supplier cost list, billing terms, duplicate-check, billing-rules update  | `sdk-catalog`, `sdk-customer`      |
+| 4     | `pos-accounting`                           | event filters, processing log, AP bill list, export paths, event contract | `sdk-accounting`                   |
+| 5     | `pos-inventory`                            | availability, lookups, ledger, putaway, replenishment, returns, shortage  | `sdk-inventory`                    |
 
-Start with `pos-catalog` (smallest scope, single read endpoint) and `pos-customer`
-(single read endpoint) to validate the annotation → generation → SDK pipeline before
-tackling the more complex async export and stateful bulk loader operations.
+Start with security/shop-manager and bulk-loader to validate the end-to-end closure
+workflow on smaller slices, then land catalog/customer, then accounting, and finally the
+inventory workstream with the widest contract surface.
 
 ---
 
