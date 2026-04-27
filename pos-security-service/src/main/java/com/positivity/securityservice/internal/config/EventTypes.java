@@ -20,7 +20,7 @@ public final class EventTypes {
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
-                                // AuthController - 1 event
+                                // AuthController - 2 events
                                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN", "User login via /v1/auth/login")
                                                 .build(),
                                 EventTypeRegistration
