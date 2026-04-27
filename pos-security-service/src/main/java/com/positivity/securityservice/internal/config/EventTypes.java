@@ -94,7 +94,7 @@ public final class EventTypes {
                                 EventTypeRegistration.write("SECURITY_USER_ROLE_REVOKE", "Revoke a role from a user")
                                                 .build(),
 
-                                // AuditController - 2 events
+                                // AuditController - 3 events
                                 EventTypeRegistration
                                                 .write("SECURITY_AUDIT_EVENT_CREATE", "Create an immutable audit event")
                                                 .build(),
