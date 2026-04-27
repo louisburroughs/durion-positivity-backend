@@ -29,18 +29,20 @@ CRM service for the Durion POS platform. Manages the customer party model (perso
 - `DELETE /v1/customers/{id}` — deactivate a customer
 - `GET /v1/customers/{accountId}/tier` — get account tier
 - `GET /v1/parties/{partyId}` — retrieve a party
+- `GET /v1/crm/accounts/parties/duplicate-check?legalName=...` — check potential duplicate commercial parties
 - `GET /v1/parties/{partyId}/contacts` — list contact roles
 - `GET /v1/parties/{partyId}/communicationPreferences` — communication preferences
+- `PUT /v1/crm/accounts/parties/{partyId}/billing-rules` — upsert billing rules for a commercial party
 - `GET /v1/customers/{customerId}/vehicles/{vehicleId}` — get a linked vehicle
 - `DELETE /v1/customers/{customerId}/vehicles/{vehicleId}` — unlink a vehicle
 - `POST /v1/customer/bulk-ingest` — bulk import customers (auth: `crm:party:create`)
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL |
-| `EUREKA_SERVER_URL` | required | Eureka service discovery URL |
+| Property                | Default  | Description                  |
+| ----------------------- | -------- | ---------------------------- |
+| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
+| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
 ## Dependencies
 

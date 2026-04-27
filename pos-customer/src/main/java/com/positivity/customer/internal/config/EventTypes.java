@@ -14,7 +14,7 @@ public final class EventTypes {
 
         /**
          * All event type registrations for the customer module.
-         * Total: 33 event types.
+         * Total: 35 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -59,6 +59,14 @@ public final class EventTypes {
                                 EventTypeRegistration
                                                 .write("CUSTOMER_VEHICLE_CREATE",
                                                                 "Associate a new vehicle with a party")
+                                                .build(),
+                                EventTypeRegistration.search(
+                                                "CUSTOMER_PARTY_DUPLICATE_CHECK",
+                                                "Check for potential duplicate commercial parties")
+                                                .build(),
+                                EventTypeRegistration.write(
+                                                "CUSTOMER_BILLING_RULES_UPSERT",
+                                                "Upsert billing rules for a commercial party")
                                                 .build(),
 
                                 // CrmVehiclesController - 4 events
