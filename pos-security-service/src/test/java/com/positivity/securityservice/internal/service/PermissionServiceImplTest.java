@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
+import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -149,7 +150,7 @@ class PermissionServiceImplTest {
             when(permissionRepository.findById(permissionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> sut.getPermission(permissionId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(EntityNotFoundException.class)
                     .hasMessageContaining("Permission not found");
         }
     }

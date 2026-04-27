@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +41,7 @@ public class PermissionServiceImpl implements PermissionService {
                 throw new IllegalArgumentException("Permission key must match domain:resource:action");
             }
 
-            Permission permission =
-                    permissionRepository.findByName(permissionKey).orElseGet(Permission::new);
+            Permission permission = permissionRepository.findByName(permissionKey).orElseGet(Permission::new);
             permission.setName(permissionKey);
             permission.setDescription(definition.getDescription());
             permission.setRegisteredByService(
@@ -58,7 +60,7 @@ public class PermissionServiceImpl implements PermissionService {
     public PermissionDto getPermission(@NonNull UUID id) {
         Permission permission = permissionRepository
                 .findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Permission not found: " + id));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Permission not found: " + id));
         return toDto(permission);
     }
 
@@ -68,6 +70,16 @@ public class PermissionServiceImpl implements PermissionService {
         return permissionRepository.findByDomain(domain).stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public Page<PermissionDto> listPermissions(@Nullable String domain, @NonNull Pageable pageable) {
+        if (domain == null || domain.isBlank()) {
+            return permissionRepository.findAll(pageable).map(this::toDto);
+        }
+        return permissionRepository.findByDomain(domain, pageable).map(this::toDto);
     }
 
     private boolean isValidPermissionKey(String permissionKey) {
