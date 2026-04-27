@@ -4,13 +4,14 @@ import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
+import com.positivity.bulkloader.internal.dto.CorrectionResultDto;
 import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
+import com.positivity.bulkloader.internal.enums.CorrectionStatus;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
-import com.positivity.bulkloader.service.ReviewQueueService;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -85,6 +86,26 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
                 .reasonCodes(audit.getReasonCodes())
                 .originalValues(audit.getOriginalValues())
                 .createdAt(audit.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public CorrectionResultDto submitSingleCorrection(
+            @NonNull UUID jobId, @NonNull BulkCorrectionItem item, @NonNull String operatorId) {
+        BulkCorrectionRequest singleRequest = BulkCorrectionRequest.builder()
+                .corrections(java.util.List.of(item))
+                .build();
+        BulkCorrectionResponse response = submitCorrections(jobId, singleRequest, operatorId);
+        CorrectionStatus status = response.getAcceptedCount() > 0
+                ? CorrectionStatus.ACCEPTED
+                : CorrectionStatus.REJECTED;
+        return CorrectionResultDto.builder()
+                .auditRecordId(item.getAuditRecordId())
+                .status(status)
+                .rejectionReason(status == CorrectionStatus.REJECTED
+                        ? "Record was rejected during correction processing"
+                        : null)
                 .build();
     }
 

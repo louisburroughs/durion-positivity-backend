@@ -36,6 +36,10 @@ public final class BulkLoaderEventTypes {
                                 EventTypeRegistration
                                                 .write("BULK_LOADER_CORRECTION_SUBMIT",
                                                                 "Submit corrected records for a bulk load job")
+                                                .build(),
+                                EventTypeRegistration
+                                                .write("BULK_LOADER_CORRECTION_SUBMIT_SINGLE",
+                                                                "Submit a single correction record")
                                                 .build());
         }
 }

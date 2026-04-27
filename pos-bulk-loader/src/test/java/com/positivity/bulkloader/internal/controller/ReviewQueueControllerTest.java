@@ -15,6 +15,8 @@ import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
+import com.positivity.bulkloader.internal.dto.CorrectionResultDto;
+import com.positivity.bulkloader.internal.enums.CorrectionStatus;
 import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.service.BulkLoadJobService;
@@ -228,6 +230,78 @@ class ReviewQueueControllerTest {
                                 .header("X-User", "other-operator")
                                 .header("X-Authorities", "bulkImport:upload:execute")
                                 .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden());
+        }
+
+        // ─── POST /v1/bulk-jobs/{jobId}/corrections/single ────────────────────────
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void submitSingleCorrection_whenValid_returns201WithAccepted() throws Exception {
+                BulkCorrectionItem item = BulkCorrectionItem.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .correctedData(Map.of("sku", "PROD-001"))
+                                .build();
+                CorrectionResultDto result = CorrectionResultDto.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .status(CorrectionStatus.ACCEPTED)
+                                .build();
+
+                when(reviewQueueService.submitSingleCorrection(eq(JOB_ID), any(), eq("test-operator")))
+                                .thenReturn(result);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections/single", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(item)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void submitSingleCorrection_whenJobInWrongState_returns409() throws Exception {
+                BulkCorrectionItem item = BulkCorrectionItem.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .correctedData(Map.of("sku", "PROD-001"))
+                                .build();
+
+                when(reviewQueueService.submitSingleCorrection(eq(JOB_ID), any(), eq("test-operator")))
+                                .thenThrow(new IllegalStateException("Job is not in FAILED state"));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections/single", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(item)))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void submitSingleCorrection_whenJobNotFound_returns404() throws Exception {
+                BulkCorrectionItem item = BulkCorrectionItem.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .correctedData(Map.of("sku", "PROD-001"))
+                                .build();
+
+                when(reviewQueueService.submitSingleCorrection(eq(JOB_ID), any(), eq("test-operator")))
+                                .thenThrow(new NoSuchElementException("BulkLoadJob not found: " + JOB_ID));
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections/single", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(item)))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void submitSingleCorrection_withoutExecuteAuthority_returns403() throws Exception {
+                BulkCorrectionItem item = BulkCorrectionItem.builder()
+                                .auditRecordId(AUDIT_ID)
+                                .correctedData(Map.of("sku", "PROD-001"))
+                                .build();
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/corrections/single", JOB_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header("X-Authorities", "bulkImport:status:read") // EXECUTE required
+                                .content(objectMapper.writeValueAsString(item)))
                                 .andExpect(status().isForbidden());
         }
 }
