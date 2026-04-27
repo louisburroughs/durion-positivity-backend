@@ -83,7 +83,7 @@ public class AuditController {
         @GetMapping("/events")
         @PreAuthorize("hasAuthority('security:audit:view')")
         @Operation(operationId = "searchAuditEvents", summary = "Search audit events", description = "Searches audit events using rich filter criteria with pagination support.")
-        @ApiResponse(responseCode = "200", description = "Audit events returned successfully", content = @Content(schema = @Schema(description = "Paged list of audit events")))
+        @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
         @ApiResponse(responseCode = "400", description = "Invalid filter criteria", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<Page<AuditLogEventDto>> searchAuditEvents(
