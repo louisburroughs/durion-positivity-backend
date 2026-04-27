@@ -10,7 +10,12 @@ import com.positivity.securityservice.internal.dto.PermissionRegistrationRespons
 import com.positivity.securityservice.service.PermissionCatalogVersionService;
 import com.positivity.securityservice.service.PermissionRegistryService;
 import com.positivity.securityservice.service.PermissionService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -18,6 +23,8 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -101,18 +108,6 @@ public class PermissionController {
     }
 
     /**
-     * Issue #42: Query permissions by domain.
-     */
-    @GetMapping(params = "domain")
-    @Operation(summary = "Query permissions by domain", description = "Returns all registered permissions for the requested domain using the domain query parameter.")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "security:permission:view" })
-    @PreAuthorize("hasAuthority('security:permission:view')")
-    public ResponseEntity<List<PermissionDto>> getPermissionsByDomainQuery(@RequestParam @NonNull String domain) {
-        return ResponseEntity.ok(permissionService.getByDomain(domain));
-    }
-
-    /**
      * Register or update permissions from a service
      */
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
@@ -135,16 +130,19 @@ public class PermissionController {
         }
     }
 
-    /**
-     * Get all registered permissions
-     */
     @GetMapping
-    @PreAuthorize("hasAuthority('security:permission:view')")
-    @Operation(summary = "Get all registered permissions", description = "Returns all permissions in the registry")
+    @Operation(operationId = "listPermissions", summary = "List permissions", description = "Returns a paged list of registered permissions, optionally filtered by domain.")
+    @ApiResponse(responseCode = "200", description = "Permissions returned", content = @Content(schema = @Schema(implementation = Page.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid pagination parameters", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
             "security:permission:view" })
-    public ResponseEntity<List<PermissionDto>> getAllPermissions() {
-        return ResponseEntity.ok(permissionRegistryService.getAllPermissions());
+    @PreAuthorize("hasAuthority('security:permission:view')")
+    public ResponseEntity<Page<PermissionDto>> listPermissions(
+            @Parameter(description = "Optional domain filter", required = false, example = "catalog") @RequestParam(required = false) String domain,
+            @Parameter(hidden = true) Pageable pageable) {
+        Page<PermissionDto> permissions = permissionService.listPermissions(domain, pageable);
+        return ResponseEntity.ok(permissions);
     }
 
     /**
