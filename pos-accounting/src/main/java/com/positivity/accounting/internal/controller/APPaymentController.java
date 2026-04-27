@@ -14,12 +14,16 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -127,16 +131,17 @@ public class APPaymentController {
         }
 
         @GetMapping("/bills")
-        @Operation(summary = "List eligible vendor bills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.", tags = {
+        @Operation(summary = "List eligible vendor bills", operationId = "listApBills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.", tags = {
                         "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
         @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
         @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:view" })
         @PreAuthorize("hasAuthority('accounting:ap:view')")
-        public @NonNull ResponseEntity<List<VendorBillSummaryResponse>> listBills(
-                        @RequestParam @Parameter(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = true) @NonNull UUID vendorId) {
+        public @NonNull ResponseEntity<Page<VendorBillSummaryResponse>> listBills(
+                        @RequestParam(required = false) @Parameter(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = false) @Nullable UUID vendorId,
+                        @PageableDefault(size = 20, sort = "billDate", direction = Sort.Direction.DESC) Pageable pageable) {
 
-                List<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId);
+                Page<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId, pageable);
                 return ResponseEntity.ok(bills);
         }
 

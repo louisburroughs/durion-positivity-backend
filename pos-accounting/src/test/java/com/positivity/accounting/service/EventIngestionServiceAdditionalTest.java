@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
@@ -338,14 +339,13 @@ class EventIngestionServiceAdditionalTest {
     // ========================================
 
     @Test
-    @DisplayName("getEventProcessingLog should return placeholder message when no entries found")
+    @DisplayName("getEventProcessingLog should return empty list when no entries found")
     void getEventProcessingLog_NoEntries() {
         when(auditTrailEntryRepository.findBySourceEventId(testEventId)).thenReturn(List.of());
 
-        List<String> result = service.getEventProcessingLog(testEventId);
+        List<EventProcessingLogEntry> result = service.getEventProcessingLog(testEventId);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0)).contains("No processing log entries found");
+        assertThat(result).isEmpty();
     }
 
     @Test
@@ -362,41 +362,12 @@ class EventIngestionServiceAdditionalTest {
 
         when(auditTrailEntryRepository.findBySourceEventId(testEventId)).thenReturn(List.of(entry));
 
-        List<String> result = service.getEventProcessingLog(testEventId);
+        List<EventProcessingLogEntry> result = service.getEventProcessingLog(testEventId);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0)).contains("actor-1");
-        assertThat(result.get(0)).contains("MANAGER");
-        assertThat(result.get(0)).contains("Manual override");
-    }
-
-    @Test
-    @DisplayName("getProcessingLog should join log entries with newlines")
-    void getProcessingLog_JoinsEntries() {
-        AuditTrailEntry entry1 = AuditTrailEntry.builder()
-                .timestamp(Instant.now(TEST_CLOCK))
-                .exceptionType(ExceptionType.PRICE_OVERRIDE)
-                .actorId("actor-1")
-                .actorRole("MANAGER")
-                .accountingStatus(com.positivity.accounting.internal.enums.AccountingStatus.POSTED)
-                .reason("First")
-                .build();
-        AuditTrailEntry entry2 = AuditTrailEntry.builder()
-                .timestamp(Instant.now(TEST_CLOCK))
-                .exceptionType(ExceptionType.REFUND)
-                .actorId("actor-2")
-                .actorRole("CASHIER")
-                .accountingStatus(com.positivity.accounting.internal.enums.AccountingStatus.POSTED)
-                .reason("Second")
-                .build();
-
-        when(auditTrailEntryRepository.findBySourceEventId(testEventId)).thenReturn(List.of(entry1, entry2));
-
-        String result = service.getProcessingLog(testEventId);
-
-        assertThat(result).contains("actor-1");
-        assertThat(result).contains("actor-2");
-        assertThat(result).contains("\n");
+        assertThat(result.get(0).getMessage()).isEqualTo("Manual override");
+        assertThat(result.get(0).getSeverity()).isEqualTo("INFO");
+        assertThat(result.get(0).getContextJson()).isNull();
     }
 
     // ========================================
@@ -440,7 +411,8 @@ class EventIngestionServiceAdditionalTest {
         failedEvent.setAttemptCount(0);
 
         when(accountingEventRepository.findAll()).thenReturn(List.of(failedEvent));
-        // reprocessEvent will call findById → throw RuntimeException to simulate failure
+        // reprocessEvent will call findById → throw RuntimeException to simulate
+        // failure
         when(accountingEventRepository.findById(failedEventId)).thenThrow(new RuntimeException("DB unavailable"));
 
         int result = service.processFailed(3);
@@ -524,8 +496,8 @@ class EventIngestionServiceAdditionalTest {
     @DisplayName("submitEvent should apply default sourceSystem when blank")
     void submitEvent_BlankSourceSystem_UsesDefault() {
         AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-        Map<String, Object> eventMap =
-                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ", LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ",
+                LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
@@ -554,8 +526,8 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("submitEvent should throw DuplicateEventException when duplicate event detected")
     void submitEvent_DuplicateEvent() {
-        Map<String, Object> eventMap =
-                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB",
+                LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(true);
 

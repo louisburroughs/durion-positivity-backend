@@ -34,6 +34,9 @@ General-ledger accounting service for the Durion POS platform. Manages chart of 
 - `GET /v1/reporting/income-statement` — income statement report
 - `GET /v1/reporting/balance-sheet` — balance sheet report
 - `GET /v1/reporting/drilldown/journal-lines/{accountId}` — drill into GL lines
+- `POST /v1/accounting/export` — request a timekeeping export job
+- `GET /v1/accounting/export/status/{jobId}` — get export job status
+- `GET /v1/accounting/export/history` — list export job history
 
 ## Configuration
 

@@ -228,6 +228,11 @@ public final class EventTypes {
                                                 .build(),
                                 EventTypeRegistration.search(
                                                 "ACCOUNTING_REPORT_EXPORT_LIST", "List report export history")
+                                                .build(),
+
+                                // TimekeepingExportController — 1 event (Wave 4 SDK migration)
+                                EventTypeRegistration.write(
+                                                "ACCOUNTING_EXPORT_REQUEST", "Request timekeeping export job")
                                                 .build());
         }
 }

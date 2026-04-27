@@ -14,6 +14,12 @@
     <description>Helper library for document template registration and rendering requests</description>
 
     <dependencies>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Spring Boot Starter Web for RestClient -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

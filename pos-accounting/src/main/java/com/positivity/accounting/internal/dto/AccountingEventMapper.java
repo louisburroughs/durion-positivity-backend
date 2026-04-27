@@ -38,6 +38,10 @@ public final class AccountingEventMapper {
                 .finalPostingReferenceId(entity.getFinalPostingReferenceId())
                 .resolvedByUserId(entity.getResolvedByUserId())
                 .mappingVersionAttempted(entity.getMappingVersionAttempted())
+                .idempotencyOutcome(entity.getIdempotencyOutcome())
+                .ingestionId(entity.getIngestionId())
+                .domainKeyId(entity.getDomainKeyId())
+                .invoiceId(entity.getInvoiceId())
                 .build();
     }
 
