@@ -39,14 +39,14 @@ Base path: `/v1/bulk-jobs`
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `bulk-loader.storage.local-root` | `/tmp/bulk-loader` | Local directory for uploaded files |
-| `bulk-loader.tus.max-upload-size` | `536870912` (512 MB) | Maximum tus upload size |
-| `bulk-loader.tus.expiry-hours` | `24` | Hours before incomplete uploads expire |
-| `pos.catalog.base-url` | `http://localhost:8082` | Catalog bulk-ingest target |
-| `pos.vehicle-inventory.base-url` | `http://localhost:8091` | Vehicle inventory target |
-| `pos.vehicle-fitment.base-url` | `http://localhost:8092` | Vehicle fitment target |
+| Property                          | Default                 | Description                            |
+| --------------------------------- | ----------------------- | -------------------------------------- |
+| `bulk-loader.storage.local-root`  | `/tmp/bulk-loader`      | Local directory for uploaded files     |
+| `bulk-loader.tus.max-upload-size` | `536870912` (512 MB)    | Maximum tus upload size                |
+| `bulk-loader.tus.expiry-hours`    | `24`                    | Hours before incomplete uploads expire |
+| `pos.catalog.base-url`            | `http://localhost:8082` | Catalog bulk-ingest target             |
+| `pos.vehicle-inventory.base-url`  | `http://localhost:8091` | Vehicle inventory target               |
+| `pos.vehicle-fitment.base-url`    | `http://localhost:8092` | Vehicle fitment target                 |
 
 ## Dependencies
 
@@ -58,6 +58,7 @@ Base path: `/v1/bulk-jobs`
 ## Database
 
 Uses Flyway with PostgreSQL. Key tables:
+
 - `bulk_load_job` — job metadata
 - `bulk_load_record_audit` — per-row processing results
 - `bulk_load_column_mapping` — CSV column mappings

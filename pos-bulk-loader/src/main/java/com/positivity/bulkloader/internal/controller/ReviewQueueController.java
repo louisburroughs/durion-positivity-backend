@@ -1,8 +1,10 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
+import com.positivity.bulkloader.internal.dto.CorrectionResultDto;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ReviewQueueService;
 import com.positivity.events.EmitEvent;
@@ -80,6 +82,22 @@ public class ReviewQueueController {
             @Valid @RequestBody @NonNull BulkCorrectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(reviewQueueService.submitCorrections(jobId, request, currentOperatorId()));
+    }
+
+    @PostMapping("/{jobId}/corrections/single")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT_SINGLE", apiVersion = "1")
+    @Operation(operationId = "submitSingleCorrection", summary = "Submit a single correction record", description = "Submits a corrected data record for a single failed audit entry from a bulk import job. The job must be in FAILED state. Returns the acceptance or rejection status for the submitted record.")
+    @ApiResponse(responseCode = "201", description = "Correction processed", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = CorrectionResultDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid correction request")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
+    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(responseCode = "409", description = "Job is not in a state that accepts corrections")
+    public ResponseEntity<CorrectionResultDto> submitSingleCorrection(
+            @io.swagger.v3.oas.annotations.Parameter(description = "ID of the bulk load job", required = true) @PathVariable @NonNull UUID jobId,
+            @Valid @RequestBody @NonNull BulkCorrectionItem item) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(reviewQueueService.submitSingleCorrection(jobId, item, currentOperatorId()));
     }
 
     private String currentOperatorId() {
