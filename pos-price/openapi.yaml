@@ -1217,7 +1217,6 @@ components:
           description: Adjustment amount; negative values reduce total
           example: -100.0
         metadata:
-          type: "null"
           description: Optional adjustment metadata bag
     RestrictionOverrideRequest:
       type: object
