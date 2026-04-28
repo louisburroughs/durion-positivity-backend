@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -69,34 +70,38 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     @Override
     @Transactional(readOnly = true)
     public AvailabilityView queryAvailability(
-            @NonNull String productSku, @NonNull UUID locationId, @Nullable UUID storageLocationId) {
-        List<InventoryLedgerEntry> allProductEntries =
-                inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku);
+            @NonNull String productSku,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId,
+            @Nullable InventorySourceType sourceType) {
+        List<InventoryLedgerEntry> allProductEntries = inventoryLedgerEntryRepository
+                .findByStockItemIdOrderByTimestampAsc(productSku);
         if (allProductEntries.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
 
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
-        List<InventoryLedgerEntry> locationEntries =
-                inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(
+        List<InventoryLedgerEntry> scopedEntries = scopeLocationId == null
+                ? allProductEntries
+                : inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(
                         productSku, scopeLocationId);
 
-        int onHand = locationEntries.stream()
+        int onHand = scopedEntries.stream()
                 .filter(e -> e.getEventType() != null && e.getEventType().affectsOnHand())
                 .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
                 .sum();
 
-        int allocationCreated = locationEntries.stream()
+        int allocationCreated = scopedEntries.stream()
                 .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_CREATED)
                 .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
                 .sum();
-        int allocationReleased = locationEntries.stream()
+        int allocationReleased = scopedEntries.stream()
                 .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
                 .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
                 .sum();
         int allocatedQty = allocationCreated - allocationReleased;
 
-        String derivedUom = locationEntries.stream()
+        String derivedUom = scopedEntries.stream()
                 .map(InventoryLedgerEntry::getUnitOfMeasure)
                 .filter(uom -> uom != null && !uom.isBlank())
                 .findFirst()
@@ -133,12 +138,11 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         int onHandQuantity = entries.stream()
                 .filter(ledgerEntry -> ledgerEntry.getEventType() != null
                         && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(ledgerEntry ->
-                        ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
+                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity()
+                        : 0)
                 .sum();
 
-        int activeReservations =
-                entries.stream().mapToInt(this::reservationDelta).sum();
+        int activeReservations = entries.stream().mapToInt(this::reservationDelta).sum();
 
         int atpQuantity = onHandQuantity - activeReservations;
 

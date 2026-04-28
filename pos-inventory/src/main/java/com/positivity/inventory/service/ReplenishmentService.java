@@ -6,6 +6,9 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResp
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ReplenishmentService {
 
@@ -20,7 +23,7 @@ public interface ReplenishmentService {
     List<ReplenishmentTaskResponse> getReplenishmentTasks();
 
     @NonNull
-    List<ReplenishmentPolicyResponse> getReplenishmentPolicies();
+    Page<ReplenishmentPolicyResponse> getReplenishmentPolicies(@Nullable UUID locationId, @NonNull Pageable pageable);
 
     @NonNull
     ReplenishmentPolicyResponse createReplenishmentPolicy(@NonNull CreateReplenishmentPolicyRequest request);

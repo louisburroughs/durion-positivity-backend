@@ -6,9 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
-import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
-import com.positivity.inventory.internal.dto.returns.ReturnResponse;
+import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.service.ReturnService;
 import java.time.Clock;
@@ -24,194 +24,116 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Contract behavior integration tests for POST /v1/inventory/returns — Story
- * #177:
- * Return Unused Items to Stock with Reason.
- *
- * <p>
- * RC1 is intentionally RED: {@code ReturnService} is not stubbed in that test;
- * Mockito returns {@code null} by default; the controller wraps null in a
- * 201-Created body, so the {@code $.returnId} assertion fails to find the
- * expected
- * UUID value.
- *
- * <p>
- * RC2, RC3, and RC4 are GREEN-in-RED-phase because the infrastructure is
- * already
- * in place:
- * <ul>
- * <li>RC2: {@code ReturnController} carries {@code @PreAuthorize}</li>
- * <li>RC3: {@code ReturnItemsRequest.returnReason} is {@code @NotBlank} and
- * the controller uses {@code @Valid}</li>
- * <li>RC4: {@code InventoryGlobalExceptionHandler} already maps
- * {@code ReturnQuantityExceededException} → 422</li>
- * </ul>
- *
- * <p>
- * ADR compliance:
- * <ul>
- * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- * <li>ADR-0014: internal service security — all state-changing endpoints
- * require
- * gateway auth</li>
- * <li>ADR-0017: HTTP response codes: 201 Created, 400 Bad Request, 403
- * Forbidden,
- * 422 Unprocessable Entity</li>
- * <li>ADR-0018: transactionUserId sourced from X-User header via security
- * context</li>
- * </ul>
- *
- * Issue: #177
- */
 @DisplayName("Return Contract Behavior — Story #177")
 class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private ReturnService returnService;
+        @MockitoBean
+        private ReturnService returnService;
 
-    // ─── RC1: POST /v1/inventory/returns — 201 Created with service returnId ─────
+        @Test
+        @DisplayName("POST /v1/inventory/returns/submit-to-stock with valid body + auth -> 202 Accepted")
+        void RC1_submitToStock_validBodyAndAuth_returns202WithServicePayload() throws Exception {
 
-    /**
-     * RC1: Verifies POST /v1/inventory/returns with a valid request body and
-     * gateway
-     * auth returns 201 Created, and that the {@code returnId} in the response
-     * originates from {@code ReturnService} (not a controller-generated value).
-     *
-     * <p>
-     * RED: {@code returnService} is not stubbed; Mockito returns {@code null} by
-     * default; the controller sets a null response body → {@code $.returnId} is
-     * absent
-     * and the assertion fails.
-     *
-     * Issue: #177
-     */
-    @Test
-    @DisplayName("POST /v1/inventory/returns with valid body + auth → 201 Created with service returnId")
-    void RC1_returnItemsToStock_validBodyAndAuth_returns201WithServiceReturnId() throws Exception {
-        // Issue #177: RC1 — controller must delegate to ReturnService and surface its
-        // returnId.
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID expectedReturnId = UUID.fromString("00000000-0000-0000-0000-000000000042");
 
-        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID expectedReturnId = UUID.fromString("00000000-0000-0000-0000-000000000042");
+                ReturnSubmissionResultDto expectedResponse = ReturnSubmissionResultDto.builder()
+                                .returnId(expectedReturnId)
+                                .workorderId(workorderId)
+                                .processedLines(1)
+                                .status("SUBMITTED")
+                                .processedAt(Instant.now(TEST_CLOCK))
+                                .build();
+                when(returnService.submitToStock(any(ReturnSubmitRequest.class))).thenReturn(expectedResponse);
 
-        ReturnResponse expectedReturnResponse = new ReturnResponse(
-                expectedReturnId,
-                workorderId,
-                "Leftover brake pads",
-                1,
-                Instant.now(TEST_CLOCK),
-                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
-        when(returnService.returnItemsToStock(any(ReturnItemsRequest.class))).thenReturn(expectedReturnResponse);
+                ReturnSubmitRequest requestBody = ReturnSubmitRequest.builder()
+                                .workorderId(workorderId)
+                                .lines(List.of(ReturnLineDto.builder()
+                                                .itemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                                .quantity(2)
+                                                .reasonCode("DAMAGED")
+                                                .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
+                                                .build()))
+                                .build();
 
-        ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                workorderId,
-                "Leftover brake pads",
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 2)));
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns/submit-to-stock"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isAccepted())
+                                .andExpect(jsonPath("$.returnId").value(expectedReturnId.toString()))
+                                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
+                                .andExpect(jsonPath("$.processedLines").value(1))
+                                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                                .andExpect(jsonPath("$.processedAt").isNotEmpty());
+        }
 
-        // Act + Assert
-        mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestBody)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.returnId").value(expectedReturnId.toString()))
-                .andExpect(jsonPath("$.workorderId").value(workorderId.toString()))
-                .andExpect(jsonPath("$.totalItemsReturned").value(1));
-    }
+        @Test
+        @DisplayName("POST /v1/inventory/returns/submit-to-stock without required authority -> 403 Forbidden")
+        void RC2_submitToStock_missingRequiredAuthority_returns403() throws Exception {
+                ReturnSubmitRequest requestBody = ReturnSubmitRequest.builder()
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .lines(List.of(ReturnLineDto.builder()
+                                                .itemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                                .quantity(1)
+                                                .reasonCode("EXCESS")
+                                                .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
+                                                .build()))
+                                .build();
 
-    // ─── RC2: POST /v1/inventory/returns — 403 with missing authority ─────────────
+                mockMvc.perform(post("/v1/inventory/returns/submit-to-stock")
+                                .header("X-User", "test-user")
+                                .header("X-Authorities", "unrelated:authority")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isForbidden());
+        }
 
-    /**
-     * RC2: Verifies POST /v1/inventory/returns with an authenticated user but
-     * without required return authority returns 403 Forbidden per ADR-0011 and
-     * ADR-0014.
-     *
-     * <p>
-     * GREEN in RED phase: {@code ReturnController} already carries
-     * {@code @PreAuthorize("hasAuthority('inventory:adjustment:create')")}.
-     *
-     * Issue: #177
-     */
-    @Test
-    @DisplayName("POST /v1/inventory/returns without required authority → 403 Forbidden")
-    void RC2_returnItemsToStock_missingRequiredAuthority_returns403() throws Exception {
-        // Issue #177: authenticated user + unrelated authority must yield 403
-        ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "Surplus parts",
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+        @Test
+        @DisplayName("POST /v1/inventory/returns/submit-to-stock with invalid line fields -> 400 Bad Request")
+        void RC3_submitToStock_invalidRequest_returns400() throws Exception {
+                ReturnSubmitRequest requestBody = ReturnSubmitRequest.builder()
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .lines(List.of(ReturnLineDto.builder()
+                                                .itemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                                .quantity(1)
+                                                .reasonCode("   ")
+                                                .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
+                                                .build()))
+                                .build();
 
-        mockMvc.perform(post("/v1/inventory/returns")
-                        .header("X-User", "test-user")
-                        .header("X-Authorities", "unrelated:authority")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestBody)))
-                .andExpect(status().isForbidden());
-    }
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns/submit-to-stock"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().isBadRequest());
+        }
 
-    // ─── RC3: POST /v1/inventory/returns — 400 for blank returnReason ────────────
+        @Test
+        @DisplayName("POST /v1/inventory/returns/submit-to-stock with quantity exceeded -> 422 Unprocessable Entity")
+        void RC4_submitToStock_quantityExceeded_returns422() throws Exception {
+                UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                when(returnService.submitToStock(any(ReturnSubmitRequest.class)))
+                                .thenThrow(new ReturnQuantityExceededException(skuId, 99, 2));
 
-    /**
-     * RC3: Verifies POST /v1/inventory/returns returns 400 Bad Request when
-     * {@code returnReason} is blank.
-     *
-     * <p>
-     * GREEN in RED phase: {@code ReturnItemsRequest.returnReason} is annotated
-     * {@code @NotBlank} and the controller uses {@code @Valid @RequestBody}.
-     *
-     * Issue: #177
-     */
-    @Test
-    @DisplayName("POST /v1/inventory/returns with blank returnReason → 400 Bad Request")
-    void RC3_returnItemsToStock_blankReturnReason_returns400() throws Exception {
-        // Issue #177: RC3 — blank reason must be rejected by @NotBlank bean validation
-        ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "   ", // blank — violates @NotBlank
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+                ReturnSubmitRequest requestBody = ReturnSubmitRequest.builder()
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .lines(List.of(ReturnLineDto.builder()
+                                                .itemId(skuId)
+                                                .quantity(99)
+                                                .reasonCode("DAMAGED")
+                                                .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
+                                                .build()))
+                                .build();
 
-        mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestBody)))
-                .andExpect(status().isBadRequest());
-    }
-
-    // ─── RC4: POST /v1/inventory/returns — 422 for quantity exceeded ─────────────
-
-    /**
-     * RC4: Verifies POST /v1/inventory/returns returns 422 Unprocessable Entity
-     * when
-     * the service throws {@link ReturnQuantityExceededException}.
-     *
-     * <p>
-     * GREEN in RED phase: {@code InventoryGlobalExceptionHandler} already maps
-     * {@code ReturnQuantityExceededException} → 422 UNPROCESSABLE_ENTITY.
-     *
-     * Issue: #177
-     */
-    @Test
-    @DisplayName("POST /v1/inventory/returns with quantity exceeded → 422 Unprocessable Entity")
-    void RC4_returnItemsToStock_quantityExceeded_returns422() throws Exception {
-        // Issue #177: RC4 — ReturnQuantityExceededException must map to 422 via handler
-        UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(returnService.returnItemsToStock(any(ReturnItemsRequest.class)))
-                .thenThrow(new ReturnQuantityExceededException(skuId, 99, 2));
-
-        ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "Overclaim return",
-                List.of(new ReturnItemLine(skuId, 99)));
-
-        mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestBody)))
-                .andExpect(status().is(422));
-    }
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns/submit-to-stock"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().is(422));
+        }
 }

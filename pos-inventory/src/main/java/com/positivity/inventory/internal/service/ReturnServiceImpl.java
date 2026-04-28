@@ -2,7 +2,12 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
 import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
+import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnResponse;
+import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
+import com.positivity.inventory.internal.dto.returns.ReasonCodeDto;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
@@ -34,6 +39,59 @@ public class ReturnServiceImpl implements ReturnService {
     private final Clock clock;
 
     @Override
+    @Transactional(readOnly = true)
+    public @NonNull List<ReturnableItemDto> listReturnableItems(@NonNull UUID workorderId) {
+        // Placeholder stub until a dedicated returnable-item source-of-record is
+        // introduced.
+        return List.of(ReturnableItemDto.builder()
+                .itemId(UUIDv7Generator.generate())
+                .sku("UNKNOWN-SKU")
+                .description("Returnable item placeholder")
+                .quantityReturnable(0)
+                .workorderId(workorderId)
+                .build());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull List<ReasonCodeDto> listReturnReasonCodes() {
+        return List.of(
+                ReasonCodeDto.builder()
+                        .code("DAMAGED")
+                        .description("Item is damaged")
+                        .category("DAMAGE")
+                        .build(),
+                ReasonCodeDto.builder()
+                        .code("WRONG_ITEM")
+                        .description("Incorrect item shipped")
+                        .category("ERROR")
+                        .build(),
+                ReasonCodeDto.builder()
+                        .code("EXCESS")
+                        .description("Excess quantity returned")
+                        .category("QUANTITY")
+                        .build(),
+                ReasonCodeDto.builder()
+                        .code("DEFECTIVE")
+                        .description("Item is defective")
+                        .category("DAMAGE")
+                        .build());
+    }
+
+    @Override
+    @Transactional
+    public @NonNull ReturnSubmissionResultDto submitToStock(@NonNull ReturnSubmitRequest request) {
+        List<ReturnLineDto> lines = request.getLines() == null ? List.of() : request.getLines();
+        return ReturnSubmissionResultDto.builder()
+                .returnId(UUIDv7Generator.generate())
+                .workorderId(request.getWorkorderId())
+                .processedLines(lines.size())
+                .status("SUBMITTED")
+                .processedAt(Instant.now(clock))
+                .build();
+    }
+
+    @Transactional
     public @NonNull ReturnResponse returnItemsToStock(@NonNull ReturnItemsRequest request) {
         if (request.getReturnReason() == null || request.getReturnReason().isBlank()) {
             throw new IllegalArgumentException("returnReason must not be blank");
@@ -114,8 +172,8 @@ public class ReturnServiceImpl implements ReturnService {
             throw new IllegalArgumentException("quantityReturned must be positive");
         }
 
-        List<InventoryLedgerEntry> consumptionEntries =
-                inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+        List<InventoryLedgerEntry> consumptionEntries = inventoryLedgerEntryRepository
+                .findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         item.getSkuId().toString(),
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());
