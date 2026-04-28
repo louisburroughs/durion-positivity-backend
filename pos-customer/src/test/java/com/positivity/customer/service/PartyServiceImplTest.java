@@ -26,8 +26,10 @@ import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesReques
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
+import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
@@ -736,5 +738,25 @@ class PartyServiceImplTest {
         var result = service.getBillingRulesForParty(partyId);
 
         assertThat(result).isNull();
+    }
+
+    @Test
+    void getBillingRulesForParty_overlaysDefaults_whenEmbeddedHasOnlyPaymentTerms() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        CommercialParty p = party(partyId);
+        BillingRulesEmbeddable embedded = new BillingRulesEmbeddable();
+        embedded.setPaymentTerms("Net 60");
+        p.setBillingRules(embedded);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        var result = service.getBillingRulesForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getPaymentTerms()).isEqualTo("Net 60");
+        assertThat(result.getInvoiceDeliveryMethod()).isEqualTo(InvoiceDeliveryMethod.EMAIL);
+        assertThat(result.isPoRequired()).isFalse();
+        assertThat(result.isTaxExempt()).isFalse();
+        assertThat(result.isCreditHold()).isFalse();
+        assertThat(result.isAutoPayEnabled()).isFalse();
     }
 }

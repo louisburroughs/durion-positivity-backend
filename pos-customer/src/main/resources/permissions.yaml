@@ -14,6 +14,8 @@ permissions:
     description: "Deactivate a party record (soft delete)"
   - name: "crm:party:merge"
     description: "Merge two party records into one survivor"
+  - name: "crm:billing_rules:edit"
+    description: "Create or update billing rules configuration for a commercial party"
   - name: "crm:contact:view"
     description: "View contact points (email, phone) for a party"
   - name: "crm:contact:create"

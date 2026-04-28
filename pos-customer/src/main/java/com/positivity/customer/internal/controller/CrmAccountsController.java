@@ -4,6 +4,7 @@ import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
+import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
@@ -16,8 +17,10 @@ import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
@@ -282,5 +285,41 @@ public class CrmAccountsController {
                 log.info("createVehicleForParty partyId={}", partyId);
                 CreateVehicleForPartyResponse response = partyService.createVehicleForParty(partyId, body);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
+
+        @Operation(operationId = "checkPartyDuplicates", summary = "Check for duplicate commercial parties", description = "Search for existing parties with a similar legal name to detect potential duplicates before creating a new commercial account.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Duplicate check completed successfully", content = @Content(schema = @Schema(implementation = DuplicateCheckResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request - legalName too short or blank", content = @Content),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        })
+        @GetMapping("/parties/duplicate-check")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.PARTY_SEARCH })
+        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_SEARCH + "')")
+        @EmitEvent(id = "CUSTOMER_PARTY_DUPLICATE_CHECK", apiVersion = "1")
+        public ResponseEntity<DuplicateCheckResponse> checkPartyDuplicates(
+                        @Parameter(description = "Legal name to check for duplicates", required = true, example = "Acme Corporation") @RequestParam @jakarta.validation.constraints.Size(min = 2) @jakarta.validation.constraints.NotBlank String legalName) {
+                DuplicateCheckResponse response = partyService.checkPartyDuplicates(legalName);
+                return ResponseEntity.ok(response);
+        }
+
+        @Operation(operationId = "upsertBillingRules", summary = "Upsert billing rules for a party", description = "Create or update the billing rules configuration for a commercial party.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Billing rules updated successfully", content = @Content(schema = @Schema(implementation = BillingRuleRef.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+        })
+        @PutMapping("/parties/{partyId}/billing-rules")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+                        CrmPermissionRegistry.BILLING_RULES_EDIT })
+        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.BILLING_RULES_EDIT + "')")
+        @EmitEvent(id = "CUSTOMER_BILLING_RULES_UPSERT", apiVersion = "1")
+        public ResponseEntity<BillingRuleRef> upsertBillingRules(
+                        @Parameter(description = "Party ID", required = true, example = "f47ac10b-58cc-4372-a567-0e02b2c3d479") @PathVariable UUID partyId,
+                        @RequestBody @jakarta.validation.Valid UpsertBillingRulesRequest request) {
+                BillingRuleRef result = partyService.upsertBillingRulesForParty(partyId, request);
+                return ResponseEntity.ok(result);
         }
 }

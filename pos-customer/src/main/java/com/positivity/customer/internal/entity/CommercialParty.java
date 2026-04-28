@@ -7,6 +7,7 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
@@ -28,6 +29,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -42,9 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "commercial_party")
 @EntityListeners(AuditingEntityListener.class)
-@Schema(
-        description =
-                "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
+@Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class CommercialParty extends AbstractParty {
 
     @Column(unique = true, nullable = false)
@@ -88,10 +88,13 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "External identifiers keyed by source system")
     private Map<String, String> externalIdentifiers = new HashMap<>();
 
-    @Schema(
-            description = "Primary address label or identifier for the organization",
-            example = "123 Main St, Springfield")
+    @Schema(description = "Primary address label or identifier for the organization", example = "123 Main St, Springfield")
     private String primaryAddress;
+
+    @Embedded
+    @Nullable
+    @Schema(description = "Embedded billing rules for this commercial party")
+    private BillingRulesEmbeddable billingRules;
 
     @OneToMany(mappedBy = "commercialParty", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @NotEmpty

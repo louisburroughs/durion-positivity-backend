@@ -7,6 +7,7 @@ import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
+import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
@@ -16,6 +17,7 @@ import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.AccountSummary;
@@ -23,6 +25,7 @@ import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.dto.snapshot.ContactSummary;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
+import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -43,6 +46,8 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
@@ -176,13 +181,13 @@ public class PartyServiceImpl implements PartyService {
 
         // Fall back to business name if no contact first name provided
         if (!StringUtils.hasText(firstName)) {
-            firstName =
-                    StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName() : request.getLegalName();
+            firstName = StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName()
+                    : request.getLegalName();
         }
 
         Contact contact = new Contact();
-        UUID personId =
-                peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName, firstName);
+        UUID personId = peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName,
+                firstName);
         contact.setCommercialParty(party);
         contact.setPersonId(personId);
         contact.setFirstName(firstName);
@@ -215,8 +220,7 @@ public class PartyServiceImpl implements PartyService {
                 .filter(p -> matchesSearchCriteria(p, searchRequest))
                 .toList();
 
-        List<SearchPartiesResponse.PartySummary> summaries =
-                filtered.stream().map(this::mapToPartySummary).toList();
+        List<SearchPartiesResponse.PartySummary> summaries = filtered.stream().map(this::mapToPartySummary).toList();
 
         log.debug("Found {} parties matching search criteria", summaries.size());
 
@@ -246,7 +250,7 @@ public class PartyServiceImpl implements PartyService {
         UUID losingPartyId;
         try {
             losingPartyId = UUID.fromString(request.getLosingPartyId());
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
         }
         CommercialParty loser = findPartyOrThrow(losingPartyId);
@@ -415,7 +419,7 @@ public class PartyServiceImpl implements PartyService {
     private <E extends Enum<E>> E parseEnumFilter(String rawValue, Class<E> enumType) {
         try {
             return Enum.valueOf(enumType, rawValue.trim().toUpperCase(Locale.US));
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             log.debug("Ignoring invalid {} filter value '{}'", enumType.getSimpleName(), rawValue);
             return null;
         }
@@ -490,14 +494,120 @@ public class PartyServiceImpl implements PartyService {
 
     @Override
     @Transactional(readOnly = true)
-    public BillingRuleRef getBillingRulesForParty(UUID partyId) {
+    public @Nullable BillingRuleRef getBillingRulesForParty(@NonNull UUID partyId) {
         log.debug("Fetching billing rules for party: {}", partyId);
         CommercialParty party = findPartyByIdInternal(partyId);
         if (party == null) {
             log.warn("Party not found when fetching billing rules: {}", partyId);
             return null;
         }
-        return BillingRuleRef.defaults();
+        BillingRulesEmbeddable embedded = party.getBillingRules();
+        if (embedded == null) {
+            return BillingRuleRef.defaults();
+        }
+        return mapToBillingRuleRef(embedded);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull DuplicateCheckResponse checkPartyDuplicates(@NonNull String legalName) {
+        String requestedLegalName = legalName.trim();
+        if (!StringUtils.hasText(requestedLegalName)) {
+            return DuplicateCheckResponse.builder()
+                    .duplicatesFound(false)
+                    .exactMatchPartyId(null)
+                    .potentialDuplicates(Collections.emptyList())
+                    .build();
+        }
+        if (requestedLegalName.length() < 2) {
+            throw new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters");
+        }
+
+        List<CommercialParty> matches = partyRepository.findByLegalNameContaining(requestedLegalName);
+        String exactMatchPartyId = matches.stream()
+                .filter(match -> requestedLegalName.equalsIgnoreCase(match.getLegalName()))
+                .map(match -> match.getPartyId().toString())
+                .findFirst()
+                .orElse(null);
+
+        List<DuplicateCheckResponse.PartyMatch> potentialDuplicates = matches.stream()
+                .map(match -> {
+                    boolean exactMatch = requestedLegalName.equalsIgnoreCase(match.getLegalName());
+                    return DuplicateCheckResponse.PartyMatch.builder()
+                            .partyId(match.getPartyId().toString())
+                            .legalName(match.getLegalName())
+                            .matchType(exactMatch ? "EXACT" : "FUZZY")
+                            .score(exactMatch ? 1.0 : 0.7)
+                            .build();
+                })
+                .toList();
+
+        return DuplicateCheckResponse.builder()
+                .duplicatesFound(!matches.isEmpty())
+                .exactMatchPartyId(exactMatchPartyId)
+                .potentialDuplicates(potentialDuplicates)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public @NonNull BillingRuleRef upsertBillingRulesForParty(
+            @NonNull UUID partyId, @NonNull UpsertBillingRulesRequest request) {
+        log.info("Upserting billing rules for partyId={}", partyId);
+        CommercialParty party = findPartyByIdInternal(partyId);
+        if (party == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);
+        }
+
+        BillingRulesEmbeddable embedded = new BillingRulesEmbeddable();
+        embedded.setPoRequired(request.isPoRequired());
+        embedded.setTaxExempt(request.isTaxExempt());
+        embedded.setCreditHold(request.isCreditHold());
+        embedded.setAutoPayEnabled(request.isAutoPayEnabled());
+        embedded.setPaymentTerms(request.getPaymentTerms());
+        embedded.setCreditLimit(request.getCreditLimit());
+        embedded.setCurrency(request.getCurrency());
+        embedded.setInvoiceDeliveryMethod(request.getInvoiceDeliveryMethod());
+        embedded.setBillingAddressId(request.getBillingAddressId());
+        embedded.setDiscountPolicyRef(request.getDiscountPolicyRef());
+        party.setBillingRules(embedded);
+        partyRepository.save(party);
+        return mapToBillingRuleRef(embedded);
+    }
+
+    private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {
+        BillingRuleRef ref = BillingRuleRef.defaults();
+        if (embedded.getPoRequired() != null) {
+            ref.setPoRequired(embedded.getPoRequired());
+        }
+        if (embedded.getTaxExempt() != null) {
+            ref.setTaxExempt(embedded.getTaxExempt());
+        }
+        if (embedded.getCreditHold() != null) {
+            ref.setCreditHold(embedded.getCreditHold());
+        }
+        if (embedded.getAutoPayEnabled() != null) {
+            ref.setAutoPayEnabled(embedded.getAutoPayEnabled());
+        }
+        if (embedded.getPaymentTerms() != null) {
+            ref.setPaymentTerms(embedded.getPaymentTerms());
+        }
+        if (embedded.getCreditLimit() != null) {
+            ref.setCreditLimit(embedded.getCreditLimit());
+        }
+        if (embedded.getCurrency() != null) {
+            ref.setCurrency(embedded.getCurrency());
+        }
+        if (embedded.getInvoiceDeliveryMethod() != null) {
+            ref.setInvoiceDeliveryMethod(embedded.getInvoiceDeliveryMethod());
+        }
+        if (embedded.getBillingAddressId() != null) {
+            ref.setBillingAddressId(embedded.getBillingAddressId());
+        }
+        if (embedded.getDiscountPolicyRef() != null) {
+            ref.setDiscountPolicyRef(embedded.getDiscountPolicyRef());
+        }
+        return ref;
     }
 
     private CrmSnapshotDTO assembleSnapshot(CommercialParty party) {
@@ -642,8 +752,7 @@ public class PartyServiceImpl implements PartyService {
 
     private CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
         try {
-            VehicleResponse vehicleData =
-                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
+            VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
             if (vehicleData == null) {
                 log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
                 return null;
