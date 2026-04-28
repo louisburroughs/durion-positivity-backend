@@ -3,13 +3,11 @@ package com.positivity.accounting.internal.controller;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import com.positivity.accounting.internal.enums.ExportFormat;
@@ -23,20 +21,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration tests for ReportExportController.
@@ -49,10 +41,8 @@ import tools.jackson.databind.ObjectMapper;
  * <li>GET /v1/accounting/reports/export — list history (200)</li>
  * </ul>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("ReportExportController Tests")
-class ReportExportControllerTest {
+class ReportExportControllerTest extends BaseIntegrationTest {
 
   private static final String BASE_URL = "/v1/accounting/reports/export";
   private static final String TEST_AUTHORITIES = "accounting:report:export";
@@ -62,24 +52,14 @@ class ReportExportControllerTest {
   private static final UUID ORG_ID = UUID.fromString("b10217f9-3ec6-46b9-9c87-e7066c100c24");
   private static final Instant REQUESTED_AT = Instant.parse("2025-01-01T10:00:00Z");
 
-  @Autowired
-  private WebApplicationContext context;
-
-  @Autowired
-  private ObjectMapper objectMapper;
-
   @MockitoBean
   private ReportExportService reportExportService;
-
-  private MockMvc mockMvc;
 
   private ReportExportRequest validRequest;
   private ReportExportResponse exportResponse;
 
   @BeforeEach
   void setUp() {
-    mockMvc = webAppContextSetup(context).apply(springSecurity()).build();
-
     validRequest = ReportExportRequest.builder()
         .format(ExportFormat.CSV)
         .reportType("JOURNAL_LINES")

@@ -2,13 +2,11 @@ package com.positivity.accounting.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.ExportJobRequest;
 import com.positivity.accounting.internal.dto.ExportJobResponse;
 import com.positivity.accounting.service.TimekeepingExportService;
@@ -19,25 +17,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("TimekeepingExportController Tests")
-class TimekeepingExportControllerTest {
+class TimekeepingExportControllerTest extends BaseIntegrationTest {
 
   private static final String BASE_URL = "/v1/accounting/export";
   private static final String EXPORT_AUTHORITY = "accounting:export:request";
@@ -47,24 +38,14 @@ class TimekeepingExportControllerTest {
   private static final UUID JOB_ID = UUID.fromString("c1234567-89ab-cdef-0123-456789abcdef");
   private static final Instant REQUESTED_AT = Instant.parse("2025-06-01T09:00:00Z");
 
-  @Autowired
-  private WebApplicationContext context;
-
-  @Autowired
-  private ObjectMapper objectMapper;
-
   @MockitoBean
   private TimekeepingExportService timekeepingExportService;
-
-  private MockMvc mockMvc;
 
   private ExportJobRequest validRequest;
   private ExportJobResponse jobResponse;
 
   @BeforeEach
   void setUp() {
-    mockMvc = webAppContextSetup(context).apply(springSecurity()).build();
-
     validRequest = ExportJobRequest.builder()
         .exportType("TIMEKEEPING")
         .format("CSV")

@@ -6,25 +6,19 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.service.FinancialReportingService;
 import java.time.LocalDate;
 import java.util.Collections;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Unit tests for FinancialReportingController input validation.
@@ -32,27 +26,14 @@ import org.springframework.web.context.WebApplicationContext;
  * Focuses on security validation (S5145) to prevent log injection attacks
  * via untrusted path variables like statementLineCode.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("FinancialReportingController Input Validation Tests")
-class FinancialReportingControllerTest {
-
-    @Autowired
-    private WebApplicationContext context;
-
-    private MockMvc mockMvc;
+class FinancialReportingControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private FinancialReportingService financialReportingService;
 
     private static final LocalDate START_DATE = LocalDate.of(2024, 1, 1);
     private static final LocalDate END_DATE = LocalDate.of(2024, 12, 31);
-
-    @BeforeEach
-    void setUp() {
-        // Initialize MockMvc with Spring Security
-        this.mockMvc = webAppContextSetup(context).apply(springSecurity()).build();
-    }
 
     @Nested
     @DisplayName("Drilldown to Accounts - statementLineCode Validation (S5145)")

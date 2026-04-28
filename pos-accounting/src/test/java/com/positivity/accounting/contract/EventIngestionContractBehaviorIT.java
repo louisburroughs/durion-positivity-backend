@@ -306,7 +306,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
                                 .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.errorCode").value("CONFLICT"))
+                                .andExpect(jsonPath("$.code").value("CONFLICT"))
                                 .andExpect(jsonPath("$.message").exists());
         }
 

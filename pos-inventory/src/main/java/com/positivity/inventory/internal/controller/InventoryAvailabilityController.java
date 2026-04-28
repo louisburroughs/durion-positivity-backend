@@ -113,7 +113,7 @@ public class InventoryAvailabilityController {
         }
 
         private void validateLocationAndSourceType(UUID locationId, InventorySourceType sourceType) {
-                if (locationId != null && sourceType != InventorySourceType.WAREHOUSE) {
+                if (locationId != null && sourceType != null && sourceType != InventorySourceType.WAREHOUSE) {
                         throw new InvalidParamCombinationException(
                                         "locationId is only valid when sourceType is WAREHOUSE");
                 }
