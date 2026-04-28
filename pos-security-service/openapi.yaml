@@ -31,6 +31,8 @@ tags:
     review cases
 - name: Admin Account-State API
   description: Administrative endpoints for user account state management
+- name: Audit Exports
+  description: Asynchronous audit export job management
 - name: Audit
   description: Audit event and pricing snapshot endpoints with immutable write-once
     behavior
@@ -986,8 +988,7 @@ paths:
         "405":
           description: Method not allowed for immutable audit events
       security:
-      - bearerAuth:
-        - security:audit:create
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:create
     delete:
@@ -1036,8 +1037,7 @@ paths:
         "405":
           description: Method not allowed for immutable audit events
       security:
-      - bearerAuth:
-        - security:audit:create
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:create
   /v1/users:
@@ -2675,56 +2675,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/PricingSnapshotCreatedResponse"
       security:
-      - bearerAuth:
-        - security:audit:create
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:create
-  /v1/audit/events:
-    get:
+  /v1/audit/exports:
+    post:
       tags:
-      - Audit
-      summary: Search audit events
-      description: Searches audit events by event type alone or by entity identity
-        with an optional time range.
-      operationId: searchEvents
-      parameters:
-      - name: entityId
-        in: query
-        description: Entity identifier to match. Must be supplied together with entityType.
-        required: false
-        schema:
-          type: string
-      - name: entityType
-        in: query
-        description: Entity type to match. Must be supplied together with entityId.
-        required: false
-        schema:
-          type: string
-      - name: eventType
-        in: query
-        description: Event type code to search by when not searching by entity.
-        required: false
-        schema:
-          type: string
-      - name: from
-        in: query
-        description: Inclusive start timestamp for the audit search window.
-        required: false
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-01T00:00:00Z
-      - name: to
-        in: query
-        description: Inclusive end timestamp for the audit search window.
-        required: false
-        schema:
-          type: string
-          format: date-time
-        example: 2026-01-31T23:59:59Z
+      - Audit Exports
+      summary: Request audit export
+      description: Submits an asynchronous audit export job. Returns 202 Accepted
+        with the created job reference.
+      operationId: requestAuditExport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditExportRequest"
+        required: true
       responses:
         "400":
-          description: Invalid audit search criteria
+          description: Invalid export request
           content:
             application/json:
               schema:
@@ -2742,7 +2712,161 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Forbidden
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "202":
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExportJobResponse"
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - security:audit:export
+  /v1/audit/events:
+    get:
+      tags:
+      - Audit
+      summary: Search audit events
+      description: Searches audit events using rich filter criteria with pagination
+        support.
+      operationId: searchAuditEvents
+      parameters:
+      - name: fromDate
+        in: query
+        description: Inclusive start timestamp (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-01T00:00:00Z
+      - name: toDate
+        in: query
+        description: Exclusive end timestamp (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+        example: 2026-12-31T23:59:59Z
+      - name: actorId
+        in: query
+        description: Actor username or user identifier
+        required: false
+        schema:
+          type: string
+        example: advisor.jane
+      - name: workorderId
+        in: query
+        description: Workorder UUID - one word per workspace naming policy
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: movementId
+        in: query
+        description: Movement UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 77777777-7777-7777-7777-777777777777
+      - name: productId
+        in: query
+        description: Product UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 88888888-8888-8888-8888-888888888888
+      - name: sku
+        in: query
+        description: SKU code
+        required: false
+        schema:
+          type: string
+        example: BRAKE-PAD-001
+      - name: eventType
+        in: query
+        description: Event type code
+        required: false
+        schema:
+          type: string
+        example: PERMISSION_DENIED
+      - name: aggregateId
+        in: query
+        description: Aggregate identifier
+        required: false
+        schema:
+          type: string
+        example: role:manager
+      - name: correlationId
+        in: query
+        description: Correlation ID UUID for distributed tracing
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 99999999-9999-9999-9999-999999999999
+      - name: reasonCode
+        in: query
+        description: Reason code string
+        required: false
+        schema:
+          type: string
+        example: MANUAL_REVIEW
+      - name: pageToken
+        in: query
+        description: Cursor token for page navigation
+        required: false
+        schema:
+          type: string
+        example: eyJwYWdlIjoyfQ
+      - name: locationIds
+        in: query
+        description: Location UUID list - repeated query param
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        example: 11111111-1111-1111-1111-111111111111
+      responses:
+        "400":
+          description: Invalid filter criteria
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Insufficient authority
           content:
             application/json:
               schema:
@@ -2764,12 +2888,9 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditLogEventDto"
+                $ref: "#/components/schemas/PageAuditLogEventDto"
       security:
-      - bearerAuth:
-        - security:audit:view
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:view
     post:
@@ -2805,7 +2926,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Forbidden
+          description: Insufficient authority
           content:
             application/json:
               schema:
@@ -2829,8 +2950,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuditEventCreatedResponse"
       security:
-      - bearerAuth:
-        - security:audit:create
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:create
   /v1/users/{userId}/permissions:
@@ -4347,19 +4467,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Query permissions by domain
-      description: Returns all registered permissions for the requested domain using
-        the domain query parameter.
-      operationId: getAllPermissions
+      summary: List permissions
+      description: "Returns a paged list of registered permissions, optionally filtered\
+        \ by domain."
+      operationId: listPermissions
       parameters:
       - name: domain
         in: query
-        required: true
+        description: Optional domain filter
+        required: false
         schema:
           type: string
+        example: catalog
       responses:
         "400":
-          description: Bad Request
+          description: Invalid pagination parameters
           content:
             application/json:
               schema:
@@ -4377,7 +4499,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Forbidden
+          description: Insufficient authority
           content:
             application/json:
               schema:
@@ -4395,13 +4517,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "200":
-          description: OK
+          description: Permissions returned
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PermissionDto"
+                $ref: "#/components/schemas/Page"
       security:
       - bearerAuth:
         - security:permission:view
@@ -4411,19 +4531,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Query permissions by domain
-      description: Returns all registered permissions for the requested domain using
-        the domain query parameter.
-      operationId: getAllPermissions_1
+      summary: List permissions
+      description: "Returns a paged list of registered permissions, optionally filtered\
+        \ by domain."
+      operationId: listPermissions_1
       parameters:
       - name: domain
         in: query
-        required: true
+        description: Optional domain filter
+        required: false
         schema:
           type: string
+        example: catalog
       responses:
         "400":
-          description: Bad Request
+          description: Invalid pagination parameters
           content:
             application/json:
               schema:
@@ -4441,7 +4563,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Forbidden
+          description: Insufficient authority
           content:
             application/json:
               schema:
@@ -4459,13 +4581,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "200":
-          description: OK
+          description: Permissions returned
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PermissionDto"
+                $ref: "#/components/schemas/Page"
       security:
       - bearerAuth:
         - security:permission:view
@@ -4969,10 +5089,73 @@ paths:
               schema:
                 $ref: "#/components/schemas/PricingSnapshotDto"
       security:
-      - bearerAuth:
-        - security:audit:view
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:view
+  /v1/audit/exports/{jobId}:
+    get:
+      tags:
+      - Audit Exports
+      summary: Get audit export job status
+      description: Returns the current status of a previously submitted audit export
+        job.
+      operationId: getAuditExportJob
+      parameters:
+      - name: jobId
+        in: path
+        description: Export job UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Export job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "200":
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExportJobResponse"
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - security:audit:export
   /v1/audit/events/{eventId}:
     get:
       tags:
@@ -5007,7 +5190,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Forbidden
+          description: Insufficient authority
           content:
             application/json:
               schema:
@@ -5031,8 +5214,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuditLogEventDto"
       security:
-      - bearerAuth:
-        - security:audit:view
+      - bearerAuth: []
       x-required-permissions:
       - security:audit:view
   /v1/users/roles/assignments/{assignmentId}:
@@ -5795,6 +5977,114 @@ components:
         snapshotId:
           type: string
           format: uuid
+    AuditEventSearchFilter:
+      type: object
+      description: Filter criteria for audit event search
+      properties:
+        fromDate:
+          type: string
+          format: date-time
+          description: Inclusive start timestamp (ISO-8601)
+          example: 2026-01-01T00:00:00Z
+        toDate:
+          type: string
+          format: date-time
+          description: Exclusive end timestamp (ISO-8601)
+          example: 2026-12-31T23:59:59Z
+        actorId:
+          type: string
+          description: Actor username/service principal
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder UUID - one word per workspace naming policy
+        movementId:
+          type: string
+          format: uuid
+          description: Movement UUID
+        productId:
+          type: string
+          format: uuid
+          description: Product UUID
+        sku:
+          type: string
+          description: SKU code
+        eventType:
+          type: string
+          description: Event type code
+        aggregateId:
+          type: string
+          description: Aggregate identifier (string)
+        correlationId:
+          type: string
+          format: uuid
+          description: Correlation ID UUID for tracing
+        reasonCode:
+          type: string
+          description: Reason code string
+        pageToken:
+          type: string
+          description: Cursor token for page-based navigation
+        locationIds:
+          type: array
+          description: Location UUID list filter
+          items:
+            type: string
+    AuditExportRequest:
+      type: object
+      description: Audit export job submission request
+      properties:
+        filters:
+          $ref: "#/components/schemas/AuditEventSearchFilter"
+          description: Filter criteria to scope the export
+        format:
+          type: string
+          description: Output format for the export
+          enum:
+          - CSV
+          - JSON
+          example: CSV
+        deliveryMode:
+          type: string
+          description: Delivery mode for the exported file
+          enum:
+          - DOWNLOAD
+          - WEBHOOK
+          example: DOWNLOAD
+      required:
+      - deliveryMode
+      - format
+    AuditExportJobResponse:
+      type: object
+      description: Audit export job status response
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Export job UUID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Current status of the export job
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+        requestedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the export was requested
+        completedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the export completed (null if not yet complete)
+        downloadUrl:
+          type: string
+          description: Pre-signed download URL (null until COMPLETED)
+        errorMessage:
+          type: string
+          description: Error message when status is FAILED
     AuditLogEventRequest:
       type: object
       properties:
@@ -5861,6 +6151,64 @@ components:
         permissionCount:
           type: integer
           format: int32
+    Page:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items: {}
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
     AuthorizationDecisionResponse:
       type: object
       properties:
@@ -5926,6 +6274,38 @@ components:
           type: string
         context:
           type: string
+    PageAuditLogEventDto:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEventDto"
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
   securitySchemes:
     bearerAuth:
       type: http

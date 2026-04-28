@@ -15,52 +15,56 @@ tags:
   description: Read inventory facts for storage locations
 - name: Reallocation
   description: Allocation rebalancing endpoints
-- name: Inventory Management
-  description: Operations related to inventory location management
 - name: Cycle Count Plans
   description: Cycle count plan management endpoints
 - name: Picking Lists
   description: Picking list command endpoints
-- name: ASN
-  description: Advanced Shipping Notice and goods receipt endpoints
 - name: Pick Lists
   description: Pick list and pick task management endpoints
+- name: Putaway Execution
+  description: Execute putaway tasks with validation and audit events
+- name: Inventory Reservations
+  description: "Reserve, promote, and cancel inventory allocations for workorder lines"
+- name: Shortage Resolution
+  description: Shortage resolution recommendation endpoints
+- name: Inventory Bulk Ingest API
+  description: Bulk import inventory adjustment requests
+- name: Returns
+  description: Inventory return-to-stock endpoints
+- name: Inventory Reference Data
+  description: Inventory reference-data read endpoints
+- name: Cycle Count Operations
+  description: Cycle count submission and recount operations
+- name: Inventory Management
+  description: Operations related to inventory location management
+- name: ASN
+  description: Advanced Shipping Notice and goods receipt endpoints
 - name: Putaway
   description: Putaway task generation and claiming endpoints
 - name: Inventory Availability
   description: Inventory availability read/write endpoints
 - name: Consumption
   description: Workorder parts consumption endpoints
-- name: Putaway Execution
-  description: Execute putaway tasks with validation and audit events
 - name: Cycle Count API
   description: API for cycle count operations and variance tracking
 - name: Replenishment
   description: Replenishment task and policy endpoints
-- name: Inventory Reservations
-  description: "Reserve, promote, and cancel inventory allocations for workorder lines"
-- name: Shortage Resolution
-  description: Shortage resolution recommendation endpoints
 - name: Cycle Count Query
   description: Query endpoints for cycle count tasks and history
 - name: Purchase Orders
   description: "Purchase order creation, lifecycle, and receiving endpoints"
 - name: Cycle Count Adjustments
   description: Manage inventory adjustments from cycle counts
-- name: Inventory Bulk Ingest API
-  description: Bulk import inventory adjustment requests
-- name: Returns
-  description: Inventory return-to-stock endpoints
 - name: Receiving
   description: "Receiving session creation, item receiving, and cross-dock execution\
     \ endpoints"
 - name: Inventory Sites
   description: Site inventory configuration endpoints. Inventory Sites represent physical
     locations that hold inventory.
+- name: Inventory Ledger
+  description: Inventory ledger read endpoints
 - name: Stock Movements
   description: Inventory ledger movement recording and adjustment endpoints
-- name: Cycle Count Operations
-  description: Cycle count submission and recount operations
 paths:
   /v1/inventory/sites/{siteId}/defaultLocations:
     get:
@@ -159,27 +163,26 @@ paths:
         - inventory:stock_movement:create
       x-required-permissions:
       - inventory:stock_movement:create
-  /v1/inventory/returns:
+  /v1/inventory/shortage/resolve:
     post:
       tags:
-      - Returns
-      summary: Return items to stock
-      description: Returns issued parts to inventory and records resulting return
-        movement
-      operationId: returnItemsToStock
+      - Shortage Resolution
+      summary: Resolve shortage
+      description: Resolves inventory shortage using a selected strategy.
+      operationId: resolveShortage
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReturnItemsRequest"
+              $ref: "#/components/schemas/ShortageResolveRequest"
         required: true
       responses:
-        "201":
-          description: Return recorded
+        "200":
+          description: Shortage resolved
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReturnResponse"
+                $ref: "#/components/schemas/ShortageResolutionResultDto"
         "400":
           description: Validation failure
           content:
@@ -187,22 +190,65 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: User lacks required return authority
+          description: User lacks required shortage resolution authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "422":
-          description: Return quantity exceeds allowable amount
+          description: Unable to resolve shortage under current constraints
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
       - bearerAuth:
-        - inventory:adjustment:create
+        - inventory:shortage:resolve
       x-required-permissions:
-      - inventory:adjustment:create
+      - inventory:shortage:resolve
+  /v1/inventory/returns/submit-to-stock:
+    post:
+      tags:
+      - Returns
+      summary: Submit return to stock
+      description: Submits inventory returns to stock.
+      operationId: submitReturnToStock
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReturnSubmitRequest"
+        required: true
+      responses:
+        "202":
+          description: Return submitted and accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReturnSubmissionResultDto"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required return write authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Return submission violates business policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:return:write
+      x-required-permissions:
+      - inventory:return:write
   /v1/inventory/reservations:
     post:
       tags:
@@ -312,16 +358,28 @@ paths:
       - Replenishment
       summary: List replenishment policies
       description: Returns configured replenishment policies.
-      operationId: getReplenishmentPolicies
+      operationId: listReplenishmentPolicies
+      parameters:
+      - name: locationId
+        in: query
+        description: Location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
       responses:
         "200":
-          description: Replenishment policies returned
+          description: Replenishment policies returned (paged)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReplenishmentPolicyResponse"
+                type: string
+                description: Page of replenishment policies
       security:
       - bearerAuth:
         - inventory:on_hand:view
@@ -580,7 +638,7 @@ paths:
       - Putaway
       summary: Claim a putaway task
       description: Claims an available putaway task for the current actor.
-      operationId: claimTask
+      operationId: claimPutawayTask
       parameters:
       - name: taskId
         in: path
@@ -612,7 +670,7 @@ paths:
       - Putaway
       summary: Generate putaway tasks
       description: Generates putaway tasks for received inventory lines.
-      operationId: generateTasks
+      operationId: generatePutawayTasks
       requestBody:
         content:
           application/json:
@@ -1610,7 +1668,7 @@ paths:
       - Inventory Availability
       summary: Query inventory availability
       description: Returns per-location availability for a product.
-      operationId: queryInventoryAvailability
+      operationId: getInventoryAvailability
       parameters:
       - name: productId
         in: path
@@ -1725,50 +1783,6 @@ paths:
         - inventory:asn:create
       x-required-permissions:
       - inventory:asn:create
-  /v1/inventory/allocations/shortages/resolve:
-    post:
-      tags:
-      - Shortage Resolution
-      summary: Resolve shortage
-      description: Returns candidate shortage resolution options from substitutes
-        and external availability
-      operationId: resolveShortage
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ShortageResolutionRequest"
-        required: true
-      responses:
-        "200":
-          description: Resolution options returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShortageResolutionResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: User lacks required shortage resolution authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "422":
-          description: Unable to resolve shortage under current constraints
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-      security:
-      - bearerAuth:
-        - inventory:shortage:resolve
-      x-required-permissions:
-      - inventory:shortage:resolve
   /v1/inventory/allocations/reallocate:
     post:
       tags:
@@ -1956,13 +1970,158 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/storage-locations:
+    get:
+      tags:
+      - Inventory Reference Data
+      summary: List inventory storage locations
+      description: Returns paged inventory storage locations.
+      operationId: listInventoryStorageLocations
+      parameters:
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Storage locations returned (paged)
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Page of inventory storage locations
+        "403":
+          description: User lacks required location view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
+  /v1/inventory/shortage/options:
+    get:
+      tags:
+      - Shortage Resolution
+      summary: List shortage options
+      description: Returns available shortage resolution options for an allocation.
+      operationId: listShortageOptions
+      parameters:
+      - name: allocationId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Shortage options returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShortageOptionDto"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required shortage view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:shortage:view
+      x-required-permissions:
+      - inventory:shortage:view
+  /v1/inventory/returns/returnable-items:
+    get:
+      tags:
+      - Returns
+      summary: List returnable items
+      description: Returns items that can be returned to stock for a workorder.
+      operationId: listReturnableItems
+      parameters:
+      - name: workorderId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Returnable items returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReturnableItemDto"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required return view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:return:view
+      x-required-permissions:
+      - inventory:return:view
+  /v1/inventory/returns/reason-codes:
+    get:
+      tags:
+      - Returns
+      summary: List return reason codes
+      description: Returns reason codes available for inventory returns.
+      operationId: listReturnReasonCodes
+      responses:
+        "200":
+          description: Return reason codes returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReasonCodeDto"
+        "403":
+          description: User lacks required return view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:return:view
+      x-required-permissions:
+      - inventory:return:view
   /v1/inventory/replenishment/tasks:
     get:
       tags:
       - Replenishment
       summary: List replenishment tasks
       description: Returns replenishment tasks that should be fulfilled.
-      operationId: getReplenishmentTasks
+      operationId: listReplenishmentTasks
       responses:
         "200":
           description: Replenishment tasks returned
@@ -2022,7 +2181,22 @@ paths:
       - Putaway
       summary: List available putaway tasks
       description: Returns all currently available putaway tasks.
-      operationId: getAvailableTasks
+      operationId: listPutawayTasks
+      parameters:
+      - name: locationId
+        in: query
+        description: Location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: query
+        description: Storage location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         "200":
           description: Available putaway tasks returned
@@ -2190,6 +2364,44 @@ paths:
         - inventory:pick_list:view
       x-required-permissions:
       - inventory:pick_list:view
+  /v1/inventory/locations:
+    get:
+      tags:
+      - Inventory Reference Data
+      summary: List inventory locations
+      description: Returns paged inventory locations.
+      operationId: listInventoryLocations
+      parameters:
+      - name: siteId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Locations returned (paged)
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Page of inventory locations
+        "403":
+          description: User lacks required location view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -2205,6 +2417,12 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: sku
+        in: query
+        description: Product SKU filter
+        required: false
+        schema:
+          type: string
       responses:
         "200":
           description: Location inventory returned
@@ -2218,11 +2436,191 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationInventoryInquiryResponse"
+        "403":
+          description: User lacks required on-hand view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
       security:
       - bearerAuth:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/location-zones:
+    get:
+      tags:
+      - Inventory Reference Data
+      summary: List inventory location zones
+      description: Returns paged inventory location zones.
+      operationId: listInventoryLocationZones
+      parameters:
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Location zones returned (paged)
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Page of inventory location zones
+        "403":
+          description: User lacks required location view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
+  /v1/inventory/ledger:
+    get:
+      tags:
+      - Inventory Ledger
+      summary: List inventory ledger entries
+      description: Returns inventory ledger entries using optional filters.
+      operationId: listInventoryLedger
+      parameters:
+      - name: productSku
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: dateFrom
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: dateTo
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: sourceTransactionId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: workorderId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: workorderLineId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: movementTypes
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      - name: pageToken
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          description: Ledger entries returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LedgerPage"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required ledger view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
+  /v1/inventory/ledger/{entryId}:
+    get:
+      tags:
+      - Inventory Ledger
+      summary: Get inventory ledger entry
+      description: Returns a single inventory ledger entry by ID.
+      operationId: getInventoryLedgerEntry
+      parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Ledger entry returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryLedgerEntryDto"
+        "403":
+          description: User lacks required ledger view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Ledger entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
   /v1/inventory/goods-receipts/{receiptId}:
     get:
       tags:
@@ -2465,26 +2863,25 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
-  /v1/inventory/availability/query:
+  /v1/inventory/availability/lead-time:
     get:
       tags:
       - Inventory Availability
-      summary: Query inventory availability by SKU and location
-      description: "Returns on-hand, allocated, and available-to-promise quantities\
-        \ for a product at a specific location. storageLocationId is optional to narrow\
-        \ the scope to a sub-location."
-      operationId: queryAvailabilityBySku
+      summary: Query product lead time
+      description: Returns dynamic lead-time estimate for a product at a location.
+      operationId: getLeadTime
       parameters:
-      - name: productSku
+      - name: productId
         in: query
-        description: Product SKU
+        description: Product identifier
         required: true
         schema:
           type: string
+          format: uuid
       - name: locationId
         in: query
         description: Location identifier
-        required: true
+        required: false
         schema:
           type: string
           format: uuid
@@ -2495,15 +2892,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: sourceType
+        in: query
+        description: "Inventory lookup strategy. WAREHOUSE = from physical location\
+          \ stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply.\
+          \ When sourceType is WAREHOUSE, locationId narrows to a specific location."
+        required: false
+        schema:
+          type: string
+          enum:
+          - WAREHOUSE
+          - SUPPLIER
+          - TRANSIT
       responses:
         "200":
-          description: Availability view returned
+          description: Lead-time view returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AvailabilityView"
+                $ref: "#/components/schemas/LeadTimeView"
         "400":
-          description: Invalid request parameters
+          description: Invalid request parameters or locationId provided without sourceType=WAREHOUSE
           content:
             application/json:
               schema:
@@ -2515,7 +2924,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
-          description: Product SKU or location not found
+          description: Lead-time data not found
           content:
             application/json:
               schema:
@@ -2533,37 +2942,57 @@ paths:
       x-required-permissions:
       - inventory:on_hand:view
       - inventory:on_hand:search
-  /v1/inventory/availability/lead-time:
+  /v1/inventory/availability/by-sku:
     get:
       tags:
       - Inventory Availability
-      summary: Query product lead time
-      description: Returns dynamic lead-time estimate for a product at a location.
-      operationId: queryLeadTime
+      summary: Query inventory availability by SKU and location
+      description: "Returns on-hand, allocated, and available-to-promise quantities\
+        \ for a product at a specific location. storageLocationId is optional to narrow\
+        \ the scope to a sub-location."
+      operationId: listAvailabilityBySku
       parameters:
-      - name: productId
+      - name: productSku
         in: query
-        description: Product identifier
+        description: Product SKU
         required: true
         schema:
           type: string
-          format: uuid
       - name: locationId
         in: query
         description: Location identifier
-        required: true
+        required: false
         schema:
           type: string
           format: uuid
+      - name: storageLocationId
+        in: query
+        description: Storage location identifier (optional; narrows to sub-location)
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sourceType
+        in: query
+        description: "Inventory lookup strategy. WAREHOUSE = from physical location\
+          \ stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply.\
+          \ When sourceType is WAREHOUSE, locationId narrows to a specific location."
+        required: false
+        schema:
+          type: string
+          enum:
+          - WAREHOUSE
+          - SUPPLIER
+          - TRANSIT
       responses:
         "200":
-          description: Lead-time view returned
+          description: Availability view returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LeadTimeView"
+                $ref: "#/components/schemas/AvailabilityView"
         "400":
-          description: Invalid request parameters
+          description: Invalid request parameters or locationId provided without sourceType=WAREHOUSE
           content:
             application/json:
               schema:
@@ -2575,7 +3004,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
-          description: Lead-time data not found
+          description: Product SKU or location not found
           content:
             application/json:
               schema:
@@ -2705,57 +3134,38 @@ components:
       - movementType
       - productSku
       - quantity
-    ReturnItemLine:
+    ShortageResolveRequest:
       type: object
       properties:
-        skuId:
+        allocationId:
           type: string
           format: uuid
-        quantityReturned:
-          type: integer
-          format: int32
-      required:
-      - skuId
-    ReturnItemsRequest:
-      type: object
-      properties:
-        workorderId:
+        allocationLineId:
           type: string
           format: uuid
-        returnReason:
+        resolution:
           type: string
           minLength: 1
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReturnItemLine"
-          minItems: 1
+        substituteSku:
+          type: string
+        notes:
+          type: string
       required:
-      - items
-      - returnReason
-      - workorderId
-    ReturnResponse:
+      - allocationId
+      - resolution
+    ShortageResolutionResultDto:
       type: object
       properties:
-        returnId:
+        allocationId:
           type: string
           format: uuid
-        workorderId:
+        resolution:
           type: string
-          format: uuid
-        returnReason:
-          type: string
-        totalItemsReturned:
-          type: integer
-          format: int32
-        createdAt:
+        resolvedAt:
           type: string
           format: date-time
-        ledgerEntryIds:
-          type: array
-          items:
-            type: string
-            format: uuid
+        status:
+          type: string
     ApiError:
       type: object
       description: Standard error response envelope returned by all Durion backend
@@ -2810,6 +3220,59 @@ components:
           type: string
           description: Validation failure message
           example: must be greater than 0
+    ReturnLineDto:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        reasonCode:
+          type: string
+          minLength: 1
+        locationId:
+          type: string
+          format: uuid
+        storageLocationId:
+          type: string
+          format: uuid
+      required:
+      - itemId
+      - locationId
+      - reasonCode
+    ReturnSubmitRequest:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnLineDto"
+          minItems: 1
+      required:
+      - lines
+      - workorderId
+    ReturnSubmissionResultDto:
+      type: object
+      properties:
+        returnId:
+          type: string
+          format: uuid
+        workorderId:
+          type: string
+          format: uuid
+        processedLines:
+          type: integer
+          format: int32
+        status:
+          type: string
+        processedAt:
+          type: string
+          format: date-time
     CreateReservationRequest:
       type: object
       properties:
@@ -4143,57 +4606,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AsnLineResponse"
-    ShortageResolutionRequest:
-      type: object
-      properties:
-        allocationId:
-          type: string
-          format: uuid
-        sku:
-          type: string
-          minLength: 1
-        shortQuantity:
-          type: integer
-          format: int32
-      required:
-      - allocationId
-      - sku
-    ResolutionOption:
-      type: object
-      properties:
-        type:
-          type: string
-          enum:
-          - SUBSTITUTE
-          - EXTERNAL_PURCHASE
-          - BACKORDER
-        substitutePartNumber:
-          type: string
-        unitCost:
-          type: number
-        estimatedLeadTimeDays:
-          type: integer
-          format: int32
-        source:
-          type: string
-        confidence:
-          type: string
-        qualityTier:
-          type: string
-    ShortageResolutionResponse:
-      type: object
-      properties:
-        allocationId:
-          type: string
-          format: uuid
-        sku:
-          type: string
-        options:
-          type: array
-          items:
-            $ref: "#/components/schemas/ResolutionOption"
-        partialResultsBanner:
-          type: boolean
     ReallocateRequest:
       type: object
       properties:
@@ -4274,6 +4686,64 @@ components:
           - CANCELLED
       required:
       - status
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    ShortageOptionDto:
+      type: object
+      properties:
+        allocationId:
+          type: string
+          format: uuid
+        allocationLineId:
+          type: string
+          format: uuid
+        resolution:
+          type: string
+        description:
+          type: string
+        substituteSku:
+          type: string
+        estimatedDays:
+          type: integer
+          format: int32
+    ReturnableItemDto:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        description:
+          type: string
+        quantityReturnable:
+          type: integer
+          format: int32
+        workorderId:
+          type: string
+          format: uuid
+    ReasonCodeDto:
+      type: object
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
     ReplenishmentTaskResponse:
       type: object
       properties:
@@ -4322,21 +4792,6 @@ components:
         locationId:
           type: string
           format: uuid
-    Pageable:
-      type: object
-      properties:
-        page:
-          type: integer
-          format: int32
-          minimum: 0
-        size:
-          type: integer
-          format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
     PagePurchaseOrderResponse:
       type: object
       properties:
@@ -4409,9 +4864,95 @@ components:
           format: int32
           description: Current on-hand quantity across all stock items at the location
           example: 12
+        availableToPromiseQuantity:
+          type: integer
+          format: int32
+          description: "Quantity available to promise after pending allocations. Note:\
+            \ reservation events are not yet factored in."
+          example: 8
       required:
+      - availableToPromiseQuantity
       - locationId
       - onHandQuantity
+    LedgerPage:
+      type: object
+      properties:
+        entries:
+          type: array
+          items: {}
+        nextPageToken:
+          type: string
+    InventoryLedgerEntryDto:
+      type: object
+      properties:
+        ledgerEntryId:
+          type: string
+          format: uuid
+        stockItemId:
+          type: string
+        adjustmentId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+          - GOODS_RECEIPT
+          - TRANSFER_IN
+          - PUTAWAY
+          - RETURN_TO_STOCK
+          - ADJUSTMENT_IN
+          - COUNT_VARIANCE_IN
+          - GOODS_ISSUE
+          - WORKORDER_CONSUMPTION
+          - TRANSFER_OUT
+          - SCRAP_OUT
+          - ADJUSTMENT_OUT
+          - COUNT_VARIANCE_OUT
+          - ADJUST_CYCLE_COUNT
+          - RESERVATION_CREATED
+          - RESERVATION_RELEASED
+          - ALLOCATION_CREATED
+          - ALLOCATION_RELEASED
+          - BACKORDER_CREATED
+          - BACKORDER_RESOLVED
+          - PICK_TASK_CREATED
+          - PICK_TASK_COMPLETED
+        changeInQuantity:
+          type: integer
+          format: int32
+        quantityAfter:
+          type: integer
+          format: int32
+        unitCost:
+          type: number
+        transactionUserId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        locationId:
+          type: string
+          format: uuid
+        fromLocationId:
+          type: string
+          format: uuid
+        toLocationId:
+          type: string
+          format: uuid
+        reasonCode:
+          type: string
+        sourceTransactionId:
+          type: string
+        unitOfMeasure:
+          type: string
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     CycleCountTaskResponse:
       type: object
       properties:
@@ -4494,28 +5035,6 @@ components:
         availableToPromiseQuantity:
           type: integer
           format: int32
-    AvailabilityView:
-      type: object
-      properties:
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        storageLocationId:
-          type: string
-          format: uuid
-        onHandQuantity:
-          type: integer
-          format: int32
-        allocatedQuantity:
-          type: integer
-          format: int32
-        availableToPromiseQuantity:
-          type: integer
-          format: int32
-        unitOfMeasure:
-          type: string
     LeadTimeView:
       type: object
       properties:
@@ -4555,6 +5074,28 @@ components:
           type: string
           format: date-time
           description: Timestamp when lead-time data was last refreshed
+    AvailabilityView:
+      type: object
+      properties:
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        storageLocationId:
+          type: string
+          format: uuid
+        onHandQuantity:
+          type: integer
+          format: int32
+        allocatedQuantity:
+          type: integer
+          format: int32
+        availableToPromiseQuantity:
+          type: integer
+          format: int32
+        unitOfMeasure:
+          type: string
   securitySchemes:
     bearerAuth:
       type: http

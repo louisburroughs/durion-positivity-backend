@@ -403,6 +403,69 @@ paths:
         - bulkImport:status:read
       x-required-permissions:
       - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}/corrections/single:
+    post:
+      tags:
+      - Review Queue API
+      summary: Submit a single correction record
+      description: Submits a corrected data record for a single failed audit entry
+        from a bulk import job. The job must be in FAILED state. Returns the acceptance
+        or rejection status for the submitted record.
+      operationId: submitSingleCorrection
+      parameters:
+      - name: jobId
+        in: path
+        description: ID of the bulk load job
+        required: true
+        schema:
+          type: string
+          default: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCorrectionItem"
+        required: true
+      responses:
+        "201":
+          description: Correction processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectionResultDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
+          description: Invalid correction request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectionResultDto"
+        "403":
+          description: Job does not belong to the authenticated operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectionResultDto"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectionResultDto"
+        "409":
+          description: Job is not in a state that accepts corrections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectionResultDto"
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
+      x-required-permissions:
+      - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/cancel:
     post:
       tags:
@@ -901,6 +964,32 @@ components:
             \ any"
           items:
             type: string
+    CorrectionResultDto:
+      type: object
+      default: null
+      description: Result of a single correction record submission
+      properties:
+        auditRecordId:
+          type: string
+          format: uuid
+          default: ""
+          description: ID of the audit record that was corrected
+          example: 00000000-0000-0000-0000-000000000001
+        status:
+          type: string
+          default: ""
+          description: Whether the correction was accepted or rejected
+          enum:
+          - ACCEPTED
+          - REJECTED
+          example: ACCEPTED
+        rejectionReason:
+          type:
+          - string
+          - "null"
+          default: ""
+          description: Reason for rejection if status is REJECTED
+          example: Audit record does not belong to this job
     Pageable:
       type: object
       properties:

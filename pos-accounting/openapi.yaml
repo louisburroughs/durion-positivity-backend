@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Audit Trail
   description: Audit trail operations for tracking accounting exceptions and overrides
+- name: Accounting Exports
+  description: Manage timekeeping and generic data export jobs.
 - name: Payment Applications
   description: Manage payment applications to invoices (AR)
 - name: Posting Rules
@@ -1708,58 +1710,135 @@ paths:
         - accounting:coa:edit
       x-required-permissions:
       - accounting:coa:edit
+  /v1/accounting/export:
+    post:
+      tags:
+      - Accounting Exports
+      summary: Request timekeeping export
+      description: Submit an export job request.
+      operationId: requestExport_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportJobRequest"
+        required: true
+      responses:
+        "202":
+          description: Export job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+      security:
+      - bearerAuth:
+        - accounting:export:request
+      x-required-permissions:
+      - accounting:export:request
   /v1/accounting/events:
     get:
       tags:
       - Accounting Events
-      summary: List events
+      summary: List accounting events
       description: Retrieve paginated accounting events with optional filters.
-      operationId: listEvents
+      operationId: listAccountingEvents
       parameters:
       - name: organizationId
         in: query
-        description: Organization identifier
-        required: true
+        description: Filter by organization
+        required: false
         schema:
           type: string
           format: uuid
-      - name: page
+      - name: eventType
         in: query
-        description: Page index (0-based)
+        description: Filter by event type
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
+          type: string
+      - name: idempotencyOutcome
         in: query
-        description: Page size
+        description: Filter by idempotency outcome
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 20
-          exclusiveMinimum: 0
+          type: string
+      - name: receivedAtFrom
+        in: query
+        description: Filter by received-at range start (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: receivedAtTo
+        in: query
+        description: Filter by received-at range end (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: eventId
+        in: query
+        description: Filter by event UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: ingestionId
+        in: query
+        description: Filter by ingestion job UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: domainKeyId
+        in: query
+        description: Filter by domain key
+        required: false
+        schema:
+          type: string
+      - name: invoiceId
+        in: query
+        description: Filter by invoice UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
       - name: status
         in: query
         description: Filter by processing status
         required: false
         schema:
           type: string
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
       responses:
         "200":
           description: Events listed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+                $ref: "#/components/schemas/PageAccountingEventResponse"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+                $ref: "#/components/schemas/PageAccountingEventResponse"
       security:
       - bearerAuth:
         - accounting:events:view
@@ -2917,6 +2996,76 @@ paths:
         - accounting:coa:view
       x-required-permissions:
       - accounting:coa:view
+  /v1/accounting/export/status/{jobId}:
+    get:
+      tags:
+      - Accounting Exports
+      summary: Get export job status
+      description: Retrieve the current status of an export job.
+      operationId: getExportStatus_1
+      parameters:
+      - name: jobId
+        in: path
+        description: Export job identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Export job status returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+        "404":
+          description: Export job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJobResponse"
+      security:
+      - bearerAuth:
+        - accounting:export:view
+      x-required-permissions:
+      - accounting:export:view
+  /v1/accounting/export/history:
+    get:
+      tags:
+      - Accounting Exports
+      summary: List export history
+      description: Retrieve paginated export job history.
+      operationId: listExportHistory
+      parameters:
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Export history returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageExportJobResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageExportJobResponse"
+      security:
+      - bearerAuth:
+        - accounting:export:view
+      x-required-permissions:
+      - accounting:export:view
   /v1/accounting/events/{eventId}:
     get:
       tags:
@@ -2985,7 +3134,8 @@ paths:
       tags:
       - Accounting Events
       summary: Get event processing log
-      description: Retrieve the processing log for an accounting event.
+      description: Retrieve the structured processing audit log for an accounting
+        event. Returns an empty list if the event has no processing log.
       operationId: getEventProcessingLog
       parameters:
       - name: eventId
@@ -3001,13 +3151,34 @@ paths:
           content:
             application/json:
               schema:
-                type: string
-        "404":
-          description: Event not found
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventProcessingLogEntry"
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
+  /v1/accounting/events/contract:
+    get:
+      tags:
+      - Accounting Events
+      summary: Get event envelope contract
+      description: Returns the current event envelope schema contract for SDK validation.
+      operationId: getEventContract
+      responses:
+        "200":
+          description: Contract returned
           content:
             application/json:
               schema:
-                type: string
+                $ref: "#/components/schemas/EventEnvelopeContract"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelopeContract"
       security:
       - bearerAuth:
         - accounting:events:view
@@ -3559,34 +3730,35 @@ paths:
       summary: List eligible vendor bills
       description: "Get eligible vendor bills for payment (status = APPROVED). Bills\
         \ are ordered by due date (oldest first, nulls last), then bill date, then\
-        \ bill ID."
-      operationId: listBills
+        \ bill ID. Sort order is server-controlled."
+      operationId: listApBills
       parameters:
       - name: vendorId
         in: query
         description: Vendor UUID
-        required: true
+        required: false
         schema:
           type: string
           format: uuid
         example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
       responses:
         "200":
           description: Bills retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+                $ref: "#/components/schemas/PageVendorBillSummaryResponse"
         "400":
           description: Invalid vendor ID
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+                $ref: "#/components/schemas/PageVendorBillSummaryResponse"
       security:
       - bearerAuth:
         - accounting:ap:view
@@ -4822,6 +4994,59 @@ components:
           format: date
       required:
       - effectiveDate
+    ExportJobRequest:
+      type: object
+      description: Request body for a timekeeping export job
+      properties:
+        exportType:
+          type: string
+          description: Type of export
+          minLength: 1
+        filters:
+          type: object
+          additionalProperties: {}
+          description: Optional filter criteria as key-value pairs
+        format:
+          type: string
+          description: "Export format: CSV or JSON"
+          minLength: 1
+        deliveryMode:
+          type: string
+          description: How the export will be delivered
+      required:
+      - exportType
+      - format
+    ExportJobResponse:
+      type: object
+      description: Status and metadata for an export job
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Unique job identifier
+        status:
+          type: string
+          description: Current job status
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the export was requested
+        completedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: When the export completed
+        downloadUrl:
+          type:
+          - string
+          - "null"
+          description: Download URL when available
+        errorMessage:
+          type:
+          - string
+          - "null"
+          description: Error message if job failed
     AccountingEventSubmitRequest:
       type: object
       description: Request payload for submitting an accounting event for ingestion
@@ -4917,6 +5142,16 @@ components:
           type: string
         mappingVersionAttempted:
           type: string
+        idempotencyOutcome:
+          type: string
+        ingestionId:
+          type: string
+          format: uuid
+        domainKeyId:
+          type: string
+        invoiceId:
+          type: string
+          format: uuid
     ReprocessEventRequest:
       type: object
       properties:
@@ -5779,32 +6014,70 @@ components:
         asOfDate:
           type: string
           format: date-time
-    PagedResponseAccountingEventResponse:
+    PageExportJobResponse:
       type: object
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountingEventResponse"
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalCount:
+        totalElements:
           type: integer
           format: int64
         totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportJobResponse"
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageAccountingEventResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
           type: integer
           format: int32
         content:
           type: array
           items:
             $ref: "#/components/schemas/AccountingEventResponse"
-        totalElements:
+        number:
           type: integer
-          format: int64
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
     ReprocessingAttemptHistoryResponse:
       type: object
       properties:
@@ -5828,6 +6101,65 @@ components:
           type: string
         mappingVersionUsed:
           type: string
+    EventProcessingLogEntry:
+      type: object
+      description: A single entry in an accounting event's processing audit log
+      properties:
+        entryId:
+          type: string
+          format: uuid
+          description: Unique identifier for this log entry
+        occurredAt:
+          type: string
+          format: date-time
+          description: When this log entry was created
+        severity:
+          type: string
+          description: "Severity level: INFO, WARN, or ERROR"
+        message:
+          type: string
+          description: Human-readable log message
+        contextJson:
+          type:
+          - string
+          - "null"
+          description: Optional JSON context for debugging
+    ContractField:
+      type: object
+      description: A single field definition in an event envelope contract
+      properties:
+        name:
+          type: string
+        jsonPath:
+          type: string
+        type:
+          type: string
+        required:
+          type: boolean
+        description:
+          type: string
+        enumValues:
+          type:
+          - array
+          - "null"
+          items:
+            type: string
+    EventEnvelopeContract:
+      type: object
+      description: Describes the expected structure of accounting event envelopes
+      properties:
+        version:
+          type: string
+          description: Contract schema version
+        fields:
+          type: array
+          description: Field definitions in the event envelope
+          items:
+            $ref: "#/components/schemas/ContractField"
+        examples:
+          type: array
+          description: Example event payloads
+          items: {}
     DefaultGLMappingListResponse:
       type: object
       properties:
@@ -5863,6 +6195,38 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreditMemoResponse"
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageVendorBillSummaryResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/VendorBillSummaryResponse"
         number:
           type: integer
           format: int32

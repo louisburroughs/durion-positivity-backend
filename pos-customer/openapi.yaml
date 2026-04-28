@@ -425,6 +425,47 @@ paths:
         - crm:contact_role:assign
       x-required-permissions:
       - crm:contact_role:assign
+  /v1/crm/accounts/parties/{partyId}/billing-rules:
+    put:
+      tags:
+      - CRM Accounts
+      summary: Upsert billing rules for a party
+      description: Create or update the billing rules configuration for a commercial
+        party.
+      operationId: upsertBillingRules
+      parameters:
+      - name: partyId
+        in: path
+        description: Party ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertBillingRulesRequest"
+        required: true
+      responses:
+        "200":
+          description: Billing rules updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingRuleRef"
+        "400":
+          description: Invalid request body
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
+      security:
+      - bearerAuth:
+        - crm:billing_rules:edit
+      x-required-permissions:
+      - crm:billing_rules:edit
   /v1/promotions/redemptions:
     post:
       tags:
@@ -1471,6 +1512,40 @@ paths:
         - crm:contact:view
       x-required-permissions:
       - crm:contact:view
+  /v1/crm/accounts/parties/duplicate-check:
+    get:
+      tags:
+      - CRM Accounts
+      summary: Check for duplicate commercial parties
+      description: Search for existing parties with a similar legal name to detect
+        potential duplicates before creating a new commercial account.
+      operationId: checkPartyDuplicates
+      parameters:
+      - name: legalName
+        in: query
+        description: Legal name to check for duplicates
+        required: true
+        schema:
+          type: string
+          maxLength: 2147483647
+          minLength: 2
+        example: Acme Corporation
+      responses:
+        "200":
+          description: Duplicate check completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicateCheckResponse"
+        "400":
+          description: Invalid request - legalName too short or blank
+        "403":
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:search
+      x-required-permissions:
+      - crm:party:search
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1690,6 +1765,93 @@ components:
           type: string
         updatedAt:
           type: string
+    UpsertBillingRulesRequest:
+      type: object
+      description: Request to upsert billing rules for a commercial party
+      properties:
+        paymentTerms:
+          type: string
+          description: Payment terms string
+          example: Net 30
+          maxLength: 100
+          minLength: 0
+        creditLimit:
+          type: number
+          description: Maximum credit limit; null means no configured limit
+          example: 10000.0
+          minimum: 0.00
+        currency:
+          type: string
+          description: ISO-4217 currency code
+          example: USD
+          pattern: "^[A-Z]{3}$"
+        taxExempt:
+          type: boolean
+          description: Whether the account is tax-exempt
+          example: false
+        poRequired:
+          type: boolean
+          description: Whether a PO number is required before order can be finalized
+          example: false
+        creditHold:
+          type: boolean
+          description: Whether the account is on a credit hold
+          example: false
+        autoPayEnabled:
+          type: boolean
+          description: Whether auto-pay is enabled for this account
+          example: false
+        invoiceDeliveryMethod:
+          type: string
+          description: Preferred invoice delivery method
+          enum:
+          - EMAIL
+          - MAIL
+          - PORTAL
+          - EDI
+        billingAddressId:
+          type: string
+          format: uuid
+          description: Billing address ID
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        discountPolicyRef:
+          type: string
+          description: Optional reference to a discount policy
+          example: DISC-GOLD-001
+          maxLength: 200
+          minLength: 0
+    BillingRuleRef:
+      type: object
+      properties:
+        poRequired:
+          type: boolean
+        taxExempt:
+          type: boolean
+        paymentTerms:
+          type: string
+        creditLimit:
+          type: number
+        creditHold:
+          type: boolean
+        invoiceDeliveryMethod:
+          type: string
+          enum:
+          - EMAIL
+          - MAIL
+          - PORTAL
+          - EDI
+        billingAddressId:
+          type: string
+          format: uuid
+        autoPayEnabled:
+          type: boolean
+        discountPolicyRef:
+          type: string
+        currency:
+          type: string
+        extensions:
+          type: object
+          additionalProperties: {}
     RecordRedemptionRequest:
       type: object
       properties:
@@ -2308,12 +2470,12 @@ components:
     PageCustomerDTO:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -2384,38 +2546,6 @@ components:
           type: boolean
         invoiceDeliveryMethod:
           type: string
-    BillingRuleRef:
-      type: object
-      properties:
-        poRequired:
-          type: boolean
-        taxExempt:
-          type: boolean
-        paymentTerms:
-          type: string
-        creditLimit:
-          type: number
-        creditHold:
-          type: boolean
-        invoiceDeliveryMethod:
-          type: string
-          enum:
-          - EMAIL
-          - MAIL
-          - PORTAL
-          - EDI
-        billingAddressId:
-          type: string
-          format: uuid
-        autoPayEnabled:
-          type: boolean
-        discountPolicyRef:
-          type: string
-        currency:
-          type: string
-        extensions:
-          type: object
-          additionalProperties: {}
     ContactPreferences:
       type: object
       properties:
@@ -2807,6 +2937,47 @@ components:
           type: string
         modifiedAt:
           type: string
+    DuplicateCheckResponse:
+      type: object
+      description: Response containing potential duplicate party matches
+      properties:
+        duplicatesFound:
+          type: boolean
+          description: Whether any duplicate matches were found
+          example: true
+        exactMatchPartyId:
+          type: string
+          description: "ID of exact-match party, if any"
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        potentialDuplicates:
+          type: array
+          description: List of potential duplicate matches
+          items:
+            $ref: "#/components/schemas/PartyMatch"
+    PartyMatch:
+      type: object
+      description: A single potential duplicate party match
+      properties:
+        partyId:
+          type: string
+          description: Party ID
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        legalName:
+          type: string
+          description: Legal name of the party
+          example: Acme Corporation
+        score:
+          type: number
+          format: double
+          description: Match confidence score (0.0-1.0)
+          example: 0.95
+        matchType:
+          type: string
+          description: Type of match
+          enum:
+          - EXACT
+          - FUZZY
+          example: EXACT
   securitySchemes:
     bearerAuth:
       type: http

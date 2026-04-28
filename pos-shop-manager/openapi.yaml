@@ -14,6 +14,8 @@ tags:
   description: Operations for creating and loading appointments in shop management
 - name: Shop API
   description: "Endpoints for shop management, technicians, and services"
+- name: Shop Audit
+  description: Shop schedule and assignment audit trail.
 - name: Workorder Operational Context API
   description: Read-only operational context view for workorders
 - name: Shop Mobile Unit API
@@ -410,8 +412,11 @@ paths:
   /v1/shop/audit:
     get:
       tags:
-      - shop-audit-controller
-      operationId: searchAudit
+      - Shop Audit
+      summary: Search shop audit trail
+      description: Searches the shop audit trail using filter criteria. At least one
+        filter criterion is required.
+      operationId: searchShopAudit
       parameters:
       - name: filter
         in: query
@@ -420,25 +425,37 @@ paths:
           $ref: "#/components/schemas/ShopAuditFilter"
       responses:
         "200":
-          description: OK
+          description: Audit entries returned
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/ShopAuditEntryResponse"
+        "400":
+          description: No filter criteria provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - shop:schedule:view
-        - appointments:view
+      - bearerAuth: []
       x-required-permissions:
       - shop:schedule:view
       - appointments:view
   /v1/shop/audit/{id}:
     get:
       tags:
-      - shop-audit-controller
-      operationId: getAuditById
+      - Shop Audit
+      summary: Get shop audit entry by ID
+      description: Returns a single shop audit entry by its UUID.
+      operationId: getShopAuditEntry
       parameters:
       - name: id
         in: path
@@ -448,15 +465,25 @@ paths:
           format: uuid
       responses:
         "200":
-          description: OK
+          description: Audit entry returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ShopAuditEntryResponse"
+        "403":
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Audit entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - shop:schedule:view
-        - appointments:view
+      - bearerAuth: []
       x-required-permissions:
       - shop:schedule:view
       - appointments:view
@@ -1115,17 +1142,25 @@ components:
           format: date-time
     ShopAuditFilter:
       type: object
+      description: Filter criteria for querying the shop audit trail. At least one
+        field must be non-null.
       properties:
         workorderId:
           type: string
+          description: Workorder UUID to filter by - one word per workspace naming
+            policy
         appointmentId:
           type: string
+          description: Appointment UUID to filter by
         mechanicId:
           type: string
+          description: Mechanic user ID to filter by
         actorUserId:
           type: string
+          description: Actor user ID to filter by
         eventType:
           type: string
+          description: Specific audit event type to filter by
           enum:
           - SCHEDULE_CREATED
           - SCHEDULE_UPDATED
@@ -1134,12 +1169,71 @@ components:
           - ASSIGNMENT_REMOVED
         locationId:
           type: string
+          description: Location ID to filter by
         fromDateTime:
           type: string
           format: date-time
+          description: Inclusive start timestamp for date-time range filter
+          example: 2026-01-01T00:00:00Z
         toDateTime:
           type: string
           format: date-time
+          description: Inclusive end timestamp for date-time range filter
+          example: 2026-12-31T23:59:59Z
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend
+        APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17T14:30:00.000Z
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related
+            errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
+            other error types
+          items:
+            $ref: "#/components/schemas/FieldError"
+        referenceId:
+          type: string
+          description: "Workflow or review-case reference identifier, when applicable"
+        nextAction:
+          type: string
+          description: "Recommended next step for the caller, when applicable"
+        supportAction:
+          type: string
+          description: "Support or admin investigation guidance, when applicable"
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
     ShopAuditEntryResponse:
       type: object
       properties:
