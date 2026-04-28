@@ -25,10 +25,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(CrmAccountsController.class)
@@ -144,16 +146,14 @@ class CrmAccountsControllerTest {
         .autoPayEnabled(false)
         .build();
 
-    when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
-        .thenThrow(new IllegalArgumentException("Party not found: " + PARTY_ID));
+        when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
+            .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + PARTY_ID));
 
     mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request))
         .header("X-Authorities", "crm:billing_rules:edit"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("PARTY_NOT_FOUND"))
-        .andExpect(jsonPath("$.message").isNotEmpty());
+            .andExpect(status().isNotFound());
   }
 
   @Test

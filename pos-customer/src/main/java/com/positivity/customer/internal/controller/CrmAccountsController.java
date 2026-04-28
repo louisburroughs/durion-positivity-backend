@@ -25,8 +25,6 @@ import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
-import com.positivity.shared.error.ApiError;
-import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,9 +32,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +53,6 @@ import org.springframework.web.bind.annotation.*;
 public class CrmAccountsController {
 
         private static final Logger log = LoggerFactory.getLogger(CrmAccountsController.class);
-        private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
         private final PartyService partyService;
         private final AccountTierService accountTierService;
@@ -303,6 +297,7 @@ public class CrmAccountsController {
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         CrmPermissionRegistry.PARTY_SEARCH })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_SEARCH + "')")
+        @EmitEvent(id = "CUSTOMER_PARTY_DUPLICATE_CHECK", apiVersion = "1")
         public ResponseEntity<DuplicateCheckResponse> checkPartyDuplicates(
                         @Parameter(description = "Legal name to check for duplicates", required = true, example = "Acme Corporation") @RequestParam @jakarta.validation.constraints.Size(min = 2) @jakarta.validation.constraints.NotBlank String legalName) {
                 DuplicateCheckResponse response = partyService.checkPartyDuplicates(legalName);
@@ -321,27 +316,10 @@ public class CrmAccountsController {
                         CrmPermissionRegistry.BILLING_RULES_EDIT })
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.BILLING_RULES_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_BILLING_RULES_UPSERT", apiVersion = "1")
-        public ResponseEntity<Object> upsertBillingRules(
+        public ResponseEntity<BillingRuleRef> upsertBillingRules(
                         @Parameter(description = "Party ID", required = true, example = "f47ac10b-58cc-4372-a567-0e02b2c3d479") @PathVariable UUID partyId,
-                        @RequestBody @jakarta.validation.Valid UpsertBillingRulesRequest request,
-                        HttpServletRequest httpRequest,
-                        HttpServletResponse httpResponse) {
-                try {
-                        BillingRuleRef result = partyService.upsertBillingRulesForParty(partyId, request);
-                        return ResponseEntity.ok(result);
-                } catch (IllegalArgumentException ex) {
-                        String correlationId = httpRequest.getHeader(X_CORRELATION_ID);
-                        if (correlationId == null || correlationId.isBlank()) {
-                                correlationId = UUIDv7Generator.generate().toString();
-                        }
-                        httpResponse.setHeader(X_CORRELATION_ID, correlationId);
-                        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                        .body(ApiError.of(
-                                                        "PARTY_NOT_FOUND",
-                                                        ex.getMessage(),
-                                                        HttpStatus.NOT_FOUND.value(),
-                                                        Instant.now().toString(),
-                                                        correlationId));
-                }
+                        @RequestBody @jakarta.validation.Valid UpsertBillingRulesRequest request) {
+                BillingRuleRef result = partyService.upsertBillingRulesForParty(partyId, request);
+                return ResponseEntity.ok(result);
         }
 }

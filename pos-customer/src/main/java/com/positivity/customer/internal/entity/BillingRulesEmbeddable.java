@@ -15,16 +15,20 @@ import org.jspecify.annotations.Nullable;
 public class BillingRulesEmbeddable {
 
   @Column(name = "br_po_required")
-  private boolean poRequired;
+  @Nullable
+  private Boolean poRequired;
 
   @Column(name = "br_tax_exempt")
-  private boolean taxExempt;
+  @Nullable
+  private Boolean taxExempt;
 
   @Column(name = "br_credit_hold")
-  private boolean creditHold;
+  @Nullable
+  private Boolean creditHold;
 
   @Column(name = "br_auto_pay_enabled")
-  private boolean autoPayEnabled;
+  @Nullable
+  private Boolean autoPayEnabled;
 
   @Column(name = "br_payment_terms", length = 100)
   @Nullable
@@ -38,7 +42,7 @@ public class BillingRulesEmbeddable {
   @Nullable
   private String currency;
 
-  @Column(name = "br_invoice_delivery_method")
+  @Column(name = "br_invoice_delivery_method", length = 50)
   @Enumerated(EnumType.STRING)
   @Nullable
   private InvoiceDeliveryMethod invoiceDeliveryMethod;

@@ -47,6 +47,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
@@ -249,7 +250,7 @@ public class PartyServiceImpl implements PartyService {
         UUID losingPartyId;
         try {
             losingPartyId = UUID.fromString(request.getLosingPartyId());
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
         }
         CommercialParty loser = findPartyOrThrow(losingPartyId);
@@ -418,7 +419,7 @@ public class PartyServiceImpl implements PartyService {
     private <E extends Enum<E>> E parseEnumFilter(String rawValue, Class<E> enumType) {
         try {
             return Enum.valueOf(enumType, rawValue.trim().toUpperCase(Locale.US));
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             log.debug("Ignoring invalid {} filter value '{}'", enumType.getSimpleName(), rawValue);
             return null;
         }
@@ -493,7 +494,7 @@ public class PartyServiceImpl implements PartyService {
 
     @Override
     @Transactional(readOnly = true)
-    public BillingRuleRef getBillingRulesForParty(@NonNull UUID partyId) {
+    public @Nullable BillingRuleRef getBillingRulesForParty(@NonNull UUID partyId) {
         log.debug("Fetching billing rules for party: {}", partyId);
         CommercialParty party = findPartyByIdInternal(partyId);
         if (party == null) {
@@ -517,6 +518,9 @@ public class PartyServiceImpl implements PartyService {
                     .exactMatchPartyId(null)
                     .potentialDuplicates(Collections.emptyList())
                     .build();
+        }
+        if (requestedLegalName.length() < 2) {
+            throw new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters");
         }
 
         List<CommercialParty> matches = partyRepository.findByLegalNameContaining(requestedLegalName);
@@ -552,7 +556,7 @@ public class PartyServiceImpl implements PartyService {
         log.info("Upserting billing rules for partyId={}", partyId);
         CommercialParty party = findPartyByIdInternal(partyId);
         if (party == null) {
-            throw new IllegalArgumentException("Party not found: " + partyId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);
         }
 
         BillingRulesEmbeddable embedded = new BillingRulesEmbeddable();
@@ -572,17 +576,37 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {
-        BillingRuleRef ref = new BillingRuleRef();
-        ref.setPoRequired(embedded.isPoRequired());
-        ref.setTaxExempt(embedded.isTaxExempt());
-        ref.setCreditHold(embedded.isCreditHold());
-        ref.setAutoPayEnabled(embedded.isAutoPayEnabled());
-        ref.setPaymentTerms(embedded.getPaymentTerms());
-        ref.setCreditLimit(embedded.getCreditLimit());
-        ref.setCurrency(embedded.getCurrency());
-        ref.setInvoiceDeliveryMethod(embedded.getInvoiceDeliveryMethod());
-        ref.setBillingAddressId(embedded.getBillingAddressId());
-        ref.setDiscountPolicyRef(embedded.getDiscountPolicyRef());
+        BillingRuleRef ref = BillingRuleRef.defaults();
+        if (embedded.getPoRequired() != null) {
+            ref.setPoRequired(embedded.getPoRequired());
+        }
+        if (embedded.getTaxExempt() != null) {
+            ref.setTaxExempt(embedded.getTaxExempt());
+        }
+        if (embedded.getCreditHold() != null) {
+            ref.setCreditHold(embedded.getCreditHold());
+        }
+        if (embedded.getAutoPayEnabled() != null) {
+            ref.setAutoPayEnabled(embedded.getAutoPayEnabled());
+        }
+        if (embedded.getPaymentTerms() != null) {
+            ref.setPaymentTerms(embedded.getPaymentTerms());
+        }
+        if (embedded.getCreditLimit() != null) {
+            ref.setCreditLimit(embedded.getCreditLimit());
+        }
+        if (embedded.getCurrency() != null) {
+            ref.setCurrency(embedded.getCurrency());
+        }
+        if (embedded.getInvoiceDeliveryMethod() != null) {
+            ref.setInvoiceDeliveryMethod(embedded.getInvoiceDeliveryMethod());
+        }
+        if (embedded.getBillingAddressId() != null) {
+            ref.setBillingAddressId(embedded.getBillingAddressId());
+        }
+        if (embedded.getDiscountPolicyRef() != null) {
+            ref.setDiscountPolicyRef(embedded.getDiscountPolicyRef());
+        }
         return ref;
     }
 
