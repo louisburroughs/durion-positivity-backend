@@ -33,8 +33,11 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,7 +64,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
     @Override
     @Transactional
-    @SuppressWarnings({"java:S1181", "java:S2221"}) // Catching Exception is intentional for gateway-level
+    @SuppressWarnings({ "java:S1181", "java:S2221" }) // Catching Exception is intentional for gateway-level
     // failures
     public @NonNull APPaymentResponse executePayment(
             @NonNull ExecuteAPPaymentRequest request, @NonNull String currentUser) {
@@ -139,8 +142,8 @@ public class APPaymentServiceImpl implements APPaymentService {
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
             payment = paymentRepository.save(payment);
 
-            List<APPaymentAllocation> savedAllocations =
-                    allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+            List<APPaymentAllocation> savedAllocations = allocationRepository
+                    .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
             APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
                     .eventId(UUIDv7Generator.generate())
@@ -376,15 +379,24 @@ public class APPaymentServiceImpl implements APPaymentService {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull List<VendorBillSummaryResponse> listEligibleBills(@NonNull UUID vendorId) {
-        List<VendorBill> bills = billRepository.findByVendorIdAndStatus(vendorId, VendorBillStatus.APPROVED);
+    public @NonNull Page<VendorBillSummaryResponse> listEligibleBills(@Nullable UUID vendorId,
+            @NonNull Pageable pageable) {
+        Page<VendorBill> billsPage = vendorId == null
+                ? billRepository.findByStatusAndOpenAmountGreaterThan(
+                        VendorBillStatus.APPROVED,
+                        BigDecimal.ZERO,
+                        pageable)
+                : billRepository.findByVendorIdAndStatusAndOpenAmountGreaterThan(
+                        vendorId,
+                        VendorBillStatus.APPROVED,
+                        BigDecimal.ZERO,
+                        pageable);
 
-        // Sort by due date (oldest first, nulls last), then bill date, then bill ID
-        bills.sort(Comparator.comparing(VendorBill::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(VendorBill::getBillDate, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(VendorBill::getVendorBillId));
+        if (billsPage == null) {
+            billsPage = Page.empty(pageable);
+        }
 
-        return bills.stream().map(this::toBillSummary).toList();
+        return billsPage.map(this::toBillSummary);
     }
 
     @Override
@@ -420,8 +432,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     private @NonNull APPaymentResponse toResponse(@NonNull APPayment payment) {
-        List<APPaymentAllocation> allocations =
-                allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+        List<APPaymentAllocation> allocations = allocationRepository
+                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
         return APPaymentResponse.builder()
                 .paymentId(payment.getPaymentId())

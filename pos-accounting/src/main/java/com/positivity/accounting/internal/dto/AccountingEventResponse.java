@@ -44,6 +44,10 @@ public class AccountingEventResponse {
     private String finalPostingReferenceId;
     private String resolvedByUserId;
     private String mappingVersionAttempted;
+    private String idempotencyOutcome;
+    private UUID ingestionId;
+    private String domainKeyId;
+    private UUID invoiceId;
 
     /**
      * Convenience setter that parses a status string into the enum.
@@ -53,7 +57,7 @@ public class AccountingEventResponse {
         if (status != null) {
             try {
                 this.status = AccountingEventStatus.valueOf(status);
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 this.status = null;
             }
         }
