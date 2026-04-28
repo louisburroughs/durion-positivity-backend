@@ -300,24 +300,28 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setReprocessingNotes("Attempt to reprocess");
 
-                // When/Then - expect 409 Conflict
+                // When/Then - expect 409 Conflict with structured ApiError body
                 mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
-                                .andExpect(status().isConflict());
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.errorCode").value("CONFLICT"))
+                                .andExpect(jsonPath("$.message").exists());
         }
 
         @Test
-        @DisplayName("Get reprocessing history for event without history - returns 404")
+        @DisplayName("Get reprocessing history for event without history - returns 200 with empty list")
         void testGetReprocessingHistory_NotFound() throws Exception {
                 // Given - create an event without reprocessing history
                 UUID eventId = submitTestEvent("Event without history");
 
-                // When/Then - expect empty list or 404
+                // When/Then - expect 200 OK with empty JSON array (F-003: changed from 404)
                 mockMvc.perform(withAuth(get(API_V1_EVENTS + "/{eventId}/reprocessing-history", eventId)))
                                 .andDo(print())
-                                .andExpect(status().isNotFound());
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$").isEmpty());
         }
 
         @Test

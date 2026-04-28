@@ -462,6 +462,49 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         @Test
+        @DisplayName("CP-AP-007: List bills with null dueDate bill appears last (NULLS LAST ordering)")
+        void testListBills_NullDueDate_AppearsLast() throws Exception {
+                // Arrange: use a distinct vendor so existing bill1/bill2 don't interfere
+                UUID nullDueVendorId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+                // billNullDue has no dueDate — should sort after billWithDue
+                VendorBill billNullDue = new VendorBill();
+                billNullDue.setVendorId(nullDueVendorId);
+                billNullDue.setBillNumber("BILL-NULL-DUE");
+                billNullDue.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
+                // dueDate intentionally left null
+                billNullDue.setTotalAmount(new BigDecimal("100.00"));
+                billNullDue.setStatus(VendorBillStatus.APPROVED);
+                billNullDue.setCreatedBy("test-setup");
+                billNullDue.setModifiedBy("test-setup");
+                billNullDue = vendorBillRepository.save(billNullDue);
+
+                // billWithDue has a concrete dueDate — should sort before billNullDue
+                VendorBill billWithDue = new VendorBill();
+                billWithDue.setVendorId(nullDueVendorId);
+                billWithDue.setBillNumber("BILL-WITH-DUE");
+                billWithDue.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(5).atStartOfDay());
+                billWithDue.setDueDate(LocalDate.now(TEST_CLOCK).plusDays(10).atStartOfDay());
+                billWithDue.setTotalAmount(new BigDecimal("200.00"));
+                billWithDue.setStatus(VendorBillStatus.APPROVED);
+                billWithDue.setCreatedBy("test-setup");
+                billWithDue.setModifiedBy("test-setup");
+                billWithDue = vendorBillRepository.save(billWithDue);
+
+                // Act: GET /v1/accounting/ap/bills?vendorId={nullDueVendorId}
+                mockMvc.perform(withAuth(get(API_V1_AP_BILLS))
+                                .param("vendorId", nullDueVendorId.toString()))
+                                .andDo(print())
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content.length()").value(2))
+                                // non-null dueDate bill must appear first (NULLS LAST)
+                                .andExpect(jsonPath("$.content[0].billNumber").value("BILL-WITH-DUE"))
+                                // null dueDate bill must appear last
+                                .andExpect(jsonPath("$.content[1].billNumber").value("BILL-NULL-DUE"));
+        }
+
+        @Test
         @DisplayName("ERR-AP-005: List bills for non-existent vendor returns empty list")
         void testListEligibleBills_EmptyList() throws Exception {
                 // Arrange: Vendor with no bills
