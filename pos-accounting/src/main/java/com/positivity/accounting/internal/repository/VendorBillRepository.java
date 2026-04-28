@@ -54,7 +54,10 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                                                 0
                                                 )
                                 ) > :openAmountThreshold
-                        ORDER BY vb.dueDate ASC, vb.billDate ASC, vb.vendorBillId ASC
+                        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
+                                 vb.dueDate ASC,
+                                 vb.billDate ASC,
+                                 vb.vendorBillId ASC
                         """, countQuery = """
                         SELECT COUNT(vb)
                         FROM VendorBill vb
@@ -100,7 +103,10 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                                                 0
                                                 )
                                 ) > :openAmountThreshold
-                        ORDER BY vb.dueDate ASC, vb.billDate ASC, vb.vendorBillId ASC
+                        ORDER BY CASE WHEN vb.dueDate IS NULL THEN 1 ELSE 0 END ASC,
+                                 vb.dueDate ASC,
+                                 vb.billDate ASC,
+                                 vb.vendorBillId ASC
                         """, countQuery = """
                         SELECT COUNT(vb)
                         FROM VendorBill vb

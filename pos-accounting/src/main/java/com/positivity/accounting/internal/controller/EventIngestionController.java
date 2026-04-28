@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -75,8 +76,17 @@ public class EventIngestionController {
                         @Parameter(description = "Filter by ingestion job UUID") @RequestParam(required = false) UUID ingestionId,
                         @Parameter(description = "Filter by domain key") @RequestParam(required = false) String domainKeyId,
                         @Parameter(description = "Filter by invoice UUID") @RequestParam(required = false) UUID invoiceId,
-                        @Parameter(description = "Filter by processing status") @RequestParam(required = false) AccountingEventStatus status,
+                        @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status,
                         @PageableDefault(size = 20, sort = "receivedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+
+                AccountingEventStatus parsedStatus = null;
+                if (status != null) {
+                        try {
+                                parsedStatus = AccountingEventStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+                        } catch (IllegalArgumentException _) {
+                                parsedStatus = null;
+                        }
+                }
 
                 AccountingEventFilter filter = AccountingEventFilter.builder()
                                 .organizationId(organizationId)
@@ -88,7 +98,7 @@ public class EventIngestionController {
                                 .ingestionId(ingestionId)
                                 .domainKeyId(domainKeyId)
                                 .invoiceId(invoiceId)
-                                .status(status)
+                                .status(parsedStatus)
                                 .build();
 
                 Page<AccountingEventResponse> page = eventIngestionService.listEvents(filter, pageable);
@@ -153,15 +163,10 @@ public class EventIngestionController {
         public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
                         @Valid @RequestBody ReprocessEventRequest request) {
-                try {
-                        AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
-                        HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK
-                                        : HttpStatus.ACCEPTED;
-                        return ResponseEntity.status(status).body(response);
-                } catch (IllegalStateException _) {
-                        // BR-3: Idempotency violation or invalid state - treat as conflict
-                        return ResponseEntity.status(HttpStatus.CONFLICT).build();
-                }
+                AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
+                HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus()) ? HttpStatus.OK
+                                : HttpStatus.ACCEPTED;
+                return ResponseEntity.status(status).body(response);
         }
 
         @GetMapping("/{eventId}/reprocessing-history")
@@ -175,20 +180,15 @@ public class EventIngestionController {
                 log.debug("Getting reprocessing history for event: {}", eventId);
                 List<ReprocessingAttemptHistoryResponse> history = eventIngestionService
                                 .getReprocessingHistory(eventId);
-                if (history == null || history.isEmpty()) {
-                        log.debug("No reprocessing history found for event: {}", eventId);
-                        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-                }
-                return ResponseEntity.ok(history);
+                return ResponseEntity.ok(history != null ? history : List.of());
         }
 
         @GetMapping("/{eventId}/processing-log")
         @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:events:view" })
         @PreAuthorize("hasAuthority('accounting:events:view')")
-        @Operation(summary = "Get event processing log", operationId = "getEventProcessingLog", description = "Retrieve the structured processing audit log for an accounting event.", tags = {
+        @Operation(summary = "Get event processing log", operationId = "getEventProcessingLog", description = "Retrieve the structured processing audit log for an accounting event. Returns an empty list if the event has no processing log.", tags = {
                         "Accounting Events" })
         @ApiResponse(responseCode = "200", description = "Processing log returned")
-        @ApiResponse(responseCode = "404", description = "Event not found")
         public ResponseEntity<List<EventProcessingLogEntry>> getEventProcessingLog(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
                 List<EventProcessingLogEntry> processingLog = eventIngestionService.getEventProcessingLog(eventId);

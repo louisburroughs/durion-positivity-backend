@@ -22,7 +22,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -131,7 +130,7 @@ public class APPaymentController {
         }
 
         @GetMapping("/bills")
-        @Operation(summary = "List eligible vendor bills", operationId = "listApBills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.", tags = {
+        @Operation(summary = "List eligible vendor bills", operationId = "listApBills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID. Sort order is server-controlled.", tags = {
                         "AP Payments" })
         @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
         @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
@@ -139,7 +138,7 @@ public class APPaymentController {
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<Page<VendorBillSummaryResponse>> listBills(
                         @RequestParam(required = false) @Parameter(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = false) @Nullable UUID vendorId,
-                        @PageableDefault(size = 20, sort = "billDate", direction = Sort.Direction.DESC) Pageable pageable) {
+                        @PageableDefault(size = 20) Pageable pageable) {
 
                 Page<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId, pageable);
                 return ResponseEntity.ok(bills);

@@ -6,3 +6,9 @@ ALTER TABLE accounting_event
 
 CREATE INDEX IF NOT EXISTS idx_accounting_event_ingestion_id
     ON accounting_event (ingestion_id);
+
+CREATE INDEX IF NOT EXISTS idx_accounting_event_domain_key_id
+    ON accounting_event (domain_key_id);
+
+CREATE INDEX IF NOT EXISTS idx_accounting_event_invoice_id
+    ON accounting_event (invoice_id);

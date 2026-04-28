@@ -2,7 +2,10 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.ExportJobRequest;
 import com.positivity.accounting.internal.dto.ExportJobResponse;
+import com.positivity.accounting.internal.exception.ExportJobNotFoundException;
+import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.service.TimekeepingExportService;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -15,9 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +29,7 @@ public class TimekeepingExportServiceImpl implements TimekeepingExportService {
 
   @Override
   public @NonNull ExportJobResponse requestExport(@NonNull ExportJobRequest request) {
-    UUID jobId = UUID.randomUUID();
+    UUID jobId = UUIDv7Generator.generate();
     ExportJobResponse job = ExportJobResponse.builder()
         .jobId(jobId)
         .status("PENDING")
@@ -42,7 +43,7 @@ public class TimekeepingExportServiceImpl implements TimekeepingExportService {
   public @NonNull ExportJobResponse getExportStatus(@NonNull UUID jobId) {
     ExportJobResponse job = jobStore.get(jobId);
     if (job == null) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Export job not found: " + jobId);
+      throw new ExportJobNotFoundException("Export job not found: " + jobId);
     }
     return job;
   }
@@ -54,8 +55,7 @@ public class TimekeepingExportServiceImpl implements TimekeepingExportService {
     if (sort.isSorted()) {
       Sort.Order order = sort.iterator().next();
       if (!"requestedAt".equals(order.getProperty())) {
-        throw new ResponseStatusException(
-            HttpStatus.BAD_REQUEST,
+        throw new UnsupportedSortPropertyException(
             "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
       }
       comparator = order.isAscending()
