@@ -121,6 +121,9 @@ public class AccountingExceptionHandler {
         if (message != null && message.startsWith("Cannot post REVERSED")) {
             return "ENTRY_ALREADY_POSTED";
         }
+        if (message != null && message.contains("already PROCESSED")) {
+            return "CONFLICT";
+        }
         return "ILLEGAL_STATE";
     }
 }
