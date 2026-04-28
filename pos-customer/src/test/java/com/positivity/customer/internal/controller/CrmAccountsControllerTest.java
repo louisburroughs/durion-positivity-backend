@@ -100,6 +100,18 @@ class CrmAccountsControllerTest {
   }
 
   @Test
+  @DisplayName("checkPartyDuplicates returns 400 when legalName trims to fewer than 2 characters")
+  void checkPartyDuplicates_returns400_whenLegalNameTrimsToBelowMinLength() throws Exception {
+    when(partyService.checkPartyDuplicates(eq(" A ")))
+        .thenThrow(new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters"));
+
+    mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
+            .param("legalName", " A ")
+            .header("X-Authorities", "crm:party:search"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   @DisplayName("B-21: GET duplicate-check without crm:party:search authority → 403")
   void checkPartyDuplicates_returns403_whenUnauthorized() throws Exception {
     mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
@@ -137,7 +149,7 @@ class CrmAccountsControllerTest {
   }
 
   @Test
-  @DisplayName("B-22: PUT billing-rules when party not found → 404 (IllegalArgumentException handled by CrmExceptionHandler)")
+  @DisplayName("upsertBillingRules returns 404 via ResponseStatusException when party not found")
   void upsertBillingRules_returns404_whenPartyNotFound() throws Exception {
     UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
         .taxExempt(false)
@@ -188,5 +200,25 @@ class CrmAccountsControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("upsertBillingRules returns 400 when service throws IllegalArgumentException for invalid input")
+  void upsertBillingRules_returns400_whenServiceThrowsIllegalArgumentException() throws Exception {
+    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+        .taxExempt(false)
+        .poRequired(false)
+        .creditHold(false)
+        .autoPayEnabled(false)
+        .build();
+
+    when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
+        .thenThrow(new IllegalArgumentException("Invalid billing rule: currency code required"));
+
+    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+            .header("X-Authorities", "crm:billing_rules:edit"))
+        .andExpect(status().isBadRequest());
   }
 }
