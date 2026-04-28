@@ -44,14 +44,17 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
     Specification<InventoryLedgerEntry> specification = buildSpecification(params);
     List<InventoryLedgerEntry> entries = inventoryLedgerEntryRepository.findAll(
         specification,
-        PageRequest.of(0, pageSize, Sort.by(Sort.Direction.ASC, "ledgerEntryId")))
+        PageRequest.of(0, pageSize + 1, Sort.by(Sort.Direction.ASC, "ledgerEntryId")))
         .getContent();
 
-    List<InventoryLedgerEntryDto> dtoEntries = entries.stream().map(this::toDto).toList();
+    boolean hasNextPage = entries.size() > pageSize;
+    List<InventoryLedgerEntry> pageEntries = hasNextPage ? entries.subList(0, pageSize) : entries;
+
+    List<InventoryLedgerEntryDto> dtoEntries = pageEntries.stream().map(this::toDto).toList();
 
     String nextPageToken = null;
-    if (entries.size() == pageSize) {
-      UUID lastLedgerEntryId = entries.get(entries.size() - 1).getLedgerEntryId();
+    if (hasNextPage) {
+      UUID lastLedgerEntryId = pageEntries.get(pageEntries.size() - 1).getLedgerEntryId();
       nextPageToken = encodePageToken(lastLedgerEntryId);
     }
 
