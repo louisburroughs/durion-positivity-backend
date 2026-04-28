@@ -27,6 +27,8 @@ Inventory management service for the Durion POS platform. Manages stock levels, 
 
 - `GET /v1/inventory/{locationId}/inventory-inquiry` — location-level stock inquiry
 - `GET /v1/inventory/{productId}` — product stock summary
+- `GET /v1/inventory/ledger` — paged inventory ledger query with filter params
+- `GET /v1/inventory/ledger/{entryId}` — fetch a single inventory ledger entry
 - `GET /v1/inventory/asns/{asnId}` — retrieve an ASN
 - `GET /v1/inventory/goods-receipts/{receiptId}` — retrieve a goods receipt
 - `GET /v1/inventory/{poId}` — retrieve a purchase order
@@ -35,6 +37,14 @@ Inventory management service for the Durion POS platform. Manages stock levels, 
 - `GET /v1/inventory/{planId}` — retrieve a cycle count plan
 - `GET /v1/inventory/lead-time` — supplier lead time data
 - `GET /v1/inventory/policies` — replenishment policies
+- `GET /v1/inventory/returns/returnable-items` — returnable item lookup for a workorder
+- `GET /v1/inventory/returns/reason-codes` — return reason code catalog
+- `POST /v1/inventory/returns/submit-to-stock` — submit return lines to stock (async accepted)
+- `GET /v1/inventory/shortage/options` — list shortage resolution options
+- `POST /v1/inventory/shortage/resolve` — resolve shortage with selected strategy
+- `GET /v1/inventory/locations` — paged location reference data
+- `GET /v1/inventory/storage-locations` — paged storage-location reference data
+- `GET /v1/inventory/location-zones` — paged location-zone reference data
 - `POST /v1/inventory/bulk-ingest` — bulk import inventory records
 
 ## Configuration

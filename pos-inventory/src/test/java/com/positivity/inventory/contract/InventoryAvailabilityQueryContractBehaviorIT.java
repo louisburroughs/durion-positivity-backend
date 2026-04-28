@@ -20,7 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Contract behavior tests for GET /v1/inventory/availability/query.
+ * Contract behavior tests for GET /v1/inventory/availability/by-sku.
  *
  * <p>
  * Verifies ATP query by productSku + locationId (+ optional storageLocationId)
@@ -61,9 +61,9 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         seedGoodsReceipt("SKU-TEST-1", LOC_ALPHA, 100);
         seedAllocationCreated("SKU-TEST-1", LOC_ALPHA, 20);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
-                        .param("productSku", "SKU-TEST-1")
-                        .param("locationId", LOC_ALPHA.toString())))
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
+                .param("productSku", "SKU-TEST-1")
+                .param("locationId", LOC_ALPHA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-TEST-1"))
@@ -83,9 +83,9 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         // "known" in the system; the queried location has no stock.
         seedGoodsReceipt("SKU-ZERO", LOC_OTHER, 50);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
-                        .param("productSku", "SKU-ZERO")
-                        .param("locationId", LOC_ZERO.toString())))
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
+                .param("productSku", "SKU-ZERO")
+                .param("locationId", LOC_ZERO.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-ZERO"))
@@ -100,9 +100,9 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-3: queryAvailability_returns404_whenProductSkuNotFound")
     void queryAvailability_returns404_whenProductSkuNotFound() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
-                        .param("productSku", "NONEXISTENT-SKU")
-                        .param("locationId", LOC_ANY.toString())))
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
+                .param("productSku", "NONEXISTENT-SKU")
+                .param("locationId", LOC_ANY.toString())))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
@@ -116,9 +116,9 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         seedGoodsReceipt("SKU-BETA", LOC_BETA, 40);
         seedGoodsReceipt("SKU-BETA", LOC_BETA, 60);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
-                        .param("productSku", "SKU-BETA")
-                        .param("locationId", LOC_BETA.toString())))
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
+                .param("productSku", "SKU-BETA")
+                .param("locationId", LOC_BETA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-BETA"))
@@ -141,9 +141,9 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
 
         // allocatedQuantity = 50 (ALLOCATION_CREATED) - 10 (ALLOCATION_RELEASED) = 40
         // ATP = 200 (onHand) - 40 (allocated) = 160
-        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
-                        .param("productSku", "SKU-ATP")
-                        .param("locationId", LOC_GAMMA.toString())))
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
+                .param("productSku", "SKU-ATP")
+                .param("locationId", LOC_GAMMA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.onHandQuantity").value(200))

@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,109 +24,123 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReplenishmentServiceImpl implements ReplenishmentService {
 
-    private final ReplenishmentTaskRepository replenishmentTaskRepository;
-    private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
+        private final ReplenishmentTaskRepository replenishmentTaskRepository;
+        private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
 
-    @Override
-    @Transactional(readOnly = true)
-    public @NonNull List<ReplenishmentTaskResponse> getReplenishmentTasks() {
-        return replenishmentTaskRepository
-                .findByStatusIn(List.of(ReplenishmentStatus.PENDING, ReplenishmentStatus.IN_PROGRESS))
-                .stream()
-                .map(this::toTaskResponse)
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public @NonNull List<ReplenishmentPolicyResponse> getReplenishmentPolicies() {
-        return replenishmentPolicyRepository.findAll().stream()
-                .map(this::toPolicyResponse)
-                .toList();
-    }
-
-    @Override
-    @Transactional
-    public @NonNull ReplenishmentPolicyResponse createReplenishmentPolicy(
-            @NonNull CreateReplenishmentPolicyRequest request) {
-        ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
-                .locationId(request.getLocationId())
-                .itemSKU(request.getItemSKU())
-                .minimumQuantity(request.getMinimumQuantity())
-                .maximumQuantity(request.getMaximumQuantity())
-                .build();
-
-        ReplenishmentPolicy saved = replenishmentPolicyRepository.save(policy);
-        return toPolicyResponse(saved);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public @NonNull ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
-            @NonNull String productId, @NonNull UUID pickFaceLocationId) {
-        boolean policyExists = replenishmentPolicyRepository.findByLocationId(pickFaceLocationId).stream()
-                .findFirst()
-                .isPresent();
-
-        if (policyExists) {
-            boolean taskAlreadyOpen = replenishmentTaskRepository.existsByItemSKUAndDestinationLocationIdAndStatusIn(
-                    productId,
-                    pickFaceLocationId,
-                    List.of(ReplenishmentStatus.PENDING, ReplenishmentStatus.IN_PROGRESS));
-            if (taskAlreadyOpen) {
-                return ReplenishmentTaskResponse.builder()
-                        .taskId(null)
-                        .status("TASK_ALREADY_QUEUED")
-                        .build();
-            }
+        @Override
+        @Transactional(readOnly = true)
+        public @NonNull List<ReplenishmentTaskResponse> getReplenishmentTasks() {
+                return replenishmentTaskRepository
+                                .findByStatusIn(List.of(ReplenishmentStatus.PENDING, ReplenishmentStatus.IN_PROGRESS))
+                                .stream()
+                                .map(this::toTaskResponse)
+                                .toList();
         }
 
-        return ReplenishmentTaskResponse.builder()
-                .taskId(null)
-                .status("NO_ACTION")
-                .build();
-    }
+        @Override
+        @Transactional(readOnly = true)
+        public @NonNull Page<ReplenishmentPolicyResponse> getReplenishmentPolicies(
+                        @Nullable UUID locationId,
+                        @NonNull Pageable pageable) {
+                List<ReplenishmentPolicy> policies = locationId == null
+                                ? replenishmentPolicyRepository.findAll()
+                                : replenishmentPolicyRepository.findByLocationId(locationId);
 
-    @Override
-    @Transactional(readOnly = true)
-    public @NonNull List<ReplenishmentTaskResponse> runBatchReplenishmentScan() {
-        // TODO(CAP-217): batch replenishment scan deferred to follow-on story
-        // Full implementation will query pick faces below minimumQuantity threshold
-        // and generate replenishment tasks for each violation found.
-        return List.of();
-    }
+                List<ReplenishmentPolicyResponse> mapped = policies.stream()
+                                .map(this::toPolicyResponse)
+                                .toList();
+                if (pageable.isUnpaged()) {
+                        return new PageImpl<>(mapped);
+                }
+                int fromIndex = Math.min((int) pageable.getOffset(), mapped.size());
+                int toIndex = Math.min(fromIndex + pageable.getPageSize(), mapped.size());
+                return new PageImpl<>(mapped.subList(fromIndex, toIndex), pageable, mapped.size());
+        }
 
-    private ReplenishmentTaskResponse toTaskResponse(ReplenishmentTask task) {
-        return ReplenishmentTaskResponse.builder()
-                .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
-                .itemSKU(task.getItemSKU())
-                .quantity(task.getQuantity() != null ? task.getQuantity() : 0)
-                .sourceLocationId(task.getSourceLocationId())
-                .destinationLocationId(task.getDestinationLocationId())
-                .status(task.getStatus() != null ? task.getStatus().name() : null)
-                .triggerType(
-                        task.getTriggerType() != null ? task.getTriggerType().name() : null)
-                .decisionReason(
-                        task.getDecisionReason() != null
-                                ? task.getDecisionReason().name()
-                                : null)
-                .sourcingReason(
-                        task.getSourcingReason() != null
-                                ? task.getSourcingReason().name()
-                                : null)
-                .assignedTo(task.getAssignedTo())
-                .createdAt(task.getCreatedAt() != null ? task.getCreatedAt().toString() : null)
-                .build();
-    }
+        @Override
+        @Transactional
+        public @NonNull ReplenishmentPolicyResponse createReplenishmentPolicy(
+                        @NonNull CreateReplenishmentPolicyRequest request) {
+                ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                                .locationId(request.getLocationId())
+                                .itemSKU(request.getItemSKU())
+                                .minimumQuantity(request.getMinimumQuantity())
+                                .maximumQuantity(request.getMaximumQuantity())
+                                .build();
 
-    private ReplenishmentPolicyResponse toPolicyResponse(ReplenishmentPolicy policy) {
-        return ReplenishmentPolicyResponse.builder()
-                .policyId(policy.getPolicyId() != null ? policy.getPolicyId().toString() : null)
-                .locationId(policy.getLocationId())
-                .itemSKU(policy.getItemSKU())
-                .minimumQuantity(policy.getMinimumQuantity() != null ? policy.getMinimumQuantity() : 0)
-                .maximumQuantity(policy.getMaximumQuantity() != null ? policy.getMaximumQuantity() : 0)
-                .createdAt(policy.getCreatedAt() != null ? policy.getCreatedAt().toString() : null)
-                .build();
-    }
+                ReplenishmentPolicy saved = replenishmentPolicyRepository.save(policy);
+                return toPolicyResponse(saved);
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public @NonNull ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
+                        @NonNull String productId, @NonNull UUID pickFaceLocationId) {
+                boolean policyExists = replenishmentPolicyRepository.findByLocationId(pickFaceLocationId).stream()
+                                .findFirst()
+                                .isPresent();
+
+                if (policyExists) {
+                        boolean taskAlreadyOpen = replenishmentTaskRepository
+                                        .existsByItemSKUAndDestinationLocationIdAndStatusIn(
+                                                        productId,
+                                                        pickFaceLocationId,
+                                                        List.of(ReplenishmentStatus.PENDING,
+                                                                        ReplenishmentStatus.IN_PROGRESS));
+                        if (taskAlreadyOpen) {
+                                return ReplenishmentTaskResponse.builder()
+                                                .taskId(null)
+                                                .status("TASK_ALREADY_QUEUED")
+                                                .build();
+                        }
+                }
+
+                return ReplenishmentTaskResponse.builder()
+                                .taskId(null)
+                                .status("NO_ACTION")
+                                .build();
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public @NonNull List<ReplenishmentTaskResponse> runBatchReplenishmentScan() {
+                // TODO(CAP-217): batch replenishment scan deferred to follow-on story
+                // Full implementation will query pick faces below minimumQuantity threshold
+                // and generate replenishment tasks for each violation found.
+                return List.of();
+        }
+
+        private ReplenishmentTaskResponse toTaskResponse(ReplenishmentTask task) {
+                return ReplenishmentTaskResponse.builder()
+                                .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
+                                .itemSKU(task.getItemSKU())
+                                .quantity(task.getQuantity() != null ? task.getQuantity() : 0)
+                                .sourceLocationId(task.getSourceLocationId())
+                                .destinationLocationId(task.getDestinationLocationId())
+                                .status(task.getStatus() != null ? task.getStatus().name() : null)
+                                .triggerType(
+                                                task.getTriggerType() != null ? task.getTriggerType().name() : null)
+                                .decisionReason(
+                                                task.getDecisionReason() != null
+                                                                ? task.getDecisionReason().name()
+                                                                : null)
+                                .sourcingReason(
+                                                task.getSourcingReason() != null
+                                                                ? task.getSourcingReason().name()
+                                                                : null)
+                                .assignedTo(task.getAssignedTo())
+                                .createdAt(task.getCreatedAt() != null ? task.getCreatedAt().toString() : null)
+                                .build();
+        }
+
+        private ReplenishmentPolicyResponse toPolicyResponse(ReplenishmentPolicy policy) {
+                return ReplenishmentPolicyResponse.builder()
+                                .policyId(policy.getPolicyId() != null ? policy.getPolicyId().toString() : null)
+                                .locationId(policy.getLocationId())
+                                .itemSKU(policy.getItemSKU())
+                                .minimumQuantity(policy.getMinimumQuantity() != null ? policy.getMinimumQuantity() : 0)
+                                .maximumQuantity(policy.getMaximumQuantity() != null ? policy.getMaximumQuantity() : 0)
+                                .createdAt(policy.getCreatedAt() != null ? policy.getCreatedAt().toString() : null)
+                                .build();
+        }
 }

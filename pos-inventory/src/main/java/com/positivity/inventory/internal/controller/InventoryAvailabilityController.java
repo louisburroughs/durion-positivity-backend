@@ -5,6 +5,8 @@ import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.enums.InventorySourceType;
+import com.positivity.inventory.internal.exception.InvalidParamCombinationException;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import com.positivity.inventory.service.InventoryLeadTimeService;
 import com.positivity.shared.error.ApiError;
@@ -19,7 +21,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -44,7 +45,7 @@ public class InventoryAvailabilityController {
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:on_hand:view" })
         @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-        @Operation(summary = "Query inventory availability", description = "Returns per-location availability for a product.", tags = {
+        @Operation(operationId = "getInventoryAvailability", summary = "Query inventory availability", description = "Returns per-location availability for a product.", tags = {
                         "Inventory Availability" })
         @ApiResponse(responseCode = "200", description = "Availability returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = LocationAvailabilityDto.class))))
         @ApiResponse(responseCode = "400", description = "Invalid product identifier")
@@ -55,16 +56,16 @@ public class InventoryAvailabilityController {
                 return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId));
         }
 
-        @GetMapping("/query")
-        @EmitEvent(id = "INVENTORY_AVAILABILITY_QUERY", apiVersion = "1")
+        @GetMapping("/by-sku")
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:on_hand:view", "inventory:on_hand:search" })
         @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
-        @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.", tags = {
+        @Operation(operationId = "listAvailabilityBySku", summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.", tags = {
                         "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+                        @ApiResponse(responseCode = "400", description = "locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "404", description = "Product SKU or location not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -72,32 +73,52 @@ public class InventoryAvailabilityController {
         // Issue: CAP-215 Story #36
         public ResponseEntity<AvailabilityView> queryAvailabilityBySku(
                         @Parameter(description = "Product SKU", required = true) @RequestParam String productSku,
-                        @Parameter(description = "Location identifier", required = true) @RequestParam UUID locationId,
-                        @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) UUID storageLocationId) {
-                log.info("GET /v1/inventory/availability/query productSku={} locationId={}", productSku, locationId);
+                        @Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
+                        @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) UUID storageLocationId,
+                        @Parameter(description = "Inventory lookup strategy. WAREHOUSE = from physical location stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply. When sourceType is WAREHOUSE, locationId narrows to a specific location.") @RequestParam(required = false) InventorySourceType sourceType) {
+                validateLocationAndSourceType(locationId, sourceType);
+                log.info("GET /v1/inventory/availability/by-sku productSku={} locationId={} sourceType={}", productSku,
+                                locationId, sourceType);
                 return ResponseEntity
-                                .ok(availabilityService.queryAvailability(productSku, locationId, storageLocationId));
+                                .ok(availabilityService.queryAvailability(productSku, locationId, storageLocationId,
+                                                sourceType));
         }
 
         @GetMapping("/lead-time")
-        @EmitEvent(id = "INVENTORY_LEAD_TIME_QUERY", apiVersion = "1")
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:on_hand:view", "inventory:on_hand:search" })
         @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
-        @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.", tags = {
+        @Operation(operationId = "getLeadTime", summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.", tags = {
                         "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+                        @ApiResponse(responseCode = "400", description = "locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "404", description = "Lead-time data not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         })
         public ResponseEntity<LeadTimeView> queryLeadTime(
                         @Parameter(description = "Product identifier", required = true) @RequestParam UUID productId,
-                        @Parameter(description = "Location identifier", required = true) @RequestParam UUID locationId) {
-                log.info("GET /v1/inventory/availability/lead-time productId={} locationId={}", productId, locationId);
-                return ResponseEntity.ok(inventoryLeadTimeService.queryLeadTime(productId, locationId));
+                        @Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
+                        @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) UUID storageLocationId,
+                        @Parameter(description = "Inventory lookup strategy. WAREHOUSE = from physical location stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply. When sourceType is WAREHOUSE, locationId narrows to a specific location.") @RequestParam(required = false) InventorySourceType sourceType) {
+                validateLocationAndSourceType(locationId, sourceType);
+                log.info(
+                                "GET /v1/inventory/availability/lead-time productId={} locationId={} storageLocationId={} sourceType={}",
+                                productId,
+                                locationId,
+                                storageLocationId,
+                                sourceType);
+                return ResponseEntity
+                                .ok(inventoryLeadTimeService.queryLeadTime(productId, locationId, storageLocationId));
+        }
+
+        private void validateLocationAndSourceType(UUID locationId, InventorySourceType sourceType) {
+                if (locationId != null && sourceType != null && sourceType != InventorySourceType.WAREHOUSE) {
+                        throw new InvalidParamCombinationException(
+                                        "locationId is only valid when sourceType is WAREHOUSE");
+                }
         }
 
         /**
@@ -129,6 +150,6 @@ public class InventoryAvailabilityController {
                         @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
                         @RequestBody(required = false) Object requestBody) {
                 log.info("POST /v1/inventory/availability/{}", productId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED).build();
         }
 }

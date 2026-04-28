@@ -1,10 +1,17 @@
 package com.positivity.inventory.service;
 
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionRequest;
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionResponse;
+import com.positivity.inventory.internal.dto.ShortageOptionDto;
+import com.positivity.inventory.internal.dto.ShortageResolveRequest;
+import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 public interface ShortageResolutionService {
+
     @NonNull
-    ShortageResolutionResponse resolveShortage(@NonNull ShortageResolutionRequest request);
+    ShortageResolutionResultDto resolveShortage(@NonNull ShortageResolveRequest request);
+
+    @NonNull
+    List<ShortageOptionDto> listShortageOptions(@NonNull UUID allocationId);
 }

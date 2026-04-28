@@ -1766,9 +1766,9 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
       - bearerAuth:
-        - inventory:shortages:resolve
+        - inventory:shortage:resolve
       x-required-permissions:
-      - inventory:shortages:resolve
+      - inventory:shortage:resolve
   /v1/inventory/allocations/reallocate:
     post:
       tags:

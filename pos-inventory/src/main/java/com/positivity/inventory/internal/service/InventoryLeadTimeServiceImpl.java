@@ -10,11 +10,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Resolves dynamic lead-time estimates from normalized inventory/supply sources.
+ * Resolves dynamic lead-time estimates from normalized inventory/supply
+ * sources.
  */
 @Service
 public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
@@ -34,13 +36,15 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull LeadTimeView queryLeadTime(@NonNull UUID productId, @NonNull UUID locationId) {
+    public @NonNull LeadTimeView queryLeadTime(
+            @NonNull UUID productId,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId) {
         if (productId == null) {
             throw new InvalidInventoryAvailabilityRequestException("productId is required");
         }
-        if (locationId == null) {
-            throw new InvalidInventoryAvailabilityRequestException("locationId is required");
-        }
+
+        UUID resolvedLocationId = storageLocationId != null ? storageLocationId : locationId;
 
         LeadTimeCandidate distributorCandidate = toCandidate(
                 distributorNormalizedInventoryRepository.findLeadTimeAggregateByProductId(productId),
@@ -56,7 +60,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
 
         return LeadTimeView.builder()
                 .productId(productId)
-                .locationId(locationId)
+                .locationId(resolvedLocationId)
                 .source(selected.source())
                 .minDays(selected.minDays())
                 .maxDays(selected.maxDays())
@@ -115,5 +119,6 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     }
 
     private record LeadTimeCandidate(
-            Integer minDays, Integer maxDays, Instant asOf, String source, String confidence) {}
+            Integer minDays, Integer maxDays, Instant asOf, String source, String confidence) {
+    }
 }

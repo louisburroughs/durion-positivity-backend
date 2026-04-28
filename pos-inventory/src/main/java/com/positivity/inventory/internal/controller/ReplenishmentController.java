@@ -13,7 +13,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -35,7 +40,7 @@ public class ReplenishmentController {
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:on_hand:view" })
         @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-        @Operation(summary = "List replenishment tasks", description = "Returns replenishment tasks that should be fulfilled.", tags = {
+        @Operation(operationId = "listReplenishmentTasks", summary = "List replenishment tasks", description = "Returns replenishment tasks that should be fulfilled.", tags = {
                         "Replenishment" })
         @ApiResponse(responseCode = "200", description = "Replenishment tasks returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReplenishmentTaskResponse.class))))
         public ResponseEntity<List<ReplenishmentTaskResponse>> getReplenishmentTasks() {
@@ -46,11 +51,13 @@ public class ReplenishmentController {
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:on_hand:view" })
         @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-        @Operation(summary = "List replenishment policies", description = "Returns configured replenishment policies.", tags = {
+        @Operation(operationId = "listReplenishmentPolicies", summary = "List replenishment policies", description = "Returns configured replenishment policies.", tags = {
                         "Replenishment" })
         @ApiResponse(responseCode = "200", description = "Replenishment policies returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
-        public ResponseEntity<List<ReplenishmentPolicyResponse>> getReplenishmentPolicies() {
-                return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies());
+        public ResponseEntity<Page<ReplenishmentPolicyResponse>> getReplenishmentPolicies(
+                        @io.swagger.v3.oas.annotations.Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
+                        @PageableDefault(size = 20) Pageable pageable) {
+                return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies(locationId, pageable));
         }
 
         @PostMapping("/policies")
@@ -58,7 +65,7 @@ public class ReplenishmentController {
         @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
                         "inventory:adjustment:create" })
         @PreAuthorize("hasAuthority('inventory:adjustment:create')")
-        @Operation(summary = "Create replenishment policy", description = "Creates a replenishment policy used to generate replenishment tasks.", tags = {
+        @Operation(operationId = "createReplenishmentPolicy", summary = "Create replenishment policy", description = "Creates a replenishment policy used to generate replenishment tasks.", tags = {
                         "Replenishment" })
         @ApiResponse(responseCode = "201", description = "Replenishment policy created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure")
