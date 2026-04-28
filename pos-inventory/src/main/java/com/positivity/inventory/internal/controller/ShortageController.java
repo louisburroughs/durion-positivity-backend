@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.service.ShortageResolutionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -38,7 +39,7 @@ public class ShortageController {
         @PreAuthorize("hasAuthority('inventory:shortage:view')")
         @Operation(operationId = "listShortageOptions", summary = "List shortage options", description = "Returns available shortage resolution options for an allocation.", tags = {
                         "Shortage Resolution" })
-        @ApiResponse(responseCode = "200", description = "Shortage options returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ShortageOptionDto.class)))
+        @ApiResponse(responseCode = "200", description = "Shortage options returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ShortageOptionDto.class))))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required shortage view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(@RequestParam UUID allocationId) {

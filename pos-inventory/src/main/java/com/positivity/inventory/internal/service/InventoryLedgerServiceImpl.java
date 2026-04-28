@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.InventoryLedgerFilterParams;
 import com.positivity.inventory.internal.dto.LedgerPage;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.InventoryLedgerService;
 import java.nio.charset.StandardCharsets;
@@ -20,10 +21,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class InventoryLedgerServiceImpl implements InventoryLedgerService {
@@ -66,7 +65,7 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
   @Transactional(readOnly = true)
   public @NonNull InventoryLedgerEntryDto getLedgerEntry(@NonNull UUID entryId) {
     InventoryLedgerEntry entry = inventoryLedgerEntryRepository.findById(entryId).orElseThrow(
-        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger entry not found: " + entryId));
+        () -> new ResourceNotFoundException("InventoryLedgerEntry", entryId.toString()));
     return toDto(entry);
   }
 
@@ -188,7 +187,7 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
     try {
       return InventoryLedgerEventType.valueOf(rawType);
     } catch (IllegalArgumentException _) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown movementType: " + rawType);
+      throw new IllegalArgumentException("Unknown movementType: " + rawType);
     }
   }
 
@@ -203,7 +202,7 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
       String decoded = new String(Base64.getUrlDecoder().decode(pageToken), StandardCharsets.UTF_8);
       return UUID.fromString(decoded);
     } catch (IllegalArgumentException _) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pageToken");
+      throw new IllegalArgumentException("Invalid pageToken");
     }
   }
 

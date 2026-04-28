@@ -53,7 +53,7 @@ public class ReplenishmentController {
         @PreAuthorize("hasAuthority('inventory:on_hand:view')")
         @Operation(operationId = "listReplenishmentPolicies", summary = "List replenishment policies", description = "Returns configured replenishment policies.", tags = {
                         "Replenishment" })
-        @ApiResponse(responseCode = "200", description = "Replenishment policies returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReplenishmentPolicyResponse.class))))
+        @ApiResponse(responseCode = "200", description = "Replenishment policies returned (paged)", content = @Content(mediaType = "application/json", schema = @Schema(description = "Page of replenishment policies")))
         public ResponseEntity<Page<ReplenishmentPolicyResponse>> getReplenishmentPolicies(
                         @io.swagger.v3.oas.annotations.Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
                         @PageableDefault(size = 20) Pageable pageable) {

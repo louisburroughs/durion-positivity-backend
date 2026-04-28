@@ -64,8 +64,7 @@ public class InventoryAvailabilityController {
                         "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
-                        @ApiResponse(responseCode = "400", description = "locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request parameters or locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "404", description = "Product SKU or location not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -92,8 +91,7 @@ public class InventoryAvailabilityController {
                         "Inventory Availability" })
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
-                        @ApiResponse(responseCode = "400", description = "locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request parameters or locationId provided without sourceType=WAREHOUSE", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "404", description = "Lead-time data not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
                         @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
@@ -115,7 +113,7 @@ public class InventoryAvailabilityController {
         }
 
         private void validateLocationAndSourceType(UUID locationId, InventorySourceType sourceType) {
-                if (locationId != null && sourceType != null && sourceType != InventorySourceType.WAREHOUSE) {
+                if (locationId != null && sourceType != InventorySourceType.WAREHOUSE) {
                         throw new InvalidParamCombinationException(
                                         "locationId is only valid when sourceType is WAREHOUSE");
                 }

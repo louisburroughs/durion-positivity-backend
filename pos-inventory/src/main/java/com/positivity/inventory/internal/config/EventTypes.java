@@ -48,16 +48,6 @@ public final class EventTypes {
                                                 "INVENTORY_AVAILABILITY_UPDATE",
                                                 "Update inventory availability for a product")
                                                 .build(),
-                                EventTypeRegistration.fastRead(
-                                                "INVENTORY_AVAILABILITY_QUERY",
-                                                "Query on-hand and ATP availability by productSku and locationId")
-                                                .build(),
-                                EventTypeRegistration.fastRead("INVENTORY_LEDGER_VIEW", "View inventory ledger entries")
-                                                .build(),
-                                EventTypeRegistration.fastRead(
-                                                "INVENTORY_LEAD_TIME_QUERY",
-                                                "Query dynamic lead time by productId and locationId")
-                                                .build(),
 
                                 // PickingListController - 1 event
                                 EventTypeRegistration.write(

@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
 import com.positivity.inventory.service.ReturnService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,7 +40,7 @@ public class ReturnController {
         @PreAuthorize("hasAuthority('inventory:return:view')")
         @Operation(operationId = "listReturnableItems", summary = "List returnable items", description = "Returns items that can be returned to stock for a workorder.", tags = {
                         "Returns" })
-        @ApiResponse(responseCode = "200", description = "Returnable items returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReturnableItemDto.class)))
+        @ApiResponse(responseCode = "200", description = "Returnable items returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReturnableItemDto.class))))
         @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "403", description = "User lacks required return view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<ReturnableItemDto>> listReturnableItems(@RequestParam UUID workorderId) {
@@ -52,7 +53,7 @@ public class ReturnController {
         @PreAuthorize("hasAuthority('inventory:return:view')")
         @Operation(operationId = "listReturnReasonCodes", summary = "List return reason codes", description = "Returns reason codes available for inventory returns.", tags = {
                         "Returns" })
-        @ApiResponse(responseCode = "200", description = "Return reason codes returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReasonCodeDto.class)))
+        @ApiResponse(responseCode = "200", description = "Return reason codes returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ReasonCodeDto.class))))
         @ApiResponse(responseCode = "403", description = "User lacks required return view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<ReasonCodeDto>> listReturnReasonCodes() {
                 return ResponseEntity.ok(returnService.listReturnReasonCodes());
