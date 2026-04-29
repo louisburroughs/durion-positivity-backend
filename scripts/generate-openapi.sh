@@ -320,6 +320,15 @@ for module in "${MODULES[@]}"; do
     if [[ "$module_status" -ne 0 ]]; then
       FAILED_MODULES+=("$module:$module_status")
       echo "Continuing to next module..." >&2
+    else
+      # Strip semantically meaningless `default: ""` and `default: null` lines
+      # from the generated spec. Springdoc emits them for primitive/UUID/object
+      # fields, which causes OpenAPI Generator to emit invalid Java initializers
+      # like `private Integer x = ;` in downstream SDKs.
+      spec_file="$module/openapi.yaml"
+      if [[ -f "$spec_file" ]]; then
+        sed -i -E '/^[[:space:]]*default:[[:space:]]*""[[:space:]]*$/d; /^[[:space:]]*default:[[:space:]]*null[[:space:]]*$/d' "$spec_file"
+      fi
     fi
   fi
   CURRENT_MODULE=""

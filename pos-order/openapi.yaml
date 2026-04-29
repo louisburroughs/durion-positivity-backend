@@ -92,28 +92,24 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
       - name: status
         in: query
         description: Override status filter
         required: false
         schema:
           type: string
-          default: ""
       - name: startDate
         in: query
         description: Start date for date range filter
         required: false
         schema:
           type: string
-          default: ""
       - name: endDate
         in: query
         description: End date for date range filter
         required: false
         schema:
           type: string
-          default: ""
       responses:
         "200":
           description: Overrides retrieved
@@ -157,8 +153,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceOverrideResult"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -190,7 +184,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -206,8 +199,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -246,7 +237,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -262,8 +252,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -491,7 +479,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
         "200":
@@ -501,8 +488,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Override not found
           content:
@@ -613,7 +598,6 @@ components:
           minimum: 0.0
         reasonCode:
           type: string
-          default: ""
           description: Reason code for the price override
           example: PRICE_MATCH
           minLength: 1
@@ -621,7 +605,6 @@ components:
           type: string
         idempotencyKey:
           type: string
-          default: ""
           description: Optional idempotency key for duplicate prevention
           example: req-abc123
       required:

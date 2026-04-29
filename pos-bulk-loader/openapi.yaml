@@ -272,7 +272,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
       responses:
         "200":
           description: Job reset and re-queued for retry
@@ -419,7 +418,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
       requestBody:
         content:
           application/json:
@@ -434,8 +432,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/CorrectionResultDto"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid correction request
           content:
@@ -892,20 +888,17 @@ components:
           format: int64
     BulkCorrectionItem:
       type: object
-      default: null
       description: A single corrected data record for a failed audit entry
       properties:
         auditRecordId:
           type: string
           format: uuid
-          default: ""
           description: ID of the audit record being corrected
           example: 00000000-0000-0000-0000-000000000001
         correctedData:
           type: object
           additionalProperties:
             type: string
-          default: ""
           description: Map of field names to their corrected values
           example:
             sku: PROD-001
@@ -915,13 +908,11 @@ components:
       - correctedData
     BulkCorrectionRequest:
       type: object
-      default: null
       description: Request to submit corrected data records for a failed bulk load
         job
       properties:
         corrections:
           type: array
-          default: ""
           description: "List of correction items, one per audit record to correct"
           items:
             $ref: "#/components/schemas/BulkCorrectionItem"
@@ -930,54 +921,45 @@ components:
       - corrections
     BulkCorrectionResponse:
       type: object
-      default: null
       description: Result of a bulk correction submission
       properties:
         jobId:
           type: string
           format: uuid
-          default: ""
           description: The bulk load job ID
           example: 00000000-0000-0000-0000-000000000001
         submittedCount:
           type: integer
           format: int32
-          default: ""
           description: Total number of corrections submitted
           example: 5
         acceptedCount:
           type: integer
           format: int32
-          default: ""
           description: Number of corrections accepted for processing
           example: 5
         rejectedCount:
           type: integer
           format: int32
-          default: ""
           description: Number of corrections rejected
           example: 0
         rejections:
           type: array
-          default: ""
           description: "Rejection detail messages for each rejected correction, if\
             \ any"
           items:
             type: string
     CorrectionResultDto:
       type: object
-      default: null
       description: Result of a single correction record submission
       properties:
         auditRecordId:
           type: string
           format: uuid
-          default: ""
           description: ID of the audit record that was corrected
           example: 00000000-0000-0000-0000-000000000001
         status:
           type: string
-          default: ""
           description: Whether the correction was accepted or rejected
           enum:
           - ACCEPTED
@@ -987,7 +969,6 @@ components:
           type:
           - string
           - "null"
-          default: ""
           description: Reason for rejection if status is REJECTED
           example: Audit record does not belong to this job
     Pageable:

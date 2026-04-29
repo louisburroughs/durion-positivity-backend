@@ -67,7 +67,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "200":
@@ -77,8 +76,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder not found or no assignment exists
           content:
@@ -104,7 +101,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: Idempotency-Key
         in: header
@@ -112,7 +108,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: tech-reassign-550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Reassign technician request
@@ -121,8 +116,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ReassignTechnicianRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               reassignTechnician:
                 description: reassignTechnician
@@ -140,8 +133,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid state transition or no current assignment
           content:
@@ -179,7 +170,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: Idempotency-Key
         in: header
@@ -187,7 +177,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: tech-assign-550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Assign technician request
@@ -196,8 +185,6 @@ paths:
             schema:
               $ref: "#/components/schemas/AssignTechnicianRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               assignTechnician:
                 description: assignTechnician
@@ -214,8 +201,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid state transition
           content:
@@ -254,7 +239,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: entryId
         in: path
@@ -262,7 +246,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440100
       - name: Idempotency-Key
         in: header
@@ -270,7 +253,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: labor-adjust-550e8400-e29b-41d4-a716-446655440100
       requestBody:
         description: Adjust labor request
@@ -279,8 +261,6 @@ paths:
             schema:
               $ref: "#/components/schemas/AdjustLaborRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               adjustLabor:
                 description: adjustLabor
@@ -296,8 +276,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid hours value
           content:
@@ -335,7 +313,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -368,7 +345,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Updated configuration object
@@ -377,8 +353,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ApprovalConfigurationRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "200":
@@ -411,7 +385,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "204":
@@ -459,7 +432,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: workorder-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Work order creation request
@@ -468,8 +440,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateWorkorderRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               createWorkorder:
                 description: createWorkorder
@@ -575,7 +545,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: serviceId
         in: path
@@ -583,7 +552,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440010
       - name: Idempotency-Key
         in: header
@@ -591,7 +559,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: labor-start-550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Start labor request
@@ -600,8 +567,6 @@ paths:
             schema:
               $ref: "#/components/schemas/StartLaborRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               startLabor:
                 description: startLabor
@@ -617,8 +582,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "200":
           description: Idempotent request - existing session returned
           content:
@@ -626,8 +589,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid state - active session exists or invalid status
           content:
@@ -666,7 +627,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Reopen workorder request
@@ -675,8 +635,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ReopenWorkorderRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               reopenWorkorder:
                 description: reopenWorkorder
@@ -720,7 +678,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -728,8 +685,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ConsumePickedItemsRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "200":
@@ -739,8 +694,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsumePickedItemsResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -748,8 +701,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "403":
           description: Forbidden
           content:
@@ -757,8 +708,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder not found
           content:
@@ -766,8 +715,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - workorder:parts:consume
@@ -786,7 +733,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -794,7 +740,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         content:
@@ -802,8 +747,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ResolveScanRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "200":
@@ -813,8 +756,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResolveScanResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -822,8 +763,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "403":
           description: Forbidden
           content:
@@ -831,8 +770,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder or pick task not found
           content:
@@ -840,8 +777,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -860,7 +795,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -868,7 +802,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: "Completion details; omit or send {} if no reason is provided"
@@ -877,8 +810,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CompletePickTaskRequest"
               additionalProperties:
-                default: ""
-              default: ""
       responses:
         "200":
           description: Pick task completed successfully
@@ -887,8 +818,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "403":
           description: Forbidden
           content:
@@ -896,8 +825,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder or pick task not found
           content:
@@ -905,8 +832,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -925,7 +850,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -933,7 +857,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: pickLineId
         in: path
@@ -941,7 +864,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440002
       requestBody:
         content:
@@ -949,8 +871,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ConfirmPickLineRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "200":
@@ -960,8 +880,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -969,8 +887,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "403":
           description: Forbidden
           content:
@@ -978,8 +894,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: "Workorder, pick task, or pick line not found"
           content:
@@ -987,8 +901,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "422":
           description: Scan mismatch or domain validation error from pos-inventory
           content:
@@ -996,8 +908,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -1029,8 +939,6 @@ paths:
             schema:
               $ref: "#/components/schemas/SubstitutePartRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               substitutePart:
                 description: substitutePart
@@ -1048,8 +956,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: "Invalid request (part already consumed, etc.)"
           content:
@@ -1099,8 +1005,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ReturnPartRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               returnParts:
                 description: returnParts
@@ -1116,8 +1020,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
@@ -1161,8 +1063,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ReturnPartQuantityRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               returnUnused:
                 description: returnUnused
@@ -1180,8 +1080,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
@@ -1226,8 +1124,6 @@ paths:
             schema:
               $ref: "#/components/schemas/IssuePartRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               issueParts:
                 description: issueParts
@@ -1243,8 +1139,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: "Invalid request (negative quantity, etc.)"
           content:
@@ -1294,8 +1188,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CorrectPartQuantityRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               correctPartQuantity:
                 description: correctPartQuantity
@@ -1313,8 +1205,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -1359,8 +1249,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ConsumePartRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               consumeParts:
                 description: consumeParts
@@ -1376,8 +1264,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: "Invalid request (exceeds issued quantity, etc.)"
           content:
@@ -1454,7 +1340,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: entryId
         in: path
@@ -1462,7 +1347,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440100
       - name: Idempotency-Key
         in: header
@@ -1470,7 +1354,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: labor-stop-550e8400-e29b-41d4-a716-446655440100
       responses:
         "200":
@@ -1480,8 +1363,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Session already stopped
           content:
@@ -1520,7 +1401,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -1529,7 +1409,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: invoice-generate-550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -1571,7 +1450,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Complete workorder request
@@ -1580,8 +1458,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CompleteWorkorderRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               completeWorkorder:
                 description: completeWorkorder
@@ -1626,7 +1502,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -1658,7 +1533,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -1667,7 +1541,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: change-request-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Change request details including items
@@ -1676,8 +1549,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateChangeRequestDTO"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               createChangeRequest:
                 description: createChangeRequest
@@ -1727,7 +1598,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Approval request with customer ID and signature capture
@@ -1736,8 +1606,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ApproveWorkorderRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               approveWorkorder:
                 description: approveWorkorder
@@ -1788,7 +1656,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -1834,7 +1701,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -1881,7 +1747,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: breakSegmentId
         in: path
@@ -1889,7 +1754,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "200":
@@ -2160,7 +2024,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: estimate-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Estimate creation request with customer and vehicle IDs
@@ -2169,8 +2032,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateEstimateRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               createEstimate:
                 description: createEstimate
@@ -2233,7 +2094,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -2274,7 +2134,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: notes
         in: query
@@ -2282,7 +2141,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: Snapshot captured before approval
       responses:
         "200":
@@ -2323,7 +2181,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -2367,7 +2224,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -2375,7 +2231,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: estimate-promote-550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -2423,7 +2278,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Line item details
@@ -2432,8 +2286,6 @@ paths:
             schema:
               $ref: "#/components/schemas/AddEstimateItemRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               addEstimateItem:
                 description: addEstimateItem
@@ -2489,7 +2341,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: reason
         in: query
@@ -2497,7 +2348,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: Customer declined additional work
       responses:
         "200":
@@ -2539,7 +2389,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -2586,7 +2435,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: "Approval request with customer ID, signature capture, and optional\
@@ -2596,8 +2444,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ApproveEstimateRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               approveEstimate:
                 description: approveEstimate
@@ -2697,7 +2543,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Emergency override details including manager ID and reason
@@ -2706,8 +2551,6 @@ paths:
             schema:
               $ref: "#/components/schemas/EmergencyOverrideDTO"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               emergencyOverride:
                 description: emergencyOverride
@@ -2761,7 +2604,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Decline details including note
@@ -2770,8 +2612,6 @@ paths:
             schema:
               $ref: "#/components/schemas/DeclineChangeRequestDTO"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               declineChangeRequest:
                 description: declineChangeRequest
@@ -2817,7 +2657,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Approval details including user ID and note
@@ -2826,8 +2665,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ApproveChangeRequestDTO"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               approveChangeRequest:
                 description: approveChangeRequest
@@ -2874,7 +2711,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "204":
@@ -2900,8 +2736,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerStopResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -2933,7 +2767,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: timer-start-550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Timer start payload
@@ -2942,8 +2775,6 @@ paths:
             schema:
               $ref: "#/components/schemas/WorkexecTimerStartRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "201":
@@ -2953,8 +2784,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "200":
           description: Idempotent replay returned existing timer
           content:
@@ -2962,8 +2791,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -3001,7 +2828,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: workexec-labor-550e8400-e29b-41d4-a716-446655440001
       - name: X-Correlation-Id
         in: header
@@ -3009,7 +2835,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: corr-12345
       requestBody:
         description: Labor-performed payload
@@ -3018,8 +2843,6 @@ paths:
             schema:
               $ref: "#/components/schemas/WorkexecLaborPerformedRequest"
               additionalProperties:
-                default: ""
-              default: ""
             example:
               workorderId: 550e8400-e29b-41d4-a716-446655440001
         required: true
@@ -3031,8 +2854,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "200":
           description: Idempotent replay returned existing labor entry
           content:
@@ -3040,8 +2861,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Invalid request
           content:
@@ -3079,8 +2898,6 @@ paths:
             schema:
               $ref: "#/components/schemas/ApprovalConfigurationRequest"
               additionalProperties:
-                default: ""
-              default: ""
         required: true
       responses:
         "200":
@@ -3108,7 +2925,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3141,7 +2957,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "204":
@@ -3198,7 +3013,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: itemId
         in: path
@@ -3206,7 +3020,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "204":
@@ -3234,7 +3047,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: itemId
         in: path
@@ -3242,7 +3054,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Updated item fields
@@ -3251,8 +3062,6 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateEstimateItemRequest"
               additionalProperties:
-                default: ""
-              default: ""
             examples:
               updateEstimateItem:
                 description: updateEstimateItem
@@ -3306,7 +3115,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3339,7 +3147,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "204":
@@ -3362,7 +3169,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3389,7 +3195,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3415,7 +3220,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3425,14 +3229,10 @@ paths:
               schema:
                 type: array
                 additionalProperties:
-                  default: ""
                 contains:
-                  default: ""
                 items:
                   $ref: "#/components/schemas/WorkorderPickedItemResponse"
-                  default: ""
                 unevaluatedItems:
-                  default: ""
         "403":
           description: Forbidden
           content:
@@ -3440,8 +3240,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3460,7 +3258,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3470,8 +3267,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPickListResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "403":
           description: Forbidden
           content:
@@ -3479,8 +3274,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder not found
           content:
@@ -3488,8 +3281,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3508,7 +3299,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3518,14 +3308,10 @@ paths:
               schema:
                 type: array
                 additionalProperties:
-                  default: ""
                 contains:
-                  default: ""
                 items:
                   $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                  default: ""
                 unevaluatedItems:
-                  default: ""
         "403":
           description: Forbidden
           content:
@@ -3533,8 +3319,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder not found
           content:
@@ -3542,8 +3326,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
                 additionalProperties:
-                  default: ""
-                default: ""
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3570,7 +3352,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
         "200":
@@ -3580,8 +3361,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder or part not found
           content:
@@ -3616,7 +3395,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
         "200":
@@ -3626,8 +3404,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder or part not found
           content:
@@ -3685,7 +3461,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "200":
@@ -3725,7 +3500,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: X-Authorities
         in: header
@@ -3733,7 +3507,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: "workorder:workorder:view,workorder:financials:view"
       responses:
         "200":
@@ -3743,8 +3516,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkorderDetailResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Workorder not found
           content:
@@ -3768,7 +3539,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3803,7 +3573,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3830,7 +3599,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3866,7 +3634,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -3876,8 +3643,6 @@ paths:
               schema:
                 type: string
                 additionalProperties:
-                  default: ""
-                default: ""
         "404":
           description: Estimate not found
           content:
@@ -3911,7 +3676,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
         "200":
@@ -3941,7 +3705,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
         "200":
@@ -3971,7 +3734,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
         "200":
@@ -4001,7 +3763,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         "200":
@@ -4058,14 +3819,12 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
       - name: multiLocation
         in: query
         description: Request cross-location results; requires workorder:wip:view_all_locations
         required: false
         schema:
           type: string
-          default: ""
       - name: pageable
         in: query
         required: true
@@ -4098,7 +3857,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
       responses:
         "200":
           description: OK
@@ -4126,8 +3884,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
                 additionalProperties:
-                  default: ""
-                default: ""
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -4154,7 +3910,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 2026-03-01
       - name: endDate
         in: query
@@ -4162,7 +3917,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: 2026-03-02
       - name: timezone
         in: query
@@ -4170,7 +3924,6 @@ paths:
         required: true
         schema:
           type: string
-          default: ""
         example: America/New_York
       - name: locationId
         in: query
@@ -4178,7 +3931,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440010
       - name: technicianIds
         in: query
@@ -4186,7 +3938,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example:
         - 550e8400-e29b-41d4-a716-446655440120
       responses:
@@ -4222,20 +3973,17 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
       - name: vehicleId
         in: query
         description: Filter by vehicle UUID (optional)
         required: false
         schema:
           type: string
-          default: ""
       - name: pageable
         in: query
         required: true
         schema:
           $ref: "#/components/schemas/Pageable"
-          default: ""
       responses:
         "200":
           description: Page of estimate summaries returned.
@@ -4294,7 +4042,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440020
       - name: customerId
         in: query
@@ -4302,7 +4049,6 @@ paths:
         required: false
         schema:
           type: string
-          default: ""
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
         "200":
@@ -4326,118 +4072,95 @@ components:
   schemas:
     AssignmentHistoryEntry:
       type: object
-      default: null
       description: Assignment history entry
       properties:
         technicianId:
           type: string
-          default: ""
           description: Technician ID for this assignment period
           example: 550e8400-e29b-41d4-a716-446655440050
         technicianName:
           type: string
-          default: ""
           description: Technician display name
           example: John Smith
         assignedAt:
           type: string
           format: date-time
-          default: ""
           description: When the technician was assigned
           example: 2024-01-27T14:30:00
         assignedBy:
           type: string
-          default: ""
           description: ID of user who assigned the technician
           example: 550e8400-e29b-41d4-a716-446655440000
         unassignedAt:
           type: string
           format: date-time
-          default: ""
           description: When the technician was unassigned (null for current assignment)
           example: 2024-01-27T16:00:00
         reason:
           type: string
-          default: ""
           description: Reason for reassignment/unassignment
           example: Technician called out sick
         notes:
           type: string
-          default: ""
           description: Assignment notes
     TechnicianAssignmentResponse:
       type: object
-      default: null
       description: Technician assignment response
       properties:
         workorderId:
           type: string
-          default: ""
           description: Work order ID
           example: 550e8400-e29b-41d4-a716-446655440001
         technicianId:
           type: string
-          default: ""
           description: Assigned technician ID
           example: 550e8400-e29b-41d4-a716-446655440050
         technicianName:
           type: string
-          default: ""
           description: Technician display name
           example: John Smith
         assignedAt:
           type: string
           format: date-time
-          default: ""
           description: When the technician was assigned
           example: 2024-01-27T14:30:00
         assignedBy:
           type: string
-          default: ""
           description: ID of user who assigned the technician
           example: 550e8400-e29b-41d4-a716-446655440000
         previousTechnicianId:
           type: string
-          default: ""
           description: Previous technician ID if this was a reassignment
           example: 550e8400-e29b-41d4-a716-446655440049
         previousTechnicianName:
           type: string
-          default: ""
           description: Previous technician name if this was a reassignment
           example: Jane Doe
         status:
           type: string
-          default: ""
           description: Status of the workorder after assignment
           example: ASSIGNED
         message:
           type: string
-          default: ""
           description: Operation result message
           example: Technician assigned successfully
         notes:
           type: string
-          default: ""
           description: Assignment notes
         reassignmentReason:
           type: string
-          default: ""
           description: Reason for reassignment if applicable
         reassignedAt:
           type: string
           format: date-time
-          default: ""
           description: When technician was reassigned
           example: 2024-01-27T15:30:00
         reassignedBy:
           type: string
-          default: ""
           description: ID of user who performed reassignment
           example: 550e8400-e29b-41d4-a716-446655440000
         technicianCertifications:
           type: array
-          default: ""
           description: Technician certifications
           example:
           - ASE Master Technician
@@ -4446,41 +4169,34 @@ components:
             type: string
         currentStatus:
           type: string
-          default: ""
           description: Current workorder status
           example: WORK_IN_PROGRESS
         assignmentHistory:
           type: array
-          default: ""
           description: Full assignment history for the workorder
           items:
             $ref: "#/components/schemas/AssignmentHistoryEntry"
     ReassignTechnicianRequest:
       type: object
-      default: null
       description: Request to reassign a workorder to a different technician
       properties:
         newTechnicianId:
           type: string
           format: uuid
-          default: ""
           description: ID of the new technician
           example: 550e8400-e29b-41d4-a716-446655440051
         reassignedByUserId:
           type: string
           format: uuid
-          default: ""
           description: ID of the user performing the reassignment (defaults from X-User-Id
             header if not provided)
           example: 550e8400-e29b-41d4-a716-446655440000
         reason:
           type: string
-          default: ""
           description: Reason for reassignment
           example: "Original technician unavailable, reassigning to available tech"
         notes:
           type: string
-          default: ""
           description: Additional notes for the reassignment
         notifyPreviousTechnician:
           type: boolean
@@ -4490,58 +4206,48 @@ components:
       - newTechnicianId
     WorkorderLaborEntryResponse:
       type: object
-      default: null
       description: Labor entry response
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique ID of the labor entry
           example: 550e8400-e29b-41d4-a716-446655440100
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder ID
           example: 550e8400-e29b-41d4-a716-446655440001
         workorderServiceId:
           type: string
           format: uuid
-          default: ""
           description: Service line item ID
           example: 550e8400-e29b-41d4-a716-446655440010
         technicianId:
           type: string
           format: uuid
-          default: ""
           description: Technician ID who performed the work
           example: 550e8400-e29b-41d4-a716-446655440050
         startTime:
           type: string
           format: date-time
-          default: ""
           description: Labor session start time
           example: 2024-01-27T14:30:00
         endTime:
           type: string
           format: date-time
-          default: ""
           description: Labor session end time (null if still active)
           example: 2024-01-27T16:30:00
         hoursWorked:
           type: number
-          default: ""
           description: Hours worked
           example: 2.0
         notes:
           type: string
-          default: ""
           description: Session notes
           example: Brake pads replaced successfully
         adjustmentReason:
           type: string
-          default: ""
           description: Adjustment reason (if hours were manually adjusted)
           example: Corrected for break time
         active:
@@ -4551,28 +4257,23 @@ components:
           example: false
         createdBy:
           type: string
-          default: ""
           description: User who created this entry
           example: system@syte.com
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Creation timestamp
           example: 2024-01-27T14:30:00Z
     AdjustLaborRequest:
       type: object
-      default: null
       description: Request to manually adjust labor hours
       properties:
         hoursWorked:
           type: number
-          default: ""
           description: Adjusted hours worked
           example: 2.5
         adjustmentReason:
           type: string
-          default: ""
           description: Reason for the adjustment
           example: Manual correction for break time
       required:
@@ -4580,30 +4281,25 @@ components:
       - hoursWorked
     ApprovalConfigurationRequest:
       type: object
-      default: null
       description: Request DTO for approval configuration creation and updates
       properties:
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location ID for this configuration (null = applies to all locations)
           example: 00000000-0000-0000-0000-000000000001
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID for this configuration (null = applies to all customers)
           example: 00000000-0000-0000-0000-000000000002
         approvalMethod:
           type: string
-          default: ""
           description: Approval method
           example: CLICK_CONFIRM
         declineExpiryDays:
           type: integer
           format: int32
-          default: ""
           description: Number of days a declined estimate can be reopened
           example: 30
           minimum: 0
@@ -4615,7 +4311,6 @@ components:
         priority:
           type: integer
           format: int32
-          default: ""
           description: "Priority for configuration matching (0=default, 1=location-specific,\
             \ 2=customer-specific)"
           example: 0
@@ -4624,36 +4319,30 @@ components:
       - approvalMethod
     ApprovalConfigurationResponse:
       type: object
-      default: null
       description: Response DTO for approval configurations
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for the configuration
           example: 550e8400-e29b-41d4-a716-446655440000
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location ID for this configuration (null = applies to all locations)
           example: 00000000-0000-0000-0000-000000000001
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID for this configuration (null = applies to all customers)
           example: 00000000-0000-0000-0000-000000000002
         approvalMethod:
           type: string
-          default: ""
           description: Approval method
           example: CLICK_CONFIRM
         declineExpiryDays:
           type: integer
           format: int32
-          default: ""
           description: Number of days a declined estimate can be reopened
           example: 30
         requireSignature:
@@ -4664,25 +4353,21 @@ components:
         priority:
           type: integer
           format: int32
-          default: ""
           description: "Priority for configuration matching (0=default, 1=location-specific,\
             \ 2=customer-specific)"
           example: 0
     CreateWorkorderRequest:
       type: object
-      default: null
       description: Request DTO for workorder creation
       properties:
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Estimate ID
           example: 550e8400-e29b-41d4-a716-446655440001
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID
           example: 550e8400-e29b-41d4-a716-446655440002
       required:
@@ -4690,53 +4375,44 @@ components:
       - estimateId
     WorkorderResponse:
       type: object
-      default: null
       description: Response DTO for workorders
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for the workorder
           example: 550e8400-e29b-41d4-a716-446655440000
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Estimate ID
           example: 550e8400-e29b-41d4-a716-446655440001
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID
           example: 550e8400-e29b-41d4-a716-446655440002
         shopId:
           type: string
           format: uuid
-          default: ""
           description: Shop ID
           example: 550e8400-e29b-41d4-a716-446655440003
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle ID
           example: 550e8400-e29b-41d4-a716-446655440004
         status:
           type: string
-          default: ""
           description: Workorder status
           example: DRAFT
         approvedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the workorder was approved
         completedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the workorder was completed
         isReopened:
           type: boolean
@@ -4746,45 +4422,37 @@ components:
         reopenedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the workorder was reopened
         crmPartyId:
           type: string
-          default: ""
           description: CRM party identifier
           example: 01952f4e-0000-7000-8000-000000000001
         crmVehicleId:
           type: string
-          default: ""
           description: CRM vehicle identifier
           example: 01952f4e-0000-7000-8000-000000000002
         crmContactIds:
           type: array
-          default: ""
           description: List of CRM contact identifiers
           items:
             type: string
     AssignTechnicianRequest:
       type: object
-      default: null
       description: Request to assign a technician to a workorder
       properties:
         technicianId:
           type: string
           format: uuid
-          default: ""
           description: ID of the technician to assign
           example: 550e8400-e29b-41d4-a716-446655440050
         assignedByUserId:
           type: string
           format: uuid
-          default: ""
           description: ID of the user performing the assignment (defaults from X-User-Id
             header if not provided)
           example: 550e8400-e29b-41d4-a716-446655440000
         notes:
           type: string
-          default: ""
           description: Assignment notes or reason
           example: Assigned to senior tech for brake system work
       required:
@@ -4828,19 +4496,16 @@ components:
           type: boolean
     StartWorkorderRequest:
       type: object
-      default: null
       description: Optional request payload used when starting a workorder
       properties:
         userId:
           type: string
           format: uuid
-          default: ""
           deprecated: true
           description: Deprecated. Actor identity is resolved from authenticated security
             context.
         reason:
           type: string
-          default: ""
           description: Optional reason associated with start transition
           example: Vehicle pulled into service bay
     WorkorderStartResponse:
@@ -4865,53 +4530,44 @@ components:
           type: string
     StartLaborRequest:
       type: object
-      default: null
       description: Request to start a labor session on a workorder service
       properties:
         technicianId:
           type: string
           format: uuid
-          default: ""
           description: ID of the technician performing the work
           example: 550e8400-e29b-41d4-a716-446655440050
         notes:
           type: string
-          default: ""
           description: Optional notes about the labor session
           example: Beginning brake pad replacement
       required:
       - technicianId
     ReopenWorkorderRequest:
       type: object
-      default: null
       description: Request payload for controlled workorder reopen
       properties:
         userId:
           type: string
           format: uuid
-          default: ""
           deprecated: true
           description: Deprecated. Actor identity is resolved from authenticated security
             context.
           example: 550e8400-e29b-41d4-a716-446655440000
         reopenReason:
           type: string
-          default: ""
           description: Mandatory reason for reopening completed workorder
           example: Corrected labor hours
     ReopenWorkorderResponse:
       type: object
-      default: null
       description: Response payload for controlled workorder reopen
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
         currentStatus:
           type: string
-          default: ""
           description: Current lifecycle status
         isReopened:
           type: boolean
@@ -4920,11 +4576,9 @@ components:
         reopenedAt:
           type: string
           format: date-time
-          default: ""
           description: Reopen timestamp
         message:
           type: string
-          default: ""
           description: Operation message
     ConsumeItem:
       type: object
@@ -4978,39 +4632,32 @@ components:
           - FAILED
     ApiError:
       type: object
-      default: null
       description: Standard error response envelope returned by all Durion backend
         APIs
       properties:
         code:
           type: string
-          default: ""
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
         message:
           type: string
-          default: ""
           description: Human-readable error message
           example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
         status:
           type: integer
           format: int32
-          default: ""
           description: HTTP status code
           example: 404
         timestamp:
           type: string
-          default: ""
           description: ISO 8601 UTC timestamp of the error
           example: 2026-03-17T14:30:00.000Z
         correlationId:
           type: string
-          default: ""
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
         fieldErrors:
           type: array
-          default: ""
           description: Field-level validation errors; present (non-null) for validation-related
             errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
             other error types
@@ -5018,29 +4665,23 @@ components:
             $ref: "#/components/schemas/FieldError"
         referenceId:
           type: string
-          default: ""
           description: "Workflow or review-case reference identifier, when applicable"
         nextAction:
           type: string
-          default: ""
           description: "Recommended next step for the caller, when applicable"
         supportAction:
           type: string
-          default: ""
           description: "Support or admin investigation guidance, when applicable"
     FieldError:
       type: object
-      default: null
       description: Validation error for a specific request field
       properties:
         field:
           type: string
-          default: ""
           description: Field name
           example: quantity
         message:
           type: string
-          default: ""
           description: Validation failure message
           example: must be greater than 0
     ResolveScanRequest:
@@ -5121,29 +4762,24 @@ components:
       - quantityPicked
     SubstitutePartRequest:
       type: object
-      default: null
       description: Request payload for substituting an authorized part
       properties:
         originalPartId:
           type: string
           format: uuid
-          default: ""
           description: Original part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         substitutePartId:
           type: string
           format: uuid
-          default: ""
           description: Substitute part identifier
           example: 550e8400-e29b-41d4-a716-446655440501
         reason:
           type: string
-          default: ""
           description: Audit reason for substitution
           example: "Original part unavailable, equivalent substitute used"
         notes:
           type: string
-          default: ""
           description: Optional substitution notes
           example: Customer notified and approved substitute
       required:
@@ -5152,92 +4788,75 @@ components:
       - substitutePartId
     WorkorderPartAdjustmentEventResponse:
       type: object
-      default: null
       description: Response payload for workorder part adjustment events
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Adjustment event identifier
           example: 550e8400-e29b-41d4-a716-446655440700
         originalPartId:
           type: string
           format: uuid
-          default: ""
           description: Original part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         originalPartDescription:
           type: string
-          default: ""
           description: Original part description
           example: Brake Pad Set - Front
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         adjustmentType:
           type: string
-          default: ""
           description: Adjustment type
           example: SUBSTITUTION
         substitutedWithPartId:
           type: string
           format: uuid
-          default: ""
           description: Substitute part identifier for substitution adjustments
           example: 550e8400-e29b-41d4-a716-446655440501
         substitutedWithPartDescription:
           type: string
-          default: ""
           description: Substitute part description
           example: Brake Pad Set - Ceramic
         quantityAdjustment:
           type: number
-          default: ""
           description: Signed quantity adjustment
           example: -1
         reason:
           type: string
-          default: ""
           description: Adjustment reason
           example: Equivalent part used due to stock shortage
         performedBy:
           type: string
-          default: ""
           description: Actor identifier who performed adjustment
           example: tech@shop.local
         performedAt:
           type: string
           format: date-time
-          default: ""
           description: Adjustment timestamp
         notes:
           type: string
-          default: ""
           description: Optional additional notes
     ReturnPartRequest:
       type: object
-      default: null
       description: Request payload to return unused issued parts to inventory
       properties:
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         quantity:
           type: number
-          default: ""
           description: Quantity to return
           example: 1
           minimum: 0.0001
         notes:
           type: string
-          default: ""
           description: Optional return notes
           example: Returned to stock after over-issue
       required:
@@ -5245,80 +4864,65 @@ components:
       - workorderPartId
     WorkorderPartUsageEventResponse:
       type: object
-      default: null
       description: Response payload for workorder part usage events
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Usage event identifier
           example: 550e8400-e29b-41d4-a716-446655440710
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         eventType:
           type: string
-          default: ""
           description: Event type
           example: ISSUED
         quantity:
           type: number
-          default: ""
           description: Quantity associated with event
           example: 1
         performedBy:
           type: string
-          default: ""
           description: Actor identifier who performed event
           example: tech@shop.local
         performedAt:
           type: string
           format: date-time
-          default: ""
           description: Event timestamp
         notes:
           type: string
-          default: ""
           description: Optional event notes
         partDescription:
           type: string
-          default: ""
           description: Part description for display
           example: Brake Pad Set - Front
     ReturnPartQuantityRequest:
       type: object
-      default: null
       description: Request payload for returning unused authorized part quantity
       properties:
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         quantity:
           type: number
-          default: ""
           description: Quantity to return
           example: 1
         reason:
           type: string
-          default: ""
           description: Audit reason for return
           example: Part not needed after inspection
         notes:
           type: string
-          default: ""
           description: Optional return notes
           example: Returned unopened package
       required:
@@ -5327,24 +4931,20 @@ components:
       - workorderPartId
     IssuePartRequest:
       type: object
-      default: null
       description: Request payload to issue authorized part quantity to a workorder
       properties:
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         quantity:
           type: number
-          default: ""
           description: Quantity to issue
           example: 1
           minimum: 0.0001
         notes:
           type: string
-          default: ""
           description: Optional issue notes
           example: Issued from bin A-14
       required:
@@ -5352,29 +4952,24 @@ components:
       - workorderPartId
     CorrectPartQuantityRequest:
       type: object
-      default: null
       description: Request payload for administratively correcting authorized part
         quantity
       properties:
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         newQuantity:
           type: number
-          default: ""
           description: Corrected authorized quantity
           example: 3
         reason:
           type: string
-          default: ""
           description: Audit reason for correction
           example: Inventory recount adjusted authorized quantity
         notes:
           type: string
-          default: ""
           description: Optional correction notes
           example: Adjusted after parts counter verification
       required:
@@ -5383,24 +4978,20 @@ components:
       - workorderPartId
     ConsumePartRequest:
       type: object
-      default: null
       description: Request payload to consume authorized part quantity on a workorder
       properties:
         workorderPartId:
           type: string
           format: uuid
-          default: ""
           description: Workorder part identifier
           example: 550e8400-e29b-41d4-a716-446655440500
         quantity:
           type: number
-          default: ""
           description: Quantity to consume
           example: 1
           minimum: 0.0001
         notes:
           type: string
-          default: ""
           description: Optional usage notes
           example: Installed on front axle
       required:
@@ -5408,23 +4999,19 @@ components:
       - workorderPartId
     OperationalContextOverrideRequest:
       type: object
-      default: null
       description: Manager override payload for workorder operational context
       properties:
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location identifier to set on the workorder
           example: 550e8400-e29b-41d4-a716-446655440300
         bayId:
           type: string
-          default: ""
           description: Optional bay identifier
           example: BAY-12
         assignedMechanics:
           type: array
-          default: ""
           description: Assigned mechanic identifiers
           example:
           - 550e8400-e29b-41d4-a716-446655440120
@@ -5433,7 +5020,6 @@ components:
             format: uuid
         assignedResources:
           type: array
-          default: ""
           description: Assigned resource identifiers
           example:
           - 550e8400-e29b-41d4-a716-446655440301
@@ -5442,7 +5028,6 @@ components:
             format: uuid
         constraints:
           type: array
-          default: ""
           description: Optional execution constraints
           example:
           - ALIGNMENT_RACK_REQUIRED
@@ -5452,38 +5037,31 @@ components:
       - locationId
     OperationalContextResponse:
       type: object
-      default: null
       description: Operational context details for a workorder
       properties:
         version:
           type: string
-          default: ""
           description: Operational context version
           example: "3"
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location identifier
           example: 550e8400-e29b-41d4-a716-446655440300
         bayId:
           type: string
-          default: ""
           description: Bay identifier
           example: BAY-12
         scheduledStartAt:
           type: string
           format: date-time
-          default: ""
           description: Scheduled start time
         scheduledEndAt:
           type: string
           format: date-time
-          default: ""
           description: Scheduled end time
         assignedMechanics:
           type: array
-          default: ""
           description: Assigned mechanic identifiers
           example:
           - 550e8400-e29b-41d4-a716-446655440120
@@ -5492,7 +5070,6 @@ components:
             format: uuid
         assignedResources:
           type: array
-          default: ""
           description: Assigned resource identifiers
           example:
           - 550e8400-e29b-41d4-a716-446655440301
@@ -5501,7 +5078,6 @@ components:
             format: uuid
         constraints:
           type: array
-          default: ""
           description: Operational constraints
           example:
           - ALIGNMENT_RACK_REQUIRED
@@ -5514,122 +5090,100 @@ components:
           example: false
     InvoiceGenerationResponse:
       type: object
-      default: null
       description: Response payload returned after invoice generation.
       properties:
         invoiceId:
           type: string
           format: uuid
-          default: ""
           description: Generated invoice identifier.
           example: 550e8400-e29b-41d4-a716-446655440000
         status:
           type: string
-          default: ""
           description: Invoice status.
           example: DRAFT
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Source workorder identifier.
           example: 550e8400-e29b-41d4-a716-446655440001
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Source estimate identifier.
           example: 550e8400-e29b-41d4-a716-446655440002
         approvalId:
           type: string
           format: uuid
-          default: ""
           description: Approval identifier used for generation.
           example: 550e8400-e29b-41d4-a716-446655440003
         subtotal:
           type: number
-          default: ""
           description: Subtotal amount before tax.
           example: 120.0
         taxAmount:
           type: number
-          default: ""
           description: Tax amount.
           example: 9.6
         totalAmount:
           type: number
-          default: ""
           description: Total amount after tax.
           example: 129.6
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Creation timestamp (UTC).
           example: 2026-02-27T12:00:00Z
     CompleteWorkorderRequest:
       type: object
-      default: null
       description: Request payload to complete a workorder
       properties:
         userId:
           type: string
           format: uuid
-          default: ""
           deprecated: true
           description: Deprecated. Actor identity is resolved from authenticated security
             context.
         completionNotes:
           type: string
-          default: ""
           description: Optional completion notes recorded for closeout
           example: Completed and verified
     CompleteWorkorderResponse:
       type: object
-      default: null
       description: Response payload for workorder completion
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         previousStatus:
           type: string
-          default: ""
           description: Status prior to completion
           example: WORK_IN_PROGRESS
         currentStatus:
           type: string
-          default: ""
           description: Status after completion
           example: COMPLETED
         completedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when completion was recorded
           example: 2026-03-02T12:34:56Z
         message:
           type: string
-          default: ""
           description: Operation outcome message
           example: Work order completed successfully
     CreateChangeRequestDTO:
       type: object
-      default: null
       description: Request payload for creating a change request
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         description:
           type: string
-          default: ""
           description: Description of additional requested work
           example: Customer requested additional diagnostics
           minLength: 1
@@ -5640,18 +5194,15 @@ components:
           example: false
         exceptionReason:
           type: string
-          default: ""
           description: Exception reason when emergency override context applies
           example: Safety-critical repair
         services:
           type: array
-          default: ""
           description: Service items included in this change request
           items:
             $ref: "#/components/schemas/WorkorderItemDTO"
         parts:
           type: array
-          default: ""
           description: Part items included in this change request
           items:
             $ref: "#/components/schemas/WorkorderItemDTO"
@@ -5659,31 +5210,26 @@ components:
       - description
     WorkorderItemDTO:
       type: object
-      default: null
       description: Service or part line item included in a change request
       properties:
         serviceEntityId:
           type: string
           format: uuid
-          default: ""
           description: Service catalog entity identifier for service items
           example: 550e8400-e29b-41d4-a716-446655440010
         productEntityId:
           type: string
           format: uuid
-          default: ""
           description: Product entity identifier for inventory part items
           example: 550e8400-e29b-41d4-a716-446655440011
         nonInventoryProductEntityId:
           type: string
           format: uuid
-          default: ""
           description: Product entity identifier for non-inventory part items
           example: 550e8400-e29b-41d4-a716-446655440012
         quantity:
           type: integer
           format: int32
-          default: ""
           description: Requested quantity for part line items
           example: 1
         isEmergencySafety:
@@ -5693,12 +5239,10 @@ components:
           example: false
         photoEvidenceUrl:
           type: string
-          default: ""
           description: Photo evidence URL for emergency/safety documentation
           example: https://cdn.example.com/evidence/photo-123.jpg
         emergencyNotes:
           type: string
-          default: ""
           description: Emergency notes used when photo evidence is unavailable
           example: Brake line rupture visible after wheel removal
         photoNotPossible:
@@ -5708,39 +5252,32 @@ components:
           example: false
     ChangeRequestResponse:
       type: object
-      default: null
       description: Response DTO for change requests
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for the change request
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder ID
           example: 550e8400-e29b-41d4-a716-446655440001
         requestedByUserId:
           type: string
-          default: ""
           description: User ID who requested the change
           example: system@positivity.com
         requestedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the change was requested
         status:
           type: string
-          default: ""
           description: Change request status
           example: AWAITING_ADVISOR_REVIEW
         description:
           type: string
-          default: ""
           description: Description of the change request
         isEmergencyException:
           type: boolean
@@ -5748,11 +5285,9 @@ components:
           description: Whether this is an emergency exception
         exceptionReason:
           type: string
-          default: ""
           description: Reason for the exception if applicable
         approvalNote:
           type: string
-          default: ""
           description: Approval notes
         isApprovalGated:
           type: boolean
@@ -5761,52 +5296,42 @@ components:
         approvedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the change was approved
         approvedBy:
           type: string
-          default: ""
           description: User ID who approved the change
           example: system@positivity.com
         declinedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the change was declined
     ApproveWorkorderRequest:
       type: object
-      default: null
       description: Request to approve a work order with customer signature
       properties:
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID who is approving the work order
           example: 00000000-0000-0000-0000-000000000001
         signatureData:
           type: string
-          default: ""
           description: Base64-encoded signature image data (PNG format recommended)
           example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
         signatureMimeType:
           type: string
-          default: ""
           description: "MIME type of signature (e.g., image/png, image/jpeg)"
           example: image/png
         signerName:
           type: string
-          default: ""
           description: Name of person providing signature
           example: John Doe
         notes:
           type: string
-          default: ""
           description: Additional notes or comments
           example: Approved after reviewing repair details
         lineItemApprovals:
           type: array
-          default: ""
           description: "Individual line item approvals/rejections. If omitted, all\
             \ items are considered approved."
           items:
@@ -5815,13 +5340,11 @@ components:
       - customerId
     LineItemApprovalDto:
       type: object
-      default: null
       description: Approval or rejection status for a specific line item
       properties:
         lineItemId:
           type: string
           format: uuid
-          default: ""
           description: ID of the line item (service/product) being approved or rejected
           example: 550e8400-e29b-41d4-a716-446655440000
         approved:
@@ -5831,12 +5354,10 @@ components:
           example: true
         rejectionReason:
           type: string
-          default: ""
           description: Reason for rejection (required if approved=false)
           example: Customer declined optional service
         notes:
           type: string
-          default: ""
           description: Additional notes about this line item decision
           example: Customer wants to get second opinion
       required:
@@ -5844,63 +5365,51 @@ components:
       - lineItemId
     StopWorkSessionRequest:
       type: object
-      default: null
       description: Request payload for stopping a work session
       properties:
         mechanicId:
           type: string
           format: uuid
-          default: ""
           description: Optional mechanic ID for disambiguation when multiple sessions
             could match
     WorkSessionResponse:
       type: object
-      default: null
       description: Response DTO for a work session
       properties:
         workSessionId:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier of the work session
         mechanicId:
           type: string
           format: uuid
-          default: ""
           description: ID of the mechanic
         workOrderId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order
         workOrderTaskId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order task
         locationId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work location
         resourceId:
           type: string
           format: uuid
-          default: ""
           description: Optional resource/bay ID
         startAt:
           type: string
           format: date-time
-          default: ""
           description: Session start timestamp
         endAt:
           type: string
           format: date-time
-          default: ""
           description: Session end timestamp
         status:
           type: string
-          default: ""
           description: Current status of the work session
           enum:
           - IN_PROGRESS
@@ -5914,25 +5423,20 @@ components:
         totalDurationSeconds:
           type: integer
           format: int32
-          default: ""
           description: Total session duration in seconds
         approvedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when the session was approved
         approvedByUserId:
           type: string
-          default: ""
           description: User ID of the approver
         approvalNotes:
           type: string
-          default: ""
           description: Notes provided at approval
         lockedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when the session was locked
         overlapOverrideUsed:
           type: boolean
@@ -5940,16 +5444,13 @@ components:
           description: Whether an overlap override was used
         overrideReason:
           type: string
-          default: ""
           description: Reason provided for the overlap override
     AddBreakSegmentRequest:
       type: object
-      default: null
       description: Request payload for adding a break segment to a work session
       properties:
         breakType:
           type: string
-          default: ""
           description: Type of break
           enum:
           - MEAL
@@ -5957,36 +5458,29 @@ components:
           - OTHER
         notes:
           type: string
-          default: ""
           description: Optional break notes
     BreakSegmentResponse:
       type: object
-      default: null
       description: Response DTO for a break segment
       properties:
         breakSegmentId:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier of the break segment
         workSessionId:
           type: string
           format: uuid
-          default: ""
           description: ID of the parent work session
         breakStartAt:
           type: string
           format: date-time
-          default: ""
           description: Break start timestamp
         breakEndAt:
           type: string
           format: date-time
-          default: ""
           description: Break end timestamp
         breakType:
           type: string
-          default: ""
           description: Type of break
           enum:
           - MEAL
@@ -5994,41 +5488,33 @@ components:
           - OTHER
         notes:
           type: string
-          default: ""
           description: Optional break notes
     StartWorkSessionRequest:
       type: object
-      default: null
       description: Request payload for starting a work session
       properties:
         mechanicId:
           type: string
           format: uuid
-          default: ""
           description: ID of the mechanic starting the session
         workOrderId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order
         workOrderTaskId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order task
         locationId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work location
         resourceId:
           type: string
           format: uuid
-          default: ""
           description: Optional resource/bay ID
         overlapOverrideReason:
           type: string
-          default: ""
           description: Reason for overriding overlap policy (requires permission)
       required:
       - locationId
@@ -6037,7 +5523,6 @@ components:
       - workOrderTaskId
     StopTravelSegmentRequest:
       type: object
-      default: null
       description: Request body for stopping an in-progress travel segment
       properties:
         toLocationId:
@@ -6047,7 +5532,6 @@ components:
           type: string
     TravelSegmentResponse:
       type: object
-      default: null
       description: Response representation of a travel segment
       properties:
         travelSegmentId:
@@ -6180,7 +5664,6 @@ components:
       - workDate
     StartTravelSegmentRequest:
       type: object
-      default: null
       description: Request body for starting a travel segment
       properties:
         mobileWorkAssignmentId:
@@ -6222,19 +5705,16 @@ components:
       - technicianId
     RejectTimeEntryRequest:
       type: object
-      default: null
       description: Request body for rejecting a time entry
       properties:
         rejectionReason:
           type: string
-          default: ""
           description: Mandatory reason for rejection
           minLength: 1
       required:
       - rejectionReason
     TimeEntryResponse:
       type: object
-      default: null
       description: Response representation of a time entry
       properties:
         timeEntryId:
@@ -6277,70 +5757,58 @@ components:
           format: date-time
     CreateEstimateRequest:
       type: object
-      default: null
       description: Request payload for creating an estimate
       properties:
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer identifier
           example: 550e8400-e29b-41d4-a716-446655440001
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle identifier
           example: 550e8400-e29b-41d4-a716-446655440002
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Optional location identifier; defaults from session when omitted
           example: 550e8400-e29b-41d4-a716-446655440003
         currencyUomId:
           type: string
-          default: ""
           description: Optional currency code; defaults when omitted
           example: USD
         taxRegionId:
           type: string
           format: uuid
-          default: ""
           description: Optional tax region identifier; defaults when omitted
           example: 550e8400-e29b-41d4-a716-446655440004
         subtotal:
           type: number
-          default: ""
           description: Optional subtotal amount before tax
           example: 500.0
         taxAmount:
           type: number
-          default: ""
           description: Optional tax amount
           example: 50.0
         total:
           type: number
-          default: ""
           description: Optional total amount including tax
           example: 550.0
         crmPartyId:
           type: string
-          default: ""
           description: CRM party identifier (UUIDv7 string)
           example: 01952f4e-0000-7000-8000-000000000001
           maxLength: 36
           minLength: 0
         crmVehicleId:
           type: string
-          default: ""
           description: CRM vehicle identifier (UUIDv7 string)
           example: 01952f4e-0000-7000-8000-000000000002
           maxLength: 36
           minLength: 0
         crmContactIds:
           type: array
-          default: ""
           description: List of CRM contact identifiers (may be empty)
           example:
           - 01952f4e-0000-7000-8000-000000000003
@@ -6354,168 +5822,136 @@ components:
       - vehicleId
     EstimateResponse:
       type: object
-      default: null
       description: Response DTO for estimates
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for the estimate
           example: 550e8400-e29b-41d4-a716-446655440000
         estimateNumber:
           type: string
-          default: ""
           description: Estimate number
           example: EST-2024-1000
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID
           example: 550e8400-e29b-41d4-a716-446655440001
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle ID
           example: 550e8400-e29b-41d4-a716-446655440002
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location ID
           example: 550e8400-e29b-41d4-a716-446655440003
         currencyUomId:
           type: string
-          default: ""
           description: Currency UOM ID
           example: USD
         taxRegionId:
           type: string
           format: uuid
-          default: ""
           description: Tax region ID
           example: 550e8400-e29b-41d4-a716-446655440004
         status:
           type: string
-          default: ""
           description: Estimate status
           example: DRAFT
         createdByUserId:
           type: string
-          default: ""
           description: Username who created the estimate
           example: john.doe
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the estimate was created
         subtotal:
           type: number
-          default: ""
           description: Subtotal amount before tax
           example: 150.0
         taxAmount:
           type: number
-          default: ""
           description: Tax amount
           example: 12.38
         total:
           type: number
-          default: ""
           description: Total amount including tax
           example: 162.38
         submittedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the estimate was submitted for approval
         submittedBy:
           type: string
-          default: ""
           description: Username who submitted the estimate for approval
           example: john.doe
         expiresAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the approval window expires
         approvedAt:
           type: string
           format: date-time
-          default: ""
           description: Date and time the estimate was approved
         approvedBy:
           type: string
           format: uuid
-          default: ""
           description: Customer UUID who approved the estimate
           example: 550e8400-e29b-41d4-a716-446655440005
         signatureData:
           type: string
-          default: ""
           description: Base64-encoded signature image
         signatureMimeType:
           type: string
-          default: ""
           description: MIME type of the signature image
           example: image/png
         signerName:
           type: string
-          default: ""
           description: Name of person who signed
         approvalNotes:
           type: string
-          default: ""
           description: Additional notes provided at approval time
         purchaseOrderNumber:
           type: string
-          default: ""
           description: Purchase order number for commercial accounts
           example: PO-2024-12345
         version:
           type: integer
           format: int32
-          default: ""
           description: Optimistic locking version
         crmPartyId:
           type: string
-          default: ""
           description: CRM party identifier
           example: 01952f4e-0000-7000-8000-000000000001
         crmVehicleId:
           type: string
-          default: ""
           description: CRM vehicle identifier
           example: 01952f4e-0000-7000-8000-000000000002
         crmContactIds:
           type: array
-          default: ""
           description: List of CRM contact identifiers
           items:
             type: string
     EstimateSnapshotResponse:
       type: object
-      default: null
       description: Response payload for captured estimate snapshots
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Snapshot identifier
           example: 550e8400-e29b-41d4-a716-446655440030
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Estimate identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         status:
           type: string
-          default: ""
           description: Estimate status at capture time
           enum:
           - DRAFT
@@ -6532,30 +5968,24 @@ components:
           example: SUBMITTED
         snapshotData:
           type: string
-          default: ""
           description: Serialized snapshot content
         capturedAt:
           type: string
           format: date-time
-          default: ""
           description: Snapshot capture timestamp
         capturedById:
           type: string
-          default: ""
           description: Actor identifier that captured the snapshot
           example: advisor@shop.local
         notes:
           type: string
-          default: ""
           description: Optional snapshot notes
     AddEstimateItemRequest:
       type: object
-      default: null
       description: Request payload for adding a line item to an estimate
       properties:
         itemType:
           type: string
-          default: ""
           description: Type of estimate item
           enum:
           - PART
@@ -6563,36 +5993,30 @@ components:
           example: PART
         description:
           type: string
-          default: ""
           description: Human-readable description when no catalog reference is provided
           example: Brake pad replacement
         quantity:
           type: number
-          default: ""
           description: Requested quantity
           example: 2
           minimum: 0.0001
         unitPrice:
           type: number
-          default: ""
           description: Unit price for the line item
           example: 49.99
           minimum: 0.00
         taxCode:
           type: string
-          default: ""
           description: Optional tax code
           example: TX-GENERAL
         productId:
           type: string
           format: uuid
-          default: ""
           description: Referenced product identifier for PART items
           example: 550e8400-e29b-41d4-a716-446655440020
         serviceId:
           type: string
           format: uuid
-          default: ""
           description: Referenced service identifier for LABOR items
           example: 550e8400-e29b-41d4-a716-446655440021
       required:
@@ -6601,24 +6025,20 @@ components:
       - unitPrice
     EstimateItemResponse:
       type: object
-      default: null
       description: Response payload for estimate line items
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Estimate item identifier
           example: 550e8400-e29b-41d4-a716-446655440020
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Parent estimate identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         itemType:
           type: string
-          default: ""
           description: Estimate item type
           enum:
           - PART
@@ -6626,92 +6046,75 @@ components:
           example: PART
         description:
           type: string
-          default: ""
           description: Item description
           example: Front brake pad replacement
         quantity:
           type: number
-          default: ""
           description: Item quantity
           example: 2
         unitPrice:
           type: number
-          default: ""
           description: Unit price
           example: 59.99
         lineTotal:
           type: number
-          default: ""
           description: Computed line total
           example: 119.98
         taxCode:
           type: string
-          default: ""
           description: Tax code
           example: TX-GENERAL
         productId:
           type: string
           format: uuid
-          default: ""
           description: Referenced product identifier when itemType=PART
           example: 550e8400-e29b-41d4-a716-446655440021
         serviceId:
           type: string
           format: uuid
-          default: ""
           description: Referenced service identifier when itemType=LABOR
           example: 550e8400-e29b-41d4-a716-446655440022
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Record creation timestamp
         updatedAt:
           type: string
           format: date-time
-          default: ""
           description: Record last update timestamp
     ApproveEstimateRequest:
       type: object
-      default: null
       description: Request to approve an estimate with customer signature
       properties:
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID who is approving the estimate
           example: 00000000-0000-0000-0000-000000000001
         signatureData:
           type: string
-          default: ""
           description: Base64-encoded signature image data (PNG format recommended)
           example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
         signatureMimeType:
           type: string
-          default: ""
           description: "MIME type of signature (e.g., image/png, image/jpeg)"
           example: image/png
         signerName:
           type: string
-          default: ""
           description: Name of person providing signature
           example: John Doe
         notes:
           type: string
-          default: ""
           description: Additional notes or comments
           example: Approved with customer present
         lineItemApprovals:
           type: array
-          default: ""
           description: "Individual line item approvals/rejections. If omitted, all\
             \ items are considered approved."
           items:
             $ref: "#/components/schemas/LineItemApprovalDto"
         purchaseOrderNumber:
           type: string
-          default: ""
           description: Purchase order number (required when PO enforcement is enabled
             for the account)
           example: PO-2024-12345
@@ -6719,42 +6122,35 @@ components:
       - customerId
     CreateEstimateFromAppointmentRequest:
       type: object
-      default: null
       description: Request payload to create an estimate from an appointment
       properties:
         idempotencyKey:
           type: string
           format: uuid
-          default: ""
           description: Idempotency key to prevent duplicate estimate creation
           example: 550e8400-e29b-41d4-a716-446655440010
         appointmentId:
           type: string
           format: uuid
-          default: ""
           description: Appointment identifier
           example: 550e8400-e29b-41d4-a716-446655440011
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer identifier
           example: 550e8400-e29b-41d4-a716-446655440012
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle identifier
           example: 550e8400-e29b-41d4-a716-446655440013
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location identifier
           example: 550e8400-e29b-41d4-a716-446655440014
         requestedServices:
           type: array
-          default: ""
           description: Requested services captured from appointment context
           example:
           - Oil change
@@ -6769,18 +6165,15 @@ components:
       - vehicleId
     CreateEstimateFromAppointmentResponse:
       type: object
-      default: null
       description: Response payload for estimate creation from appointment
       properties:
         estimateId:
           type: string
           format: uuid
-          default: ""
           description: Created estimate identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         status:
           type: string
-          default: ""
           description: Created estimate status
           example: DRAFT
         created:
@@ -6791,12 +6184,10 @@ components:
           example: true
     EmergencyOverrideDTO:
       type: object
-      default: null
       description: Request payload for applying an emergency override
       properties:
         exceptionReason:
           type: string
-          default: ""
           description: Reason justifying emergency override
           example: Safety-critical repair authorized
           minLength: 1
@@ -6804,12 +6195,10 @@ components:
       - exceptionReason
     DeclineChangeRequestDTO:
       type: object
-      default: null
       description: Request payload for declining a change request
       properties:
         approvalNote:
           type: string
-          default: ""
           description: Decline note captured as the decision artifact
           example: Declined by customer
           minLength: 1
@@ -6817,20 +6206,17 @@ components:
       - approvalNote
     ApproveChangeRequestDTO:
       type: object
-      default: null
       description: Request payload for approving a change request
       properties:
         approvedBy:
           type: string
           format: uuid
-          default: ""
           deprecated: true
           description: Deprecated. Actor identity is resolved from authenticated security
             context.
           example: 550e8400-e29b-41d4-a716-446655440100
         approvalNote:
           type: string
-          default: ""
           description: Approval note captured as the decision artifact
           example: Approved after customer confirmation
           minLength: 1
@@ -6838,90 +6224,74 @@ components:
       - approvalNote
     WorkexecTimerEntryResponse:
       type: object
-      default: null
       description: Timer entry response for workexec timer APIs
       properties:
         timeEntryId:
           type: string
           format: uuid
-          default: ""
           description: Timer entry identifier
           example: 550e8400-e29b-41d4-a716-446655440600
         mechanicId:
           type: string
           format: uuid
-          default: ""
           description: Mechanic identifier
           example: 550e8400-e29b-41d4-a716-446655440120
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderItemId:
           type: string
           format: uuid
-          default: ""
           description: Optional workorder item identifier
           example: 550e8400-e29b-41d4-a716-446655440010
         laborCode:
           type: string
-          default: ""
           description: Labor code
           example: DIAG
         startTime:
           type: string
           format: date-time
-          default: ""
           description: Timer start timestamp
         endTime:
           type: string
           format: date-time
-          default: ""
           description: Timer stop timestamp
         durationInSeconds:
           type: integer
           format: int64
-          default: ""
           description: Computed duration in seconds
           example: 3600
         status:
           type: string
-          default: ""
           description: Timer status
           example: STOPPED
     WorkexecTimerStopResponse:
       type: object
-      default: null
       description: Stop timer response containing all stopped timers
       properties:
         stopped:
           type: array
-          default: ""
           description: Stopped timer entries
           items:
             $ref: "#/components/schemas/WorkexecTimerEntryResponse"
     WorkexecTimerStartRequest:
       type: object
-      default: null
       description: Start timer request for workexec time entries
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderItemId:
           type: string
           format: uuid
-          default: ""
           description: Optional workorder line item identifier
           example: 550e8400-e29b-41d4-a716-446655440010
         laborCode:
           type: string
-          default: ""
           description: Optional labor code associated with timer
           example: DIAG
       required:
@@ -6951,31 +6321,25 @@ components:
       - system
     WorkexecLaborPerformedRequest:
       type: object
-      default: null
       description: Request payload for recording labor performed from external systems
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
         technicianId:
           type: string
           format: uuid
-          default: ""
           description: Technician identifier
         performedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when labor was performed
         labor:
           $ref: "#/components/schemas/LaborQuantity"
-          default: ""
           description: Labor quantity and unit
         source:
           $ref: "#/components/schemas/SourceReference"
-          default: ""
           description: External source metadata
       required:
       - labor
@@ -6985,168 +6349,136 @@ components:
       - workorderId
     WorkexecLaborPerformedResponse:
       type: object
-      default: null
       description: Recorded labor-performed response
       properties:
         laborPerformedId:
           type: string
           format: uuid
-          default: ""
           description: Labor performed record identifier
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         technicianId:
           type: string
           format: uuid
-          default: ""
           description: Technician identifier
           example: 550e8400-e29b-41d4-a716-446655440120
         performedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when labor was performed
         quantity:
           type: number
-          default: ""
           description: Labor quantity
           example: 1.5
         unit:
           type: string
-          default: ""
           description: Labor quantity unit
           example: HOURS
         sourceSystem:
           type: string
-          default: ""
           description: Source system identifier
           example: workexec
         sourceReferenceId:
           type: string
-          default: ""
           description: Source reference identifier
           example: EXT-REF-12345
     UpdateEstimateItemRequest:
       type: object
-      default: null
       description: Request payload for partial update of an estimate line item
       properties:
         description:
           type: string
-          default: ""
           description: Updated description
           example: Front brake pad replacement
         quantity:
           type: number
-          default: ""
           description: Updated quantity
           example: 2
           minimum: 0.0001
         unitPrice:
           type: number
-          default: ""
           description: Updated unit price
           example: 59.99
           minimum: 0.00
         taxCode:
           type: string
-          default: ""
           description: Updated tax code
           example: TX-GENERAL
     WorkorderStateTransitionResponse:
       type: object
-      default: null
       description: Work order state transition history entry
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for this transition record
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order
           example: 550e8400-e29b-41d4-a716-446655440000
         fromStatus:
           type: string
-          default: ""
           description: The status the work order transitioned FROM
           example: DRAFT
         toStatus:
           type: string
-          default: ""
           description: The status the work order transitioned TO
           example: WORK_IN_PROGRESS
         transitionedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when the transition occurred
         transitionedBy:
           type: string
-          default: ""
           description: Stable actor identifier who performed the transition
           example: 550e8400-e29b-41d4-a716-446655440000
         reason:
           type: string
-          default: ""
           description: Reason for the transition
           example: Customer approved the estimate
         metadata:
           type: string
-          default: ""
           description: Additional metadata about the transition
     WorkorderSnapshotResponse:
       type: object
-      default: null
       description: Work order snapshot history entry
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Unique identifier for this snapshot record
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: ID of the work order
           example: 550e8400-e29b-41d4-a716-446655440000
         status:
           type: string
-          default: ""
           description: Status of the work order at the time of this snapshot
           example: WORK_IN_PROGRESS
         capturedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when the snapshot was captured
         capturedBy:
           type: string
-          default: ""
           description: Stable actor identifier who captured the snapshot
           example: 550e8400-e29b-41d4-a716-446655440000
         snapshotType:
           type: string
-          default: ""
           description: "Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)"
           example: MANUAL
         snapshotData:
           type: string
-          default: ""
           description: Snapshot data (typically JSON)
         reason:
           type: string
-          default: ""
           description: Reason for capturing the snapshot
     WorkorderPickedItemResponse:
       type: object
@@ -7196,7 +6528,6 @@ components:
           format: date-time
     WorkorderCapabilities:
       type: object
-      default: null
       description: Capability flags for workorder actions based on user authorities
       properties:
         canStart:
@@ -7241,23 +6572,19 @@ components:
           example: false
     WorkorderDetailResponse:
       type: object
-      default: null
       description: Comprehensive workorder detail with role-based visibility
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder ID
           example: 550e8400-e29b-41d4-a716-446655440000
         workorderNumber:
           type: string
-          default: ""
           description: Workorder number (from sequence)
           example: WO-2024-5001
         status:
           type: string
-          default: ""
           description: Workorder status
           enum:
           - DRAFT
@@ -7273,104 +6600,85 @@ components:
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer ID
           example: 550e8400-e29b-41d4-a716-446655440001
         customerName:
           type: string
-          default: ""
           description: Customer name
           example: John Doe
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle ID
           example: 550e8400-e29b-41d4-a716-446655440002
         vehicleDescription:
           type: string
-          default: ""
           description: Vehicle description
           example: "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\""
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Creation timestamp
           example: 2024-01-27T10:00:00Z
         createdBy:
           type: string
           format: uuid
-          default: ""
           description: Created by user ID
           example: 550e8400-e29b-41d4-a716-446655440003
         isStarted:
           type: string
-          default: ""
           description: Is workorder started (derived from status)
           example: "true"
         isInProgress:
           type: string
-          default: ""
           description: Is workorder in progress (derived from status)
           example: "true"
         isCompleted:
           type: string
-          default: ""
           description: Is workorder completed (derived from status)
           example: "false"
         startedAt:
           type: string
           format: date-time
-          default: ""
           description: Start timestamp
           example: 2024-01-27T14:30:00Z
         assignedTechnicianId:
           type: string
           format: uuid
-          default: ""
           description: Assigned technician ID
           example: 550e8400-e29b-41d4-a716-446655440004
         assignedTechnicianName:
           type: string
-          default: ""
           description: Assigned technician name
           example: Jane Smith
         services:
           type: array
-          default: ""
           description: Service line items with labor totals
           items:
             $ref: "#/components/schemas/WorkorderServiceResponse"
         parts:
           type: array
-          default: ""
           description: Part line items with usage totals
           items:
             $ref: "#/components/schemas/WorkorderPartResponse"
         estimatedTotal:
           type: number
-          default: ""
           description: Estimated total (conditionally included based on canViewFinancials)
           example: 1245.5
         laborTotal:
           type: number
-          default: ""
           description: Total labor cost (conditionally included)
           example: 425.0
         partsTotal:
           type: number
-          default: ""
           description: Total parts cost (conditionally included)
           example: 720.5
         taxTotal:
           type: number
-          default: ""
           description: Total tax (conditionally included)
           example: 100.0
         capabilities:
           $ref: "#/components/schemas/WorkorderCapabilities"
-          default: ""
           description: Capability flags indicating allowed actions
       required:
       - capabilities
@@ -7382,29 +6690,24 @@ components:
       - workorderId
     WorkorderPartResponse:
       type: object
-      default: null
       description: Workorder part line item with usage totals
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Part line item ID
           example: 550e8400-e29b-41d4-a716-446655440000
         productEntityId:
           type: string
           format: uuid
-          default: ""
           description: Product entity ID from catalog
           example: 550e8400-e29b-41d4-a716-446655440001
         description:
           type: string
-          default: ""
           description: Part description
           example: Brake Rotor - Front
         status:
           type: string
-          default: ""
           description: Part line status
           enum:
           - PENDING_APPROVAL
@@ -7416,64 +6719,52 @@ components:
           example: OPEN
         quantity:
           type: number
-          default: ""
           description: Authorized quantity from estimate
           example: 2.0
         unitPrice:
           type: number
-          default: ""
           description: Unit price per part
           example: 65.0
         quantityIssued:
           type: number
-          default: ""
           description: Quantity issued from inventory
           example: 2.0
         quantityConsumed:
           type: number
-          default: ""
           description: Quantity consumed (cannot be returned)
           example: 1.5
         quantityReturned:
           type: number
-          default: ""
           description: Quantity returned to inventory
           example: 0.5
         partCost:
           type: number
-          default: ""
           description: Total part cost (authorized quantity * unit price)
           example: 130.0
         lineTotal:
           type: number
-          default: ""
           description: Line total from estimate
           example: 130.0
     WorkorderServiceResponse:
       type: object
-      default: null
       description: Workorder service line item with labor totals
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Service line item ID
           example: 550e8400-e29b-41d4-a716-446655440000
         serviceEntityId:
           type: string
           format: uuid
-          default: ""
           description: Service entity ID from catalog
           example: 550e8400-e29b-41d4-a716-446655440001
         description:
           type: string
-          default: ""
           description: Service description
           example: Brake Pad Replacement
         status:
           type: string
-          default: ""
           description: Service line status
           enum:
           - PENDING_APPROVAL
@@ -7485,38 +6776,31 @@ components:
           example: OPEN
         quantity:
           type: number
-          default: ""
           description: Authorized quantity (hours for labor)
           example: 2.5
         unitPrice:
           type: number
-          default: ""
           description: Unit price (hourly rate)
           example: 85.0
         totalLaborHours:
           type: number
-          default: ""
           description: Total labor hours recorded
           example: 1.5
         laborCost:
           type: number
-          default: ""
           description: Total labor cost
           example: 127.5
         lineTotal:
           type: number
-          default: ""
           description: Line total from estimate
           example: 212.5
     CompletionPreconditionsResponse:
       type: object
-      default: null
       description: Completion precondition evaluation response
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder identifier
         canComplete:
           type: boolean
@@ -7524,34 +6808,28 @@ components:
           description: Whether the workorder can be completed
         currentStatus:
           type: string
-          default: ""
           description: Current status
         checklistItems:
           type: array
-          default: ""
           description: Checklist items evaluated before completion
           items:
             type: string
         blockingReasons:
           type: array
-          default: ""
           description: Blocking reasons that prevent completion
           items:
             type: string
         unresolvedApprovalGatedChangeRequests:
           type: integer
           format: int32
-          default: ""
           description: Number of unresolved approval-gated change requests
         nonTerminalServiceItems:
           type: integer
           format: int32
-          default: ""
           description: Number of service items not in COMPLETED/CANCELLED status
         nonTerminalPartItems:
           type: integer
           format: int32
-          default: ""
           description: Number of part items not in COMPLETED/CANCELLED status
         emergencyDenialAcknowledged:
           type: boolean
@@ -7563,51 +6841,42 @@ components:
           description: Whether at least one billable item exists for final snapshot
     EstimateSummaryResponse:
       type: object
-      default: null
       description: Customer-facing estimate summary with grouped items and totals
       properties:
         id:
           type: string
           format: uuid
-          default: ""
           description: Estimate identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         estimateNumber:
           type: string
-          default: ""
           description: Estimate number
           example: EST-2026-1001
         createdAt:
           type: string
           format: date-time
-          default: ""
           description: Creation timestamp
         expiresAt:
           type: string
           format: date-time
-          default: ""
           description: Estimate expiry timestamp
         customerId:
           type: string
           format: uuid
-          default: ""
           description: Customer identifier
           example: 550e8400-e29b-41d4-a716-446655440001
         vehicleId:
           type: string
           format: uuid
-          default: ""
           description: Vehicle identifier
           example: 550e8400-e29b-41d4-a716-446655440002
         locationId:
           type: string
           format: uuid
-          default: ""
           description: Location identifier
           example: 550e8400-e29b-41d4-a716-446655440003
         status:
           type: string
-          default: ""
           description: Current estimate status
           enum:
           - DRAFT
@@ -7624,34 +6893,28 @@ components:
           example: DRAFT
         partItems:
           type: array
-          default: ""
           description: Part line items
           items:
             $ref: "#/components/schemas/EstimateItemResponse"
         laborItems:
           type: array
-          default: ""
           description: Labor line items
           items:
             $ref: "#/components/schemas/EstimateItemResponse"
         subtotal:
           type: number
-          default: ""
           description: Subtotal amount
           example: 150.0
         taxAmount:
           type: number
-          default: ""
           description: Tax amount
           example: 12.38
         total:
           type: number
-          default: ""
           description: Total amount
           example: 162.38
         currencyUomId:
           type: string
-          default: ""
           description: Currency code
           example: USD
     Pageable:
@@ -7730,17 +6993,14 @@ components:
           type: boolean
     WorkorderStatusView:
       type: object
-      default: null
       description: Summary view of a workorder's work-in-progress status
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder unique identifier
         status:
           type: string
-          default: ""
           description: Current workorder status
           enum:
           - DRAFT
@@ -7754,43 +7014,34 @@ components:
           - CANCELLED
         assignedTechnicianId:
           type: string
-          default: ""
           description: ID of the technician currently assigned (null if unassigned)
         locationId:
           type: string
-          default: ""
           description: Location ID the workorder belongs to
         estimatedCompletionTime:
           type: string
           format: date-time
-          default: ""
           description: Estimated time of completion (null if not set)
         customerName:
           type: string
-          default: ""
           description: Full name of the customer
         vehicleInfo:
           type: string
-          default: ""
           description: Human-readable vehicle description (year/make/model/trim)
         lastUpdatedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp of the last status update
     WorkorderStatusDetail:
       type: object
-      default: null
       description: Full WIP detail for a single workorder
       properties:
         workorderId:
           type: string
           format: uuid
-          default: ""
           description: Workorder unique identifier
         status:
           type: string
-          default: ""
           description: Current workorder status
           enum:
           - DRAFT
@@ -7804,66 +7055,52 @@ components:
           - CANCELLED
         assignedTechnicianId:
           type: string
-          default: ""
           description: ID of the technician currently assigned (null if unassigned)
         locationId:
           type: string
-          default: ""
           description: Location ID the workorder belongs to
         estimatedCompletionTime:
           type: string
           format: date-time
-          default: ""
           description: Estimated time of completion (null if not set)
         customerName:
           type: string
-          default: ""
           description: Full name of the customer
         vehicleInfo:
           type: string
-          default: ""
           description: Human-readable vehicle description (year/make/model/trim)
         lastUpdatedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp of the last status update
         statusHistory:
           type: array
-          default: ""
           description: Ordered history of all status changes for this workorder
           items:
             $ref: "#/components/schemas/WorkorderStatusHistoryEntry"
         phoneNumber:
           type: string
-          default: ""
           description: Customer contact phone number (null if not available)
         vehicleVin:
           type: string
-          default: ""
           description: Vehicle VIN (null if not recorded)
         serviceDescription:
           type: string
-          default: ""
           description: Summary of the service being performed
         internalNotes:
           type: string
-          default: ""
           description: Internal shop notes (null if none)
         partsBlocking:
           type: array
-          default: ""
           description: Part numbers or descriptions that are blocking progress
           items:
             type: string
     WorkorderStatusHistoryEntry:
       type: object
-      default: null
       description: A single entry in the workorder status history
       properties:
         status:
           type: string
-          default: ""
           description: Status reached at this point in history
           enum:
           - DRAFT
@@ -7878,15 +7115,12 @@ components:
         changedAt:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when the status change occurred
         changedBy:
           type: string
-          default: ""
           description: Identity of the user who changed the status
         reason:
           type: string
-          default: ""
           description: Optional reason provided for the status change
     PageEstimateSummaryResponse:
       type: object
@@ -7948,46 +7182,38 @@ components:
           type: string
     DashboardResponse:
       type: object
-      default: null
       description: Daily Dispatch Board dashboard aggregate response
       properties:
         date:
           type: string
           format: date
-          default: ""
           description: The date this dashboard is for
         locationId:
           type: string
-          default: ""
           description: Location identifier
         workorders:
           type: array
-          default: ""
           description: Workorder summaries for the day
           items:
             $ref: "#/components/schemas/WorkorderSummary"
         mechanics:
           type: array
-          default: ""
           description: Mechanic statuses
           items:
             $ref: "#/components/schemas/MechanicStatus"
         bays:
           type: array
-          default: ""
           description: Service bay statuses
           items:
             $ref: "#/components/schemas/BayStatus"
         conflicts:
           type: array
-          default: ""
           description: Detected conflicts
           items:
             $ref: "#/components/schemas/ConflictEntry"
         lastRefreshed:
           type: string
           format: date-time
-          default: ""
           description: Timestamp when data was last refreshed
         dataQualityWarning:
           type: boolean
