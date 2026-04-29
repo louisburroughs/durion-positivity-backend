@@ -2,6 +2,7 @@
 -- Mounted at /docker-entrypoint-initdb.d/ and runs once on fresh volume initialization.
 -- All databases are owned by the POSTGRES_USER superuser.
 CREATE DATABASE pos_accounting_db;
+CREATE DATABASE pos_bulk_loader_db;
 CREATE DATABASE pos_catalog_db;
 CREATE DATABASE pos_customer_db;
 CREATE DATABASE pos_event_receiver_db;

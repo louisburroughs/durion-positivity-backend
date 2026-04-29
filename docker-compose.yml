@@ -199,6 +199,37 @@ services:
       timeout: 3s
       retries: 20
 
+  pos-bulk-loader:
+    build:
+      context: ./pos-bulk-loader
+      dockerfile: Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_bulk_loader_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_CATALOG_BASE_URL: http://pos-catalog:8080
+      POS_CUSTOMER_BASE_URL: http://pos-customer:8080
+      POS_PEOPLE_BASE_URL: http://pos-people:8080
+      POS_PRICE_BASE_URL: http://pos-price:8080
+      POS_VEHICLE_INVENTORY_BASE_URL: http://pos-vehicle-inventory:8080
+      POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
+      <<: [*pos-security-client-env, *pos-events-client-env]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+    depends_on:
+      pos-security-service:
+        condition: service_healthy
+    networks:
+      - pos-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   pos-catalog:
     build:
       context: ./pos-catalog

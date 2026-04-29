@@ -46,6 +46,10 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
     restart: unless-stopped
 
+  pos-bulk-loader:
+    image: ${ECR_REGISTRY}/durion/pos-bulk-loader:${BACKEND_TAG}
+    restart: unless-stopped
+
   pos-catalog:
     image: ${ECR_REGISTRY}/durion/pos-catalog:${BACKEND_TAG}
     restart: unless-stopped
