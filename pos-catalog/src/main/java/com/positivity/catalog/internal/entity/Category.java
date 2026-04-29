@@ -2,10 +2,13 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
@@ -22,4 +25,12 @@ public class Category {
     private UUID id;
 
     private String name;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }
