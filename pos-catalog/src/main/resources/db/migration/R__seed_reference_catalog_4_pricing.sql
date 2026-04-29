@@ -522,7 +522,7 @@ ON CONFLICT (msrp_id) DO UPDATE SET
     updated_at = NOW();
 
 -- item_cost: deterministic PK via md5('cost:' || sku)
-INSERT INTO item_cost (item_id, product_id, qty_on_hand, standard_cost, last_cost, average_cost, created_at, updated_at)
+INSERT INTO item_cost (item_cost_id, item_id, qty_on_hand, standard_cost, last_cost, average_cost, created_at, updated_at)
 SELECT
     md5('cost:' || p.sku)::uuid,
     p.id,
