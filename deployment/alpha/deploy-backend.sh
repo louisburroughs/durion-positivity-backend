@@ -8,9 +8,53 @@ ALPHA_ROOT="${ALPHA_ROOT:-/opt/durion/alpha}"
 BACKEND_DIR="${BACKEND_DIR:-${ALPHA_ROOT}/backend}"
 ENV_FILE="${ENV_FILE:-${ALPHA_ROOT}/.env}"
 PROD_OVERRIDE="${PROD_OVERRIDE:-${ALPHA_ROOT}/docker-compose.prod.yml}"
+DOCKER_PRUNE_INTERVAL_HOURS="${DOCKER_PRUNE_INTERVAL_HOURS:-24}"
+DOCKER_PRUNE_STATE_FILE="${DOCKER_PRUNE_STATE_FILE:-${ALPHA_ROOT}/.last-docker-prune-at}"
 
 env_single_quote() {
   printf "'%s'" "${1//\'/\'\"\'\"\'}"
+}
+
+should_run_docker_prune() {
+  if ! [[ "${DOCKER_PRUNE_INTERVAL_HOURS}" =~ ^[0-9]+$ ]]; then
+    echo "Skipping Docker prune: DOCKER_PRUNE_INTERVAL_HOURS must be an integer, got '${DOCKER_PRUNE_INTERVAL_HOURS}'." >&2
+    return 1
+  fi
+
+  if [[ "${DOCKER_PRUNE_INTERVAL_HOURS}" -le 0 ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${DOCKER_PRUNE_STATE_FILE}" ]]; then
+    return 0
+  fi
+
+  local now_epoch last_prune_epoch min_interval_seconds
+  now_epoch="$(date +%s)"
+  last_prune_epoch="$(cat "${DOCKER_PRUNE_STATE_FILE}" 2>/dev/null || echo 0)"
+  min_interval_seconds="$((DOCKER_PRUNE_INTERVAL_HOURS * 3600))"
+
+  [[ "$((now_epoch - last_prune_epoch))" -ge "${min_interval_seconds}" ]]
+}
+
+run_periodic_docker_prune() {
+  if ! should_run_docker_prune; then
+    echo "Skipping Docker prune: last cleanup is newer than ${DOCKER_PRUNE_INTERVAL_HOURS}h."
+    return 0
+  fi
+
+  echo "Docker disk usage before prune:"
+  docker system df || true
+
+  if docker system prune -af; then
+    date +%s > "${DOCKER_PRUNE_STATE_FILE}"
+    echo "Docker disk usage after prune:"
+    docker system df || true
+    return 0
+  fi
+
+  echo "Warning: docker system prune failed; deployment succeeded but cleanup did not." >&2
+  return 0
 }
 
 OBSERVABILITY_SERVICES=(
@@ -109,3 +153,4 @@ echo "Starting backend services: ${BACKEND_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${BACKEND_SERVICES[@]}"
 
 docker compose "${COMPOSE_ARGS[@]}" ps
+run_periodic_docker_prune
