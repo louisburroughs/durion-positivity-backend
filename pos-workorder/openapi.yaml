@@ -25,7 +25,7 @@ tags:
 - name: Estimate Search
   description: Estimate search and retrieval
 - name: Workorder Parts Usage
-  description: "Track parts issue, consumption, and returns"
+  description: Track parts issue, consumption, and returns
 - name: Daily Dispatch Board Dashboard
   description: Dispatch board aggregation and conflict detection
 - name: Work Order API
@@ -33,12 +33,11 @@ tags:
 - name: Approval Configuration API
   description: Endpoints for managing approval configurations by location and customer
 - name: Workexec Time Tracking API
-  description: "Endpoints for timer operations, labor entry creation, and job time\
-    \ totals"
+  description: Endpoints for timer operations, labor entry creation, and job time totals
 - name: Operational Context
   description: Workorder execution context operations
 - name: Workorder Part Adjustments
-  description: "Part substitutions, returns, and corrections"
+  description: Part substitutions, returns, and corrections
 - name: Workorder Picked Items
   description: Browser-facing picked items and consume endpoints for workorder fulfillment
 - name: Technician Assignment API
@@ -57,8 +56,7 @@ paths:
       tags:
       - Technician Assignment API
       summary: Get technician assignment
-      description: Retrieve the current technician assignment and full assignment
-        history for a workorder.
+      description: Retrieve the current technician assignment and full assignment history for a workorder.
       operationId: getTechnicianAssignment
       parameters:
       - name: workorderId
@@ -69,18 +67,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
-        "200":
+        '200':
           description: Assignment retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "404":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '404':
           description: Workorder not found or no assignment exists
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
       security:
       - bearerAuth:
         - workorder:workorder:view
@@ -90,8 +88,7 @@ paths:
       tags:
       - Technician Assignment API
       summary: Reassign workorder to different technician
-      description: Reassign a workorder to a different technician. Records reassignment
-        reason and maintains history.
+      description: Reassign a workorder to a different technician. Records reassignment reason and maintains history.
       operationId: reassignTechnician
       parameters:
       - name: workorderId
@@ -113,7 +110,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReassignTechnicianRequest"
+              $ref: '#/components/schemas/ReassignTechnicianRequest'
             examples:
               reassignTechnician:
                 description: reassignTechnician
@@ -124,30 +121,30 @@ paths:
                   notes: Reassigned due to availability
         required: true
       responses:
-        "200":
+        '200':
           description: Technician reassigned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "400":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '400':
           description: Invalid state transition or no current assignment
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "403":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "404":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
@@ -157,8 +154,7 @@ paths:
       tags:
       - Technician Assignment API
       summary: Assign technician to workorder
-      description: Assign a technician to a work order. Transitions workorder to ASSIGNED
-        status if currently APPROVED.
+      description: Assign a technician to a work order. Transitions workorder to ASSIGNED status if currently APPROVED.
       operationId: assignTechnician
       parameters:
       - name: workorderId
@@ -180,7 +176,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AssignTechnicianRequest"
+              $ref: '#/components/schemas/AssignTechnicianRequest'
             examples:
               assignTechnician:
                 description: assignTechnician
@@ -190,30 +186,30 @@ paths:
                   notes: Primary technician assigned
         required: true
       responses:
-        "200":
+        '200':
           description: Technician assigned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "400":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '400':
           description: Invalid state transition
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "403":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
-        "404":
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+        '404':
           description: Workorder or technician not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+                $ref: '#/components/schemas/TechnicianAssignmentResponse'
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
@@ -224,8 +220,7 @@ paths:
       tags:
       - Workorder Labor API
       summary: Adjust labor hours
-      description: Manually adjust hours worked on a labor entry with a reason for
-        audit trail.
+      description: Manually adjust hours worked on a labor entry with a reason for audit trail.
       operationId: adjustLaborHours
       parameters:
       - name: workorderId
@@ -254,7 +249,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdjustLaborRequest"
+              $ref: '#/components/schemas/AdjustLaborRequest'
             examples:
               adjustLabor:
                 description: adjustLabor
@@ -263,30 +258,30 @@ paths:
                   adjustmentReason: Corrected after timesheet review
         required: true
       responses:
-        "200":
+        '200':
           description: Labor hours adjusted successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '400':
           description: Invalid hours value
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "403":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '404':
           description: Labor entry not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -308,18 +303,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Configuration found and returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
-        "404":
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+        '404':
           description: Configuration not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
       security:
       - bearerAuth:
         - workorder:approval_config:view
@@ -344,21 +339,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApprovalConfigurationRequest"
+              $ref: '#/components/schemas/ApprovalConfigurationRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Configuration updated successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
-        "404":
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+        '404':
           description: Configuration not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
       security:
       - bearerAuth:
         - workorder:approval_config:edit
@@ -379,9 +374,9 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "204":
+        '204':
           description: Configuration deleted successfully.
-        "404":
+        '404':
           description: Configuration not found.
       security:
       - bearerAuth:
@@ -396,14 +391,14 @@ paths:
       description: Retrieve a list of all work orders.
       operationId: getAllWorkorders
       responses:
-        "200":
+        '200':
           description: List of work orders returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderResponse"
+                  $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth:
         - workorder:workorder:view
@@ -413,14 +408,12 @@ paths:
       tags:
       - Work Order API
       summary: Create a new work order
-      description: Add a new work order to the system. Supports idempotent creation
-        via Idempotency-Key header to prevent duplicate workorders.
+      description: Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.
       operationId: createWorkorder
       parameters:
       - name: Idempotency-Key
         in: header
-        description: Optional idempotency key to prevent duplicate creation (recommended
-          for retries)
+        description: Optional idempotency key to prevent duplicate creation (recommended for retries)
         required: false
         schema:
           type: string
@@ -430,7 +423,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateWorkorderRequest"
+              $ref: '#/components/schemas/CreateWorkorderRequest'
             examples:
               createWorkorder:
                 description: createWorkorder
@@ -439,13 +432,12 @@ paths:
                   customerId: 550e8400-e29b-41d4-a716-446655440010
         required: true
       responses:
-        "200":
-          description: "Work order created successfully, or existing work order returned\
-            \ if idempotency key was previously processed."
+        '200':
+          description: Work order created successfully, or existing work order returned if idempotency key was previously processed.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
+                $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/suggestSubstitutes:
@@ -461,23 +453,22 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/SubstituteLinkResponse"
+                  $ref: '#/components/schemas/SubstituteLinkResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/start:
     post:
       tags:
       - Operational Context
-      summary: "Start work on workorder, locking operational context"
-      description: Transitions the workorder into active execution and locks operational
-        context to prevent further overrides.
+      summary: Start work on workorder, locking operational context
+      description: Transitions the workorder into active execution and locks operational context to prevent further overrides.
       operationId: startWork
       parameters:
       - name: workorderId
@@ -490,32 +481,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StartWorkorderRequest"
+              $ref: '#/components/schemas/StartWorkorderRequest'
       responses:
-        "200":
-          description: "Work started, context locked"
+        '200':
+          description: Work started, context locked
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderStartResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderStartResponse'
+        '400':
           description: Cannot start workorder due to pending change requests
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderStartResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderStartResponse'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderStartResponse"
-        "409":
+                $ref: '#/components/schemas/WorkorderStartResponse'
+        '409':
           description: Work already started
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderStartResponse"
+                $ref: '#/components/schemas/WorkorderStartResponse'
       security:
       - bearerAuth:
         - workorder:start
@@ -526,8 +517,7 @@ paths:
       tags:
       - Workorder Labor API
       summary: Start labor session
-      description: Start tracking labor on a specific service item. Only one active
-        session allowed per service.
+      description: Start tracking labor on a specific service item. Only one active session allowed per service.
       operationId: startLaborSession
       parameters:
       - name: workorderId
@@ -556,7 +546,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StartLaborRequest"
+              $ref: '#/components/schemas/StartLaborRequest'
             examples:
               startLabor:
                 description: startLabor
@@ -565,36 +555,36 @@ paths:
                   notes: Starting diagnostic work
         required: true
       responses:
-        "201":
+        '201':
           description: Labor session started successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "200":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '200':
           description: Idempotent request - existing session returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '400':
           description: Invalid state - active session exists or invalid status
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "403":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '404':
           description: Workorder or service not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -605,8 +595,7 @@ paths:
       tags:
       - Work Order API
       summary: Reopen completed workorder
-      description: Controlled reopen for completed workorders. Requires elevated permission
-        and mandatory reason.
+      description: Controlled reopen for completed workorders. Requires elevated permission and mandatory reason.
       operationId: reopenWorkorder
       parameters:
       - name: workorderId
@@ -621,7 +610,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReopenWorkorderRequest"
+              $ref: '#/components/schemas/ReopenWorkorderRequest'
             examples:
               reopenWorkorder:
                 description: reopenWorkorder
@@ -629,24 +618,24 @@ paths:
                   reopenReason: Customer requested additional work
         required: true
       responses:
-        "200":
+        '200':
           description: Workorder reopened successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReopenWorkorderResponse"
-        "400":
+                $ref: '#/components/schemas/ReopenWorkorderResponse'
+        '400':
           description: Workorder cannot be reopened or reason missing.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReopenWorkorderResponse"
-        "404":
+                $ref: '#/components/schemas/ReopenWorkorderResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReopenWorkorderResponse"
+                $ref: '#/components/schemas/ReopenWorkorderResponse'
       security:
       - bearerAuth:
         - workorder:workorder:reopen_completed
@@ -670,33 +659,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConsumePickedItemsRequest"
+              $ref: '#/components/schemas/ConsumePickedItemsRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Picked items consumed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ConsumePickedItemsResponse"
-        "400":
+                $ref: '#/components/schemas/ConsumePickedItemsResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - workorder:parts:consume
@@ -727,33 +716,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ResolveScanRequest"
+              $ref: '#/components/schemas/ResolveScanRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Scan resolved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ResolveScanResponse"
-        "400":
+                $ref: '#/components/schemas/ResolveScanResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Workorder or pick task not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -781,30 +770,30 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: "Completion details; omit or send {} if no reason is provided"
+        description: Completion details; omit or send {} if no reason is provided
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompletePickTaskRequest"
+              $ref: '#/components/schemas/CompletePickTaskRequest'
       responses:
-        "200":
+        '200':
           description: Pick task completed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPickTaskResponse"
-        "403":
+                $ref: '#/components/schemas/WorkorderPickTaskResponse'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Workorder or pick task not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -842,39 +831,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConfirmPickLineRequest"
+              $ref: '#/components/schemas/ConfirmPickLineRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Pick line confirmed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPickTaskResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderPickTaskResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: "Workorder, pick task, or pick line not found"
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Workorder, pick task, or pick line not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "422":
+                $ref: '#/components/schemas/ApiError'
+        '422':
           description: Scan mismatch or domain validation error from pos-inventory
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -904,7 +893,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubstitutePartRequest"
+              $ref: '#/components/schemas/SubstitutePartRequest'
             examples:
               substitutePart:
                 description: substitutePart
@@ -915,30 +904,30 @@ paths:
                   notes: Equivalent OEM part
         required: true
       responses:
-        "201":
+        '201':
           description: Part substituted successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "400":
-          description: "Invalid request (part already consumed, etc.)"
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '400':
+          description: Invalid request (part already consumed, etc.)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "409":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '409':
           description: Idempotency conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -968,7 +957,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReturnPartRequest"
+              $ref: '#/components/schemas/ReturnPartRequest'
             examples:
               returnParts:
                 description: returnParts
@@ -977,24 +966,24 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "201":
+        '201':
           description: Parts returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '400':
+          description: Invalid request (exceeds available quantity, etc.)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1024,7 +1013,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReturnPartQuantityRequest"
+              $ref: '#/components/schemas/ReturnPartQuantityRequest'
             examples:
               returnUnused:
                 description: returnUnused
@@ -1035,24 +1024,24 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
-        "201":
+        '201':
           description: Unused quantity returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '400':
+          description: Invalid request (exceeds available quantity, etc.)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1063,8 +1052,7 @@ paths:
       tags:
       - Workorder Parts Usage
       summary: Issue parts to workorder
-      description: "Issue parts from inventory, reserving them for consumption on\
-        \ the workorder"
+      description: Issue parts from inventory, reserving them for consumption on the workorder
       operationId: issueParts
       parameters:
       - name: workorderId
@@ -1083,7 +1071,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/IssuePartRequest"
+              $ref: '#/components/schemas/IssuePartRequest'
             examples:
               issueParts:
                 description: issueParts
@@ -1092,30 +1080,30 @@ paths:
                   quantity: 2
         required: true
       responses:
-        "201":
+        '201':
           description: Parts issued successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "400":
-          description: "Invalid request (negative quantity, etc.)"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '400':
+          description: Invalid request (negative quantity, etc.)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "409":
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '409':
           description: Idempotency conflict (duplicate key)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1145,7 +1133,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CorrectPartQuantityRequest"
+              $ref: '#/components/schemas/CorrectPartQuantityRequest'
             examples:
               correctPartQuantity:
                 description: correctPartQuantity
@@ -1156,24 +1144,24 @@ paths:
                   notes: Corrected after inventory count
         required: true
       responses:
-        "201":
+        '201':
           description: Part quantity corrected successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1184,8 +1172,7 @@ paths:
       tags:
       - Workorder Parts Usage
       summary: Consume parts on workorder
-      description: Record actual consumption of parts. Quantity consumed cannot exceed
-        quantity issued.
+      description: Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.
       operationId: consumeParts
       parameters:
       - name: workorderId
@@ -1204,7 +1191,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConsumePartRequest"
+              $ref: '#/components/schemas/ConsumePartRequest'
             examples:
               consumeParts:
                 description: consumeParts
@@ -1213,24 +1200,24 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "201":
+        '201':
           description: Parts consumption recorded successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "400":
-          description: "Invalid request (exceeds issued quantity, etc.)"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '400':
+          description: Invalid request (exceeds issued quantity, etc.)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1241,8 +1228,7 @@ paths:
       tags:
       - Operational Context
       summary: Manager override of operational context
-      description: Applies a manager-authorized override to operational context values
-        before work starts; request is rejected once context is locked.
+      description: Applies a manager-authorized override to operational context values before work starts; request is rejected once context is locked.
       operationId: overrideOperationalContext
       parameters:
       - name: workorderId
@@ -1255,27 +1241,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OperationalContextOverrideRequest"
+              $ref: '#/components/schemas/OperationalContextOverrideRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Override applied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationalContextResponse"
-        "404":
+                $ref: '#/components/schemas/OperationalContextResponse'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationalContextResponse"
-        "409":
+                $ref: '#/components/schemas/OperationalContextResponse'
+        '409':
           description: Context locked (work started)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationalContextResponse"
+                $ref: '#/components/schemas/OperationalContextResponse'
       security:
       - bearerAuth:
         - workorder:operationalContext:override
@@ -1311,30 +1297,30 @@ paths:
           type: string
         example: labor-stop-550e8400-e29b-41d4-a716-446655440100
       responses:
-        "200":
+        '200':
           description: Labor session stopped successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '400':
           description: Session already stopped
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "403":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '404':
           description: Labor entry not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -1345,8 +1331,7 @@ paths:
       tags:
       - Work Order API
       summary: Generate invoice draft from completed workorder
-      description: Generate an invoice draft from a completed workorder with optional
-        idempotency key.
+      description: Generate an invoice draft from a completed workorder with optional idempotency key.
       operationId: generateInvoice
       parameters:
       - name: workorderId
@@ -1358,32 +1343,30 @@ paths:
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
-        description: Optional idempotency key to prevent duplicate invoice generation
-          (recommended for retries)
+        description: Optional idempotency key to prevent duplicate invoice generation (recommended for retries)
         required: false
         schema:
           type: string
         example: invoice-generate-550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: Invoice generated successfully or existing invoice returned
-            for idempotent replay.
+        '200':
+          description: Invoice generated successfully or existing invoice returned for idempotent replay.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "404":
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "409":
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '409':
           description: Work order is not in COMPLETED state.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
       security:
       - bearerAuth:
         - workorder:workorder:generate_invoice
@@ -1394,8 +1377,7 @@ paths:
       tags:
       - Work Order API
       summary: Complete a work order
-      description: "Complete a work order, transitioning it to COMPLETED status and\
-        \ emitting a WorkCompleted event."
+      description: Complete a work order, transitioning it to COMPLETED status and emitting a WorkCompleted event.
       operationId: completeWorkorder
       parameters:
       - name: workorderId
@@ -1410,7 +1392,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompleteWorkorderRequest"
+              $ref: '#/components/schemas/CompleteWorkorderRequest'
             examples:
               completeWorkorder:
                 description: completeWorkorder
@@ -1418,24 +1400,24 @@ paths:
                   completionNotes: Completed and verified
         required: true
       responses:
-        "200":
+        '200':
           description: Work order completed successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CompleteWorkorderResponse"
-        "400":
+                $ref: '#/components/schemas/CompleteWorkorderResponse'
+        '400':
           description: Invalid state transition or work order already completed.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CompleteWorkorderResponse"
-        "404":
+                $ref: '#/components/schemas/CompleteWorkorderResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CompleteWorkorderResponse"
+                $ref: '#/components/schemas/CompleteWorkorderResponse'
       security:
       - bearerAuth:
         - workorder:workorder:complete
@@ -1457,14 +1439,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: List of change requests returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ChangeRequestResponse"
+                  $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:view
@@ -1474,10 +1456,7 @@ paths:
       tags:
       - Change Request API
       summary: Create a change request
-      description: Technician creates a request for additional work beyond authorized
-        scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires
-        description and at least one service or part item. Supports idempotent creation
-        via Idempotency-Key header to prevent duplicate change requests.
+      description: Technician creates a request for additional work beyond authorized scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires description and at least one service or part item. Supports idempotent creation via Idempotency-Key header to prevent duplicate change requests.
       operationId: createChangeRequest
       parameters:
       - name: workorderId
@@ -1489,8 +1468,7 @@ paths:
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
-        description: Optional idempotency key to prevent duplicate creation (recommended
-          for retries)
+        description: Optional idempotency key to prevent duplicate creation (recommended for retries)
         required: false
         schema:
           type: string
@@ -1500,7 +1478,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateChangeRequestDTO"
+              $ref: '#/components/schemas/CreateChangeRequestDTO'
             examples:
               createChangeRequest:
                 description: createChangeRequest
@@ -1509,26 +1487,24 @@ paths:
                   approvalGated: true
         required: true
       responses:
-        "200":
-          description: "Change request created successfully, or existing change request\
-            \ returned if idempotency key was previously processed"
+        '200':
+          description: Change request created successfully, or existing change request returned if idempotency key was previously processed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "400":
-          description: "Invalid request - missing description, no items, or validation\
-            \ failed"
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '400':
+          description: Invalid request - missing description, no items, or validation failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "404":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
           description: Work order not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
+                $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:create
@@ -1539,9 +1515,7 @@ paths:
       tags:
       - Work Order API
       summary: Approve a work order with customer signature
-      description: Transition work order to APPROVED status with customer signature
-        capture. Work order can be approved from DRAFT status. Requires customer ID
-        validation and signature data (base64-encoded image).
+      description: Transition work order to APPROVED status with customer signature capture. Work order can be approved from DRAFT status. Requires customer ID validation and signature data (base64-encoded image).
       operationId: approveWorkorder
       parameters:
       - name: workorderId
@@ -1556,7 +1530,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApproveWorkorderRequest"
+              $ref: '#/components/schemas/ApproveWorkorderRequest'
             examples:
               approveWorkorder:
                 description: approveWorkorder
@@ -1568,25 +1542,24 @@ paths:
                   notes: Approved by customer
         required: true
       responses:
-        "200":
+        '200':
           description: Work order approved successfully with signature captured.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "400":
-          description: Work order cannot be approved in current state or customer
-            ID mismatch.
+                $ref: '#/components/schemas/WorkorderResponse'
+        '400':
+          description: Work order cannot be approved in current state or customer ID mismatch.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
+                $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth:
         - workorder:workorder:approve
@@ -1597,8 +1570,7 @@ paths:
       tags:
       - Work Session API
       summary: Stop a work session
-      description: Technician stops an active work session. Records end time and transitions
-        the session to COMPLETED status.
+      description: Technician stops an active work session. Records end time and transitions the session to COMPLETED status.
       operationId: stopWorkSession
       parameters:
       - name: workSessionId
@@ -1612,27 +1584,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StopWorkSessionRequest"
+              $ref: '#/components/schemas/StopWorkSessionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Work session stopped successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionResponse"
-        "400":
+                $ref: '#/components/schemas/WorkSessionResponse'
+        '400':
           description: Invalid request - work session not active or validation failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionResponse"
-        "404":
+                $ref: '#/components/schemas/WorkSessionResponse'
+        '404':
           description: Work session not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionResponse"
+                $ref: '#/components/schemas/WorkSessionResponse'
       security:
       - bearerAuth:
         - timekeeping:work_session:stop
@@ -1657,27 +1629,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddBreakSegmentRequest"
+              $ref: '#/components/schemas/AddBreakSegmentRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Break segment started successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
-        "400":
+                $ref: '#/components/schemas/BreakSegmentResponse'
+        '400':
           description: Invalid request - work session not active or validation failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
-        "404":
+                $ref: '#/components/schemas/BreakSegmentResponse'
+        '404':
           description: Work session not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
+                $ref: '#/components/schemas/BreakSegmentResponse'
       security:
       - bearerAuth:
         - timekeeping:work_session:break_start
@@ -1688,8 +1660,7 @@ paths:
       tags:
       - Work Session API
       summary: Stop a break segment
-      description: Technician records the end of a break segment within an active
-        work session.
+      description: Technician records the end of a break segment within an active work session.
       operationId: stopBreakSegment
       parameters:
       - name: workSessionId
@@ -1707,24 +1678,24 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
-        "200":
+        '200':
           description: Break segment stopped successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
-        "400":
+                $ref: '#/components/schemas/BreakSegmentResponse'
+        '400':
           description: Break segment not active or work session invalid
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
-        "404":
+                $ref: '#/components/schemas/BreakSegmentResponse'
+        '404':
           description: Work session or break segment not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BreakSegmentResponse"
+                $ref: '#/components/schemas/BreakSegmentResponse'
       security:
       - bearerAuth:
         - timekeeping:work_session:break_stop
@@ -1735,29 +1706,27 @@ paths:
       tags:
       - Work Session API
       summary: Start a work session
-      description: Technician starts a work session on a work order. Creates an IN_PROGRESS
-        work session and records the start time.
+      description: Technician starts a work session on a work order. Creates an IN_PROGRESS work session and records the start time.
       operationId: startWorkSession
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StartWorkSessionRequest"
+              $ref: '#/components/schemas/StartWorkSessionRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Work session started successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionResponse"
-        "400":
-          description: Invalid request - missing required fields or work order not
-            found
+                $ref: '#/components/schemas/WorkSessionResponse'
+        '400':
+          description: Invalid request - missing required fields or work order not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionResponse"
+                $ref: '#/components/schemas/WorkSessionResponse'
       security:
       - bearerAuth:
         - timekeeping:work_session:create
@@ -1780,15 +1749,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StopTravelSegmentRequest"
+              $ref: '#/components/schemas/StopTravelSegmentRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TravelSegmentResponse"
+                $ref: '#/components/schemas/TravelSegmentResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -1811,15 +1780,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateTravelSegmentAdjustmentRequest"
+              $ref: '#/components/schemas/CreateTravelSegmentAdjustmentRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TravelSegmentAdjustmentResponse"
+                $ref: '#/components/schemas/TravelSegmentAdjustmentResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -1842,17 +1811,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubmitTravelSegmentsRequest"
+              $ref: '#/components/schemas/SubmitTravelSegmentsRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/TravelSegmentResponse"
+                  $ref: '#/components/schemas/TravelSegmentResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -1868,15 +1837,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StartTravelSegmentRequest"
+              $ref: '#/components/schemas/StartTravelSegmentRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TravelSegmentResponse"
+                $ref: '#/components/schemas/TravelSegmentResponse'
       security:
       - bearerAuth:
         - workorder:labor:add
@@ -1899,15 +1868,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RejectTimeEntryRequest"
+              $ref: '#/components/schemas/RejectTimeEntryRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryResponse"
+                $ref: '#/components/schemas/TimeEntryResponse'
       security:
       - bearerAuth:
         - TimeEntry:Reject
@@ -1927,12 +1896,12 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryResponse"
+                $ref: '#/components/schemas/TimeEntryResponse'
       security:
       - bearerAuth:
         - TimeEntry:Approve
@@ -1946,14 +1915,14 @@ paths:
       description: Retrieve a list of all estimates.
       operationId: getAllEstimates
       responses:
-        "200":
+        '200':
           description: List of estimates returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EstimateResponse"
+                  $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -1963,10 +1932,7 @@ paths:
       tags:
       - Estimate API
       summary: Create a new draft estimate
-      description: "Create a new estimate in DRAFT status for a customer and vehicle.\
-        \ Requires ESTIMATE_CREATE permission. System will generate a unique estimate\
-        \ number and apply default values for location, currency, and tax region if\
-        \ not provided."
+      description: Create a new estimate in DRAFT status for a customer and vehicle. Requires ESTIMATE_CREATE permission. System will generate a unique estimate number and apply default values for location, currency, and tax region if not provided.
       operationId: createEstimate
       parameters:
       - name: Idempotency-Key
@@ -1981,7 +1947,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateEstimateRequest"
+              $ref: '#/components/schemas/CreateEstimateRequest'
             examples:
               createEstimate:
                 description: createEstimate
@@ -1991,32 +1957,31 @@ paths:
                   locationId: 550e8400-e29b-41d4-a716-446655440020
         required: true
       responses:
-        "201":
+        '201':
           description: Estimate created successfully.
           content:
             application/json:
               schema:
                 type: object
-        "400":
+        '400':
           description: Invalid request - missing required fields.
           content:
             application/json:
               schema:
                 type: object
-        "403":
+        '403':
           description: Forbidden - user does not have ESTIMATE_CREATE permission.
           content:
             application/json:
               schema:
                 type: object
-        "409":
-          description: Conflict - estimate could not be created due to state or integrity
-            constraints.
+        '409':
+          description: Conflict - estimate could not be created due to state or integrity constraints.
           content:
             application/json:
               schema:
                 type: object
-        "500":
+        '500':
           description: Internal server error - unexpected estimate creation failure.
           content:
             application/json:
@@ -2032,10 +1997,7 @@ paths:
       tags:
       - Estimate API
       summary: Submit estimate for customer approval
-      description: "Submit a DRAFT estimate for customer approval. Creates immutable\
-        \ snapshot and transitions to PENDING_APPROVAL state. Validates completeness\
-        \ (has customer, vehicle, line items, calculated totals). CAP:003 Issue #168\
-        \ - Submit Estimate for Customer Approval"
+      description: 'Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. Validates completeness (has customer, vehicle, line items, calculated totals). CAP:003 Issue #168 - Submit Estimate for Customer Approval'
       operationId: submitForApproval
       parameters:
       - name: estimateId
@@ -2046,24 +2008,24 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Estimate submitted for approval successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "400":
+                $ref: '#/components/schemas/EstimateResponse'
+        '400':
           description: Estimate is incomplete or not in DRAFT state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateResponse'
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
+                $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:submit
@@ -2074,8 +2036,7 @@ paths:
       tags:
       - Estimate API
       summary: Create historical snapshot
-      description: Capture an immutable snapshot of the estimate's complete state
-        (estimate + all line items) for audit trail and version history purposes.
+      description: Capture an immutable snapshot of the estimate's complete state (estimate + all line items) for audit trail and version history purposes.
       operationId: createEstimateSnapshot
       parameters:
       - name: estimateId
@@ -2093,24 +2054,24 @@ paths:
           type: string
         example: Snapshot captured before approval
       responses:
-        "200":
+        '200':
           description: Snapshot created successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateSnapshotResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateSnapshotResponse'
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateSnapshotResponse"
-        "409":
+                $ref: '#/components/schemas/EstimateSnapshotResponse'
+        '409':
           description: Snapshot creation failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateSnapshotResponse"
+                $ref: '#/components/schemas/EstimateSnapshotResponse'
       security:
       - bearerAuth:
         - workorder:estimate_snapshot:create
@@ -2121,8 +2082,7 @@ paths:
       tags:
       - Estimate API
       summary: Reopen a declined estimate
-      description: Transition a declined estimate back to DRAFT state. Can only be
-        done within the configured expiry period.
+      description: Transition a declined estimate back to DRAFT state. Can only be done within the configured expiry period.
       operationId: reopenEstimate
       parameters:
       - name: estimateId
@@ -2133,24 +2093,24 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Estimate reopened successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "400":
+                $ref: '#/components/schemas/EstimateResponse'
+        '400':
           description: Estimate cannot be reopened (not declined or expired).
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateResponse'
+        '404':
           description: Estimate not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
+                $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:reopen
@@ -2161,11 +2121,7 @@ paths:
       tags:
       - Estimate API
       summary: Promote approved estimate to workorder
-      description: "Promote an approved estimate to a workorder. Validates preconditions:\
-        \ estimate must be APPROVED, not expired, have approved items, and not already\
-        \ promoted. Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate\
-        \ was previously promoted (idempotency). CAP:004 Story #26 - Create a workorder\
-        \ from approved estimate."
+      description: 'Promote an approved estimate to a workorder. Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). CAP:004 Story #26 - Create a workorder from approved estimate.'
       operationId: promoteEstimateToWorkorder
       parameters:
       - name: estimateId
@@ -2183,30 +2139,30 @@ paths:
           type: string
         example: estimate-promote-550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Workorder created successfully from estimate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "400":
+                $ref: '#/components/schemas/WorkorderResponse'
+        '400':
           description: Validation error - estimate not in correct state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderResponse'
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "409":
+                $ref: '#/components/schemas/WorkorderResponse'
+        '409':
           description: Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
+                $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth:
         - workorder:estimate:promote
@@ -2217,9 +2173,7 @@ paths:
       tags:
       - Estimate API
       summary: Add line item to estimate
-      description: "Add a part or labor line item to a draft estimate. Estimate must\
-        \ be in DRAFT status. For PART items, provide productId or description. For\
-        \ LABOR items, provide serviceId or description."
+      description: Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. For PART items, provide productId or description. For LABOR items, provide serviceId or description.
       operationId: addEstimateItem
       parameters:
       - name: estimateId
@@ -2234,7 +2188,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddEstimateItemRequest"
+              $ref: '#/components/schemas/AddEstimateItemRequest'
             examples:
               addEstimateItem:
                 description: addEstimateItem
@@ -2246,30 +2200,30 @@ paths:
                   taxCode: LABOR_STANDARD
         required: true
       responses:
-        "200":
+        '200':
           description: Line item added successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "400":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '400':
           description: Validation error or invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "409":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
+                $ref: '#/components/schemas/EstimateItemResponse'
       security:
       - bearerAuth:
         - workorder:estimate_item:add
@@ -2280,8 +2234,7 @@ paths:
       tags:
       - Estimate API
       summary: Decline an estimate
-      description: Transition estimate to declined state. Estimate can be declined
-        from DRAFT or APPROVED status.
+      description: Transition estimate to declined state. Estimate can be declined from DRAFT or APPROVED status.
       operationId: declineEstimate
       parameters:
       - name: estimateId
@@ -2299,24 +2252,24 @@ paths:
           type: string
         example: Customer declined additional work
       responses:
-        "200":
+        '200':
           description: Estimate declined successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "400":
+                $ref: '#/components/schemas/EstimateResponse'
+        '400':
           description: Estimate cannot be declined in current state.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateResponse'
+        '404':
           description: Estimate not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
+                $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:decline
@@ -2327,9 +2280,7 @@ paths:
       tags:
       - Estimate API
       summary: Calculate taxes and totals
-      description: "Calculate subtotal, tax amount, and total for an estimate based\
-        \ on its line items. Estimate must be in DRAFT status. Uses stub tax calculation\
-        \ (8.25% flat rate) pending pos-accounting integration."
+      description: Calculate subtotal, tax amount, and total for an estimate based on its line items. Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending pos-accounting integration.
       operationId: calculateEstimateTotals
       parameters:
       - name: estimateId
@@ -2340,27 +2291,24 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Totals calculated successfully
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties: {}
-        "404":
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties: {}
-        "409":
+        '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties: {}
       security:
       - bearerAuth:
         - workorder:estimate:calculate
@@ -2371,11 +2319,7 @@ paths:
       tags:
       - Estimate API
       summary: Approve an estimate with customer signature
-      description: "Transition estimate to approved state with customer signature\
-        \ capture. Estimate can be approved from DRAFT status. Requires customer ID\
-        \ validation and signature data (base64-encoded image). For commercial accounts\
-        \ with PO enforcement enabled, a purchase order number must be provided (CAP:092\
-        \ Story #98)."
+      description: 'Transition estimate to approved state with customer signature capture. Estimate can be approved from DRAFT status. Requires customer ID validation and signature data (base64-encoded image). For commercial accounts with PO enforcement enabled, a purchase order number must be provided (CAP:092 Story #98).'
       operationId: approveEstimate
       parameters:
       - name: estimateId
@@ -2386,12 +2330,11 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: "Approval request with customer ID, signature capture, and optional\
-          \ selective line item approvals"
+        description: Approval request with customer ID, signature capture, and optional selective line item approvals
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApproveEstimateRequest"
+              $ref: '#/components/schemas/ApproveEstimateRequest'
             examples:
               approveEstimate:
                 description: approveEstimate
@@ -2404,25 +2347,24 @@ paths:
                   purchaseOrderNumber: PO-12345
         required: true
       responses:
-        "200":
+        '200':
           description: Estimate approved successfully with signature captured.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "400":
-          description: "Estimate cannot be approved in current state, customer ID\
-            \ mismatch, or PO required but not provided."
+                $ref: '#/components/schemas/EstimateResponse'
+        '400':
+          description: Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateResponse'
+        '404':
           description: Estimate not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
+                $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:approve
@@ -2433,46 +2375,45 @@ paths:
       tags:
       - Estimates from Appointments
       summary: Create draft estimate from appointment
-      description: "Creates a new DRAFT estimate from an appointment. Idempotent:\
-        \ returns existing estimate if appointmentId already has one."
+      description: 'Creates a new DRAFT estimate from an appointment. Idempotent: returns existing estimate if appointmentId already has one.'
       operationId: createEstimateFromAppointment
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateEstimateFromAppointmentRequest"
+              $ref: '#/components/schemas/CreateEstimateFromAppointmentRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Estimate created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
-        "200":
+                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+        '200':
           description: Existing estimate returned (idempotent)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
-        "400":
+                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+        '400':
           description: Missing or invalid required fields
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
-        "401":
+                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+        '401':
           description: Unauthenticated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
-        "403":
+                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateEstimateFromAppointmentResponse"
+                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
       security:
       - bearerAuth: []
   /v1/workorders/changeRequests/{changeId}/emergency-override:
@@ -2480,9 +2421,7 @@ paths:
       tags:
       - Change Request API
       summary: Apply emergency override
-      description: Manager applies emergency override to approve a change request
-        with exception. Requires Manager role and a valid exception reason. Items
-        move from PENDING_APPROVAL to READY_TO_EXECUTE status.
+      description: Manager applies emergency override to approve a change request with exception. Requires Manager role and a valid exception reason. Items move from PENDING_APPROVAL to READY_TO_EXECUTE status.
       operationId: applyEmergencyOverride
       parameters:
       - name: changeId
@@ -2497,7 +2436,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EmergencyOverrideDTO"
+              $ref: '#/components/schemas/EmergencyOverrideDTO'
             examples:
               emergencyOverride:
                 description: emergencyOverride
@@ -2506,30 +2445,30 @@ paths:
                   exceptionReason: Safety-critical repair authorized
         required: true
       responses:
-        "200":
+        '200':
           description: Emergency override applied successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "400":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '400':
           description: Cannot apply override - invalid state or missing reason
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "403":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '403':
           description: Insufficient permissions - Manager role required
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "404":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
           description: Change request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
+                $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:emergency_override
@@ -2540,9 +2479,7 @@ paths:
       tags:
       - Change Request API
       summary: Decline a change request
-      description: Service Advisor declines the change request. Items move from PENDING_APPROVAL
-        to CANCELLED status (not billable). Approval note is required to record the
-        decline decision.
+      description: Service Advisor declines the change request. Items move from PENDING_APPROVAL to CANCELLED status (not billable). Approval note is required to record the decline decision.
       operationId: declineChangeRequest
       parameters:
       - name: changeId
@@ -2557,7 +2494,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DeclineChangeRequestDTO"
+              $ref: '#/components/schemas/DeclineChangeRequestDTO'
             examples:
               declineChangeRequest:
                 description: declineChangeRequest
@@ -2565,24 +2502,24 @@ paths:
                   approvalNote: Declined by customer
         required: true
       responses:
-        "200":
+        '200':
           description: Change request declined successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "400":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '400':
           description: Cannot decline - invalid state or missing note
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "404":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
           description: Change request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
+                $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:decline
@@ -2593,8 +2530,7 @@ paths:
       tags:
       - Change Request API
       summary: Approve a change request
-      description: Service Advisor approves the change request. Items move from PENDING_APPROVAL
-        to READY_TO_EXECUTE status. Approval note is required as the approval artifact.
+      description: Service Advisor approves the change request. Items move from PENDING_APPROVAL to READY_TO_EXECUTE status. Approval note is required as the approval artifact.
       operationId: approveChangeRequest
       parameters:
       - name: changeId
@@ -2609,7 +2545,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApproveChangeRequestDTO"
+              $ref: '#/components/schemas/ApproveChangeRequestDTO'
             examples:
               approveChangeRequest:
                 description: approveChangeRequest
@@ -2618,24 +2554,24 @@ paths:
                   approvalNote: Approved after customer confirmation
         required: true
       responses:
-        "200":
+        '200':
           description: Change request approved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "400":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '400':
           description: Cannot approve - invalid state or missing approval note
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "404":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
           description: Change request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
+                $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:approve
@@ -2646,8 +2582,7 @@ paths:
       tags:
       - Change Request API
       summary: Record customer denial acknowledgment
-      description: "For declined emergency/safety items, record that customer acknowledged\
-        \ the denial. Required before closing the work order and returning the vehicle."
+      description: For declined emergency/safety items, record that customer acknowledged the denial. Required before closing the work order and returning the vehicle.
       operationId: recordCustomerDenialAcknowledgment
       parameters:
       - name: changeId
@@ -2658,11 +2593,11 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "204":
+        '204':
           description: Acknowledgment recorded successfully
-        "400":
+        '400':
           description: Not an emergency request or invalid state
-        "404":
+        '404':
           description: Change request not found
       security:
       - bearerAuth: []
@@ -2674,19 +2609,19 @@ paths:
       description: Stop active timer entries for the authenticated mechanic
       operationId: stopTimers
       responses:
-        "200":
+        '200':
           description: Timers stopped successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecTimerStopResponse"
-        "400":
+                $ref: '#/components/schemas/WorkexecTimerStopResponse'
+        '400':
           description: Missing or invalid authenticated user id
           content:
             application/json:
               schema:
                 type: object
-        "409":
+        '409':
           description: Conflict while stopping timers
           content:
             application/json:
@@ -2717,34 +2652,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WorkexecTimerStartRequest"
+              $ref: '#/components/schemas/WorkexecTimerStartRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Timer started successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-        "200":
+                $ref: '#/components/schemas/WorkexecTimerEntryResponse'
+        '200':
           description: Idempotent replay returned existing timer
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-        "400":
+                $ref: '#/components/schemas/WorkexecTimerEntryResponse'
+        '400':
           description: Missing or invalid authenticated user id
           content:
             application/json:
               schema:
                 type: object
-        "404":
+        '404':
           description: Referenced resource not found
           content:
             application/json:
               schema:
                 type: object
-        "409":
+        '409':
           description: Conflict while starting timer
           content:
             application/json:
@@ -2782,36 +2717,36 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WorkexecLaborPerformedRequest"
+              $ref: '#/components/schemas/WorkexecLaborPerformedRequest'
             example:
               workorderId: 550e8400-e29b-41d4-a716-446655440001
         required: true
       responses:
-        "201":
+        '201':
           description: Labor entry created successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
-        "200":
+                $ref: '#/components/schemas/WorkexecLaborPerformedResponse'
+        '200':
           description: Idempotent replay returned existing labor entry
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
-        "400":
+                $ref: '#/components/schemas/WorkexecLaborPerformedResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
                 type: object
-        "404":
+        '404':
           description: Related resource not found
           content:
             application/json:
               schema:
                 type: object
-        "409":
+        '409':
           description: Conflict while recording labor
           content:
             application/json:
@@ -2834,15 +2769,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApprovalConfigurationRequest"
+              $ref: '#/components/schemas/ApprovalConfigurationRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Configuration created successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
       security:
       - bearerAuth:
         - workorder:approval_config:create
@@ -2864,18 +2799,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Estimate found and returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateResponse'
+        '404':
           description: Estimate not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateResponse"
+                $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -2896,9 +2831,9 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "204":
+        '204':
           description: Estimate deleted successfully.
-        "404":
+        '404':
           description: Estimate not found.
       security:
       - bearerAuth:
@@ -2921,10 +2856,9 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: {}
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
@@ -2940,8 +2874,7 @@ paths:
       tags:
       - Estimate API
       summary: Remove line item
-      description: Remove a line item from a draft estimate (soft delete). Estimate
-        must be in DRAFT status.
+      description: Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.
       operationId: deleteEstimateItem
       parameters:
       - name: estimateId
@@ -2959,11 +2892,11 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
-        "204":
+        '204':
           description: Line item removed successfully
-        "404":
+        '404':
           description: Estimate or item not found
-        "409":
+        '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
       security:
       - bearerAuth:
@@ -2974,8 +2907,7 @@ paths:
       tags:
       - Estimate API
       summary: Update line item
-      description: Update an existing line item on a draft estimate. Estimate must
-        be in DRAFT status. Only provided fields will be updated.
+      description: Update an existing line item on a draft estimate. Estimate must be in DRAFT status. Only provided fields will be updated.
       operationId: updateEstimateItem
       parameters:
       - name: estimateId
@@ -2997,7 +2929,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateEstimateItemRequest"
+              $ref: '#/components/schemas/UpdateEstimateItemRequest'
             examples:
               updateEstimateItem:
                 description: updateEstimateItem
@@ -3008,30 +2940,30 @@ paths:
                   taxCode: LABOR_STANDARD
         required: true
       responses:
-        "200":
+        '200':
           description: Line item updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "400":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '400':
           description: Validation error or invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '404':
           description: Estimate or item not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
-        "409":
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateItemResponse"
+                $ref: '#/components/schemas/EstimateItemResponse'
       security:
       - bearerAuth:
         - workorder:estimate_item:edit
@@ -3053,18 +2985,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Work order found and returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderResponse"
+                $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth:
         - workorder:workorder:view
@@ -3085,9 +3017,9 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "204":
+        '204':
           description: Work order deleted successfully.
-        "404":
+        '404':
           description: Work order not found.
       security:
       - bearerAuth: []
@@ -3107,14 +3039,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Transition history returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderStateTransitionResponse"
+                  $ref: '#/components/schemas/WorkorderStateTransitionResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/snapshots:
@@ -3133,14 +3065,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Snapshot history returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderSnapshotResponse"
+                  $ref: '#/components/schemas/WorkorderSnapshotResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/picked-items:
@@ -3158,22 +3090,20 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Picked items retrieved successfully
           content:
             application/json:
               schema:
                 type: array
-                contains:
                 items:
-                  $ref: "#/components/schemas/WorkorderPickedItemResponse"
-                unevaluatedItems:
-        "403":
+                  $ref: '#/components/schemas/WorkorderPickedItemResponse'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3194,24 +3124,24 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Pick list retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPickListResponse"
-        "403":
+                $ref: '#/components/schemas/WorkorderPickListResponse'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3232,28 +3162,26 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Pick tasks retrieved successfully
           content:
             application/json:
               schema:
                 type: array
-                contains:
                 items:
-                  $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                unevaluatedItems:
-        "403":
+                  $ref: '#/components/schemas/WorkorderPickTaskResponse'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3264,8 +3192,7 @@ paths:
       tags:
       - Workorder Parts Usage
       summary: Get parts usage history
-      description: "Retrieve usage history (issue, consume, return events) for parts\
-        \ on the workorder"
+      description: Retrieve usage history (issue, consume, return events) for parts on the workorder
       operationId: getUsageHistory
       parameters:
       - name: workorderId
@@ -3282,20 +3209,20 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
-        "200":
+        '200':
           description: Usage history retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                  $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:view
@@ -3306,8 +3233,7 @@ paths:
       tags:
       - Workorder Part Adjustments
       summary: Get part adjustment history
-      description: "Retrieve adjustment history (substitutions, returns, corrections)\
-        \ for parts on the workorder"
+      description: Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder
       operationId: getAdjustmentHistory
       parameters:
       - name: workorderId
@@ -3324,20 +3250,20 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
-        "200":
+        '200':
           description: Adjustment history retrieved successfully (newest first)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '404':
           description: Workorder or part not found
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                  $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:view
@@ -3348,8 +3274,7 @@ paths:
       tags:
       - Operational Context
       summary: Get operational context for workorder
-      description: "Returns the current operational context for a workorder, including\
-        \ flags and source data used to drive execution decisions."
+      description: Returns the current operational context for a workorder, including flags and source data used to drive execution decisions.
       operationId: getOperationalContext
       parameters:
       - name: workorderId
@@ -3359,18 +3284,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Operational context returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationalContextResponse"
-        "404":
+                $ref: '#/components/schemas/OperationalContextResponse'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationalContextResponse"
+                $ref: '#/components/schemas/OperationalContextResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/labor:
@@ -3378,7 +3303,7 @@ paths:
       tags:
       - Workorder Labor API
       summary: Get labor history
-      description: "Retrieve all labor entries for a workorder, ordered newest first."
+      description: Retrieve all labor entries for a workorder, ordered newest first.
       operationId: getLaborHistory
       parameters:
       - name: workorderId
@@ -3389,22 +3314,22 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
-        "200":
+        '200':
           description: Labor history retrieved successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-        "403":
+                  $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+        '403':
           description: Permission denied
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+                  $ref: '#/components/schemas/WorkorderLaborEntryResponse'
       security:
       - bearerAuth:
         - workorder:labor:view
@@ -3415,9 +3340,7 @@ paths:
       tags:
       - Workorder Detail
       summary: Get workorder detail with role-based visibility
-      description: Returns comprehensive workorder detail. Financial fields are conditionally
-        included based on user authorities. Capability flags indicate which actions
-        the user can perform.
+      description: Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. Capability flags indicate which actions the user can perform.
       operationId: getWorkorderDetail
       parameters:
       - name: workorderId
@@ -3433,20 +3356,20 @@ paths:
         required: false
         schema:
           type: string
-        example: "workorder:workorder:view,workorder:financials:view"
+        example: workorder:workorder:view,workorder:financials:view
       responses:
-        "200":
+        '200':
           description: Workorder detail retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderDetailResponse"
-        "404":
+                $ref: '#/components/schemas/WorkorderDetailResponse'
+        '404':
           description: Workorder not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderDetailResponse"
+                $ref: '#/components/schemas/WorkorderDetailResponse'
       security:
       - bearerAuth: []
   /v1/workorders/{workorderId}/completion-preconditions:
@@ -3454,8 +3377,7 @@ paths:
       tags:
       - Work Order API
       summary: Validate completion preconditions
-      description: Evaluate completion preconditions for a workorder and return checklist
-        + blocking reasons.
+      description: Evaluate completion preconditions for a workorder and return checklist + blocking reasons.
       operationId: getCompletionPreconditions
       parameters:
       - name: workorderId
@@ -3466,18 +3388,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Completion preconditions evaluated successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CompletionPreconditionsResponse"
-        "404":
+                $ref: '#/components/schemas/CompletionPreconditionsResponse'
+        '404':
           description: Work order not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CompletionPreconditionsResponse"
+                $ref: '#/components/schemas/CompletionPreconditionsResponse'
       security:
       - bearerAuth:
         - workorder:workorder:complete
@@ -3488,8 +3410,7 @@ paths:
       tags:
       - Change Request API
       summary: Check if work order can be closed
-      description: Verify all declined emergency/safety items have customer denial
-        acknowledgment
+      description: Verify all declined emergency/safety items have customer denial acknowledgment
       operationId: canCloseWorkorder
       parameters:
       - name: workorderId
@@ -3500,8 +3421,8 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: "Returns true if work order can be closed, false otherwise"
+        '200':
+          description: Returns true if work order can be closed, false otherwise
           content:
             application/json:
               schema:
@@ -3513,9 +3434,7 @@ paths:
       tags:
       - Estimate API
       summary: Get estimate summary (customer-facing)
-      description: "Retrieve a customer-facing summary of an estimate with grouped\
-        \ line items (parts and labor) and financial breakdown. Use the /{estimateId}/pdf\
-        \ endpoint to generate a PDF document."
+      description: Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) and financial breakdown. Use the /{estimateId}/pdf endpoint to generate a PDF document.
       operationId: getEstimateSummary
       parameters:
       - name: estimateId
@@ -3526,18 +3445,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Summary retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateSummaryResponse"
-        "404":
+                $ref: '#/components/schemas/EstimateSummaryResponse'
+        '404':
           description: Estimate not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EstimateSummaryResponse"
+                $ref: '#/components/schemas/EstimateSummaryResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -3548,9 +3467,7 @@ paths:
       tags:
       - Estimate API
       summary: Generate estimate PDF
-      description: "Generate a PDF document for an estimate containing header details,\
-        \ line items grouped by type (parts and labor), and financial totals. Rendered\
-        \ via pos-documents service."
+      description: Generate a PDF document for an estimate containing header details, line items grouped by type (parts and labor), and financial totals. Rendered via pos-documents service.
       operationId: generateEstimatePdf
       parameters:
       - name: estimateId
@@ -3561,20 +3478,20 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: PDF generated successfully
           content:
             application/pdf:
               schema:
                 type: string
-        "404":
+        '404':
           description: Estimate not found
           content:
             application/pdf:
               schema:
                 type: string
                 format: byte
-        "502":
+        '502':
           description: Document service unavailable
           content:
             application/pdf:
@@ -3602,14 +3519,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
-        "200":
+        '200':
           description: List of estimates returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EstimateResponse"
+                  $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -3631,14 +3548,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
-        "200":
+        '200':
           description: List of estimates returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EstimateResponse"
+                  $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -3660,14 +3577,14 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
-        "200":
+        '200':
           description: List of estimates returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EstimateResponse"
+                  $ref: '#/components/schemas/EstimateResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -3689,18 +3606,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
+        '200':
           description: Change request found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
-        "404":
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
           description: Change request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChangeRequestResponse"
+                $ref: '#/components/schemas/ChangeRequestResponse'
       security:
       - bearerAuth:
         - workorder:change_request:view
@@ -3714,14 +3631,14 @@ paths:
       description: Retrieve a list of all approval configurations.
       operationId: getAllConfigurations
       responses:
-        "200":
+        '200':
           description: List of configurations returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApprovalConfigurationResponse"
+                  $ref: '#/components/schemas/ApprovalConfigurationResponse'
       security:
       - bearerAuth:
         - workorder:approval_config:view
@@ -3732,9 +3649,7 @@ paths:
       tags:
       - WIP Dashboard
       summary: List active WIP workorders
-      description: "Returns a paginated list of workorders in active WIP statuses.\
-        \ When the caller holds workorder:wip:view_all_locations, results span all\
-        \ locations."
+      description: Returns a paginated list of workorders in active WIP statuses. When the caller holds workorder:wip:view_all_locations, results span all locations.
       operationId: listWip
       parameters:
       - name: locationId
@@ -3753,14 +3668,14 @@ paths:
         in: query
         required: true
         schema:
-          $ref: "#/components/schemas/Pageable"
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageWorkorderStatusView"
+                $ref: '#/components/schemas/PageWorkorderStatusView'
       security:
       - bearerAuth:
         - workorder:wip:view
@@ -3771,8 +3686,7 @@ paths:
       tags:
       - WIP Dashboard
       summary: Get WIP detail for a workorder
-      description: Returns full WIP detail for a single workorder including status
-        history.
+      description: Returns full WIP detail for a single workorder including status history.
       operationId: getWipDetail
       parameters:
       - name: workorderId
@@ -3782,12 +3696,12 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkorderStatusDetail"
+                $ref: '#/components/schemas/WorkorderStatusDetail'
       security:
       - bearerAuth:
         - workorder:wip:view
@@ -3801,13 +3715,13 @@ paths:
       description: Retrieve active timer entries for the authenticated mechanic
       operationId: getActiveTimerEntries
       responses:
-        "200":
+        '200':
           description: Active timers returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-        "400":
+                $ref: '#/components/schemas/WorkexecTimerEntryResponse'
+        '400':
           description: Missing or invalid authenticated user id
           content:
             application/json:
@@ -3823,8 +3737,7 @@ paths:
       tags:
       - Workexec Time Tracking API
       summary: Get job time totals
-      description: "Retrieve aggregated tracked hours for a date range, timezone,\
-        \ and optional location/technicians"
+      description: Retrieve aggregated tracked hours for a date range, timezone, and optional location/technicians
       operationId: getJobTimeTotals
       parameters:
       - name: startDate
@@ -3864,13 +3777,13 @@ paths:
         example:
         - 550e8400-e29b-41d4-a716-446655440120
       responses:
-        "200":
+        '200':
           description: Job time totals returned successfully
           content:
             application/json:
               schema:
                 type: object
-        "400":
+        '400':
           description: Invalid request parameters
           content:
             application/json:
@@ -3886,8 +3799,7 @@ paths:
       tags:
       - Estimate Search
       summary: Search estimates
-      description: Paginated search for estimates filtered by optional customerId
-        and/or vehicleId.
+      description: Paginated search for estimates filtered by optional customerId and/or vehicleId.
       operationId: searchEstimates
       parameters:
       - name: customerId
@@ -3906,14 +3818,14 @@ paths:
         in: query
         required: true
         schema:
-          $ref: "#/components/schemas/Pageable"
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Page of estimate summaries returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageEstimateSummaryResponse"
+                $ref: '#/components/schemas/PageEstimateSummaryResponse'
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -3924,8 +3836,7 @@ paths:
       tags:
       - Daily Dispatch Board Dashboard
       summary: Get daily dispatch dashboard
-      description: "Returns workorder, mechanic, bay, and conflict data for the given\
-        \ location and date"
+      description: Returns workorder, mechanic, bay, and conflict data for the given location and date
       operationId: getDashboard
       parameters:
       - name: locationId
@@ -3940,12 +3851,12 @@ paths:
           type: string
           format: date
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DashboardResponse"
+                $ref: '#/components/schemas/DashboardResponse'
       security:
       - bearerAuth:
         - workorder:dashboard:view
@@ -3974,18 +3885,18 @@ paths:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
-        "200":
+        '200':
           description: Configuration found and returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
-        "404":
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+        '404':
           description: No configuration found (default will be used).
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+                $ref: '#/components/schemas/ApprovalConfigurationResponse'
       security:
       - bearerAuth:
         - workorder:approval_config:view
@@ -4009,7 +3920,7 @@ components:
           type: string
           format: date-time
           description: When the technician was assigned
-          example: 2024-01-27T14:30:00
+          example: 2024-01-27 14:30:00
         assignedBy:
           type: string
           description: ID of user who assigned the technician
@@ -4018,7 +3929,7 @@ components:
           type: string
           format: date-time
           description: When the technician was unassigned (null for current assignment)
-          example: 2024-01-27T16:00:00
+          example: 2024-01-27 16:00:00
         reason:
           type: string
           description: Reason for reassignment/unassignment
@@ -4046,7 +3957,7 @@ components:
           type: string
           format: date-time
           description: When the technician was assigned
-          example: 2024-01-27T14:30:00
+          example: 2024-01-27 14:30:00
         assignedBy:
           type: string
           description: ID of user who assigned the technician
@@ -4077,7 +3988,7 @@ components:
           type: string
           format: date-time
           description: When technician was reassigned
-          example: 2024-01-27T15:30:00
+          example: 2024-01-27 15:30:00
         reassignedBy:
           type: string
           description: ID of user who performed reassignment
@@ -4098,7 +4009,7 @@ components:
           type: array
           description: Full assignment history for the workorder
           items:
-            $ref: "#/components/schemas/AssignmentHistoryEntry"
+            $ref: '#/components/schemas/AssignmentHistoryEntry'
     ReassignTechnicianRequest:
       type: object
       description: Request to reassign a workorder to a different technician
@@ -4111,13 +4022,12 @@ components:
         reassignedByUserId:
           type: string
           format: uuid
-          description: ID of the user performing the reassignment (defaults from X-User-Id
-            header if not provided)
+          description: ID of the user performing the reassignment (defaults from X-User-Id header if not provided)
           example: 550e8400-e29b-41d4-a716-446655440000
         reason:
           type: string
           description: Reason for reassignment
-          example: "Original technician unavailable, reassigning to available tech"
+          example: Original technician unavailable, reassigning to available tech
         notes:
           type: string
           description: Additional notes for the reassignment
@@ -4155,12 +4065,12 @@ components:
           type: string
           format: date-time
           description: Labor session start time
-          example: 2024-01-27T14:30:00
+          example: 2024-01-27 14:30:00
         endTime:
           type: string
           format: date-time
           description: Labor session end time (null if still active)
-          example: 2024-01-27T16:30:00
+          example: 2024-01-27 16:30:00
         hoursWorked:
           type: number
           description: Hours worked
@@ -4186,7 +4096,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp
-          example: 2024-01-27T14:30:00Z
+          example: 2024-01-27 14:30:00+00:00
     AdjustLaborRequest:
       type: object
       description: Request to manually adjust labor hours
@@ -4228,14 +4138,13 @@ components:
           minimum: 0
         requireSignature:
           type: string
-          default: "false"
+          default: 'false'
           description: Whether signature is required
-          example: "false"
+          example: 'false'
         priority:
           type: integer
           format: int32
-          description: "Priority for configuration matching (0=default, 1=location-specific,\
-            \ 2=customer-specific)"
+          description: Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)
           example: 0
           minimum: 0
       required:
@@ -4276,8 +4185,7 @@ components:
         priority:
           type: integer
           format: int32
-          description: "Priority for configuration matching (0=default, 1=location-specific,\
-            \ 2=customer-specific)"
+          description: Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)
           example: 0
     CreateWorkorderRequest:
       type: object
@@ -4340,8 +4248,7 @@ components:
         isReopened:
           type: boolean
           default: false
-          description: Whether the completed workorder is currently reopened for controlled
-            edits
+          description: Whether the completed workorder is currently reopened for controlled edits
         reopenedAt:
           type: string
           format: date-time
@@ -4371,8 +4278,7 @@ components:
         assignedByUserId:
           type: string
           format: uuid
-          description: ID of the user performing the assignment (defaults from X-User-Id
-            header if not provided)
+          description: ID of the user performing the assignment (defaults from X-User-Id header if not provided)
           example: 550e8400-e29b-41d4-a716-446655440000
         notes:
           type: string
@@ -4425,8 +4331,7 @@ components:
           type: string
           format: uuid
           deprecated: true
-          description: Deprecated. Actor identity is resolved from authenticated security
-            context.
+          description: Deprecated. Actor identity is resolved from authenticated security context.
         reason:
           type: string
           description: Optional reason associated with start transition
@@ -4474,8 +4379,7 @@ components:
           type: string
           format: uuid
           deprecated: true
-          description: Deprecated. Actor identity is resolved from authenticated security
-            context.
+          description: Deprecated. Actor identity is resolved from authenticated security context.
           example: 550e8400-e29b-41d4-a716-446655440000
         reopenReason:
           type: string
@@ -4521,7 +4425,7 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/ConsumeItem"
+            $ref: '#/components/schemas/ConsumeItem'
           minItems: 1
       required:
       - items
@@ -4537,7 +4441,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/ConsumedItemResult"
+            $ref: '#/components/schemas/ConsumedItemResult'
     ConsumedItemResult:
       type: object
       properties:
@@ -4555,8 +4459,7 @@ components:
           - FAILED
     ApiError:
       type: object
-      description: Standard error response envelope returned by all Durion backend
-        APIs
+      description: Standard error response envelope returned by all Durion backend APIs
       properties:
         code:
           type: string
@@ -4574,27 +4477,25 @@ components:
         timestamp:
           type: string
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17T14:30:00.000Z
+          example: 2026-03-17 14:30:00+00:00
         correlationId:
           type: string
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
         fieldErrors:
           type: array
-          description: Field-level validation errors; present (non-null) for validation-related
-            errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
-            other error types
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
           items:
-            $ref: "#/components/schemas/FieldError"
+            $ref: '#/components/schemas/FieldError'
         referenceId:
           type: string
-          description: "Workflow or review-case reference identifier, when applicable"
+          description: Workflow or review-case reference identifier, when applicable
         nextAction:
           type: string
-          description: "Recommended next step for the caller, when applicable"
+          description: Recommended next step for the caller, when applicable
         supportAction:
           type: string
-          description: "Support or admin investigation guidance, when applicable"
+          description: Support or admin investigation guidance, when applicable
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -4700,7 +4601,7 @@ components:
         reason:
           type: string
           description: Audit reason for substitution
-          example: "Original part unavailable, equivalent substitute used"
+          example: Original part unavailable, equivalent substitute used
         notes:
           type: string
           description: Optional substitution notes
@@ -4875,8 +4776,7 @@ components:
       - workorderPartId
     CorrectPartQuantityRequest:
       type: object
-      description: Request payload for administratively correcting authorized part
-        quantity
+      description: Request payload for administratively correcting authorized part quantity
       properties:
         workorderPartId:
           type: string
@@ -4965,7 +4865,7 @@ components:
         version:
           type: string
           description: Operational context version
-          example: "3"
+          example: '3'
         locationId:
           type: string
           format: uuid
@@ -5055,7 +4955,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
+          example: 2026-02-27 12:00:00+00:00
     CompleteWorkorderRequest:
       type: object
       description: Request payload to complete a workorder
@@ -5064,8 +4964,7 @@ components:
           type: string
           format: uuid
           deprecated: true
-          description: Deprecated. Actor identity is resolved from authenticated security
-            context.
+          description: Deprecated. Actor identity is resolved from authenticated security context.
         completionNotes:
           type: string
           description: Optional completion notes recorded for closeout
@@ -5091,7 +4990,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when completion was recorded
-          example: 2026-03-02T12:34:56Z
+          example: 2026-03-02 12:34:56+00:00
         message:
           type: string
           description: Operation outcome message
@@ -5123,12 +5022,12 @@ components:
           type: array
           description: Service items included in this change request
           items:
-            $ref: "#/components/schemas/WorkorderItemDTO"
+            $ref: '#/components/schemas/WorkorderItemDTO'
         parts:
           type: array
           description: Part items included in this change request
           items:
-            $ref: "#/components/schemas/WorkorderItemDTO"
+            $ref: '#/components/schemas/WorkorderItemDTO'
       required:
       - description
     WorkorderItemDTO:
@@ -5240,10 +5139,10 @@ components:
         signatureData:
           type: string
           description: Base64-encoded signature image data (PNG format recommended)
-          example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+          example: data:image/png;base64,iVBORw0KGgoAAAANS...
         signatureMimeType:
           type: string
-          description: "MIME type of signature (e.g., image/png, image/jpeg)"
+          description: MIME type of signature (e.g., image/png, image/jpeg)
           example: image/png
         signerName:
           type: string
@@ -5255,10 +5154,9 @@ components:
           example: Approved after reviewing repair details
         lineItemApprovals:
           type: array
-          description: "Individual line item approvals/rejections. If omitted, all\
-            \ items are considered approved."
+          description: Individual line item approvals/rejections. If omitted, all items are considered approved.
           items:
-            $ref: "#/components/schemas/LineItemApprovalDto"
+            $ref: '#/components/schemas/LineItemApprovalDto'
       required:
       - customerId
     LineItemApprovalDto:
@@ -5293,8 +5191,7 @@ components:
         mechanicId:
           type: string
           format: uuid
-          description: Optional mechanic ID for disambiguation when multiple sessions
-            could match
+          description: Optional mechanic ID for disambiguation when multiple sessions could match
     WorkSessionResponse:
       type: object
       description: Response DTO for a work session
@@ -5927,7 +5824,7 @@ components:
           type: number
           description: Unit price for the line item
           example: 49.99
-          minimum: 0.00
+          minimum: 0.0
         taxCode:
           type: string
           description: Optional tax code
@@ -6017,10 +5914,10 @@ components:
         signatureData:
           type: string
           description: Base64-encoded signature image data (PNG format recommended)
-          example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+          example: data:image/png;base64,iVBORw0KGgoAAAANS...
         signatureMimeType:
           type: string
-          description: "MIME type of signature (e.g., image/png, image/jpeg)"
+          description: MIME type of signature (e.g., image/png, image/jpeg)
           example: image/png
         signerName:
           type: string
@@ -6032,14 +5929,12 @@ components:
           example: Approved with customer present
         lineItemApprovals:
           type: array
-          description: "Individual line item approvals/rejections. If omitted, all\
-            \ items are considered approved."
+          description: Individual line item approvals/rejections. If omitted, all items are considered approved.
           items:
-            $ref: "#/components/schemas/LineItemApprovalDto"
+            $ref: '#/components/schemas/LineItemApprovalDto'
         purchaseOrderNumber:
           type: string
-          description: Purchase order number (required when PO enforcement is enabled
-            for the account)
+          description: Purchase order number (required when PO enforcement is enabled for the account)
           example: PO-2024-12345
       required:
       - customerId
@@ -6102,8 +5997,7 @@ components:
         created:
           type: boolean
           default: false
-          description: Whether a new estimate was created (false when idempotency
-            returns existing record)
+          description: Whether a new estimate was created (false when idempotency returns existing record)
           example: true
     EmergencyOverrideDTO:
       type: object
@@ -6135,8 +6029,7 @@ components:
           type: string
           format: uuid
           deprecated: true
-          description: Deprecated. Actor identity is resolved from authenticated security
-            context.
+          description: Deprecated. Actor identity is resolved from authenticated security context.
           example: 550e8400-e29b-41d4-a716-446655440100
         approvalNote:
           type: string
@@ -6198,7 +6091,7 @@ components:
           type: array
           description: Stopped timer entries
           items:
-            $ref: "#/components/schemas/WorkexecTimerEntryResponse"
+            $ref: '#/components/schemas/WorkexecTimerEntryResponse'
     WorkexecTimerStartRequest:
       type: object
       description: Start timer request for workexec time entries
@@ -6259,11 +6152,9 @@ components:
           format: date-time
           description: Timestamp when labor was performed
         labor:
-          $ref: "#/components/schemas/LaborQuantity"
-          description: Labor quantity and unit
+          $ref: '#/components/schemas/LaborQuantity'
         source:
-          $ref: "#/components/schemas/SourceReference"
-          description: External source metadata
+          $ref: '#/components/schemas/SourceReference'
       required:
       - labor
       - performedAt
@@ -6325,7 +6216,7 @@ components:
           type: number
           description: Updated unit price
           example: 59.99
-          minimum: 0.00
+          minimum: 0.0
         taxCode:
           type: string
           description: Updated tax code
@@ -6395,7 +6286,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
         snapshotType:
           type: string
-          description: "Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)"
+          description: Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)
           example: MANUAL
         snapshotData:
           type: string
@@ -6537,12 +6428,12 @@ components:
         vehicleDescription:
           type: string
           description: Vehicle description
-          example: "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\""
+          example: '"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)"'
         createdAt:
           type: string
           format: date-time
           description: Creation timestamp
-          example: 2024-01-27T10:00:00Z
+          example: 2024-01-27 10:00:00+00:00
         createdBy:
           type: string
           format: uuid
@@ -6551,20 +6442,20 @@ components:
         isStarted:
           type: string
           description: Is workorder started (derived from status)
-          example: "true"
+          example: 'true'
         isInProgress:
           type: string
           description: Is workorder in progress (derived from status)
-          example: "true"
+          example: 'true'
         isCompleted:
           type: string
           description: Is workorder completed (derived from status)
-          example: "false"
+          example: 'false'
         startedAt:
           type: string
           format: date-time
           description: Start timestamp
-          example: 2024-01-27T14:30:00Z
+          example: 2024-01-27 14:30:00+00:00
         assignedTechnicianId:
           type: string
           format: uuid
@@ -6578,12 +6469,12 @@ components:
           type: array
           description: Service line items with labor totals
           items:
-            $ref: "#/components/schemas/WorkorderServiceResponse"
+            $ref: '#/components/schemas/WorkorderServiceResponse'
         parts:
           type: array
           description: Part line items with usage totals
           items:
-            $ref: "#/components/schemas/WorkorderPartResponse"
+            $ref: '#/components/schemas/WorkorderPartResponse'
         estimatedTotal:
           type: number
           description: Estimated total (conditionally included based on canViewFinancials)
@@ -6601,8 +6492,7 @@ components:
           description: Total tax (conditionally included)
           example: 100.0
         capabilities:
-          $ref: "#/components/schemas/WorkorderCapabilities"
-          description: Capability flags indicating allowed actions
+          $ref: '#/components/schemas/WorkorderCapabilities'
       required:
       - capabilities
       - createdAt
@@ -6818,12 +6708,12 @@ components:
           type: array
           description: Part line items
           items:
-            $ref: "#/components/schemas/EstimateItemResponse"
+            $ref: '#/components/schemas/EstimateItemResponse'
         laborItems:
           type: array
           description: Labor line items
           items:
-            $ref: "#/components/schemas/EstimateItemResponse"
+            $ref: '#/components/schemas/EstimateItemResponse'
         subtotal:
           type: number
           description: Subtotal amount
@@ -6870,14 +6760,14 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/WorkorderStatusView"
+            $ref: '#/components/schemas/WorkorderStatusView'
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -6902,7 +6792,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -7000,7 +6890,7 @@ components:
           type: array
           description: Ordered history of all status changes for this workorder
           items:
-            $ref: "#/components/schemas/WorkorderStatusHistoryEntry"
+            $ref: '#/components/schemas/WorkorderStatusHistoryEntry'
         phoneNumber:
           type: string
           description: Customer contact phone number (null if not available)
@@ -7060,14 +6950,14 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/EstimateSummaryResponse"
+            $ref: '#/components/schemas/EstimateSummaryResponse'
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -7118,22 +7008,22 @@ components:
           type: array
           description: Workorder summaries for the day
           items:
-            $ref: "#/components/schemas/WorkorderSummary"
+            $ref: '#/components/schemas/WorkorderSummary'
         mechanics:
           type: array
           description: Mechanic statuses
           items:
-            $ref: "#/components/schemas/MechanicStatus"
+            $ref: '#/components/schemas/MechanicStatus'
         bays:
           type: array
           description: Service bay statuses
           items:
-            $ref: "#/components/schemas/BayStatus"
+            $ref: '#/components/schemas/BayStatus'
         conflicts:
           type: array
           description: Detected conflicts
           items:
-            $ref: "#/components/schemas/ConflictEntry"
+            $ref: '#/components/schemas/ConflictEntry'
         lastRefreshed:
           type: string
           format: date-time
@@ -7141,8 +7031,7 @@ components:
         dataQualityWarning:
           type: boolean
           default: false
-          description: True when one or more upstream data sources were unavailable
-            during aggregation; data may be incomplete
+          description: True when one or more upstream data sources were unavailable during aggregation; data may be incomplete
     MechanicStatus:
       type: object
       properties:
@@ -7164,7 +7053,7 @@ components:
         ptoEntries:
           type: array
           items:
-            $ref: "#/components/schemas/PtoEntry"
+            $ref: '#/components/schemas/PtoEntry'
     PtoEntry:
       type: object
       properties:

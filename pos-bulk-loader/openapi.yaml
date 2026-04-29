@@ -26,10 +26,7 @@ paths:
       tags:
       - Column Mapping API
       summary: Get proposed column mappings for a job
-      description: Retrieves the proposed column mappings for the specified bulk load
-        job. The operator can only access mappings for their own jobs. This endpoint
-        is typically used to review the detected column mappings before approving
-        them for processing.
+      description: Retrieves the proposed column mappings for the specified bulk load job. The operator can only access mappings for their own jobs. This endpoint is typically used to review the detected column mappings before approving them for processing.
       operationId: getMappings
       parameters:
       - name: jobId
@@ -39,22 +36,22 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Mappings returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ColumnMappingResponse"
-        "403":
+                  $ref: '#/components/schemas/ColumnMappingResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ColumnMappingResponse"
+                  $ref: '#/components/schemas/ColumnMappingResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -65,10 +62,7 @@ paths:
       tags:
       - Column Mapping API
       summary: Approve and finalize column mappings for a job
-      description: "Approves and finalizes the proposed column mappings for the specified\
-        \ bulk load job. The operator can only approve mappings for their own jobs.\
-        \ Once approved, the mappings are locked and used for processing the bulk\
-        \ load job."
+      description: Approves and finalizes the proposed column mappings for the specified bulk load job. The operator can only approve mappings for their own jobs. Once approved, the mappings are locked and used for processing the bulk load job.
       operationId: approveMappings
       parameters:
       - name: jobId
@@ -81,25 +75,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ColumnMappingApproveRequest"
+              $ref: '#/components/schemas/ColumnMappingApproveRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Mappings approved
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ColumnMappingResponse"
-        "403":
+                  $ref: '#/components/schemas/ColumnMappingResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ColumnMappingResponse"
+                  $ref: '#/components/schemas/ColumnMappingResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -111,22 +105,21 @@ paths:
       tags:
       - Bulk Load Jobs API
       summary: List bulk load jobs for the authenticated operator
-      description: Retrieves a paginated list of bulk load jobs for the authenticated
-        operator. The operator can only access their own jobs.
+      description: Retrieves a paginated list of bulk load jobs for the authenticated operator. The operator can only access their own jobs.
       operationId: listJobs
       parameters:
       - name: pageable
         in: query
         required: true
         schema:
-          $ref: "#/components/schemas/Pageable"
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Jobs listed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageBulkLoadJobResponse"
+                $ref: '#/components/schemas/PageBulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -137,29 +130,27 @@ paths:
       tags:
       - Bulk Load Jobs API
       summary: Create a new bulk load job
-      description: Creates a new bulk load job for the authenticated operator. Each
-        operator can only have one active job at a time. The job starts in CREATED
-        state and must be populated with a file upload before processing can begin.
+      description: Creates a new bulk load job for the authenticated operator. Each operator can only have one active job at a time. The job starts in CREATED state and must be populated with a file upload before processing can begin.
       operationId: createJob
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BulkLoadJobCreateRequest"
+              $ref: '#/components/schemas/BulkLoadJobCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Job created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "409":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '409':
           description: Operator already has an active job
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
+                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -171,10 +162,7 @@ paths:
       tags:
       - Bulk Load File Upload API
       summary: Upload a file for a bulk load job
-      description: "Uploads a file for the specified bulk load job. The file is stored\
-        \ and associated with the job for later processing. The job must be in CREATED\
-        \ or UPLOADING state. Multiple files can be uploaded, but only the latest\
-        \ file will be processed."
+      description: Uploads a file for the specified bulk load job. The file is stored and associated with the job for later processing. The job must be in CREATED or UPLOADING state. Multiple files can be uploaded, but only the latest file will be processed.
       operationId: uploadFile
       parameters:
       - name: jobId
@@ -195,18 +183,18 @@ paths:
               required:
               - file
       responses:
-        "200":
+        '200':
           description: File uploaded and content detected
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FileUploadResponse"
-        "404":
+                $ref: '#/components/schemas/FileUploadResponse'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FileUploadResponse"
+                $ref: '#/components/schemas/FileUploadResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -217,8 +205,7 @@ paths:
       tags:
       - TUS Resumable Upload API
       summary: Create a resumable upload
-      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location
-        header with the upload URL for subsequent HEAD and PATCH requests.
+      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.
       operationId: createUpload
       parameters:
       - name: jobId
@@ -244,11 +231,11 @@ paths:
         schema:
           type: string
       responses:
-        "201":
+        '201':
           description: Upload created
-        "412":
+        '412':
           description: Unsupported TUS version
-        "413":
+        '413':
           description: Upload-Length exceeds server maximum
       security:
       - bearerAuth:
@@ -261,9 +248,7 @@ paths:
       tags:
       - Bulk Load Jobs API
       summary: Retry a failed bulk load job
-      description: "Retries a bulk load job that has reached the FAILED state, resetting\
-        \ it to CREATED and re-queuing it for processing. The operator can only retry\
-        \ their own jobs. Returns 409 if the job is not in FAILED state."
+      description: Retries a bulk load job that has reached the FAILED state, resetting it to CREATED and re-queuing it for processing. The operator can only retry their own jobs. Returns 409 if the job is not in FAILED state.
       operationId: retryJob
       parameters:
       - name: jobId
@@ -273,30 +258,30 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: Job reset and re-queued for retry
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "403":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "404":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "409":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '409':
           description: Job is not in FAILED state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
+                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -308,9 +293,7 @@ paths:
       tags:
       - Bulk Load File Upload API
       summary: Launch a bulk load job for processing
-      description: "Starts Spring Batch execution for the specified bulk load job\
-        \ and transitions it to PROCESSING. The job must be in CREATED, UPLOADING,\
-        \ or MAPPING_REVIEW state and must already have a persisted upload and locationId."
+      description: Starts Spring Batch execution for the specified bulk load job and transitions it to PROCESSING. The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state and must already have a persisted upload and locationId.
       operationId: startProcessing
       parameters:
       - name: jobId
@@ -320,24 +303,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Job transitioned to PROCESSING
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "404":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "409":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '409':
           description: Invalid state transition
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
+                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -348,9 +331,7 @@ paths:
       tags:
       - Review Queue API
       summary: Submit corrected records for a bulk load job
-      description: Submits corrected data for one or more error records from a bulk
-        import audit. The job must be in FAILED state to accept corrections. Returns
-        409 if the job is not in a correctable state.
+      description: Submits corrected data for one or more error records from a bulk import audit. The job must be in FAILED state to accept corrections. Returns 409 if the job is not in a correctable state.
       operationId: submitCorrections
       parameters:
       - name: jobId
@@ -363,39 +344,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BulkCorrectionRequest"
+              $ref: '#/components/schemas/BulkCorrectionRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Corrections submitted successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkCorrectionResponse"
-        "400":
+                $ref: '#/components/schemas/BulkCorrectionResponse'
+        '400':
           description: Invalid correction request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkCorrectionResponse"
-        "403":
+                $ref: '#/components/schemas/BulkCorrectionResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkCorrectionResponse"
-        "404":
+                $ref: '#/components/schemas/BulkCorrectionResponse'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkCorrectionResponse"
-        "409":
+                $ref: '#/components/schemas/BulkCorrectionResponse'
+        '409':
           description: Job is not in a state that accepts corrections
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkCorrectionResponse"
+                $ref: '#/components/schemas/BulkCorrectionResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -407,9 +388,7 @@ paths:
       tags:
       - Review Queue API
       summary: Submit a single correction record
-      description: Submits a corrected data record for a single failed audit entry
-        from a bulk import job. The job must be in FAILED state. Returns the acceptance
-        or rejection status for the submitted record.
+      description: Submits a corrected data record for a single failed audit entry from a bulk import job. The job must be in FAILED state. Returns the acceptance or rejection status for the submitted record.
       operationId: submitSingleCorrection
       parameters:
       - name: jobId
@@ -422,39 +401,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BulkCorrectionItem"
+              $ref: '#/components/schemas/BulkCorrectionItem'
         required: true
       responses:
-        "201":
+        '201':
           description: Correction processed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CorrectionResultDto"
-        "400":
+                $ref: '#/components/schemas/CorrectionResultDto'
+        '400':
           description: Invalid correction request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CorrectionResultDto"
-        "403":
+                $ref: '#/components/schemas/CorrectionResultDto'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CorrectionResultDto"
-        "404":
+                $ref: '#/components/schemas/CorrectionResultDto'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CorrectionResultDto"
-        "409":
+                $ref: '#/components/schemas/CorrectionResultDto'
+        '409':
           description: Job is not in a state that accepts corrections
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CorrectionResultDto"
+                $ref: '#/components/schemas/CorrectionResultDto'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -466,8 +445,7 @@ paths:
       tags:
       - Bulk Load Jobs API
       summary: Cancel a running bulk load job
-      description: Cancels a bulk load job that is currently in progress. The operator
-        can only cancel their own jobs.
+      description: Cancels a bulk load job that is currently in progress. The operator can only cancel their own jobs.
       operationId: cancelJob
       parameters:
       - name: jobId
@@ -477,18 +455,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Job cancelled
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "409":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '409':
           description: Job is already in terminal state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
+                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -515,11 +493,11 @@ paths:
         schema:
           type: string
       responses:
-        "204":
+        '204':
           description: Upload deleted
-        "404":
+        '404':
           description: Upload not found
-        "412":
+        '412':
           description: Unsupported TUS version
       security:
       - bearerAuth:
@@ -546,11 +524,11 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: Current upload offset
-        "404":
+        '404':
           description: Upload not found
-        "412":
+        '412':
           description: Unsupported TUS version
       security:
       - bearerAuth:
@@ -562,9 +540,7 @@ paths:
       tags:
       - TUS Resumable Upload API
       summary: Upload a chunk
-      description: Appends a byte range to an in-progress TUS upload. Content-Type
-        must be application/offset+octet-stream. Upload-Offset must equal the current
-        server-side offset.
+      description: Appends a byte range to an in-progress TUS upload. Content-Type must be application/offset+octet-stream. Upload-Offset must equal the current server-side offset.
       operationId: uploadChunk
       parameters:
       - name: uploadId
@@ -596,15 +572,15 @@ paths:
         schema:
           type: string
       responses:
-        "204":
-          description: "Chunk accepted, new offset returned"
-        "409":
+        '204':
+          description: Chunk accepted, new offset returned
+        '409':
           description: Upload-Offset conflict
-        "410":
+        '410':
           description: Upload has expired
-        "412":
+        '412':
           description: Unsupported TUS version
-        "415":
+        '415':
           description: Content-Type must be application/offset+octet-stream
       security:
       - bearerAuth:
@@ -617,11 +593,10 @@ paths:
       tags:
       - TUS Resumable Upload API
       summary: TUS server capabilities
-      description: "Returns supported TUS version, extensions, and max upload size.\
-        \ No authentication required."
+      description: Returns supported TUS version, extensions, and max upload size. No authentication required.
       operationId: options
       responses:
-        "204":
+        '204':
           description: Server capabilities
       security:
       - bearerAuth:
@@ -632,8 +607,7 @@ paths:
       tags:
       - Bulk Load Jobs API
       summary: Get a bulk load job by ID
-      description: Retrieves the details of a bulk load job for the authenticated
-        operator. The operator can only access their own jobs.
+      description: Retrieves the details of a bulk load job for the authenticated operator. The operator can only access their own jobs.
       operationId: getJob
       parameters:
       - name: jobId
@@ -643,24 +617,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Job found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "403":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
-        "404":
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '404':
           description: Job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkLoadJobResponse"
+                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -672,8 +646,7 @@ paths:
       tags:
       - Review Queue API
       summary: Download error report as CSV for a bulk load job
-      description: Generates and downloads a CSV file containing all error records
-        for the specified bulk load job.
+      description: Generates and downloads a CSV file containing all error records for the specified bulk load job.
       operationId: downloadErrorReport
       parameters:
       - name: jobId
@@ -683,14 +656,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: CSV error report downloaded
           content:
             application/json:
               schema:
                 type: string
                 format: binary
-        "403":
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
@@ -708,8 +681,7 @@ paths:
       tags:
       - Review Queue API
       summary: Get audit records for a bulk load job
-      description: "Returns a list of audit records for the specified bulk load job,\
-        \ including review status and details for each record."
+      description: Returns a list of audit records for the specified bulk load job, including review status and details for each record.
       operationId: getAuditRecords
       parameters:
       - name: jobId
@@ -719,22 +691,22 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Audit records returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AuditRecordResponse"
-        "403":
+                  $ref: '#/components/schemas/AuditRecordResponse'
+        '403':
           description: Job does not belong to the authenticated operator
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AuditRecordResponse"
+                  $ref: '#/components/schemas/AuditRecordResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -749,7 +721,7 @@ components:
         mappings:
           type: array
           items:
-            $ref: "#/components/schemas/ColumnMappingUpdateRequest"
+            $ref: '#/components/schemas/ColumnMappingUpdateRequest'
           minItems: 1
       required:
       - mappings
@@ -896,24 +868,24 @@ components:
           example: 00000000-0000-0000-0000-000000000001
         correctedData:
           type: object
+          additionalProperties:
             type: string
           description: Map of field names to their corrected values
           example:
             sku: PROD-001
-            price: "19.99"
+            price: '19.99'
       required:
       - auditRecordId
       - correctedData
     BulkCorrectionRequest:
       type: object
-      description: Request to submit corrected data records for a failed bulk load
-        job
+      description: Request to submit corrected data records for a failed bulk load job
       properties:
         corrections:
           type: array
-          description: "List of correction items, one per audit record to correct"
+          description: List of correction items, one per audit record to correct
           items:
-            $ref: "#/components/schemas/BulkCorrectionItem"
+            $ref: '#/components/schemas/BulkCorrectionItem'
           minItems: 1
       required:
       - corrections
@@ -943,8 +915,7 @@ components:
           example: 0
         rejections:
           type: array
-          description: "Rejection detail messages for each rejected correction, if\
-            \ any"
+          description: Rejection detail messages for each rejected correction, if any
           items:
             type: string
     CorrectionResultDto:
@@ -966,7 +937,7 @@ components:
         rejectionReason:
           type:
           - string
-          - "null"
+          - 'null'
           description: Reason for rejection if status is REJECTED
           example: Audit record does not belong to this job
     Pageable:
@@ -999,14 +970,14 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/BulkLoadJobResponse"
+            $ref: '#/components/schemas/BulkLoadJobResponse'
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -1031,7 +1002,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:

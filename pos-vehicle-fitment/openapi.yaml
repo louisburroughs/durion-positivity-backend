@@ -5,16 +5,15 @@ info:
   contact:
     name: Durion Support Services
     email: platform@durionpos.org
-  version: "1.0"
+  version: '1.0'
 servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
 - name: Vehicle Applicability Hints
-  description: Endpoints for managing product fitment hints and filtering products
-    by vehicle attributes
+  description: Endpoints for managing product fitment hints and filtering products by vehicle attributes
 - name: Vehicle Fitment API
-  description: "Endpoints for vehicle manufacturers, makes, models, and types"
+  description: Endpoints for vehicle manufacturers, makes, models, and types
 - name: Vehicle Fitment Bulk Ingest API
   description: Bulk import vehicle fitment records
 paths:
@@ -34,18 +33,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Hint retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
-        "404":
+                $ref: '#/components/schemas/HintResponse'
+        '404':
           description: Hint not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
+                $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
     put:
@@ -66,27 +65,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateHintRequest"
+              $ref: '#/components/schemas/UpdateHintRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Hint updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
-        "400":
+                $ref: '#/components/schemas/HintResponse'
+        '400':
           description: Invalid request data
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
-        "404":
+                $ref: '#/components/schemas/HintResponse'
+        '404':
           description: Hint not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
+                $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
     delete:
@@ -104,9 +103,9 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Hint deleted successfully
-        "404":
+        '404':
           description: Hint not found
       security:
       - bearerAuth: []
@@ -121,27 +120,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateHintRequest"
+              $ref: '#/components/schemas/CreateHintRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Hint created successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
-        "400":
+                $ref: '#/components/schemas/HintResponse'
+        '400':
           description: Invalid request data
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
-        "404":
+                $ref: '#/components/schemas/HintResponse'
+        '404':
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HintResponse"
+                $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
   /v1/vehicle-fitment/hints/filter-products:
@@ -155,21 +154,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/FilterProductsRequest"
+              $ref: '#/components/schemas/FilterProductsRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Products filtered successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FilterProductsResponse"
-        "400":
+                $ref: '#/components/schemas/FilterProductsResponse'
+        '400':
           description: Invalid request data
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FilterProductsResponse"
+                $ref: '#/components/schemas/FilterProductsResponse'
       security:
       - bearerAuth: []
   /v1/fitments/bulk-ingest:
@@ -177,28 +176,27 @@ paths:
       tags:
       - Vehicle Fitment Bulk Ingest API
       summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record
-        results.
+      description: Accepts a batch of domain records for bulk import. Returns per-record results.
       operationId: bulkIngest
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BulkIngestRequestFitmentBulkIngestRecord"
+              $ref: '#/components/schemas/BulkIngestRequestFitmentBulkIngestRecord'
         required: true
       responses:
-        "200":
+        '200':
           description: Batch processed (check per-record success/failure in response)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkIngestResponse"
-        "400":
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '400':
           description: Invalid request payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BulkIngestResponse"
+                $ref: '#/components/schemas/BulkIngestResponse'
       security:
       - bearerAuth:
         - vehicle-fitment:hint:create
@@ -221,14 +219,14 @@ paths:
           format: uuid
         example: 00e0c0f0-0000-0000-0000-000000000000
       responses:
-        "200":
+        '200':
           description: List of vehicle types returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/VehicleTypeResponse"
+                  $ref: '#/components/schemas/VehicleTypeResponse'
       security:
       - bearerAuth: []
   /v1/vehicle-fitment/models/{makeId}:
@@ -248,14 +246,14 @@ paths:
           format: uuid
         example: 00e0c0f0-0000-0000-0000-000000000000
       responses:
-        "200":
+        '200':
           description: List of models returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ModelResponse"
+                  $ref: '#/components/schemas/ModelResponse'
       security:
       - bearerAuth: []
   /v1/vehicle-fitment/manufacturers:
@@ -266,14 +264,14 @@ paths:
       description: Retrieve a list of all vehicle manufacturers.
       operationId: getManufacturers
       responses:
-        "200":
+        '200':
           description: List of manufacturers returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ManufacturerResponse"
+                  $ref: '#/components/schemas/ManufacturerResponse'
       security:
       - bearerAuth: []
   /v1/vehicle-fitment/makes/{manufacturerId}:
@@ -293,14 +291,14 @@ paths:
           format: uuid
         example: 00e0c0f0-0000-0000-0000-000000000000
       responses:
-        "200":
+        '200':
           description: List of makes returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/MakeResponse"
+                  $ref: '#/components/schemas/MakeResponse'
       security:
       - bearerAuth: []
   /v1/vehicle-fitment/hints/product/{productId}:
@@ -319,14 +317,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Hints retrieved successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/HintResponse"
+                  $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
 components:
@@ -364,7 +362,7 @@ components:
           type: array
           description: Updated fitment tags for the hint
           items:
-            $ref: "#/components/schemas/FitmentTagDto"
+            $ref: '#/components/schemas/FitmentTagDto'
           minItems: 1
       required:
       - fitmentTags
@@ -384,17 +382,17 @@ components:
           type: array
           description: Fitment tags for this hint
           items:
-            $ref: "#/components/schemas/FitmentTagDto"
+            $ref: '#/components/schemas/FitmentTagDto'
         createdAt:
           type: string
           format: date-time
           description: Hint creation timestamp
-          example: 2026-03-05T14:10:00
+          example: 2026-03-05 14:10:00
         updatedAt:
           type: string
           format: date-time
           description: Hint last update timestamp
-          example: 2026-03-05T14:12:00
+          example: 2026-03-05 14:12:00
         createdBy:
           type: string
           description: User or system identity that created the hint
@@ -422,7 +420,7 @@ components:
           type: array
           description: Fitment tags used to determine product applicability
           items:
-            $ref: "#/components/schemas/FitmentTagDto"
+            $ref: '#/components/schemas/FitmentTagDto'
           minItems: 1
       required:
       - fitmentTags
@@ -473,7 +471,7 @@ components:
         records:
           type: array
           items:
-            $ref: "#/components/schemas/FitmentBulkIngestRecord"
+            $ref: '#/components/schemas/FitmentBulkIngestRecord'
           minItems: 1
         operatorId:
           type: string
@@ -520,7 +518,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/BulkIngestResult"
+            $ref: '#/components/schemas/BulkIngestResult'
     BulkIngestResult:
       type: object
       properties:

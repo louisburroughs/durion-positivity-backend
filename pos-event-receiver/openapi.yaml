@@ -30,18 +30,18 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "200":
+        '200':
           description: Event type found and returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
-        "404":
+                $ref: '#/components/schemas/EventTypeResponse'
+        '404':
           description: Event type not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
     put:
       tags:
       - Event Types
@@ -62,21 +62,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EventTypeRequest"
+              $ref: '#/components/schemas/EventTypeRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Event type updated successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
-        "404":
+                $ref: '#/components/schemas/EventTypeResponse'
+        '404':
           description: Event type not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
     delete:
       tags:
       - Event Types
@@ -93,9 +93,9 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "204":
+        '204':
           description: Event type deleted successfully
-        "404":
+        '404':
           description: Event type not found
   /v1/eventTypes/code/{typeCode}:
     get:
@@ -114,18 +114,18 @@ paths:
           minLength: 1
         example: ORDER_CREATED
       responses:
-        "200":
+        '200':
           description: Event type found and returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
-        "404":
+                $ref: '#/components/schemas/EventTypeResponse'
+        '404':
           description: Event type not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
     put:
       tags:
       - Event Types
@@ -146,21 +146,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EventTypeRequest"
+              $ref: '#/components/schemas/EventTypeRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Event type created or updated successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
-        "400":
+                $ref: '#/components/schemas/EventTypeResponse'
+        '400':
           description: Invalid request parameters
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
   /v1/events:
     post:
       tags:
@@ -173,16 +173,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EmitEventRequest"
+              $ref: '#/components/schemas/EmitEventRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Event stored successfully
           content:
             '*/*':
               schema:
                 type: string
-        "400":
+        '400':
           description: Event type ID is not preregistered
           content:
             '*/*':
@@ -196,12 +196,12 @@ paths:
       description: Retrieve all available event types
       operationId: getAllEventTypes
       responses:
-        "200":
+        '200':
           description: List of event types returned successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
     post:
       tags:
       - Event Types
@@ -213,21 +213,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EventTypeRequest"
+              $ref: '#/components/schemas/EventTypeRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Event type created successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
-        "400":
+                $ref: '#/components/schemas/EventTypeResponse'
+        '400':
           description: Invalid request parameters
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
   /v1/events/summary/lastWeek:
     get:
       tags:
@@ -236,12 +236,12 @@ paths:
       description: Returns event counts grouped by event type for the last 7 days
       operationId: getLastWeekSummary
       responses:
-        "200":
+        '200':
           description: Summary returned successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventSummaryResponse"
+                $ref: '#/components/schemas/EventSummaryResponse'
   /v1/events/summary/lastHour:
     get:
       tags:
@@ -250,12 +250,12 @@ paths:
       description: Returns event counts grouped by event type for the last 60 minutes
       operationId: getLastHourSummary
       responses:
-        "200":
+        '200':
           description: Summary returned successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventSummaryResponse"
+                $ref: '#/components/schemas/EventSummaryResponse'
   /v1/events/summary/lastDay:
     get:
       tags:
@@ -264,12 +264,12 @@ paths:
       description: Returns event counts grouped by event type for the last 24 hours
       operationId: getLastDaySummary
       responses:
-        "200":
+        '200':
           description: Summary returned successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventSummaryResponse"
+                $ref: '#/components/schemas/EventSummaryResponse'
   /v1/eventTypes/active:
     get:
       tags:
@@ -278,12 +278,12 @@ paths:
       description: Retrieve only active event types
       operationId: getActiveEventTypes
       responses:
-        "200":
+        '200':
           description: List of active event types returned successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventTypeResponse"
+                $ref: '#/components/schemas/EventTypeResponse'
 components:
   schemas:
     EventTypeRequest:
@@ -295,7 +295,7 @@ components:
           description: Unique code identifying the event type
           example: ORDER_CREATED
           minLength: 1
-          pattern: "^[A-Z0-9_]+$"
+          pattern: ^[A-Z0-9_]+$
         description:
           type: string
           description: Human-readable description of the event type
@@ -308,25 +308,22 @@ components:
         apiVersion:
           type: string
           description: API version for this event type
-          example: "1"
-          pattern: "^[0-9]+$"
+          example: '1'
+          pattern: ^[0-9]+$
         p50Micros:
           type: integer
           format: int64
-          description: "50th percentile latency threshold in microseconds (default:\
-            \ 10,000,000 = 10s)"
+          description: '50th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 500000
         p95Micros:
           type: integer
           format: int64
-          description: "95th percentile latency threshold in microseconds (default:\
-            \ 10,000,000 = 10s)"
+          description: '95th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 1000000
         p99Micros:
           type: integer
           format: int64
-          description: "99th percentile latency threshold in microseconds (default:\
-            \ 10,000,000 = 10s)"
+          description: '99th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 2000000
       required:
       - description
@@ -355,7 +352,7 @@ components:
         apiVersion:
           type: string
           description: Event API version
-          example: "1"
+          example: '1'
         p50Micros:
           type: integer
           format: int64
@@ -389,13 +386,13 @@ components:
           description: Preregistered event type code
           example: ORDER_ORDER_CREATE
           minLength: 1
-          pattern: "^[A-Z0-9_]+$"
+          pattern: ^[A-Z0-9_]+$
         apiVersion:
           type: string
           description: Event API version
-          example: "1"
+          example: '1'
           minLength: 1
-          pattern: "^[0-9]+$"
+          pattern: ^[0-9]+$
         timestamp:
           type: integer
           format: int64
@@ -410,7 +407,7 @@ components:
           type: string
           format: date-time
           description: Event publication time in UTC
-          example: 2026-03-05T21:15:00Z
+          example: 2026-03-05 21:15:00+00:00
       required:
       - apiVersion
       - elapsedMs

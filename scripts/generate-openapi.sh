@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 MVNW="./mvnw"
@@ -327,17 +328,15 @@ for module in "${MODULES[@]}"; do
       # like `private Integer x = ;` in downstream SDKs.
       spec_file="$module/openapi.yaml"
       if [[ -f "$spec_file" ]]; then
-        # 1) Strip `default: ""` / `default: null` (springdoc emits these for
-        #    primitive/UUID/object fields; OpenAPI Generator stamps them as
-        #    invalid Java initializers).
-        # 2) After (1), `additionalProperties:` keys whose only child was a
-        #    stripped default become empty maps (parsed as null) and fail
-        #    OpenAPI spec validation. Drop those too.
-        sed -i -E \
-          -e '/^[[:space:]]*default:[[:space:]]*""[[:space:]]*$/d' \
-          -e '/^[[:space:]]*default:[[:space:]]*null[[:space:]]*$/d' \
-          -e '/^[[:space:]]*additionalProperties:[[:space:]]*(null)?[[:space:]]*$/d' \
-          "$spec_file"
+        # Strip springdoc emissions that break downstream tooling: empty
+        # `default` values, sibling-of-$ref keys, and empty
+        # `additionalProperties`. See scripts/sanitize-openapi.py for details.
+        sanitizer="$SCRIPT_DIR/sanitize-openapi.py"
+        if [[ -x "$sanitizer" ]] || [[ -f "$sanitizer" ]]; then
+          python3 "$sanitizer" "$spec_file" || {
+            echo "WARN: sanitize-openapi.py failed for $spec_file" >&2
+          }
+        fi
       fi
     fi
   fi

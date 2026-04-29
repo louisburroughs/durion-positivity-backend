@@ -15,7 +15,7 @@ tags:
 - name: JWT API
   description: Endpoints for JWT authentication and token management per ADR-0011
 - name: Role Management
-  description: "Manage roles, permissions, and user assignments"
+  description: Manage roles, permissions, and user assignments
 - name: Authorization
   description: Authorization decision endpoints for principal permissions
 - name: User API
@@ -27,23 +27,20 @@ tags:
 - name: Auth API
   description: User-facing authentication endpoints
 - name: Self-Registration Review API
-  description: Administrative queue for blocked self-registration recovery and identity
-    review cases
+  description: Administrative queue for blocked self-registration recovery and identity review cases
 - name: Admin Account-State API
   description: Administrative endpoints for user account state management
 - name: Audit Exports
   description: Asynchronous audit export job management
 - name: Audit
-  description: Audit event and pricing snapshot endpoints with immutable write-once
-    behavior
+  description: Audit event and pricing snapshot endpoints with immutable write-once behavior
 paths:
   /v1/users/{username}/roles:
     put:
       tags:
       - User API
       summary: Assign roles to a user
-      description: Replaces or applies the requested role set for the specified user
-        by username.
+      description: Replaces or applies the requested role set for the specified user by username.
       operationId: assignRoles
       parameters:
       - name: username
@@ -57,52 +54,51 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: {}
               description: Payload containing the roles to assign
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User roles updated successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDto"
+                $ref: '#/components/schemas/UserDto'
       security:
       - bearerAuth:
         - security:role:assign
@@ -113,8 +109,7 @@ paths:
       tags:
       - User Role Management
       summary: Assign a role to a user
-      description: Creates an effective role assignment linking the specified user
-        to the specified role.
+      description: Creates an effective role assignment linking the specified user to the specified role.
       operationId: assignRoleToUser
       parameters:
       - name: userId
@@ -130,43 +125,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
       security:
       - bearerAuth:
@@ -177,8 +172,7 @@ paths:
       tags:
       - User Role Management
       summary: Revoke a role from a user
-      description: Removes the effective assignment of the specified role from the
-        specified user.
+      description: Removes the effective assignment of the specified role from the specified user.
       operationId: revokeRoleFromUser
       parameters:
       - name: userId
@@ -194,43 +188,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
       security:
       - bearerAuth:
@@ -254,48 +248,48 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User found and returned.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDto"
+                $ref: '#/components/schemas/UserDto'
       security:
       - bearerAuth:
         - security:user:view
@@ -320,51 +314,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UserUpdateRequest"
+              $ref: '#/components/schemas/UserUpdateRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User updated successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDto"
+                $ref: '#/components/schemas/UserDto'
       security:
       - bearerAuth:
         - security:user:edit
@@ -386,43 +380,43 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User deleted successfully.
       security:
       - bearerAuth:
@@ -434,8 +428,7 @@ paths:
       tags:
       - Role Management
       summary: Assign permission to a role by key
-      description: Assigns the permission identified by path key to the specified
-        role
+      description: Assigns the permission identified by path key to the specified role
       operationId: assignPermissionToRole
       parameters:
       - name: roleId
@@ -450,43 +443,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Permission assigned to role
       security:
       - bearerAuth:
@@ -512,43 +505,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Permission revoked from role
       security:
       - bearerAuth:
@@ -560,8 +553,7 @@ paths:
       tags:
       - Role Management
       summary: Assign permission to a role by key
-      description: Assigns the permission identified by path key to the specified
-        role
+      description: Assigns the permission identified by path key to the specified role
       operationId: assignPermissionToRole_1
       parameters:
       - name: roleId
@@ -576,43 +568,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Permission assigned to role
       security:
       - bearerAuth:
@@ -638,43 +630,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Permission revoked from role
       security:
       - bearerAuth:
@@ -686,8 +678,7 @@ paths:
       tags:
       - Role Management
       summary: Grant permission to a role
-      description: Grants a single permission to the specified role and returns the
-        updated role
+      description: Grants a single permission to the specified role and returns the updated role
       operationId: grantPermissionToRole
       parameters:
       - name: roleId
@@ -700,51 +691,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RolePermissionGrantRequest"
+              $ref: '#/components/schemas/RolePermissionGrantRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid grant request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permission granted to role
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:edit
@@ -755,8 +746,7 @@ paths:
       tags:
       - Role Management
       summary: Grant permission to a role
-      description: Grants a single permission to the specified role and returns the
-        updated role
+      description: Grants a single permission to the specified role and returns the updated role
       operationId: grantPermissionToRole_1
       parameters:
       - name: roleId
@@ -769,51 +759,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RolePermissionGrantRequest"
+              $ref: '#/components/schemas/RolePermissionGrantRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid grant request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permission granted to role
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:edit
@@ -830,51 +820,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RolePermissionsRequest"
+              $ref: '#/components/schemas/RolePermissionsRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role permissions updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:edit
@@ -891,51 +881,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RolePermissionsRequest"
+              $ref: '#/components/schemas/RolePermissionsRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role or permission not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role permissions updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:edit
@@ -949,43 +939,43 @@ paths:
       description: Audit events are immutable and cannot be modified after creation.
       operationId: updateNotAllowed
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "405":
+                $ref: '#/components/schemas/ApiError'
+        '405':
           description: Method not allowed for immutable audit events
       security:
       - bearerAuth: []
@@ -998,43 +988,43 @@ paths:
       description: Audit events are immutable and cannot be deleted once recorded.
       operationId: deleteNotAllowed
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "405":
+                $ref: '#/components/schemas/ApiError'
+        '405':
           description: Method not allowed for immutable audit events
       security:
       - bearerAuth: []
@@ -1048,50 +1038,50 @@ paths:
       description: Retrieve a list of all users.
       operationId: getAllUsers
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: List of users returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/UserDto"
+                  $ref: '#/components/schemas/UserDto'
       security:
       - bearerAuth:
         - security:user:view
@@ -1101,58 +1091,57 @@ paths:
       tags:
       - User API
       summary: Create a new user
-      description: "Creates a new user with username, password, and roles."
+      description: Creates a new user with username, password, and roles.
       operationId: createUser
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              additionalProperties: {}
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: User created successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDto"
+                $ref: '#/components/schemas/UserDto'
       security:
       - bearerAuth:
         - security:user:create
@@ -1163,8 +1152,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Unlock a user account
-      description: Removes the locked state from the specified user account so the
-        user can authenticate again.
+      description: Removes the locked state from the specified user account so the user can authenticate again.
       operationId: unlock
       parameters:
       - name: id
@@ -1174,43 +1162,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User account unlocked successfully
       security:
       - bearerAuth:
@@ -1222,8 +1210,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Expire user credentials
-      description: Expires the specified user's credentials so a credential reset
-        or update is required before reuse.
+      description: Expires the specified user's credentials so a credential reset or update is required before reuse.
       operationId: expireCredentials
       parameters:
       - name: id
@@ -1233,43 +1220,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User credentials expired successfully
       security:
       - bearerAuth:
@@ -1281,8 +1268,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Expire a user account
-      description: Expires the specified user account so it is no longer considered
-        valid for authentication.
+      description: Expires the specified user account so it is no longer considered valid for authentication.
       operationId: expireAccount
       parameters:
       - name: id
@@ -1292,43 +1278,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User account expired successfully
       security:
       - bearerAuth:
@@ -1340,8 +1326,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Enable a user account
-      description: Marks the specified user account as enabled so it can be used for
-        sign-in and access checks.
+      description: Marks the specified user account as enabled so it can be used for sign-in and access checks.
       operationId: enable
       parameters:
       - name: id
@@ -1351,43 +1336,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User account enabled successfully
       security:
       - bearerAuth:
@@ -1399,8 +1384,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Disable a user account
-      description: Marks the specified user account as disabled to prevent further
-        use until it is re-enabled.
+      description: Marks the specified user account as disabled to prevent further use until it is re-enabled.
       operationId: disable
       parameters:
       - name: id
@@ -1410,43 +1394,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: User account disabled successfully
       security:
       - bearerAuth:
@@ -1464,51 +1448,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RoleAssignmentRequest"
+              $ref: '#/components/schemas/RoleAssignmentRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User or role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Role assignment created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleAssignmentDto"
+                $ref: '#/components/schemas/RoleAssignmentDto'
       security:
       - bearerAuth:
         - security:role:assign
@@ -1525,51 +1509,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RoleAssignmentRequest"
+              $ref: '#/components/schemas/RoleAssignmentRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User or role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Role assignment created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleAssignmentDto"
+                $ref: '#/components/schemas/RoleAssignmentDto'
       security:
       - bearerAuth:
         - security:role:assign
@@ -1583,50 +1567,50 @@ paths:
       description: Returns all roles in the system
       operationId: getAllRoles
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Roles returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RoleDto"
+                  $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -1647,48 +1631,48 @@ paths:
                 type: string
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid role payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Role name already exists
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Role created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:create
@@ -1702,50 +1686,50 @@ paths:
       description: Returns all roles in the system
       operationId: getAllRoles_1
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Roles returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RoleDto"
+                  $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -1766,48 +1750,48 @@ paths:
                 type: string
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid role payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Role name already exists
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Role created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:create
@@ -1818,8 +1802,7 @@ paths:
       tags:
       - Principal Role Management
       summary: Assign a role to a principal
-      description: Assigns the specified role to the specified principal identifier
-        for RBAC matrix authorization.
+      description: Assigns the specified role to the specified principal identifier for RBAC matrix authorization.
       operationId: assignRoleToPrincipal
       parameters:
       - name: principalId
@@ -1836,43 +1819,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Principal or role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role assigned to principal successfully
       security:
       - bearerAuth:
@@ -1884,60 +1867,59 @@ paths:
       tags:
       - Permission Registry
       summary: Register permissions (RBAC contract endpoint)
-      description: Registers or updates permissions using the RBAC contract payload
-        and returns the resulting permission set.
+      description: Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.
       operationId: registerPermissionsContract
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionRegistrationRequest"
+              $ref: '#/components/schemas/PermissionRegistrationRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:register
@@ -1948,60 +1930,59 @@ paths:
       tags:
       - Permission Registry
       summary: Register permissions (RBAC contract endpoint)
-      description: Registers or updates permissions using the RBAC contract payload
-        and returns the resulting permission set.
+      description: Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.
       operationId: registerPermissionsContract_1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionRegistrationRequest"
+              $ref: '#/components/schemas/PermissionRegistrationRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:register
@@ -2018,51 +1999,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionRegistrationRequest"
+              $ref: '#/components/schemas/PermissionRegistrationRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionRegistrationResponse"
+                $ref: '#/components/schemas/PermissionRegistrationResponse'
       security:
       - bearerAuth:
         - security:permission:register
@@ -2079,51 +2060,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionRegistrationRequest"
+              $ref: '#/components/schemas/PermissionRegistrationRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionRegistrationResponse"
+                $ref: '#/components/schemas/PermissionRegistrationResponse'
       security:
       - bearerAuth:
         - security:permission:register
@@ -2134,58 +2115,57 @@ paths:
       tags:
       - Permission Registry
       summary: Decode perm_bits for diagnostics
-      description: Decodes a perm_bits Base64URL BitSet back to permission code strings.
-        For debugging only.
+      description: Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.
       operationId: decodePermissions
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionDecodeRequest"
+              $ref: '#/components/schemas/PermissionDecodeRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionDecodeResponse"
+                $ref: '#/components/schemas/PermissionDecodeResponse'
       security:
       - bearerAuth:
         - security:permission:view
@@ -2196,58 +2176,57 @@ paths:
       tags:
       - Permission Registry
       summary: Decode perm_bits for diagnostics
-      description: Decodes a perm_bits Base64URL BitSet back to permission code strings.
-        For debugging only.
+      description: Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.
       operationId: decodePermissions_1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionDecodeRequest"
+              $ref: '#/components/schemas/PermissionDecodeRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionDecodeResponse"
+                $ref: '#/components/schemas/PermissionDecodeResponse'
       security:
       - bearerAuth:
         - security:permission:view
@@ -2258,8 +2237,7 @@ paths:
       tags:
       - Self-Registration Review API
       summary: Resolve a self-registration review case
-      description: Marks a blocked self-registration case as resolved after recovery
-        or manual review.
+      description: Marks a blocked self-registration case as resolved after recovery or manual review.
       operationId: resolveCase
       parameters:
       - name: caseId
@@ -2272,51 +2250,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ResolveSelfRegistrationReviewCaseRequest"
+              $ref: '#/components/schemas/ResolveSelfRegistrationReviewCaseRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Review case not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Review case resolved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+                $ref: '#/components/schemas/SelfRegistrationReviewCaseResponse'
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -2327,291 +2305,281 @@ paths:
       tags:
       - JWT API
       summary: Issue JWT token pair (access + refresh)
-      description: Authenticate and receive both access token (1-hour) and refresh
-        token (7-day). See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full
-        specification.
+      description: Authenticate and receive both access token (1-hour) and refresh token (7-day). See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.
       operationId: generateTokenPair
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TokenPairRequest"
+              $ref: '#/components/schemas/TokenPairRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid request (blank username or empty roles)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Token pair issued successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenPairResponse"
+                $ref: '#/components/schemas/TokenPairResponse'
   /v1/auth/self-register:
     post:
       tags:
       - Auth API
       summary: Self-register a new user
-      description: "Creates a low-privilege customer account after resolving or creating\
-        \ a linked person record. Successful registration requires a follow-up login\
-        \ and does not issue tokens immediately. Conflict responses include operator\
-        \ guidance for recovery, linked-account, and CRM identity-review cases."
+      description: Creates a low-privilege customer account after resolving or creating a linked person record. Successful registration requires a follow-up login and does not issue tokens immediately. Conflict responses include operator guidance for recovery, linked-account, and CRM identity-review cases.
       operationId: selfRegister
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SelfRegistrationRequest"
+              $ref: '#/components/schemas/SelfRegistrationRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid registration payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: Registration blocked because an account or linked person already
-            exists; response includes nextAction and supportAction guidance
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Registration blocked because an account or linked person already exists; response includes nextAction and supportAction guidance
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Self-registration completed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SelfRegistrationResponse"
+                $ref: '#/components/schemas/SelfRegistrationResponse'
   /v1/auth/refresh:
     post:
       tags:
       - JWT API
       summary: Refresh access token using refresh token
-      description: Exchange a valid refresh token for a new access token and refresh
-        token. Old tokens are immediately revoked. See BACKEND_CONTRACT_GUIDE.md §Refresh
-        Endpoint for full specification.
+      description: Exchange a valid refresh token for a new access token and refresh token. Old tokens are immediately revoked. See BACKEND_CONTRACT_GUIDE.md §Refresh Endpoint for full specification.
       operationId: refreshAccessToken
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RefreshTokenRequest"
+              $ref: '#/components/schemas/RefreshTokenRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid refresh token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Concurrency conflict during token revocation
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: New token pair issued successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenPairResponse"
+                $ref: '#/components/schemas/TokenPairResponse'
   /v1/auth/login:
     post:
       tags:
       - Auth API
       summary: User login
-      description: Authenticates a user with username and password and returns a JWT
-        token pair.
+      description: Authenticates a user with username and password and returns a JWT token pair.
       operationId: login
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Missing or blank username/password
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Invalid credentials
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Authentication successful
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenPairResponse"
+                $ref: '#/components/schemas/TokenPairResponse'
   /v1/auth/internal/token:
     post:
       tags:
       - JWT API
       summary: Issue internal JWT access token
-      description: Internal endpoint to issue a JWT access token (1-hour expiration).
-        See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.
+      description: Internal endpoint to issue a JWT access token (1-hour expiration). See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.
       operationId: issueInternalToken
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InternalTokenRequest"
+              $ref: '#/components/schemas/InternalTokenRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid request (blank username or empty roles)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: "Forbidden: internal admin context required"
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: 'Forbidden: internal admin context required'
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: JWT token issued successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenResponse"
+                $ref: '#/components/schemas/TokenResponse'
       security:
       - bearerAuth:
         - security:token:issue_internal
@@ -2622,58 +2590,57 @@ paths:
       tags:
       - Audit
       summary: Create pricing snapshot
-      description: Creates an immutable pricing snapshot record for later audit and
-        traceability.
+      description: Creates an immutable pricing snapshot record for later audit and traceability.
       operationId: createPricingSnapshot
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PricingSnapshotRequest"
+              $ref: '#/components/schemas/PricingSnapshotRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid pricing snapshot payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Pricing snapshot created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PricingSnapshotCreatedResponse"
+                $ref: '#/components/schemas/PricingSnapshotCreatedResponse'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -2683,58 +2650,57 @@ paths:
       tags:
       - Audit Exports
       summary: Request audit export
-      description: Submits an asynchronous audit export job. Returns 202 Accepted
-        with the created job reference.
+      description: Submits an asynchronous audit export job. Returns 202 Accepted with the created job reference.
       operationId: requestAuditExport
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AuditExportRequest"
+              $ref: '#/components/schemas/AuditExportRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid export request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "202":
+                $ref: '#/components/schemas/ApiError'
+        '202':
           description: Export job created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditExportJobResponse"
+                $ref: '#/components/schemas/AuditExportJobResponse'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -2744,8 +2710,7 @@ paths:
       tags:
       - Audit
       summary: Search audit events
-      description: Searches audit events using rich filter criteria with pagination
-        support.
+      description: Searches audit events using rich filter criteria with pagination support.
       operationId: searchAuditEvents
       parameters:
       - name: fromDate
@@ -2755,7 +2720,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: toDate
         in: query
         description: Exclusive end timestamp (ISO-8601)
@@ -2763,7 +2728,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-12-31T23:59:59Z
+        example: 2026-12-31 23:59:59+00:00
       - name: actorId
         in: query
         description: Actor username or user identifier
@@ -2847,48 +2812,48 @@ paths:
             type: string
         example: 11111111-1111-1111-1111-111111111111
       responses:
-        "400":
+        '400':
           description: Invalid filter criteria
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Audit events returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAuditLogEventDto"
+                $ref: '#/components/schemas/PageAuditLogEventDto'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -2897,58 +2862,57 @@ paths:
       tags:
       - Audit
       summary: Create audit event
-      description: Creates an immutable audit event record and returns the generated
-        event identifier.
+      description: Creates an immutable audit event record and returns the generated event identifier.
       operationId: createEvent
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AuditLogEventRequest"
+              $ref: '#/components/schemas/AuditLogEventRequest'
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid audit event payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "201":
+                $ref: '#/components/schemas/ApiError'
+        '201':
           description: Audit event created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditEventCreatedResponse"
+                $ref: '#/components/schemas/AuditEventCreatedResponse'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -2968,50 +2932,50 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
                 uniqueItems: true
       security:
       - bearerAuth:
@@ -3023,8 +2987,7 @@ paths:
       tags:
       - Admin Account-State API
       summary: Get user account state
-      description: Returns the current administrative account-state flags for the
-        specified user.
+      description: Returns the current administrative account-state flags for the specified user.
       operationId: getAccountState
       parameters:
       - name: id
@@ -3034,48 +2997,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User account state returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AccountStateResponse"
+                $ref: '#/components/schemas/AccountStateResponse'
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -3096,48 +3059,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3157,43 +3120,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Role deleted
       security:
       - bearerAuth:
@@ -3215,48 +3178,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3276,43 +3239,43 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Role deleted
       security:
       - bearerAuth:
@@ -3334,50 +3297,50 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User permissions returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
                 uniqueItems: true
       security:
       - bearerAuth:
@@ -3399,50 +3362,50 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: User permissions returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
                 uniqueItems: true
       security:
       - bearerAuth:
@@ -3474,43 +3437,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permission check completed
           content:
             application/json:
@@ -3546,43 +3509,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permission check completed
           content:
             application/json:
@@ -3607,48 +3570,48 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3668,48 +3631,48 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoleDto"
+                $ref: '#/components/schemas/RoleDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3720,8 +3683,7 @@ paths:
       tags:
       - Role Management
       summary: Get user role assignments
-      description: Returns currently effective assignments by default. Set includeHistory=true
-        to return all assignments including expired/revoked
+      description: Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked
       operationId: getUserRoleAssignments
       parameters:
       - name: userId
@@ -3741,50 +3703,50 @@ paths:
           default: false
         example: false
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role assignments returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RoleAssignmentDto"
+                  $ref: '#/components/schemas/RoleAssignmentDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3795,8 +3757,7 @@ paths:
       tags:
       - Role Management
       summary: Get user role assignments
-      description: Returns currently effective assignments by default. Set includeHistory=true
-        to return all assignments including expired/revoked
+      description: Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked
       operationId: getUserRoleAssignments_1
       parameters:
       - name: userId
@@ -3816,50 +3777,50 @@ paths:
           default: false
         example: false
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Role assignments returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RoleAssignmentDto"
+                  $ref: '#/components/schemas/RoleAssignmentDto'
       security:
       - bearerAuth:
         - security:role:view
@@ -3880,48 +3841,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionDto"
+                $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:view
@@ -3942,48 +3903,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PermissionDto"
+                $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:view
@@ -3994,8 +3955,7 @@ paths:
       tags:
       - Permission Registry
       summary: Validate permission name format
-      description: Checks if a permission name follows the domain:resource:action
-        format
+      description: Checks if a permission name follows the domain:resource:action format
       operationId: validatePermissionName
       parameters:
       - name: permissionName
@@ -4004,43 +3964,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
@@ -4056,8 +4016,7 @@ paths:
       tags:
       - Permission Registry
       summary: Validate permission name format
-      description: Checks if a permission name follows the domain:resource:action
-        format
+      description: Checks if a permission name follows the domain:resource:action format
       operationId: validatePermissionName_1
       parameters:
       - name: permissionName
@@ -4066,43 +4025,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
@@ -4127,43 +4086,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
@@ -4188,43 +4147,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
@@ -4249,50 +4208,50 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:view
@@ -4312,50 +4271,50 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PermissionDto"
+                  $ref: '#/components/schemas/PermissionDto'
       security:
       - bearerAuth:
         - security:permission:view
@@ -4366,110 +4325,107 @@ paths:
       tags:
       - Permission Registry
       summary: Get current permission catalog version
-      description: Returns the active catalog version and total permission count.
-        No authentication required.
+      description: Returns the active catalog version and total permission count. No authentication required.
       operationId: getCatalogVersion
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CatalogVersionResponse"
+                $ref: '#/components/schemas/CatalogVersionResponse'
   /v1/users/permissions/catalog-version:
     get:
       tags:
       - Permission Registry
       summary: Get current permission catalog version
-      description: Returns the active catalog version and total permission count.
-        No authentication required.
+      description: Returns the active catalog version and total permission count. No authentication required.
       operationId: getCatalogVersion_1
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CatalogVersionResponse"
+                $ref: '#/components/schemas/CatalogVersionResponse'
   /v1/users/permissions:
     get:
       tags:
       - Permission Registry
       summary: List permissions
-      description: "Returns a paged list of registered permissions, optionally filtered\
-        \ by domain."
+      description: Returns a paged list of registered permissions, optionally filtered by domain.
       operationId: listPermissions
       parameters:
       - name: domain
@@ -4480,48 +4436,48 @@ paths:
           type: string
         example: catalog
       responses:
-        "400":
+        '400':
           description: Invalid pagination parameters
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permissions returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Page"
+                $ref: '#/components/schemas/Page'
       security:
       - bearerAuth:
         - security:permission:view
@@ -4532,8 +4488,7 @@ paths:
       tags:
       - Permission Registry
       summary: List permissions
-      description: "Returns a paged list of registered permissions, optionally filtered\
-        \ by domain."
+      description: Returns a paged list of registered permissions, optionally filtered by domain.
       operationId: listPermissions_1
       parameters:
       - name: domain
@@ -4544,48 +4499,48 @@ paths:
           type: string
         example: catalog
       responses:
-        "400":
+        '400':
           description: Invalid pagination parameters
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Permissions returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Page"
+                $ref: '#/components/schemas/Page'
       security:
       - bearerAuth:
         - security:permission:view
@@ -4614,48 +4569,48 @@ paths:
           type: string
         example: pricing:msrp:edit
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: "Forbidden: authorization decision permission required"
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: 'Forbidden: authorization decision permission required'
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Authorization decision returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthorizationDecisionResponse"
+                $ref: '#/components/schemas/AuthorizationDecisionResponse'
       security:
       - bearerAuth:
         - security:authorization:decide
@@ -4666,8 +4621,7 @@ paths:
       tags:
       - Self-Registration Review API
       summary: List self-registration review cases
-      description: Returns blocked self-registration cases for recovery or identity
-        review.
+      description: Returns blocked self-registration cases for recovery or identity review.
       operationId: listCases
       parameters:
       - name: status
@@ -4687,50 +4641,50 @@ paths:
           - ACCOUNT_RECOVERY
           - IDENTITY_REVIEW
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Review cases returned successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+                  $ref: '#/components/schemas/SelfRegistrationReviewCaseResponse'
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -4751,48 +4705,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Review case not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Review case returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+                $ref: '#/components/schemas/SelfRegistrationReviewCaseResponse'
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -4803,7 +4757,7 @@ paths:
       tags:
       - JWT API
       summary: Validate JWT token
-      description: "Check if a JWT token is valid (signature, expiration, revocation)"
+      description: Check if a JWT token is valid (signature, expiration, revocation)
       operationId: validateToken
       parameters:
       - name: token
@@ -4812,48 +4766,48 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Validation result returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ValidateResponse"
+                $ref: '#/components/schemas/ValidateResponse'
   /v1/auth/user-id:
     get:
       tags:
@@ -4868,43 +4822,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Token invalid or expired
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: userId extracted successfully
           content:
             application/json:
@@ -4926,43 +4880,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Token invalid or expired
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Subject extracted successfully
           content:
             application/json:
@@ -4984,43 +4938,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Token invalid or expired
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Roles extracted successfully
           content:
             application/json:
@@ -5046,48 +5000,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Pricing snapshot not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Pricing snapshot returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PricingSnapshotDto"
+                $ref: '#/components/schemas/PricingSnapshotDto'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -5097,8 +5051,7 @@ paths:
       tags:
       - Audit Exports
       summary: Get audit export job status
-      description: Returns the current status of a previously submitted audit export
-        job.
+      description: Returns the current status of a previously submitted audit export job.
       operationId: getAuditExportJob
       parameters:
       - name: jobId
@@ -5110,48 +5063,48 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Export job not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Export job status
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditExportJobResponse"
+                $ref: '#/components/schemas/AuditExportJobResponse'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -5171,48 +5124,48 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Audit event not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Insufficient authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "200":
+                $ref: '#/components/schemas/ApiError'
+        '200':
           description: Audit event returned successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditLogEventDto"
+                $ref: '#/components/schemas/AuditLogEventDto'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -5222,9 +5175,7 @@ paths:
       tags:
       - Role Management
       summary: Revoke role assignment
-      description: "Revokes a role assignment by setting its end date. Supports past,\
-        \ present, or future dates. The system automatically records when the revocation\
-        \ was requested. Defaults to today when endDate is omitted"
+      description: Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted
       operationId: revokeRoleAssignment
       parameters:
       - name: assignmentId
@@ -5237,51 +5188,50 @@ paths:
         example: 123e4567-e89b-12d3-a456-426614174000
       - name: endDate
         in: query
-        description: Effective end date and time for revocation. Defaults to current
-          date and time
+        description: Effective end date and time for revocation. Defaults to current date and time
         required: false
         schema:
           type: string
           format: date-time
-        example: 2026-02-16T10:30:00
+        example: 2026-02-16 10:30:00
       responses:
-        "400":
+        '400':
           description: Invalid endDate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role assignment not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Role assignment revoked
       security:
       - bearerAuth:
@@ -5293,9 +5243,7 @@ paths:
       tags:
       - Role Management
       summary: Revoke role assignment
-      description: "Revokes a role assignment by setting its end date. Supports past,\
-        \ present, or future dates. The system automatically records when the revocation\
-        \ was requested. Defaults to today when endDate is omitted"
+      description: Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted
       operationId: revokeRoleAssignment_1
       parameters:
       - name: assignmentId
@@ -5308,51 +5256,50 @@ paths:
         example: 123e4567-e89b-12d3-a456-426614174000
       - name: endDate
         in: query
-        description: Effective end date and time for revocation. Defaults to current
-          date and time
+        description: Effective end date and time for revocation. Defaults to current date and time
         required: false
         schema:
           type: string
           format: date-time
-        example: 2026-02-16T10:30:00
+        example: 2026-02-16 10:30:00
       responses:
-        "400":
+        '400':
           description: Invalid endDate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Role assignment not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Role assignment revoked
       security:
       - bearerAuth:
@@ -5373,43 +5320,43 @@ paths:
         schema:
           type: string
       responses:
-        "400":
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
+                $ref: '#/components/schemas/ApiError'
+        '404':
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
+                $ref: '#/components/schemas/ApiError'
+        '409':
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
+                $ref: '#/components/schemas/ApiError'
+        '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
+                $ref: '#/components/schemas/ApiError'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
+                $ref: '#/components/schemas/ApiError'
+        '500':
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
-        "204":
+                $ref: '#/components/schemas/ApiError'
+        '204':
           description: Token revoked successfully
       security:
       - bearerAuth: []
@@ -5417,8 +5364,7 @@ components:
   schemas:
     ApiError:
       type: object
-      description: Standard error response envelope returned by all Durion backend
-        APIs
+      description: Standard error response envelope returned by all Durion backend APIs
       properties:
         code:
           type: string
@@ -5436,27 +5382,25 @@ components:
         timestamp:
           type: string
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17T14:30:00.000Z
+          example: 2026-03-17 14:30:00+00:00
         correlationId:
           type: string
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
         fieldErrors:
           type: array
-          description: Field-level validation errors; present (non-null) for validation-related
-            errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
-            other error types
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
           items:
-            $ref: "#/components/schemas/FieldError"
+            $ref: '#/components/schemas/FieldError'
         referenceId:
           type: string
-          description: "Workflow or review-case reference identifier, when applicable"
+          description: Workflow or review-case reference identifier, when applicable
         nextAction:
           type: string
-          description: "Recommended next step for the caller, when applicable"
+          description: Recommended next step for the caller, when applicable
         supportAction:
           type: string
-          description: "Support or admin investigation guidance, when applicable"
+          description: Support or admin investigation guidance, when applicable
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -5530,7 +5474,7 @@ components:
         permissions:
           type: array
           items:
-            $ref: "#/components/schemas/PermissionDto"
+            $ref: '#/components/schemas/PermissionDto'
           uniqueItems: true
         createdAt:
           type: string
@@ -5636,7 +5580,7 @@ components:
         permissions:
           type: array
           items:
-            $ref: "#/components/schemas/PermissionDefinition"
+            $ref: '#/components/schemas/PermissionDefinition'
         version:
           type: string
     PermissionRegistrationResponse:
@@ -5721,32 +5665,32 @@ components:
           description: Submitted email address
         requestedUsername:
           type: string
-          description: "Requested username, when available"
+          description: Requested username, when available
         personId:
           type: string
           format: uuid
-          description: "Resolved or created person identifier, when available"
+          description: Resolved or created person identifier, when available
         linkedUserId:
           type: string
           format: uuid
-          description: "Linked or recoverable user identifier, when available"
+          description: Linked or recoverable user identifier, when available
         crmCandidateCount:
           type: integer
           format: int32
-          description: "CRM candidate count, when available"
+          description: CRM candidate count, when available
         crmSharedIdentityCandidateCount:
           type: integer
           format: int32
-          description: "CRM shared-identity candidate count, when available"
+          description: CRM shared-identity candidate count, when available
         crmExactEmailMatch:
           type: boolean
-          description: "CRM exact email match flag, when available"
+          description: CRM exact email match flag, when available
         crmExactPhoneMatch:
           type: boolean
-          description: "CRM exact phone match flag, when available"
+          description: CRM exact phone match flag, when available
         crmExactNameMatch:
           type: boolean
-          description: "CRM exact name match flag, when available"
+          description: CRM exact name match flag, when available
         notes:
           type: string
           description: Operator notes recorded for the case
@@ -5761,13 +5705,13 @@ components:
         resolvedAt:
           type: string
           format: date-time
-          description: "Resolution timestamp, when resolved"
+          description: Resolution timestamp, when resolved
         resolvedBy:
           type: string
-          description: "Actor who resolved the case, when resolved"
+          description: Actor who resolved the case, when resolved
         resolutionNotes:
           type: string
-          description: "Resolution notes, when resolved"
+          description: Resolution notes, when resolved
     TokenPairRequest:
       type: object
       description: Request to generate an access token and refresh token pair
@@ -5829,15 +5773,13 @@ components:
           example: +1-555-123-4567
         username:
           type: string
-          description: "Optional requested username. If omitted, the email local part\
-            \ is used."
+          description: Optional requested username. If omitted, the email local part is used.
         idpSubject:
           type: string
           description: Optional external identity subject for future federation support
         idempotencyKey:
           type: string
-          description: Optional idempotency key used to replay a completed registration
-            attempt without creating duplicate side effects
+          description: Optional idempotency key used to replay a completed registration attempt without creating duplicate side effects
       required:
       - email
       - firstName
@@ -5891,8 +5833,7 @@ components:
           type: boolean
           description: True when an existing person was reused
         crmMatchSummary:
-          $ref: "#/components/schemas/CrmMatchSummaryDto"
-          description: Summary of CRM person search candidates
+          $ref: '#/components/schemas/CrmMatchSummaryDto'
         idempotencyKey:
           type: string
           description: Idempotency key echoed back when the caller supplied one
@@ -5926,8 +5867,7 @@ components:
       - username
     InternalTokenRequest:
       type: object
-      description: Request to generate a single JWT token for an internal trusted
-        caller
+      description: Request to generate a single JWT token for an internal trusted caller
       properties:
         subject:
           type: string
@@ -5959,18 +5899,15 @@ components:
           type: string
         status:
           type: string
-        inputs: {}
-        outputs: {}
     PricingSnapshotRequest:
       type: object
       properties:
-        quoteContext: {}
         finalPrice:
           type: number
         evaluationSteps:
           type: array
           items:
-            $ref: "#/components/schemas/PricingRuleTraceEntryRequest"
+            $ref: '#/components/schemas/PricingRuleTraceEntryRequest'
     PricingSnapshotCreatedResponse:
       type: object
       properties:
@@ -5985,12 +5922,12 @@ components:
           type: string
           format: date-time
           description: Inclusive start timestamp (ISO-8601)
-          example: 2026-01-01T00:00:00Z
+          example: 2026-01-01 00:00:00+00:00
         toDate:
           type: string
           format: date-time
           description: Exclusive end timestamp (ISO-8601)
-          example: 2026-12-31T23:59:59Z
+          example: 2026-12-31 23:59:59+00:00
         actorId:
           type: string
           description: Actor username/service principal
@@ -6035,8 +5972,7 @@ components:
       description: Audit export job submission request
       properties:
         filters:
-          $ref: "#/components/schemas/AuditEventSearchFilter"
-          description: Filter criteria to scope the export
+          $ref: '#/components/schemas/AuditEventSearchFilter'
         format:
           type: string
           description: Output format for the export
@@ -6096,9 +6032,6 @@ components:
           type: string
         entityType:
           type: string
-        oldValue: {}
-        newValue: {}
-        context: {}
     AuditEventCreatedResponse:
       type: object
       properties:
@@ -6165,14 +6098,13 @@ components:
           format: int32
         content:
           type: array
-          items: {}
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -6197,7 +6129,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -6250,7 +6182,7 @@ components:
         evaluationSteps:
           type: array
           items:
-            $ref: "#/components/schemas/PricingRuleTraceEntryDto"
+            $ref: '#/components/schemas/PricingRuleTraceEntryDto'
     AuditLogEventDto:
       type: object
       properties:
@@ -6289,14 +6221,14 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/AuditLogEventDto"
+            $ref: '#/components/schemas/AuditLogEventDto'
         number:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
