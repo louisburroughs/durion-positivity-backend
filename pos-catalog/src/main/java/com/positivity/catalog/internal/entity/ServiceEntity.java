@@ -2,8 +2,11 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Data;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Data
@@ -20,6 +23,14 @@ public class ServiceEntity implements CatalogItem {
     private String name;
     private String longDescription;
     private String shortDescription;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 
     @Override
     public String getLongDescription() {
