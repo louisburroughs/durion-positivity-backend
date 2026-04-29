@@ -327,7 +327,17 @@ for module in "${MODULES[@]}"; do
       # like `private Integer x = ;` in downstream SDKs.
       spec_file="$module/openapi.yaml"
       if [[ -f "$spec_file" ]]; then
-        sed -i -E '/^[[:space:]]*default:[[:space:]]*""[[:space:]]*$/d; /^[[:space:]]*default:[[:space:]]*null[[:space:]]*$/d' "$spec_file"
+        # 1) Strip `default: ""` / `default: null` (springdoc emits these for
+        #    primitive/UUID/object fields; OpenAPI Generator stamps them as
+        #    invalid Java initializers).
+        # 2) After (1), `additionalProperties:` keys whose only child was a
+        #    stripped default become empty maps (parsed as null) and fail
+        #    OpenAPI spec validation. Drop those too.
+        sed -i -E \
+          -e '/^[[:space:]]*default:[[:space:]]*""[[:space:]]*$/d' \
+          -e '/^[[:space:]]*default:[[:space:]]*null[[:space:]]*$/d' \
+          -e '/^[[:space:]]*additionalProperties:[[:space:]]*(null)?[[:space:]]*$/d' \
+          "$spec_file"
       fi
     fi
   fi

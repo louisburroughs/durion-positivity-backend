@@ -431,7 +431,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CorrectionResultDto"
-                additionalProperties:
         "400":
           description: Invalid correction request
           content:
@@ -897,7 +896,6 @@ components:
           example: 00000000-0000-0000-0000-000000000001
         correctedData:
           type: object
-          additionalProperties:
             type: string
           description: Map of field names to their corrected values
           example:

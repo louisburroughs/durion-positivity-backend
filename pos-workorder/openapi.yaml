@@ -75,7 +75,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
-                additionalProperties:
         "404":
           description: Workorder not found or no assignment exists
           content:
@@ -115,7 +114,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ReassignTechnicianRequest"
-              additionalProperties:
             examples:
               reassignTechnician:
                 description: reassignTechnician
@@ -132,7 +130,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
-                additionalProperties:
         "400":
           description: Invalid state transition or no current assignment
           content:
@@ -184,7 +181,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AssignTechnicianRequest"
-              additionalProperties:
             examples:
               assignTechnician:
                 description: assignTechnician
@@ -200,7 +196,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TechnicianAssignmentResponse"
-                additionalProperties:
         "400":
           description: Invalid state transition
           content:
@@ -260,7 +255,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AdjustLaborRequest"
-              additionalProperties:
             examples:
               adjustLabor:
                 description: adjustLabor
@@ -275,7 +269,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-                additionalProperties:
         "400":
           description: Invalid hours value
           content:
@@ -352,7 +345,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApprovalConfigurationRequest"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -439,7 +431,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateWorkorderRequest"
-              additionalProperties:
             examples:
               createWorkorder:
                 description: createWorkorder
@@ -566,7 +557,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/StartLaborRequest"
-              additionalProperties:
             examples:
               startLabor:
                 description: startLabor
@@ -581,14 +571,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-                additionalProperties:
         "200":
           description: Idempotent request - existing session returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-                additionalProperties:
         "400":
           description: Invalid state - active session exists or invalid status
           content:
@@ -634,7 +622,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ReopenWorkorderRequest"
-              additionalProperties:
             examples:
               reopenWorkorder:
                 description: reopenWorkorder
@@ -684,7 +671,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ConsumePickedItemsRequest"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -693,28 +679,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsumePickedItemsResponse"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: Workorder not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - workorder:parts:consume
@@ -746,7 +728,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ResolveScanRequest"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -755,28 +736,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResolveScanResponse"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: Workorder or pick task not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -809,7 +786,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CompletePickTaskRequest"
-              additionalProperties:
       responses:
         "200":
           description: Pick task completed successfully
@@ -817,21 +793,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                additionalProperties:
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: Workorder or pick task not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -870,7 +843,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ConfirmPickLineRequest"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -879,35 +851,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: "Workorder, pick task, or pick line not found"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "422":
           description: Scan mismatch or domain validation error from pos-inventory
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -938,7 +905,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/SubstitutePartRequest"
-              additionalProperties:
             examples:
               substitutePart:
                 description: substitutePart
@@ -955,7 +921,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                additionalProperties:
         "400":
           description: "Invalid request (part already consumed, etc.)"
           content:
@@ -1004,7 +969,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ReturnPartRequest"
-              additionalProperties:
             examples:
               returnParts:
                 description: returnParts
@@ -1019,7 +983,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
@@ -1062,7 +1025,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ReturnPartQuantityRequest"
-              additionalProperties:
             examples:
               returnUnused:
                 description: returnUnused
@@ -1079,7 +1041,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                additionalProperties:
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
@@ -1123,7 +1084,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/IssuePartRequest"
-              additionalProperties:
             examples:
               issueParts:
                 description: issueParts
@@ -1138,7 +1098,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
         "400":
           description: "Invalid request (negative quantity, etc.)"
           content:
@@ -1187,7 +1146,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CorrectPartQuantityRequest"
-              additionalProperties:
             examples:
               correctPartQuantity:
                 description: correctPartQuantity
@@ -1204,7 +1162,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
@@ -1248,7 +1205,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ConsumePartRequest"
-              additionalProperties:
             examples:
               consumeParts:
                 description: consumeParts
@@ -1263,7 +1219,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
         "400":
           description: "Invalid request (exceeds issued quantity, etc.)"
           content:
@@ -1362,7 +1317,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderLaborEntryResponse"
-                additionalProperties:
         "400":
           description: Session already stopped
           content:
@@ -1457,7 +1411,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CompleteWorkorderRequest"
-              additionalProperties:
             examples:
               completeWorkorder:
                 description: completeWorkorder
@@ -1548,7 +1501,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateChangeRequestDTO"
-              additionalProperties:
             examples:
               createChangeRequest:
                 description: createChangeRequest
@@ -1605,7 +1557,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApproveWorkorderRequest"
-              additionalProperties:
             examples:
               approveWorkorder:
                 description: approveWorkorder
@@ -2031,7 +1982,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateEstimateRequest"
-              additionalProperties:
             examples:
               createEstimate:
                 description: createEstimate
@@ -2285,7 +2235,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AddEstimateItemRequest"
-              additionalProperties:
             examples:
               addEstimateItem:
                 description: addEstimateItem
@@ -2443,7 +2392,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApproveEstimateRequest"
-              additionalProperties:
             examples:
               approveEstimate:
                 description: approveEstimate
@@ -2550,7 +2498,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/EmergencyOverrideDTO"
-              additionalProperties:
             examples:
               emergencyOverride:
                 description: emergencyOverride
@@ -2611,7 +2558,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/DeclineChangeRequestDTO"
-              additionalProperties:
             examples:
               declineChangeRequest:
                 description: declineChangeRequest
@@ -2664,7 +2610,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApproveChangeRequestDTO"
-              additionalProperties:
             examples:
               approveChangeRequest:
                 description: approveChangeRequest
@@ -2735,7 +2680,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerStopResponse"
-                additionalProperties:
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -2774,7 +2718,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/WorkexecTimerStartRequest"
-              additionalProperties:
         required: true
       responses:
         "201":
@@ -2783,14 +2726,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-                additionalProperties:
         "200":
           description: Idempotent replay returned existing timer
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-                additionalProperties:
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -2842,7 +2783,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/WorkexecLaborPerformedRequest"
-              additionalProperties:
             example:
               workorderId: 550e8400-e29b-41d4-a716-446655440001
         required: true
@@ -2853,14 +2793,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
-                additionalProperties:
         "200":
           description: Idempotent replay returned existing labor entry
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
@@ -2897,7 +2835,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApprovalConfigurationRequest"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -3061,7 +2998,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateEstimateItemRequest"
-              additionalProperties:
             examples:
               updateEstimateItem:
                 description: updateEstimateItem
@@ -3228,7 +3164,6 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties:
                 contains:
                 items:
                   $ref: "#/components/schemas/WorkorderPickedItemResponse"
@@ -3239,7 +3174,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3266,21 +3200,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPickListResponse"
-                additionalProperties:
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: Workorder not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3307,7 +3238,6 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties:
                 contains:
                 items:
                   $ref: "#/components/schemas/WorkorderPickTaskResponse"
@@ -3318,14 +3248,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
         "404":
           description: Workorder not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -3360,7 +3288,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
         "404":
           description: Workorder or part not found
           content:
@@ -3403,7 +3330,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                additionalProperties:
         "404":
           description: Workorder or part not found
           content:
@@ -3515,7 +3441,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkorderDetailResponse"
-                additionalProperties:
         "404":
           description: Workorder not found
           content:
@@ -3642,7 +3567,6 @@ paths:
             application/pdf:
               schema:
                 type: string
-                additionalProperties:
         "404":
           description: Estimate not found
           content:
@@ -3883,7 +3807,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-                additionalProperties:
         "400":
           description: Missing or invalid authenticated user id
           content:

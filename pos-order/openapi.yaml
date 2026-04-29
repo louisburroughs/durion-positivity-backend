@@ -152,7 +152,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceOverrideResult"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
@@ -198,7 +197,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-                additionalProperties:
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -251,7 +249,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-                additionalProperties:
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -487,7 +484,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-                additionalProperties:
         "404":
           description: Override not found
           content:

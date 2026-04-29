@@ -53,7 +53,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
-                additionalProperties:
         "404":
           description: Product not found
           content:
@@ -93,7 +92,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
-                additionalProperties:
         "400":
           description: Validation error
           content:
@@ -150,7 +148,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-                additionalProperties:
         "400":
           description: Invalid payload
           content:
@@ -201,7 +198,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
-                additionalProperties:
         "404":
           description: Product not found
           content:
@@ -244,7 +240,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
-                additionalProperties:
         "400":
           description: Validation error
           content:
@@ -299,7 +294,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
-                additionalProperties:
         "404":
           description: Conversion not found
           content:
@@ -340,7 +334,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
@@ -405,7 +398,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
-                additionalProperties:
         "404":
           description: Not found
           content:
@@ -441,7 +433,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
-                additionalProperties:
         "404":
           description: Not found
           content:
@@ -494,7 +485,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
-                additionalProperties:
         "404":
           description: Price book not found
           content:
@@ -531,7 +521,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
-                additionalProperties:
         "404":
           description: Price book not found
           content:
@@ -574,7 +563,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
-                additionalProperties:
         "409":
           description: Rule conflict
           content:
@@ -637,7 +625,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
-                additionalProperties:
         "400":
           description: Invalid payload
           content:
@@ -674,7 +661,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
-                additionalProperties:
         "404":
           description: Catalog not found
           content:
@@ -707,7 +693,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CatalogDto"
-              additionalProperties:
         required: true
       responses:
         "200":
@@ -716,7 +701,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
-                additionalProperties:
         "400":
           description: Invalid request body
           content:
@@ -795,7 +779,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
-                additionalProperties:
         "400":
           description: Invalid item type or request body
           content:
@@ -870,7 +853,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
-                additionalProperties:
         "400":
           description: Validation error
           content:
@@ -989,7 +971,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - catalog:msrp:read
@@ -1020,7 +1001,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-                additionalProperties:
         "400":
           description: Invalid payload
           content:
@@ -1058,7 +1038,6 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties:
                 contains:
                 items:
                   $ref: "#/components/schemas/UomConversionDto"
@@ -1089,7 +1068,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
-                additionalProperties:
         "400":
           description: Invalid request
           content:
@@ -1122,7 +1100,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
-                additionalProperties:
         "400":
           description: Invalid payload
           content:
@@ -1161,7 +1138,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-                additionalProperties:
         "400":
           description: Guardrail validation failed
           content:
@@ -1209,7 +1185,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-                additionalProperties:
         "400":
           description: Invalid rejection request
           content:
@@ -1263,7 +1238,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-                additionalProperties:
         "400":
           description: Invalid approval request
           content:
@@ -1310,7 +1284,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-                additionalProperties:
         "400":
           description: Invalid policy payload
           content:
@@ -1344,7 +1317,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
-                additionalProperties:
         "400":
           description: Invalid payload
           content:
@@ -1376,7 +1348,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - catalog:price_book:read
@@ -1407,7 +1378,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
-                additionalProperties:
         "409":
           description: Rule conflict
           content:
@@ -1440,7 +1410,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResolvePriceResponseDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - catalog:price_book:read
@@ -1459,7 +1428,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CatalogDto"
-              additionalProperties:
         required: true
       responses:
         "201":
@@ -1468,7 +1436,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
-                additionalProperties:
         "400":
           description: Invalid request body
           content:
@@ -1541,7 +1508,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
-                additionalProperties:
         "400":
           description: Invalid item type or request body
           content:
@@ -1576,7 +1542,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
-                additionalProperties:
         "404":
           description: Product not found
           content:
@@ -1618,7 +1583,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-                additionalProperties:
         "404":
           description: No active MSRP for date
           content:
@@ -1660,7 +1624,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
-                additionalProperties:
         "400":
           description: Invalid location ID
           content:
@@ -1707,7 +1670,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
-                additionalProperties:
         "404":
           description: Service not found
           content:
@@ -1742,7 +1704,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1802,7 +1763,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
-                additionalProperties:
         "400":
           description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
@@ -1844,7 +1804,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
-                additionalProperties:
         "404":
           description: No pricing context found
           content:
@@ -1879,7 +1838,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
-                additionalProperties:
         "404":
           description: Non-inventory product not found
           content:
@@ -1914,7 +1872,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1943,7 +1900,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1970,7 +1926,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1999,7 +1954,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostAuditDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -2030,7 +1984,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
-                additionalProperties:
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -2071,7 +2024,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Page"
-                additionalProperties:
         "400":
           description: At least one filter is required
           content:
