@@ -9,11 +9,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.time.Duration;
+
 /**
  * Verifies that GatewayPermissionCatalog.CATALOG_VERSION matches the version
- * currently published by pos-security-service at startup. A mismatch means the
- * gateway will silently reject all JWTs with the newer perm_ver, so the
- * application context is terminated immediately if they diverge.
+ * currently published by pos-security-service at startup.
+ *
+ * A version MISMATCH is fatal — the gateway will silently reject all JWTs with the
+ * newer perm_ver so the context is terminated immediately.
+ *
+ * Connectivity failures (503, connection refused) are non-fatal: they indicate the
+ * security service hasn't registered with Eureka yet or is still starting. The
+ * warning is logged and the check is skipped so the gateway can proceed.
  */
 @Component
 public class PermissionVersionStartupCheck {
@@ -37,11 +44,12 @@ public class PermissionVersionStartupCheck {
                     .uri(CATALOG_VERSION_PATH)
                     .retrieve()
                     .bodyToMono(CatalogVersionDto.class)
+                    .timeout(Duration.ofSeconds(5))
                     .block();
 
             if (remote == null) {
-                throw new IllegalStateException(
-                        "Permission catalog version check returned null from " + CATALOG_VERSION_PATH);
+                LOG.warn("Permission catalog version check returned null — skipping");
+                return;
             }
 
             if (remote.version() != localVersion) {
@@ -55,9 +63,19 @@ public class PermissionVersionStartupCheck {
                     remote.version(), remote.permissionCount());
 
         } catch (WebClientResponseException e) {
-            LOG.error("Permission catalog version check failed — security-service returned HTTP {}: {}",
+            // 4xx means the endpoint exists but something is wrong with the request —
+            // treat as fatal since it hints at a real incompatibility.
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new IllegalStateException(
+                        "Permission catalog version check failed with client error: " + e.getStatusCode(), e);
+            }
+            // 5xx / 503 means the security service is temporarily unavailable.
+            LOG.warn("Permission catalog version check skipped — security-service returned HTTP {} (service may still be starting): {}",
                     e.getStatusCode(), e.getMessage());
-            throw new IllegalStateException("Cannot verify permission catalog version at startup", e);
+        } catch (Exception e) {
+            // Connection refused, timeout, etc. — service hasn't started yet.
+            LOG.warn("Permission catalog version check skipped — security-service unreachable at startup: {}",
+                    e.getMessage());
         }
     }
 
