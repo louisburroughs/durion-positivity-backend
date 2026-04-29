@@ -975,8 +975,8 @@ class SecurityGatewayConfigTest {
 
         /** Catalog version stays aligned with the token perm_ver claim. */
         @Test
-        void catalogVersion_is3() {
-            assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(3);
+        void catalogVersion_is4() {
+            assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(4);
         }
 
         /** Bit 0 maps to PERM_accounting:je:view. */
