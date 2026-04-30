@@ -248,13 +248,22 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
-      - name: Cache OWASP dependency-check data
+      - name: Install internal snapshot artifacts
+        run: ./mvnw install -DskipTests -DskipITs -B -q
+
+      - name: Get current week for cache key
+        id: date
+        run: echo "week=$(date +'%Y-%W')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OWASP NVD data
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/org/owasp
-          key: ${{ runner.os }}-owasp-dc-${{ hashFiles('**/pom.xml') }}
+          # NVD data is time-sensitive, not pom-sensitive — bust weekly so stale
+          # CVE data doesn't linger, but pom changes don't force a re-download.
+          key: ${{ runner.os }}-owasp-nvd-${{ steps.date.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-owasp-dc-
+            ${{ runner.os }}-owasp-nvd-
 
       - name: Run OWASP Dependency Check
         env:
