@@ -1,3 +1,9 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   kafka:
     image: bitnami/kafka:3.9.0
@@ -27,6 +33,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    logging: *logging
 
   kafka-init:
     image: bitnami/kafka:3.9.0
@@ -41,6 +48,7 @@ services:
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic workorder.commands.v1 --partitions 3 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --list
     restart: "no"
+    logging: *logging
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
@@ -53,6 +61,7 @@ services:
       KAFKA_CLUSTERS_0_NAME: "pos-workorder-local"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
       DYNAMIC_CONFIG_ENABLED: "true"
+    logging: *logging
 
 volumes:
   kafka-data:
