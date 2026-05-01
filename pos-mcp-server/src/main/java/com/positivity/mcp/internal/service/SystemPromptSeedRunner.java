@@ -46,7 +46,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
           LOGGER.info("Seeded system prompt name={}", name);
         }
       } catch (Exception exception) {
-        LOGGER.warn("Failed to seed system prompt name={} error={}", name, exception.getMessage());
+        LOGGER.warn("Failed to seed system prompt name={}", name, exception);
       }
     });
   }

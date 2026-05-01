@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,7 +17,6 @@ import com.positivity.mcp.service.DocumentIngestionJob;
 import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -110,7 +110,8 @@ class StaticRagPreloadServiceImplTest {
   @DisplayName("preloadAll skips document when prior record has same hash and LOADED status")
   void preloadAll_sameHash_noIngestion_skipsDocument() throws Exception {
     String hash = computeFileHash();
-    when(ragPreloadRecordRepository.findFirstByDocumentIdOrderByLoadedAtDesc(TEST_DOC_ID))
+    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
+        RagPreloadStatus.LOADED))
         .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, hash)));
     when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -130,7 +131,8 @@ class StaticRagPreloadServiceImplTest {
   @DisplayName("preloadAll submits ingestion when prior record has different hash")
   void preloadAll_differentHash_submitsIngestion() {
     String differentHash = "0".repeat(64);
-    when(ragPreloadRecordRepository.findFirstByDocumentIdOrderByLoadedAtDesc(TEST_DOC_ID))
+    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
+        RagPreloadStatus.LOADED))
         .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, differentHash)));
     when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
     when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -150,7 +152,8 @@ class StaticRagPreloadServiceImplTest {
   @Test
   @DisplayName("preloadAll submits ingestion when no prior record exists")
   void preloadAll_noExistingRecord_submitsIngestion() {
-    when(ragPreloadRecordRepository.findFirstByDocumentIdOrderByLoadedAtDesc(TEST_DOC_ID))
+    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
+        RagPreloadStatus.LOADED))
         .thenReturn(Optional.empty());
     when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
     when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -169,7 +172,8 @@ class StaticRagPreloadServiceImplTest {
   @Test
   @DisplayName("preloadAll persists FAILED record for erroring doc and continues to next document")
   void preloadAll_ingestionThrows_persistsFailedRecord_continuesOtherDocs() {
-    when(ragPreloadRecordRepository.findFirstByDocumentIdOrderByLoadedAtDesc(anyString()))
+    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(anyString(),
+        eq(RagPreloadStatus.LOADED)))
         .thenReturn(Optional.empty());
     when(documentIngestionService.submitDocument(anyString(), any()))
         .thenThrow(new RuntimeException("Ingestion failed"))

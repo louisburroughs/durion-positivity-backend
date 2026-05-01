@@ -80,10 +80,10 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
 
     String hash = computeHash(bytes);
 
-    Optional<RagPreloadRecord> prior = ragPreloadRecordRepository.findFirstByDocumentIdOrderByLoadedAtDesc(documentId);
+    Optional<RagPreloadRecord> prior = ragPreloadRecordRepository
+        .findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(documentId, RagPreloadStatus.LOADED);
     if (prior.isPresent()
-        && prior.get().getContentHash().equals(hash)
-        && prior.get().getStatus() == RagPreloadStatus.LOADED) {
+        && prior.get().getContentHash().equals(hash)) {
       LOGGER.info("Skipping unchanged RAG document document_id={}", documentId);
       persistRecord(documentId, hash, sourcePath, RagPreloadStatus.SKIPPED);
       meterRegistry.counter("mcp.rag.preload.skipped", TAG_DOCUMENT_ID, documentId).increment();
