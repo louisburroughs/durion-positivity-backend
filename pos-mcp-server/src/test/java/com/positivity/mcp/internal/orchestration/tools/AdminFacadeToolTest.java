@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClient;
 class AdminFacadeToolTest {
 
     private static final String SECURITY_BASE_URL = "http://pos-security-service/v1/admin";
+    private static final String USERS_BASE_URL = "http://pos-security-service/v1/users";
 
     private MockRestServiceServer mockServer;
     private AdminFacadeTool tool;
@@ -27,7 +28,7 @@ class AdminFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new AdminFacadeTool(builder, SECURITY_BASE_URL);
+        tool = new AdminFacadeTool(builder, SECURITY_BASE_URL, USERS_BASE_URL);
     }
 
     @Test
