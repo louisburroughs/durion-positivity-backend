@@ -12,6 +12,7 @@ import com.positivity.price.internal.enums.DiscountType;
 import com.positivity.price.internal.enums.PromotionStatus;
 import com.positivity.price.internal.repository.PromotionOfferRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,9 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
 
     @Autowired
     private PromotionOfferRepository promotionOfferRepository;
+
+    @Autowired
+    private Clock clock;
 
     /**
      * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST
@@ -268,8 +272,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         inactiveOffer.setName("Inactive Promotion");
         inactiveOffer.setDiscountType(DiscountType.PERCENT_LABOR);
         inactiveOffer.setDiscountValue(BigDecimal.valueOf(7.50));
-        inactiveOffer.setStartDate(LocalDate.of(2026, 5, 1));
-        inactiveOffer.setEndDate(LocalDate.of(2026, 5, 31));
+        inactiveOffer.setStartDate(LocalDate.now(clock).plusMonths(1));
+        inactiveOffer.setEndDate(LocalDate.now(clock).plusMonths(2));
         inactiveOffer.setStatus(PromotionStatus.INACTIVE);
 
         PromotionOffer savedInactiveOffer = promotionOfferRepository.save(inactiveOffer);
@@ -334,8 +338,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         expiredOffer.setName("Expired Promotion");
         expiredOffer.setDiscountType(DiscountType.PERCENT_LABOR);
         expiredOffer.setDiscountValue(BigDecimal.valueOf(5.00));
-        expiredOffer.setStartDate(LocalDate.of(2026, 1, 1));
-        expiredOffer.setEndDate(LocalDate.of(2026, 1, 31));
+        expiredOffer.setStartDate(LocalDate.now(clock).minusMonths(2));
+        expiredOffer.setEndDate(LocalDate.now(clock).minusMonths(1));
         expiredOffer.setStatus(PromotionStatus.EXPIRED);
 
         PromotionOffer savedExpiredOffer = promotionOfferRepository.save(expiredOffer);
