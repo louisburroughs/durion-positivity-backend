@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS mcp_rag_preload_record (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rag_preload_document_id
-  ON mcp_rag_preload_record (document_id, loaded_at DESC);
+  ON mcp_rag_preload_record (document_id, status, loaded_at DESC);

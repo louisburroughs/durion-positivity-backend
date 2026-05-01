@@ -49,7 +49,7 @@ prompts on startup, and add Micrometer observability for preload lifecycle.
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/entity/RagPreloadRecord.java` (NEW)
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/repository/RagPreloadRecordRepository.java` (NEW)
 - `pos-mcp-server/src/main/resources/db/migration/V9__rag_preload_tracking.sql` (NEW)
-- `pos-mcp-server/src/main/resources/db/migration/h2/V9__rag_preload_tracking.sql` (NEW — for H2 test compat)
+- `pos-mcp-server/src/main/resources/db/h2-migration/V9__rag_preload_tracking.sql` (NEW — for H2 test compat)
 
 **Entity fields:**
 
@@ -64,7 +64,7 @@ loaded_at       TIMESTAMP NOT NULL
 
 **Repository methods:**
 
-- `findFirstByDocumentIdOrderByLoadedAtDesc(String documentId)` returning `Optional<RagPreloadRecord>`
+- `findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(String documentId, RagPreloadStatus status)` returning `Optional<RagPreloadRecord>`; pass `RagPreloadStatus.LOADED` so SKIPPED rows do not mask the latest successfully loaded record
 
 **Migration V9 SQL:**
 
