@@ -24,6 +24,42 @@ class RoleAuthorityServiceTest {
     }
 
     @Test
+    void expandRolesToAuthorities_adminIncludesAllCustomerAuthorities() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("ADMIN"));
+
+        assertThat(authorities).contains(
+                "crm:party:view",
+                "crm:party:search",
+                "crm:party:create",
+                "crm:party:edit",
+                "crm:party:deactivate",
+                "crm:party:merge",
+                "crm:contact:view",
+                "crm:contact:create",
+                "crm:contact:edit",
+                "crm:contact:delete",
+                "crm:contact_role:view",
+                "crm:contact_role:assign",
+                "crm:contact_role:revoke",
+                "crm:contact_preference:view",
+                "crm:contact_preference:edit",
+                "crm:vehicle:view",
+                "crm:vehicle:search",
+                "crm:vehicle:create",
+                "crm:vehicle:edit",
+                "crm:vehicle:deactivate",
+                "crm:vehicle_party_association:view",
+                "crm:vehicle_party_association:create",
+                "crm:vehicle_party_association:edit",
+                "crm:vehicle_preference:view",
+                "crm:vehicle_preference:edit",
+                "crm:processing_log:view",
+                "crm:suspense:view",
+                "crm:integration:audit",
+                "crm:billing_rules:edit");
+    }
+
+    @Test
     void expandRolesToAuthorities_handlesPrefixedAndBlankRoles() {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("ROLE_CSR", " "));
 
