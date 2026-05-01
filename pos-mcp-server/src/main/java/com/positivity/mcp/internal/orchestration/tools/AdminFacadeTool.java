@@ -11,16 +11,25 @@ import org.springframework.web.client.RestClient;
 public class AdminFacadeTool {
 
     private final RestClient securityRestClient;
+    private final RestClient usersRestClient;
 
     public AdminFacadeTool(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.admin.base-url:http://pos-security-service/v1/admin}") @NonNull String baseUrl) {
-        this.securityRestClient = restClientBuilder.baseUrl(baseUrl).build();
+            @Value("${pos.admin.base-url:http://pos-security-service/v1/admin}") @NonNull String adminBaseUrl,
+            @Value("${pos.security.users.base-url:http://pos-security-service/v1/users}") @NonNull String usersBaseUrl) {
+        this.securityRestClient = restClientBuilder.baseUrl(adminBaseUrl).build();
+        this.usersRestClient = restClientBuilder.baseUrl(usersBaseUrl).build();
     }
 
     @Tool("Get overall platform system status and health summary")
     public String getSystemStatus() {
         return "pos-mcp-server status: UP";
+    }
+
+    @Tool("List all users registered in the platform. Returns each user's ID, username, and assigned roles. " +
+          "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
+    public String listUsers() {
+        return usersRestClient.get().retrieve().body(String.class);
     }
 
     @Tool("Get effective user permissions and access details")

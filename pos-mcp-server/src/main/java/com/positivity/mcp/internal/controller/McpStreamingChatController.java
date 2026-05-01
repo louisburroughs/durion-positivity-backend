@@ -7,7 +7,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -50,13 +53,20 @@ public class McpStreamingChatController {
                 .map(token -> ServerSentEvent.<String>builder(token).event("chat").build());
     }
 
+    private static final List<String> ROLE_PRIORITY = List.of(
+            "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_SERVICE_WRITER",
+            "ROLE_CASHIER", "ROLE_SUPPLIER", "ROLE_TECHNICIAN");
+
     private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
-        return Objects.requireNonNull(auth.getAuthorities().stream()
+        Set<String> userRoles = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .filter(Objects::nonNull)
                 .filter(a -> a.startsWith("ROLE_"))
+                .collect(Collectors.toSet());
+        return ROLE_PRIORITY.stream()
+                .filter(userRoles::contains)
                 .findFirst()
-                .orElse("ROLE_USER"));
+                .orElse("ROLE_USER");
     }
 
     @Schema(name = "StreamChatRequest", description = "Streaming chat request payload", example = "{\"message\":\"Hello\"}")
