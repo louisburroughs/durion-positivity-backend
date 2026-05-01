@@ -1,6 +1,6 @@
 # pos-price
 
-Pricing engine service for the Durion POS platform. Manages base prices, promotion offers, restriction rules, eligibility evaluation, pricing snapshots, and price quote calculation.
+Pricing engine service for the Durion Positivity ETSMS platform. Manages base prices, promotion offers, restriction rules, eligibility evaluation, pricing snapshots, and price quote calculation.
 
 ## Responsibilities
 

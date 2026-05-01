@@ -1,6 +1,6 @@
 # pos-api-gateway
 
-Spring Cloud Gateway (WebFlux) acting as the single external entry point for the Durion POS platform. Validates JWT bearer tokens, strips or propagates identity headers, routes requests to downstream microservices discovered through Eureka, and aggregates Swagger UI documentation from all services.
+Spring Cloud Gateway (WebFlux) acting as the single external entry point for the Durion Positivity ETSMS platform. Validates JWT bearer tokens, strips or propagates identity headers, routes requests to downstream microservices discovered through Eureka, and aggregates Swagger UI documentation from all services.
 
 ## Responsibilities
 
@@ -23,29 +23,29 @@ Spring Cloud Gateway (WebFlux) acting as the single external entry point for the
 
 Routes strip the leading path prefix before forwarding to the upstream service.
 
-| Prefix | Upstream Service |
-|---|---|
-| `/accounting/**` | `lb://ACCOUNTING` |
-| `/catalog/**` | `lb://CATALOG` |
-| `/customer/**` | `lb://CUSTOMER` |
-| `/inventory/**` | `lb://INVENTORY` |
-| `/invoice/**` | `lb://INVOICE` |
-| `/order/**` | `lb://ORDER` |
-| `/workorder/**` | `lb://WORKORDER` |
+| Prefix                 | Upstream Service        |
+| ---------------------- | ----------------------- |
+| `/accounting/**`       | `lb://ACCOUNTING`       |
+| `/catalog/**`          | `lb://CATALOG`          |
+| `/customer/**`         | `lb://CUSTOMER`         |
+| `/inventory/**`        | `lb://INVENTORY`        |
+| `/invoice/**`          | `lb://INVOICE`          |
+| `/order/**`            | `lb://ORDER`            |
+| `/workorder/**`        | `lb://WORKORDER`        |
 | `/security-service/**` | `lb://SECURITY-SERVICE` |
-| `/shop-manager/**` | `lb://SHOP-MANAGER` |
+| `/shop-manager/**`     | `lb://SHOP-MANAGER`     |
 
 Discovery locator is disabled; only explicitly configured routes are exposed. `pos-tax` and `pos-events` are intentionally not routed externally.
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `pos.gateway.security.strict-jwt-header-validation` | `true` | Reject unsafe JWT header patterns before introspection |
-| `pos.gateway.security.allowed-jwt-algorithms` | `HS256` | Permitted JWT `alg` values |
-| `auth.token-identity-required` | `false` | Reject tokens missing `perm_bits` claim |
-| `auth.strip-inbound-identity-headers` | `true` | Strip `X-User`, `X-User-Id`, `X-Authorities` headers |
-| `auth.auth-path-root` | `/security-service/v1/auth` | Public auth path that bypasses JWT checks |
+| Property                                            | Default                     | Description                                            |
+| --------------------------------------------------- | --------------------------- | ------------------------------------------------------ |
+| `pos.gateway.security.strict-jwt-header-validation` | `true`                      | Reject unsafe JWT header patterns before introspection |
+| `pos.gateway.security.allowed-jwt-algorithms`       | `HS256`                     | Permitted JWT `alg` values                             |
+| `auth.token-identity-required`                      | `false`                     | Reject tokens missing `perm_bits` claim                |
+| `auth.strip-inbound-identity-headers`               | `true`                      | Strip `X-User`, `X-User-Id`, `X-Authorities` headers   |
+| `auth.auth-path-root`                               | `/security-service/v1/auth` | Public auth path that bypasses JWT checks              |
 
 ## Dependencies
 

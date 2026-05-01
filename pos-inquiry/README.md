@@ -1,6 +1,6 @@
 # pos-inquiry
 
-Placeholder service module for the Durion POS inquiry domain. Currently scaffolded with a minimal Spring Boot application and OpenAPI configuration; business logic has not yet been implemented.
+Placeholder service module for the Durion Positivity ETSMS inquiry domain. Currently scaffolded with a minimal Spring Boot application and OpenAPI configuration; business logic has not yet been implemented.
 
 ## Responsibilities
 

@@ -1,6 +1,6 @@
 # pos-vehicle-fitment
 
-Vehicle fitment and part applicability service for the Durion POS platform. Manages the hierarchical vehicle taxonomy (Manufacturer, Make, Model, VehicleType), part-to-vehicle fitment associations, vehicle variables, and applicability hints for product-to-vehicle matching.
+Vehicle fitment and part applicability service for the Durion Positivity ETSMS platform. Manages the hierarchical vehicle taxonomy (Manufacturer, Make, Model, VehicleType), part-to-vehicle fitment associations, vehicle variables, and applicability hints for product-to-vehicle matching.
 
 ## Responsibilities
 
@@ -35,10 +35,10 @@ Vehicle fitment and part applicability service for the Durion POS platform. Mana
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL |
-| `EUREKA_SERVER_URL` | required | Eureka service discovery URL |
+| Property                | Default  | Description                  |
+| ----------------------- | -------- | ---------------------------- |
+| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
+| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
 ## Dependencies
 

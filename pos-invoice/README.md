@@ -1,6 +1,6 @@
 # pos-invoice
 
-Invoice and payment service for the Durion POS platform. Creates invoices from workorder completion, collects payments via the configured payment gateway (Stripe), manages receipt generation, handles payment reversals and voids, and enforces billing rules.
+Invoice and payment service for the Durion Positivity ETSMS platform. Creates invoices from workorder completion, collects payments via the configured payment gateway (Stripe), manages receipt generation, handles payment reversals and voids, and enforces billing rules.
 
 ## Responsibilities
 

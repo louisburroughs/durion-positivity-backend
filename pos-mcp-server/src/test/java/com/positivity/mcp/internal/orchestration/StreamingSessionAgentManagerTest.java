@@ -3,11 +3,13 @@ package com.positivity.mcp.internal.orchestration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
@@ -59,6 +61,9 @@ class StreamingSessionAgentManagerTest {
     @Mock
     private ToolRegistry toolRegistry;
 
+    @Mock
+    private RolePromptResolver rolePromptResolver;
+
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
 
@@ -70,6 +75,7 @@ class StreamingSessionAgentManagerTest {
         // bleed
         when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         manager = new StreamingSessionAgentManager(
                 streamingChatModel,
@@ -77,6 +83,7 @@ class StreamingSessionAgentManagerTest {
                 embeddingStore,
                 toolRegistry,
                 exaWebSearchTool,
+                rolePromptResolver,
                 null,
                 30,
                 500,

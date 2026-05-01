@@ -18,7 +18,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
-import com.positivity.mcp.service.SystemPromptService;
+import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -43,7 +43,7 @@ import org.springframework.web.client.RestClient;
  * Unit tests for {@link SessionAgentManager}: cache behaviour and eviction.
  *
  * <p>
- * {@code SessionAgentManager} is annotated {@code @Profile("!test")} so Spring
+ * {@code SessionAgentManager} is annotated {@code @Profile("alpha")} so Spring
  * never
  * instantiates it during slice tests. Here we construct it directly via
  * {@code new},
@@ -81,7 +81,7 @@ class SessionAgentManagerTest {
     private ToolRegistryService toolRegistryService;
 
     @Mock
-    private SystemPromptService systemPromptService;
+    private RolePromptResolver rolePromptResolver;
 
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in LangChain4j
@@ -103,6 +103,7 @@ class SessionAgentManagerTest {
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
+        lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
         orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
@@ -116,7 +117,7 @@ class SessionAgentManagerTest {
                 orderFacadeTool,
                 toolRegistryService,
                 null,
-                systemPromptService,
+                rolePromptResolver,
                 30,
                 500,
                 50,

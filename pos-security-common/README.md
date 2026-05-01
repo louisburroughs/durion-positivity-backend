@@ -1,6 +1,6 @@
 # pos-security-common
 
-Shared security library for all Durion POS microservices. Provides Spring Security configuration that trusts gateway-forwarded identity headers, permission manifest loading, and security context helpers. This is a library dependency, not a deployable service.
+Shared security library for all Durion Positivity microservices. Provides Spring Security configuration that trusts gateway-forwarded identity headers, permission manifest loading, and security context helpers. This is a library dependency, not a deployable service.
 
 ## Responsibilities
 

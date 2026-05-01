@@ -1,6 +1,6 @@
 # pos-location
 
-Location hierarchy and physical space management service for the Durion POS platform. Manages the tree of service locations, bays, storage locations, mobile units, service areas, rosters, and travel buffer policies.
+Location hierarchy and physical space management service for the Durion Positivity ETSMS platform. Manages the tree of service locations, bays, storage locations, mobile units, service areas, rosters, and travel buffer policies.
 
 ## Responsibilities
 

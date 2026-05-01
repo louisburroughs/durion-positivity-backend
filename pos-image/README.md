@@ -1,6 +1,6 @@
 # pos-image
 
-Image storage and retrieval microservice for the Durion POS platform. Persists image binary data with classification metadata and provides fetch-by-filename or fetch-by-ID endpoints.
+Image storage and retrieval microservice for the Durion Positivity ETSMS platform. Persists image binary data with classification metadata and provides fetch-by-filename or fetch-by-ID endpoints.
 
 ## Responsibilities
 

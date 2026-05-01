@@ -1,6 +1,6 @@
 # pos-event-receiver
 
-Central event aggregation and storage service for the Durion POS platform. Receives `@EmitEvent` emissions from all microservices, persists them, computes hourly roll-ups, and exposes summary and query endpoints for observability dashboards and audit tooling.
+Central event aggregation and storage service for the Durion Positivity ETSMS platform. Receives `@EmitEvent` emissions from all microservices, persists them, computes hourly roll-ups, and exposes summary and query endpoints for observability dashboards and audit tooling.
 
 ## Responsibilities
 

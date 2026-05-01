@@ -11,8 +11,8 @@ import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
-import com.positivity.mcp.service.SystemPromptService;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
@@ -49,9 +49,6 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private static final String MEMORY_KEY_SEPARATOR = "::";
     private static final String WORKFLOW_IDLE = "IDLE";
     private static final String FULL_TOOL_CACHE_KEY = "full";
-    private static final String SIMPLE_CHAT_SYSTEM_PROMPT =
-            "You are a concise POS assistant for Durion Positivity. Answer general conversation directly. "
-                    + "Do not invent business data.";
 
     private final Cache<String, PosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -69,9 +66,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     @Nullable
     private final ToolAuditService toolAuditService;
-
-    @SuppressWarnings("unused")
-    private final SystemPromptService systemPromptService;
+    private final RolePromptResolver rolePromptResolver;
 
     private final int memoryMaxMessages;
     private final int candidateToolLimit;
@@ -87,7 +82,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull OrderFacadeTool orderFacadeTool,
             @Nullable ToolRegistryService toolRegistryService,
             @Nullable ToolAuditService toolAuditService,
-            @NonNull SystemPromptService systemPromptService,
+            @NonNull RolePromptResolver rolePromptResolver,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
@@ -102,7 +97,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.orderFacadeTool = orderFacadeTool;
         this.toolRegistryService = toolRegistryService;
         this.toolAuditService = toolAuditService;
-        this.systemPromptService = systemPromptService;
+        this.rolePromptResolver = rolePromptResolver;
         this.memoryMaxMessages = memoryMaxMessages;
         this.candidateToolLimit = Math.max(1, candidateToolLimit);
         this.rateLimitPerSession = rateLimitPerSession;
@@ -114,8 +109,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache =
-                Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
+        this.roleAgentCache = Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
         prebuildRoleAgents();
     }
 
@@ -144,8 +138,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             }
 
             ToolSelection selection = selectTools(role, message);
-            PosAssistant agent =
-                    getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(), selection.fallbackTools());
+            PosAssistant agent = getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(),
+                    selection.fallbackTools());
             String roleContext = "Current user role: " + role;
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(memoryKey(userId, role), message, roleContext);
@@ -197,8 +191,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         long startNanos = System.nanoTime();
         // 1. Resolve role-specific tools and append fallback tools without
         // registering duplicate @Tool method names.
-        List<Object> tools =
-                ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray(Object[]::new));
+        List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
+                fallbackTools.toArray(Object[]::new));
 
         // 2. Build RAG content retriever
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
@@ -207,8 +201,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maxResults(5)
                 .minScore(0.7)
                 .build();
-        ContentRetriever resilientContentRetriever =
-                new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
+        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
+                "embedding-store-content-retriever");
 
         // 3. Assemble AiServices proxy. Chat memory remains per user+role through
         // the provider, so role-level agent prebuilds do not share conversations.
@@ -216,6 +210,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
+                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.info("Built MCP role agent role={} tools={} in {} ms", role, tools.size(), elapsedMs(startNanos));
@@ -232,7 +227,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Evicts a user's conversation state and rate counter. Role agents remain cached.
+     * Evicts a user's conversation state and rate counter. Role agents remain
+     * cached.
      */
     @Override
     public void evict(@NonNull String userId) {
@@ -262,8 +258,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private @NonNull String simpleChat(
             @NonNull String userId, @NonNull String role, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
+        String prompt = rolePromptResolver.resolvePrompt(role);
         String response = chatModel
-                .chat(List.of(SystemMessage.from(SIMPLE_CHAT_SYSTEM_PROMPT), UserMessage.from(message)))
+                .chat(List.of(SystemMessage.from(prompt), UserMessage.from(message)))
                 .aiMessage()
                 .text();
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);

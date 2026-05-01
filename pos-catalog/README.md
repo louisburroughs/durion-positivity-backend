@@ -1,6 +1,6 @@
 # pos-catalog
 
-Product catalog service for the Durion POS platform. Manages the product master, price books, unit-of-measure conversions, supplier item costs, MSRP records, location-level price overrides, and product lifecycle transitions.
+Product catalog service for the Durion Positivity ETSMS platform. Manages the product master, price books, unit-of-measure conversions, supplier item costs, MSRP records, location-level price overrides, and product lifecycle transitions.
 
 ## Responsibilities
 
@@ -36,10 +36,10 @@ Product catalog service for the Durion POS platform. Manages the product master,
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL |
-| `EUREKA_SERVER_URL` | required | Eureka service discovery URL |
+| Property                | Default  | Description                  |
+| ----------------------- | -------- | ---------------------------- |
+| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
+| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
 ## Dependencies
 

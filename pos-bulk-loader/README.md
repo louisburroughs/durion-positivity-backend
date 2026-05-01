@@ -1,6 +1,6 @@
 # pos-bulk-loader
 
-Bulk data import orchestrator for Durion POS. Accepts CSV file uploads, proposes column mappings, drives Spring Batch processing against domain service bulk-ingest endpoints, and queues failed records for operator review.
+Bulk data import orchestrator for Durion Positivity ETSMS. Accepts CSV file uploads, proposes column mappings, drives Spring Batch processing against domain service bulk-ingest endpoints, and queues failed records for operator review.
 
 ## Responsibilities
 

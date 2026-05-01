@@ -1,6 +1,6 @@
 # pos-accounting
 
-General-ledger accounting service for the Durion POS platform. Manages chart of accounts, journal entries, GL posting rules, payment application, AP payments, vendor bills, credit memos, and financial reporting. Consumes payment-cleared events from Kafka and produces posted accounting entries through a transactional outbox pattern.
+General-ledger accounting service for the Durion Positivity ETSMS platform. Manages chart of accounts, journal entries, GL posting rules, payment application, AP payments, vendor bills, credit memos, and financial reporting. Consumes payment-cleared events from Kafka and produces posted accounting entries through a transactional outbox pattern.
 
 ## Responsibilities
 

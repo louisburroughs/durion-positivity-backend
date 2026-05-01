@@ -1,6 +1,6 @@
 # pos-shared-dtos
 
-Shared DTO library for cross-module data transfer across the Durion POS platform. Contains invoice request/response types, vehicle request/response types, shared enumerations, error envelope, and UUIDv7 ID generation utilities. This is a library dependency, not a deployable service.
+Shared DTO library for cross-module data transfer across the Durion Positivity ETSMS platform. Contains invoice request/response types, vehicle request/response types, shared enumerations, error envelope, and UUIDv7 ID generation utilities. This is a library dependency, not a deployable service.
 
 ## Responsibilities
 

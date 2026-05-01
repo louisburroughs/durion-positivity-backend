@@ -1,6 +1,6 @@
 # pos-dependencies
 
-Maven Bill of Materials (BOM) for all internal Durion POS library artifacts and shared third-party dependency versions. Consuming modules import this BOM to get consistent, compatible versions without specifying individual version numbers.
+Maven Bill of Materials (BOM) for all internal Durion Positivity library artifacts and shared third-party dependency versions. Consuming modules import this BOM to get consistent, compatible versions without specifying individual version numbers.
 
 ## Responsibilities
 

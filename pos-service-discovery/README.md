@@ -1,6 +1,6 @@
 # pos-service-discovery
 
-Netflix Eureka server providing service discovery for all Durion POS microservices. Every `pos-*` service registers with this server on startup and uses it to resolve service addresses for load-balanced inter-service calls.
+Netflix Eureka server providing service discovery for all Durion Positivity microservices. Every `pos-*` service registers with this server on startup and uses it to resolve service addresses for load-balanced inter-service calls.
 
 ## Responsibilities
 

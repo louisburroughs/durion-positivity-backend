@@ -100,7 +100,7 @@ public class APPaymentGLPostingEventHandler {
      * The payload structure follows the accounting event schema with:
      * <ul>
      * <li>eventType: AP_PAYMENT_GL_POSTING</li>
-     * <li>sourceSystem: POS (Durion POS backend)</li>
+     * <li>sourceSystem: POS (Durion Positivity backend)</li>
      * <li>transactionDate: gateway timestamp (or event creation time)</li>
      * <li>payload: payment details including allocations per vendor bill</li>
      * </ul>

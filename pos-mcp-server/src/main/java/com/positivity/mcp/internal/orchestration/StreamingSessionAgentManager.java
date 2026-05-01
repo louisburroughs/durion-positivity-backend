@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
+import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import dev.langchain4j.memory.ChatMemory;
@@ -44,6 +45,7 @@ public class StreamingSessionAgentManager
     private final PgVectorEmbeddingStore embeddingStore;
     private final ToolRegistry toolRegistry;
     private final ExaWebSearchTool exaWebSearchTool;
+    private final RolePromptResolver rolePromptResolver;
 
     @Nullable
     private final ToolAuditService toolAuditService;
@@ -57,6 +59,7 @@ public class StreamingSessionAgentManager
             @NonNull PgVectorEmbeddingStore embeddingStore,
             @NonNull ToolRegistry toolRegistry,
             @NonNull ExaWebSearchTool exaWebSearchTool,
+            @NonNull RolePromptResolver rolePromptResolver,
             @Nullable ToolAuditService toolAuditService,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -67,6 +70,7 @@ public class StreamingSessionAgentManager
         this.embeddingStore = embeddingStore;
         this.toolRegistry = toolRegistry;
         this.exaWebSearchTool = exaWebSearchTool;
+        this.rolePromptResolver = rolePromptResolver;
         this.toolAuditService = toolAuditService;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -79,8 +83,7 @@ public class StreamingSessionAgentManager
                 .maximumSize(sanitizedMaxCachedAgents)
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache =
-                Caffeine.newBuilder().maximumSize(sanitizedMaxCachedAgents).build();
+        this.roleAgentCache = Caffeine.newBuilder().maximumSize(sanitizedMaxCachedAgents).build();
         prebuildRoleAgents();
     }
 
@@ -144,13 +147,14 @@ public class StreamingSessionAgentManager
                 .maxResults(5)
                 .minScore(0.7)
                 .build();
-        ContentRetriever resilientContentRetriever =
-                new ResilientContentRetriever(contentRetriever, "embedding-store-content-retriever");
+        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
+                "embedding-store-content-retriever");
 
         StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
+                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.info(

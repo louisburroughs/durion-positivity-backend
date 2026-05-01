@@ -1,6 +1,6 @@
 # pos-order
 
-Order management service for the Durion POS platform. Manages sales order carts, price override requests with approval workflows, and order cancellations.
+Order management service for the Durion Positivity ETSMS platform. Manages sales order carts, price override requests with approval workflows, and order cancellations.
 
 ## Responsibilities
 
