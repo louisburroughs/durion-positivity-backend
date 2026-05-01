@@ -1,6 +1,6 @@
 # pos-vehicle-inventory
 
-Vehicle registry and inventory service for the Durion POS platform. Stores vehicle records with VIN, year/make/model/trim, license plate, and customer account associations. Provides search, bulk ingest, and event-driven ingestion from external sources.
+Vehicle registry and inventory service for the Durion Positivity ETSMS platform. Stores vehicle records with VIN, year/make/model/trim, license plate, and customer account associations. Provides search, bulk ingest, and event-driven ingestion from external sources.
 
 ## Responsibilities
 
@@ -34,10 +34,10 @@ Vehicle registry and inventory service for the Durion POS platform. Stores vehic
 
 ## Configuration
 
-| Property | Default | Description |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL |
-| `EUREKA_SERVER_URL` | required | Eureka service discovery URL |
+| Property                | Default  | Description                  |
+| ----------------------- | -------- | ---------------------------- |
+| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
+| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
 ## Dependencies
 

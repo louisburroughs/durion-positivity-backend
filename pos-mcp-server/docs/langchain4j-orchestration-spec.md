@@ -6,7 +6,7 @@ ACCEPTED — replaces the earlier external-agent orchestration proposal.
 
 ## Problem Statement
 
-The previous external-agent architecture delegated LLM orchestration to a monolithic platform. This creates three blockers for the Durion POS use case:
+The previous external-agent architecture delegated LLM orchestration to a monolithic platform. This creates three blockers for the Durion Positivity use case:
 
 1. **Per-role tool isolation** — Each user role (Cashier, Manager, Admin, Supplier) needs a distinct tool set. The previous approach had no native mechanism for per-session tool filtering based on the caller's RBAC role.
 2. **Session-scoped agent caching** — Expensive resources (model connections, tool registries, chat memory) should be created once per user and reused across multiple chat sessions. The previous session model did not map to this requirement.
@@ -49,41 +49,41 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 
 ### System Boundaries
 
-| Component | Role | Deployment |
-|-----------|------|------------|
-| pos-mcp-server | Tool host, LLM orchestration, session management, audit | Spring Boot service (existing) |
-| Ollama | Model runtime (chat + embeddings) | Local container or reachable internal endpoint |
-| PostgreSQL | Tool registry, RAG embeddings, audit, chat memory | Existing shared instance |
-| Exa | Web search API | External SaaS |
+| Component      | Role                                                    | Deployment                                     |
+| -------------- | ------------------------------------------------------- | ---------------------------------------------- |
+| pos-mcp-server | Tool host, LLM orchestration, session management, audit | Spring Boot service (existing)                 |
+| Ollama         | Model runtime (chat + embeddings)                       | Local container or reachable internal endpoint |
+| PostgreSQL     | Tool registry, RAG embeddings, audit, chat memory       | Existing shared instance                       |
+| Exa            | Web search API                                          | External SaaS                                  |
 
 ### What The Previous External Platform Handled → What Replaces It
 
-| Previous Responsibility | LangChain4j Replacement |
-|-------------------------|------------------------|
-| Prompt construction | `AiServices` interface with system message provider |
-| Tool-use planning | LangChain4j tool-calling protocol (model-driven) |
-| Conversation memory | `MessageWindowChatMemory` (token-limited, per-session) |
-| Retrieval / RAG | `EmbeddingStoreContentRetriever` + pgvector |
-| Model abstraction | `OllamaChatModel` / `OllamaStreamingChatModel` |
-| User-facing interface | Stays in frontend; `pos-mcp-server` is the API backend |
+| Previous Responsibility | LangChain4j Replacement                                |
+| ----------------------- | ------------------------------------------------------ |
+| Prompt construction     | `AiServices` interface with system message provider    |
+| Tool-use planning       | LangChain4j tool-calling protocol (model-driven)       |
+| Conversation memory     | `MessageWindowChatMemory` (token-limited, per-session) |
+| Retrieval / RAG         | `EmbeddingStoreContentRetriever` + pgvector            |
+| Model abstraction       | `OllamaChatModel` / `OllamaStreamingChatModel`         |
+| User-facing interface   | Stays in frontend; `pos-mcp-server` is the API backend |
 
 ---
 
 ## What Survives from Current Codebase
 
-| Asset | Location | Reuse |
-|-------|----------|-------|
-| OpenAPI tool discovery | `internal/discovery/` | **Keep** — continues as the tool source-of-truth |
-| Tool registry design | [tool-registry-implementation.md](tool-registry-implementation.md) | **Implement** — becomes per-role tool resolver |
-| Facade tool catalog | [domain-facade-tools.md](domain-facade-tools.md) | **Keep** — defines the 16 curated facade tools |
-| `McpPermissions` + Spring Security | `internal/security/` | **Keep** — enforces RBAC at tool execution boundary |
-| `NltiSession` / `NltiRequest` / audit entities | `internal/entity/` | **Keep** — session tracking and audit trail |
-| `SystemPrompt` + `LlmApiConfig` CRUD | `internal/entity/` + controllers | **Keep** — prompt and model config management |
-| SSE transport + `McpAsyncServer` | `internal/config/McpServerConfiguration` | **Keep** — external MCP clients can still connect |
-| `LlmApiProperties` | `internal/config/` | **Evolve** — extend for Ollama-specific settings |
-| Local backend compose stack | `docker-compose.yml` | **Keep** |
-| `internal/llm/` (empty) | — | **Replace** with LangChain4j orchestration |
-| `internal/orchestration/` (empty) | — | **Replace** with SessionAgentManager |
+| Asset                                          | Location                                                           | Reuse                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------- |
+| OpenAPI tool discovery                         | `internal/discovery/`                                              | **Keep** — continues as the tool source-of-truth    |
+| Tool registry design                           | [tool-registry-implementation.md](tool-registry-implementation.md) | **Implement** — becomes per-role tool resolver      |
+| Facade tool catalog                            | [domain-facade-tools.md](domain-facade-tools.md)                   | **Keep** — defines the 16 curated facade tools      |
+| `McpPermissions` + Spring Security             | `internal/security/`                                               | **Keep** — enforces RBAC at tool execution boundary |
+| `NltiSession` / `NltiRequest` / audit entities | `internal/entity/`                                                 | **Keep** — session tracking and audit trail         |
+| `SystemPrompt` + `LlmApiConfig` CRUD           | `internal/entity/` + controllers                                   | **Keep** — prompt and model config management       |
+| SSE transport + `McpAsyncServer`               | `internal/config/McpServerConfiguration`                           | **Keep** — external MCP clients can still connect   |
+| `LlmApiProperties`                             | `internal/config/`                                                 | **Evolve** — extend for Ollama-specific settings    |
+| Local backend compose stack                    | `docker-compose.yml`                                               | **Keep**                                            |
+| `internal/llm/` (empty)                        | —                                                                  | **Replace** with LangChain4j orchestration          |
+| `internal/orchestration/` (empty)              | —                                                                  | **Replace** with SessionAgentManager                |
 
 ---
 
@@ -151,10 +151,10 @@ langchain4j:
 mcp:
   rag:
     table-name: mcp_document_embedding
-    dimension: 768         # nomic-embed-text dimension
-    index-type: ivfflat    # or hnsw
+    dimension: 768 # nomic-embed-text dimension
+    index-type: ivfflat # or hnsw
   agent:
-    cache-ttl-minutes: 30  # per-user agent cache TTL
+    cache-ttl-minutes: 30 # per-user agent cache TTL
     max-cached-agents: 500
     memory-max-messages: 50
 
@@ -623,13 +623,13 @@ CREATE INDEX mcp_doc_embedding_idx
 
 Based on the 16 facade tools from [domain-facade-tools.md](domain-facade-tools.md):
 
-| Role | Tools |
-|------|-------|
-| Cashier | OrderTool, CustomerTool, PricingTool, InventoryTool (read-only) |
+| Role           | Tools                                                                             |
+| -------------- | --------------------------------------------------------------------------------- |
+| Cashier        | OrderTool, CustomerTool, PricingTool, InventoryTool (read-only)                   |
 | Service Writer | WorkorderTool, CustomerTool, VehicleTool, CatalogTool, PricingTool, InventoryTool |
-| Manager | All of Service Writer + ReportingTool, AccountingTool, InvoiceTool, HRTool |
-| Admin | All tools |
-| Supplier | OrderTool (PO view), InventoryTool (ASN), CatalogTool (read-only) |
+| Manager        | All of Service Writer + ReportingTool, AccountingTool, InvoiceTool, HRTool        |
+| Admin          | All tools                                                                         |
+| Supplier       | OrderTool (PO view), InventoryTool (ASN), CatalogTool (read-only)                 |
 
 All roles also get: **ExaWebSearchTool** (always) + **RAG retriever** (always).
 
@@ -706,14 +706,14 @@ services:
 
 ## Risks and Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Ollama tool-calling quality with small models | Hallucinated tool calls, wrong parameters | Test with ≥32B parameter models for production; use `qwen2.5:32b` or `llama3.1:70b`; keep facade tool count ≤25 per role |
-| Context window overflow from long sessions | Truncated history, lost context | `MessageWindowChatMemory(50)` caps history; add summarization strategy for long sessions later |
-| pgvector cold start (no documents) | RAG returns nothing, model relies solely on tools | Acceptable in Phase 1; seed with product catalogs, SOPs, knowledge base in Phase 2 |
-| Caffeine cache memory pressure | Too many cached agents consume heap | Cap at 500 agents, 30-min TTL; monitor with Micrometer gauge |
-| Exa API key in environment | Key rotation requires restart | Use Spring Cloud Config or Vault for dynamic secret rotation later |
-| Ollama connectivity issues | Chat and embedding calls fail | Require a reachable `OLLAMA_BASE_URL`; add startup health checks for model endpoint reachability and alerting on failures |
+| Risk                                          | Impact                                            | Mitigation                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Ollama tool-calling quality with small models | Hallucinated tool calls, wrong parameters         | Test with ≥32B parameter models for production; use `qwen2.5:32b` or `llama3.1:70b`; keep facade tool count ≤25 per role  |
+| Context window overflow from long sessions    | Truncated history, lost context                   | `MessageWindowChatMemory(50)` caps history; add summarization strategy for long sessions later                            |
+| pgvector cold start (no documents)            | RAG returns nothing, model relies solely on tools | Acceptable in Phase 1; seed with product catalogs, SOPs, knowledge base in Phase 2                                        |
+| Caffeine cache memory pressure                | Too many cached agents consume heap               | Cap at 500 agents, 30-min TTL; monitor with Micrometer gauge                                                              |
+| Exa API key in environment                    | Key rotation requires restart                     | Use Spring Cloud Config or Vault for dynamic secret rotation later                                                        |
+| Ollama connectivity issues                    | Chat and embedding calls fail                     | Require a reachable `OLLAMA_BASE_URL`; add startup health checks for model endpoint reachability and alerting on failures |
 
 ---
 
@@ -770,8 +770,8 @@ services:
 
 ## Documents Superseded
 
-| Document | Disposition |
-|----------|-------------|
-| [tool-registry-implementation.md](tool-registry-implementation.md) | **Still valid** — implementation patterns carry forward into `ToolRegistry` |
-| [tool-registry-plan.md](tool-registry-plan.md) | **Still valid** — phased plan aligns with Phases 2–4 above |
-| [domain-facade-tools.md](domain-facade-tools.md) | **Still valid** — facade tool catalog is the source of truth for tool definitions |
+| Document                                                           | Disposition                                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| [tool-registry-implementation.md](tool-registry-implementation.md) | **Still valid** — implementation patterns carry forward into `ToolRegistry`       |
+| [tool-registry-plan.md](tool-registry-plan.md)                     | **Still valid** — phased plan aligns with Phases 2–4 above                        |
+| [domain-facade-tools.md](domain-facade-tools.md)                   | **Still valid** — facade tool catalog is the source of truth for tool definitions |

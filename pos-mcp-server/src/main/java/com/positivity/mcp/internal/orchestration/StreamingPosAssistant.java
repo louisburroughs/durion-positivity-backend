@@ -8,8 +8,8 @@ import dev.langchain4j.service.V;
 
 public interface StreamingPosAssistant {
 
-    @SystemMessage("""
-      You are a POS assistant for Durion Positivity.
+  @SystemMessage("""
+      You are a POS assistant for Positivity.
       Use the provided tools when answering questions that require current
       inventory, order, customer, pricing, or other POS business data.
       For general conversation, answer directly without using tools.
@@ -17,5 +17,5 @@ public interface StreamingPosAssistant {
       Never fabricate data.
       {{roleContext}}
       """)
-    TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
+  TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
 }

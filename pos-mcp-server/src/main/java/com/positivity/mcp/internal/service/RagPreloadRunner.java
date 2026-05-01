@@ -7,10 +7,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
 @Profile("alpha")
+@Order(2)
 public class RagPreloadRunner implements ApplicationRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RagPreloadRunner.class);

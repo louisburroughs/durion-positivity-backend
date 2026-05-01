@@ -1,6 +1,6 @@
 # pos-shop-manager
 
-Shop operations service for the Durion POS platform. Manages shop appointments, bay and mobile unit scheduling, mechanic availability and assignments, workorder operational context, and conflict detection.
+Shop operations service for the Durion Positivity ETSMS platform. Manages shop appointments, bay and mobile unit scheduling, mechanic availability and assignments, workorder operational context, and conflict detection.
 
 ## Responsibilities
 

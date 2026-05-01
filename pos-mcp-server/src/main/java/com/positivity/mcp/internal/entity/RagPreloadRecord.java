@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -42,6 +43,10 @@ public class RagPreloadRecord {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private RagPreloadStatus status;
+
+  @Nullable
+  @Column(name = "job_id", nullable = true, updatable = false)
+  private UUID jobId;
 
   @Column(name = "loaded_at", nullable = false)
   @CreatedDate

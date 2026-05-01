@@ -1,6 +1,6 @@
 # pos-security-service
 
-Identity, authentication, and authorisation service for the Durion POS platform. Issues JWTs with compact permission bitset claims, manages users, roles, and permission assignments, enforces lockout policy, and provides a self-registration review workflow.
+Identity, authentication, and authorisation service for the Durion Positivity ETSMS platform. Issues JWTs with compact permission bitset claims, manages users, roles, and permission assignments, enforces lockout policy, and provides a self-registration review workflow.
 
 ## Responsibilities
 

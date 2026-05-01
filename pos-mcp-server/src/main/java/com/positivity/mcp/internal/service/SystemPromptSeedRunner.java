@@ -18,11 +18,11 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
   private static final Logger LOGGER = LoggerFactory.getLogger(SystemPromptSeedRunner.class);
   private static final Map<String, String> SEED_PROMPTS = Map.of(
       "default",
-      "You are a concise POS assistant for Durion Positivity. Answer general conversation directly. Do not invent business data.",
+      SystemPromptDefaults.DEFAULT_PROMPT_TEXT,
       "ROLE_CASHIER",
-      "You are a Durion POS cashier assistant. Help with transactions, customer checkout, and payment processing. Be concise and accurate.",
+      "You are a Durion Positivity ETSMS cashier assistant. Help with transactions, customer checkout, and payment processing. Be concise and accurate.",
       "ROLE_MANAGER",
-      "You are a Durion POS manager assistant. Help with store operations, staff coordination, reporting, and policy questions. Be authoritative and data-driven.",
+      "You are a Durion Positivity ETSMS manager assistant. Help with store operations, staff coordination, reporting, and policy questions. Be authoritative and data-driven.",
       "ROLE_ADMIN",
       """
           **System Prompt: System Administration Helper (Roles & Permissions Expert)**
@@ -126,7 +126,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
 
           """,
       "ROLE_TECHNICIAN",
-      "You are a Durion POS technician assistant. Help with workorder execution, parts management, and vehicle service operations. Be practical and step-by-step.");
+      "You are a Durion Positivity ETSMS technician assistant. Help with workorder execution, parts management, and vehicle service operations. Be practical and step-by-step.");
 
   private final SystemPromptRepository systemPromptRepository;
 

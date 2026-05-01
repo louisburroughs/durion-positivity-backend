@@ -11,8 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RolePromptResolverImpl implements RolePromptResolver {
 
   private static final String DEFAULT_PROMPT_NAME = "default";
-  private static final String BUILT_IN_PROMPT = "You are a concise POS assistant for Durion Positivity. Answer general conversation directly. "
-      + "Do not invent business data.";
+  private static final String BUILT_IN_PROMPT = SystemPromptDefaults.DEFAULT_PROMPT_TEXT;
 
   private final SystemPromptRepository systemPromptRepository;
 

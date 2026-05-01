@@ -1,6 +1,6 @@
 # pos-workorder
 
-Core workorder service for the Durion POS platform. Manages the full workorder lifecycle from estimate creation through WIP execution, technician time tracking, parts usage, invoice generation, and completion. Integrates with the customer, vehicle, tax, and invoice services.
+Core workorder service for the Durion Positivity ETSMS platform. Manages the full workorder lifecycle from estimate creation through WIP execution, technician time tracking, parts usage, invoice generation, and completion. Integrates with the customer, vehicle, tax, and invoice services.
 
 ## Responsibilities
 

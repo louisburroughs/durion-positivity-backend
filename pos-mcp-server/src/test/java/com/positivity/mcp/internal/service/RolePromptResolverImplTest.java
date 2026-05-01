@@ -72,4 +72,15 @@ class RolePromptResolverImplTest {
 
     assertThat(result).contains("concise POS assistant");
   }
+
+  @Test
+  @DisplayName("resolvePrompt returns shared default text when neither role nor default prompt exists")
+  void resolvePrompt_noPromptFoundForRoleOrDefault_returnsSharedDefaultText() {
+    when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.empty());
+    when(systemPromptRepository.findByName(DEFAULT_NAME)).thenReturn(Optional.empty());
+
+    String result = resolver.resolvePrompt(ROLE_NAME);
+
+    assertThat(result).isEqualTo(SystemPromptDefaults.DEFAULT_PROMPT_TEXT);
+  }
 }

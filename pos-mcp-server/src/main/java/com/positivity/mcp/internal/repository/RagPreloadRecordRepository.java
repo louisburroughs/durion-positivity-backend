@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.repository;
 
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -14,4 +15,7 @@ public interface RagPreloadRecordRepository extends JpaRepository<RagPreloadReco
   @NonNull
   Optional<RagPreloadRecord> findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
       @NonNull String documentId, @NonNull RagPreloadStatus status);
+
+  @NonNull
+  List<RagPreloadRecord> findAllByStatus(@NonNull RagPreloadStatus status);
 }

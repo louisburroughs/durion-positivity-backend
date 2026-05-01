@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 
 /**
- * Spring Boot entry point for the Durion Positivity MCP server.
+ * Spring Boot entry point for the Positivity MCP server.
  * <p>
  * The actual MCP server is configured as a Spring bean so that
  * it can be accessed both by HTTP controllers and other services.

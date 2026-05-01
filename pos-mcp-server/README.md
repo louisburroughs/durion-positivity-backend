@@ -1,6 +1,6 @@
 # pos-mcp-server
 
-AI orchestration and MCP (Model Context Protocol) server for the Durion POS platform. Discovers backend REST APIs from Eureka, registers them as MCP tools, routes natural language requests through LangChain4j agents backed by Ollama, and maintains a pgvector RAG document store for context-augmented queries.
+AI orchestration and MCP (Model Context Protocol) server for the Durion Positivity ETSMS platform. Discovers backend REST APIs from Eureka, registers them as MCP tools, routes natural language requests through LangChain4j agents backed by Ollama, and maintains a pgvector RAG document store for context-augmented queries.
 
 ## Responsibilities
 

@@ -1,6 +1,6 @@
 # pos-documents
 
-PDF rendering microservice for the Durion POS platform. Accepts render requests with a template ID, data payload, and desired output format, then returns the rendered document. Templates are registered by consumer services at startup using `pos-document-helper`.
+PDF rendering microservice for the Durion Positivity ETSMS platform. Accepts render requests with a template ID, data payload, and desired output format, then returns the rendered document. Templates are registered by consumer services at startup using `pos-document-helper`.
 
 ## Responsibilities
 

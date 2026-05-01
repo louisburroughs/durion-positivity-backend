@@ -1,6 +1,6 @@
 # pos-customer
 
-CRM service for the Durion POS platform. Manages the customer party model (persons, commercial parties, organisations), contact roles, communication preferences, party relationships, account tiers, promotion redemptions, and customer-linked vehicles.
+CRM service for the Durion Positivity ETSMS platform. Manages the customer party model (persons, commercial parties, organisations), contact roles, communication preferences, party relationships, account tiers, promotion redemptions, and customer-linked vehicles.
 
 ## Responsibilities
 

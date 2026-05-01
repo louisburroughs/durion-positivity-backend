@@ -1,6 +1,6 @@
 # pos-people
 
-HR and workforce management service for the Durion POS platform. Manages employees, persons, time entries, work sessions, staffing assignments, availability, access control assignments, and timekeeping ingestion.
+HR and workforce management service for the Durion Positivity ETSMS platform. Manages employees, persons, time entries, work sessions, staffing assignments, availability, access control assignments, and timekeeping ingestion.
 
 ## Responsibilities
 
