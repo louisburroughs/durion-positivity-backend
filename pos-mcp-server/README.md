@@ -57,17 +57,18 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion POS plat
 Uses Flyway with PostgreSQL + pgvector extension. Migrations at `src/main/resources/db/migration`. H2 migrations at `src/main/resources/db/h2-migration` for local dev profile.
 
 Key tables added by this module:
+
 - `mcp_rag_preload_record` — immutable audit rows tracking each static document preload attempt (document_id, content_hash, status, loaded_at)
 
 ## Startup Behaviour
 
 Three ApplicationRunner beans execute on startup (in addition to tool and event-type registration):
 
-| Runner                     | Profile    | Behaviour |
-| -------------------------- | ---------- | --------- |
-| `SystemPromptSeedRunner`   | `!test`    | Seeds `default`, `ROLE_CASHIER`, `ROLE_MANAGER`, `ROLE_ADMIN`, `ROLE_TECHNICIAN` system prompts if not already present. Best-effort — per-entry failures are logged and skipped. |
-| `RagPreloadRunner`         | `alpha`    | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
-| `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run. |
+| Runner                             | Profile | Behaviour                                                                                                                                                                                                                                              |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SystemPromptSeedRunner`           | `!test` | Seeds `default`, `ROLE_CASHIER`, `ROLE_MANAGER`, `ROLE_ADMIN`, `ROLE_TECHNICIAN` system prompts if not already present. Best-effort — per-entry failures are logged and skipped.                                                                       |
+| `RagPreloadRunner`                 | `alpha` | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
+| `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run.                                                                                                                                                                              |
 
 ### Role-Aware Prompt Resolution
 

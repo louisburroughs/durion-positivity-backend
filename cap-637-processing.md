@@ -274,19 +274,19 @@ cd /home/louis-burroughs/IdeaProjects/durion && ./.github/hooks/lint-run-hook.sh
 
 ## Step Completion Log
 
-| Step         | Status     | Evidence  |
-| ------------ | ---------- | --------- |
-| Plan created | ✅ DONE    | This file |
-| Branch setup | ✅ DONE    | `cap/637-mcp-runtime-config` from main |
-| Slice A      | ✅ DONE    | RagPreloadRecord, RagPreloadRecordRepository, V9 migrations |
-| Slice B      | ✅ DONE    | StaticRagPreloadServiceImpl, RagPreloadRunner, classpath rag/ docs |
-| Slice C      | ✅ DONE    | StaticRagPreloadProperties, application.yml mcp.rag.preload.docs |
-| Slice D      | ✅ DONE    | RolePromptResolverImpl, SessionAgentManager + StreamingSessionAgentManager |
-| Slice E      | ✅ DONE    | SystemPromptSeedRunner (5 prompts seeded best-effort on !test) |
-| Slice F      | ✅ DONE    | mcp.rag.preload.{loaded,skipped,failed} + duration timer |
-| Slice G      | ✅ DONE    | 8 unit tests (3+5), 282 total passing |
-| Slice H      | ✅ DONE    | README Startup Behaviour, Key Classes, RAG Preload Config |
-| Verify       | ✅ DONE    | BUILD SUCCESS — 282 tests, 0 failures |
-| Lint         | ✅ DONE    | PASS — 0 findings, 15 files |
-| Review       | ✅ DONE    | Verdict: PASS — 3 low findings resolved |
-| PR           | ✅ DONE    | https://github.com/louisburroughs/durion-positivity-backend/pull/638 |
+| Step         | Status  | Evidence                                                                   |
+| ------------ | ------- | -------------------------------------------------------------------------- |
+| Plan created | ✅ DONE | This file                                                                  |
+| Branch setup | ✅ DONE | `cap/637-mcp-runtime-config` from main                                     |
+| Slice A      | ✅ DONE | RagPreloadRecord, RagPreloadRecordRepository, V9 migrations                |
+| Slice B      | ✅ DONE | StaticRagPreloadServiceImpl, RagPreloadRunner, classpath rag/ docs         |
+| Slice C      | ✅ DONE | StaticRagPreloadProperties, application.yml mcp.rag.preload.docs           |
+| Slice D      | ✅ DONE | RolePromptResolverImpl, SessionAgentManager + StreamingSessionAgentManager |
+| Slice E      | ✅ DONE | SystemPromptSeedRunner (5 prompts seeded best-effort on !test)             |
+| Slice F      | ✅ DONE | mcp.rag.preload.{loaded,skipped,failed} + duration timer                   |
+| Slice G      | ✅ DONE | 8 unit tests (3+5), 282 total passing                                      |
+| Slice H      | ✅ DONE | README Startup Behaviour, Key Classes, RAG Preload Config                  |
+| Verify       | ✅ DONE | BUILD SUCCESS — 282 tests, 0 failures                                      |
+| Lint         | ✅ DONE | PASS — 0 findings, 15 files                                                |
+| Review       | ✅ DONE | Verdict: PASS — 3 low findings resolved                                    |
+| PR           | ✅ DONE | https://github.com/louisburroughs/durion-positivity-backend/pull/638       |

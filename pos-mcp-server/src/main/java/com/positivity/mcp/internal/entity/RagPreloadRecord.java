@@ -47,6 +47,8 @@ public class RagPreloadRecord {
   @CreatedDate
   private OffsetDateTime loadedAt;
 
-  // This is an immutable audit record — one row is written per preload event and never updated.
-  // updatedAt is intentionally absent: status transitions create new rows rather than patching existing ones.
+  // This is an immutable audit record — one row is written per preload event and
+  // never updated.
+  // updatedAt is intentionally absent: status transitions create new rows rather
+  // than patching existing ones.
 }
