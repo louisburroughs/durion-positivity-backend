@@ -20,6 +20,8 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion POS plat
 - `DocumentIngestionService` — asynchronous RAG document ingestion with chunking and embedding
 - `IntentParserService` — classifies inbound messages to route direct vs. agent paths
 - `SystemPromptService` — manages named system prompts stored in PostgreSQL
+- `RolePromptResolver` — resolves the active system prompt for a given role (role → "default" → built-in fallback)
+- `StaticRagPreloadService` — preloads configured static classpath documents into the RAG store on startup (alpha profile)
 
 ## API Endpoints
 
@@ -40,6 +42,7 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion POS plat
 | `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text` | Embedding model for RAG                   |
 | `mcp.agent.cache-ttl-minutes`                   | `30`               | Per-user session agent cache TTL          |
 | `mcp.rag.chunking.enabled`                      | `true`             | Enable document chunking before embedding |
+| `mcp.rag.preload.docs`                          | `[]`               | Static classpath documents to preload     |
 | `mcp.tuning.enabled`                            | `true`             | Enable adaptive tool priority tuning      |
 | `mcp.tuning.cron`                               | `0 0 2 * * ?`      | Tuning schedule (daily at 02:00)          |
 
@@ -52,6 +55,46 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion POS plat
 ## Database
 
 Uses Flyway with PostgreSQL + pgvector extension. Migrations at `src/main/resources/db/migration`. H2 migrations at `src/main/resources/db/h2-migration` for local dev profile.
+
+Key tables added by this module:
+- `mcp_rag_preload_record` — immutable audit rows tracking each static document preload attempt (document_id, content_hash, status, loaded_at)
+
+## Startup Behaviour
+
+Three ApplicationRunner beans execute on startup (in addition to tool and event-type registration):
+
+| Runner                     | Profile    | Behaviour |
+| -------------------------- | ---------- | --------- |
+| `SystemPromptSeedRunner`   | `!test`    | Seeds `default`, `ROLE_CASHIER`, `ROLE_MANAGER`, `ROLE_ADMIN`, `ROLE_TECHNICIAN` system prompts if not already present. Best-effort — per-entry failures are logged and skipped. |
+| `RagPreloadRunner`         | `alpha`    | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
+| `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run. |
+
+### Role-Aware Prompt Resolution
+
+The system prompt used for each chat session is resolved per-role by `RolePromptResolver`:
+
+1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_CASHIER`).
+2. If not found, look up the prompt named `default`.
+3. If not found, use the built-in hardcoded fallback prompt.
+
+Prompts are managed via the `/v1/prompts` CRUD API (requires `mcp:system_prompt:*` permission).
+
+### Static RAG Preload Configuration
+
+Configure static documents to preload in `application.yml`:
+
+```yaml
+mcp:
+  rag:
+    preload:
+      docs:
+        - id: "accounting.de-bookkeeping"
+          source-path: "classpath:rag/de-bookkeeping-rag.md"
+        - id: "inventory.inv-cntrl"
+          source-path: "classpath:rag/inv-cntrl-rag.md"
+```
+
+Each entry specifies a stable `id` (document_id used for supersede semantics) and a `source-path` (classpath resource). Adding a new entry here is all that is required to include an additional static document in the preload registry.
 
 ## Development
 
