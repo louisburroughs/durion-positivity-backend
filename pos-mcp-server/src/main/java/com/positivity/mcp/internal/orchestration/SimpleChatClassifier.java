@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.service.SimpleChatRuleCatalogService;
 import java.util.HashSet;
 import java.util.List;

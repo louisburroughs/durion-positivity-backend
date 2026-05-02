@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.internal.orchestration.SimpleChatRuleCatalog;
-import com.positivity.mcp.internal.orchestration.SimpleChatRuleDefaults;
-import com.positivity.mcp.internal.orchestration.SimpleChatRuleSpec;
+import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
+import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
+import com.positivity.mcp.internal.classification.SimpleChatRuleSpec;
 import com.positivity.mcp.internal.repository.SimpleChatRuleRepository;
 import java.time.Clock;
 import java.time.Duration;

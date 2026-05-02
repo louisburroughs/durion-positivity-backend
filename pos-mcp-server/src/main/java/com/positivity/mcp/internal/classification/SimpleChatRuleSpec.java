@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.orchestration;
+package com.positivity.mcp.internal.classification;
 
 import com.positivity.mcp.internal.enums.SimpleChatRuleType;
 import org.jspecify.annotations.NonNull;

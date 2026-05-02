@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

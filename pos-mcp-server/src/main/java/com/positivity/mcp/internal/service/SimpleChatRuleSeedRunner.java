@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.entity.SimpleChatRule;
-import com.positivity.mcp.internal.orchestration.SimpleChatRuleDefaults;
-import com.positivity.mcp.internal.orchestration.SimpleChatRuleSpec;
+import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
+import com.positivity.mcp.internal.classification.SimpleChatRuleSpec;
 import com.positivity.mcp.internal.repository.SimpleChatRuleRepository;
 import java.util.HashSet;
 import java.util.Set;
