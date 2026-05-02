@@ -84,7 +84,7 @@ public final class SimpleChatRuleCatalog {
         return deAccented.replaceAll("\\s+", " ");
     }
 
-    static @NonNull List<String> tokenize(@NonNull String text) {
+    public static @NonNull List<String> tokenize(@NonNull String text) {
         return Arrays.stream(text.split("[^\\p{L}\\p{N}]+"))
                 .filter(token -> !token.isBlank())
                 .toList();
