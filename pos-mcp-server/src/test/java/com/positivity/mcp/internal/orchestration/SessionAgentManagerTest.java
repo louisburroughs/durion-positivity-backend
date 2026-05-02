@@ -19,12 +19,15 @@ import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.RolePromptResolver;
+import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -88,6 +91,7 @@ class SessionAgentManagerTest {
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
+    private SimpleChatClassifier simpleChatClassifier;
 
     private SessionAgentManager manager;
 
@@ -104,9 +108,13 @@ class SessionAgentManagerTest {
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
+        lenient().when(embeddingModel.embed(anyString()))
+                .thenReturn(Response.from(Embedding.from(new float[] { 0.1f })));
+        lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
         orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
+        simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         manager = new SessionAgentManager(
                 chatModel,
                 embeddingModel,
@@ -118,6 +126,7 @@ class SessionAgentManagerTest {
                 toolRegistryService,
                 null,
                 rolePromptResolver,
+                simpleChatClassifier,
                 30,
                 500,
                 50,

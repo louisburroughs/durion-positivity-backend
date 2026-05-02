@@ -36,6 +36,7 @@ public class StreamingSessionAgentManager
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
+    private static final int MAX_LOG_PREVIEW_LENGTH = 160;
 
     private final Cache<String, StreamingPosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -99,16 +100,35 @@ public class StreamingSessionAgentManager
         StreamingPosAssistant agent = getOrCreateAgent(userId, role);
         String roleContext = "Current user role: " + role;
         long startMs = System.currentTimeMillis();
-
         String memoryId = memoryKey(userId, role);
+        String messagePreview = preview(message);
+        LOGGER.debug(
+                "MCP streaming chat dispatch userId={} role={} chars={} tokens={} preview=\"{}\"",
+                userId,
+                role,
+                message.length(),
+                tokenCount(message),
+                messagePreview);
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, roleContext, emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
+                    LOGGER.debug(
+                            "MCP streaming chat completed userId={} role={} totalElapsedMs={} preview=\"{}\"",
+                            userId,
+                            role,
+                            elapsedMs,
+                            messagePreview);
                     if (toolAuditService != null) {
                         toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
                     }
                 })
                 .doOnError(exception -> {
+                    LOGGER.warn(
+                            "MCP streaming chat failed userId={} role={} preview=\"{}\" error={}",
+                            userId,
+                            role,
+                            messagePreview,
+                            exception.getClass().getSimpleName());
                     if (toolAuditService != null) {
                         toolAuditService.logToolExecution(
                                 null,
@@ -157,6 +177,7 @@ public class StreamingSessionAgentManager
                 .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
+        LOGGER.debug("Built MCP streaming role agent role={} toolNames={}", role, toolNames(tools));
         LOGGER.info(
                 "Built MCP streaming role agent role={} tools={} in {} ms", role, tools.size(), elapsedMs(startNanos));
         return agent;
@@ -200,6 +221,22 @@ public class StreamingSessionAgentManager
 
     private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
         return userId + MEMORY_KEY_SEPARATOR + role;
+    }
+
+    private static @NonNull String preview(@NonNull String text) {
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_LOG_PREVIEW_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_LOG_PREVIEW_LENGTH - 3) + "...";
+    }
+
+    private static int tokenCount(@NonNull String text) {
+        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text)).size();
+    }
+
+    private static @NonNull List<String> toolNames(@NonNull List<Object> tools) {
+        return tools.stream().map(tool -> tool.getClass().getSimpleName()).toList();
     }
 
     private static long elapsedMs(long startNanos) {

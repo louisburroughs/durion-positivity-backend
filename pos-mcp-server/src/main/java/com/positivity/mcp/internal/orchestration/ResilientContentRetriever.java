@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 final class ResilientContentRetriever implements ContentRetriever {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResilientContentRetriever.class);
+    private static final int MAX_LOG_PREVIEW_LENGTH = 160;
 
     private final ContentRetriever delegate;
     private final String retrieverName;
@@ -27,23 +28,39 @@ final class ResilientContentRetriever implements ContentRetriever {
     @Override
     public @NonNull List<Content> retrieve(@NonNull Query query) {
         long startNanos = System.nanoTime();
+        String queryPreview = preview(query.text());
+        LOGGER.debug(
+                "RAG retrieval starting retriever={} chars={} preview=\"{}\"",
+                retrieverName,
+                query.text().length(),
+                queryPreview);
         try {
             List<Content> content = delegate.retrieve(query);
-            LOGGER.info(
-                    "RAG retrieval {} returned {} content items in {} ms",
+            LOGGER.debug(
+                    "RAG retrieval completed retriever={} contentItems={} elapsedMs={} preview=\"{}\"",
                     retrieverName,
                     content.size(),
-                    elapsedMs(startNanos));
+                    elapsedMs(startNanos),
+                    queryPreview);
             return content;
         } catch (RuntimeException exception) {
             LOGGER.warn(
-                    "RAG retrieval disabled for query because {} failed after {} ms: {}",
+                    "RAG retrieval failed retriever={} elapsedMs={} preview=\"{}\" error={}",
                     retrieverName,
                     elapsedMs(startNanos),
+                    queryPreview,
                     exception.getMessage(),
                     exception);
             return List.of();
         }
+    }
+
+    private static @NonNull String preview(@NonNull String text) {
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_LOG_PREVIEW_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_LOG_PREVIEW_LENGTH - 3) + "...";
     }
 
     private static long elapsedMs(long startNanos) {

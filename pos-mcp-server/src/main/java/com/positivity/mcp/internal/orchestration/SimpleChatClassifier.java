@@ -1,87 +1,82 @@
 package com.positivity.mcp.internal.orchestration;
 
-import java.util.Locale;
+import com.positivity.mcp.internal.service.SimpleChatRuleCatalogService;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
+@Component
 final class SimpleChatClassifier {
 
-    private static final int MAX_SIMPLE_CHAT_LENGTH = 160;
+    private static final int MAX_SIMPLE_CHAT_CHAR_LENGTH = 160;
+    private static final int MAX_SIMPLE_CHAT_TOKEN_COUNT = 12;
 
-    private static final Set<String> BUSINESS_KEYWORDS = Set.of(
-            "accounting",
-            "audit",
-            "catalog",
-            "customer",
-            "employee",
-            "event",
-            "invoice",
-            "inventory",
-            "location",
-            "order",
-            "part",
-            "payment",
-            "price",
-            "product",
-            "report",
-            "sales",
-            "shop",
-            "sku",
-            "stock",
-            "tax",
-            "vehicle",
-            "vin",
-            "workorder");
+    private final Supplier<SimpleChatRuleCatalog> catalogSupplier;
 
-    private static final Set<String> ACTION_KEYWORDS = Set.of(
-            "calculate",
-            "check",
-            "create",
-            "delete",
-            "find",
-            "get",
-            "list",
-            "lookup",
-            "search",
-            "show",
-            "summarize",
-            "update");
+    @Autowired
+    SimpleChatClassifier(@NonNull SimpleChatRuleCatalogService catalogService) {
+        this(catalogService::currentCatalog);
+    }
 
-    private SimpleChatClassifier() {}
+    // Test-only constructor for supplying a fixed in-memory catalog.
+    SimpleChatClassifier(@NonNull SimpleChatRuleCatalog catalog) {
+        this(() -> catalog);
+    }
 
-    static boolean isSimpleChat(@NonNull String message) {
-        String text = normalize(message);
-        if (text.isBlank() || text.length() > MAX_SIMPLE_CHAT_LENGTH) {
-            return false;
-        }
-        if (containsAnyToken(text, BUSINESS_KEYWORDS) || containsAnyToken(text, ACTION_KEYWORDS)) {
+    private SimpleChatClassifier(@NonNull Supplier<SimpleChatRuleCatalog> catalogSupplier) {
+        this.catalogSupplier = catalogSupplier;
+    }
+
+    boolean isSimpleChat(@NonNull String message) {
+        String text = SimpleChatRuleCatalog.normalize(message);
+        if (text.isBlank() || text.length() > MAX_SIMPLE_CHAT_CHAR_LENGTH) {
             return false;
         }
 
-        return isGreeting(text)
-                || isThanks(text)
-                || text.matches("^say hello\\b.*")
-                || text.matches("^(who are you|what can you do|help)[?.! ]*$");
-    }
-
-    private static boolean isGreeting(@NonNull String text) {
-        return text.matches("^(hi|hello|hey|good morning|good afternoon|good evening)[!. ]*$");
-    }
-
-    private static boolean isThanks(@NonNull String text) {
-        return text.matches("^(thanks|thank you)[!. ]*$");
-    }
-
-    private static boolean containsAnyToken(@NonNull String text, @NonNull Set<String> tokens) {
-        for (String token : tokens) {
-            if (text.matches(".*\\b" + token + "\\b.*")) {
-                return true;
-            }
+        MessageFeatures features = MessageFeatures.from(text);
+        if (features.tokens().isEmpty() || features.tokenCount() > MAX_SIMPLE_CHAT_TOKEN_COUNT) {
+            return false;
         }
-        return false;
+
+        SimpleChatRuleCatalog catalog = catalogSupplier.get();
+        if (catalog.isPureSocialIntent(text)) {
+            return true;
+        }
+
+        return !hasStrongTaskSignal(text, features, catalog);
+
     }
 
-    private static @NonNull String normalize(@NonNull String message) {
-        return message.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    private static boolean hasStrongTaskSignal(
+            @NonNull String text, @NonNull MessageFeatures features, @NonNull SimpleChatRuleCatalog catalog) {
+        if (features.hasQuestionMark() && !catalog.isSocialQuestion(text) && !catalog.isCapability(text)) {
+            return true;
+        }
+        if (catalog.matchesQuantityQuestion(text)) {
+            return true;
+        }
+        if (catalog.matchesTaskRequest(text)) {
+            return true;
+        }
+        return catalog.containsBusinessKeyword(features.tokenSet())
+                || catalog.containsActionKeyword(features.tokenSet())
+                || catalog.containsTaskCueKeyword(features.tokenSet());
+    }
+
+    private record MessageFeatures(@NonNull List<String> tokens, @NonNull Set<String> tokenSet,
+            boolean hasQuestionMark) {
+
+        static @NonNull MessageFeatures from(@NonNull String text) {
+            List<String> tokens = SimpleChatRuleCatalog.tokenize(text);
+            return new MessageFeatures(tokens, new HashSet<>(tokens), text.indexOf('?') >= 0);
+        }
+
+        int tokenCount() {
+            return tokens.size();
+        }
     }
 }
