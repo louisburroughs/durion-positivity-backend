@@ -15,7 +15,7 @@ public class HrFacadeTool {
     public HrFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.hr.base-url:http://pos-people/v1/hr}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get employee profile information by employee ID")

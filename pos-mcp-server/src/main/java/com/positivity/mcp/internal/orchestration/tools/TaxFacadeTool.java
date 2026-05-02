@@ -15,7 +15,7 @@ public class TaxFacadeTool {
     public TaxFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.tax.base-url:http://pos-tax/v1/tax}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get the tax rate for a specific location")

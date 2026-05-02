@@ -15,7 +15,7 @@ public class OrderFacadeTool {
     public OrderFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.order.base-url:http://pos-order/v1/orders}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Look up an order by order ID")

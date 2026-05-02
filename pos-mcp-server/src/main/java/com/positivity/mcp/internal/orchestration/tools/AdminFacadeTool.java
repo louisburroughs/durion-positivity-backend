@@ -17,8 +17,8 @@ public class AdminFacadeTool {
             RestClient.Builder restClientBuilder,
             @Value("${pos.admin.base-url:http://pos-security-service/v1/admin}") @NonNull String adminBaseUrl,
             @Value("${pos.security.users.base-url:http://pos-security-service/v1/users}") @NonNull String usersBaseUrl) {
-        this.securityRestClient = restClientBuilder.baseUrl(adminBaseUrl).build();
-        this.usersRestClient = restClientBuilder.baseUrl(usersBaseUrl).build();
+        this.securityRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, adminBaseUrl);
+        this.usersRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, usersBaseUrl);
     }
 
     @Tool("Get overall platform system status and health summary")

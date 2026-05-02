@@ -15,7 +15,7 @@ public class AccountingFacadeTool {
     public AccountingFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.accounting.base-url:http://pos-accounting/v1/accounting}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get account balance information by account ID")

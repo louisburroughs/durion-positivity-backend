@@ -15,7 +15,7 @@ public class EventsFacadeTool {
     public EventsFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.event-receiver.base-url:http://pos-event-receiver/v1/events}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get all registered event types and metadata")

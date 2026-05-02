@@ -90,7 +90,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
-            @Value("${mcp.agent.candidate-tool-limit:5}") int candidateToolLimit,
+            @Value("${mcp.agent.candidate-tool-limit:2}") int candidateToolLimit,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;

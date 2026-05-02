@@ -113,7 +113,7 @@
       "name": "mcp.agent.candidate-tool-limit",
       "type": "java.lang.Integer",
       "description": "Maximum candidate tools considered per orchestration turn.",
-      "defaultValue": 5
+      "defaultValue": 2
     },
     {
       "name": "mcp.tuning.enabled",

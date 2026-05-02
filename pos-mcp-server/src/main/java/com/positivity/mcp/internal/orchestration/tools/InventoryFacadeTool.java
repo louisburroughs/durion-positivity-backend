@@ -15,7 +15,7 @@ public class InventoryFacadeTool {
     public InventoryFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.inventory.base-url:http://pos-inventory/v1/inventory}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Check current stock level for a product by SKU number")

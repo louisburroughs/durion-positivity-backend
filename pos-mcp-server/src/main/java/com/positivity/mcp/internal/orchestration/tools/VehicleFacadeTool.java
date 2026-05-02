@@ -15,7 +15,7 @@ public class VehicleFacadeTool {
     public VehicleFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.vehicle.base-url:http://pos-customer/v1/vehicles}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get vehicle details by vehicle ID")

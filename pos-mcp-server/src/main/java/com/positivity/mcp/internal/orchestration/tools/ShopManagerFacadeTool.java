@@ -15,7 +15,7 @@ public class ShopManagerFacadeTool {
     public ShopManagerFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.shopmanager.base-url:http://pos-shop-manager/v1/shop}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get overall status for a shop location")

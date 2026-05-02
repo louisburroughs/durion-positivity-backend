@@ -15,7 +15,7 @@ public class WorkorderFacadeTool {
     public WorkorderFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.workorder.base-url:http://pos-workorder/v1/workorders}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get full workorder details by workorder ID")

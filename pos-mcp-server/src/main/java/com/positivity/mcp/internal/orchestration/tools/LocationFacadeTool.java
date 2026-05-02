@@ -15,7 +15,7 @@ public class LocationFacadeTool {
     public LocationFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.location.base-url:http://pos-location/v1/locations}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get location details by location ID")

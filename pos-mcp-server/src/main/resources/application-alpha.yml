@@ -50,6 +50,7 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
+    candidate-tool-limit: 2
 
 exa:
   api-key: ${EXA_API_KEY:}
