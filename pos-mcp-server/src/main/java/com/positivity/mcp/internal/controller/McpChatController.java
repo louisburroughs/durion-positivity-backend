@@ -12,6 +12,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:execute" })
 @RequestMapping("/v1/mcp")
 public class McpChatController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(McpChatController.class);
 
     private final AgentOrchestrationService agentOrchestrationService;
 
@@ -63,10 +67,17 @@ public class McpChatController {
                 .filter(Objects::nonNull)
                 .filter(a -> a.startsWith("ROLE_"))
                 .collect(Collectors.toSet());
-        return ROLE_PRIORITY.stream()
+        String resolvedRole = ROLE_PRIORITY.stream()
                 .filter(userRoles::contains)
                 .findFirst()
                 .orElse("ROLE_USER");
+        LOGGER.debug(
+                "MCP chat role resolution principal={} roleAuthorities={} selectedRole={} fallback={}",
+                auth.getName(),
+                userRoles,
+                resolvedRole,
+                "ROLE_USER".equals(resolvedRole));
+        return resolvedRole;
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")

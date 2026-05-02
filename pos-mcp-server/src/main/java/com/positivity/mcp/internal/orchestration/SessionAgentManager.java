@@ -317,10 +317,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
+        List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
         if (toolRegistryService == null) {
-            List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role);
-            LOGGER.debug("MCP tool selector unavailable role={} resolvedRoleTools={}", role, toolNames(resolvedTools));
-            return resolvedTools;
+            LOGGER.debug("MCP tool selector unavailable role={} resolvedRoleTools={}", role, toolNames(fullRoleTools));
+            return fullRoleTools;
         }
         try {
             List<String> selectedNames = toolRegistryService
@@ -328,7 +328,22 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     .stream()
                     .map(ToolMetadata::name)
                     .toList();
+            if (selectedNames.isEmpty()) {
+                LOGGER.debug(
+                        "MCP tool selector returned no candidates role={} fullRoleTools={}; using full role tool set",
+                        role,
+                        toolNames(fullRoleTools));
+                return fullRoleTools;
+            }
             List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
+            if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
+                LOGGER.debug(
+                        "MCP tool candidates resolved to zero role tools role={} candidateNames={} fullRoleTools={}; using full role tool set",
+                        role,
+                        selectedNames,
+                        toolNames(fullRoleTools));
+                return fullRoleTools;
+            }
             LOGGER.debug(
                     "MCP tool candidates role={} candidateNames={} resolvedRoleTools={}",
                     role,
@@ -341,7 +356,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     role,
                     exception.getClass().getSimpleName(),
                     exception);
-            return toolRegistry.resolveToolsForRole(role);
+            return fullRoleTools;
         }
     }
 

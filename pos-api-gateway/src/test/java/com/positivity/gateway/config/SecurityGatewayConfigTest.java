@@ -173,6 +173,29 @@ class SecurityGatewayConfigTest {
         return builder.compact();
     }
 
+    private static String buildCanonicalTokenWithRoles(
+            String sub, String uid, String personId, String permBits, int permVer, String... roles) {
+        var builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(sub)
+                .issuer(TEST_ISSUER)
+                .audience()
+                .add(TEST_AUDIENCE)
+                .and()
+                .claim("uid", uid)
+                .claim("username", sub)
+                .claim("roles", Arrays.asList(roles))
+                .claim("perm_bits", permBits)
+                .claim("perm_ver", permVer)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 3_600_000))
+                .signWith(TEST_KEY);
+        if (personId != null) {
+            builder = builder.claim("personId", personId);
+        }
+        return builder.compact();
+    }
+
     // ── PERM-006 / PERM-007 — local JWT validation & bitset decode ───────────
 
     /**
@@ -230,6 +253,37 @@ class SecurityGatewayConfigTest {
         assertThat(exchange.getResponse().getStatusCode()).isNull();
         String authorities = downstreamHeaders.get().getFirst("X-Authorities");
         assertThat(authorities).contains("PERM_nlti:request:submit").contains("PERM_mcp:chat:execute");
+    }
+
+    @Test
+    void canonicalToken_withRoles_forwardsRolesHeader() {
+        String permBits = encodePermBits(226);
+        String token = buildCanonicalTokenWithRoles(
+                "admin.alpha",
+                "u1",
+                null,
+                permBits,
+                GatewayPermissionCatalog.CATALOG_VERSION,
+                "ROLE_ADMIN");
+
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+        GatewayFilterChain chain = ex -> {
+            downstreamHeaders.set(ex.getRequest().getHeaders());
+            return Mono.empty();
+        };
+
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/mcp-server/v1/mcp/chat")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamHeaders.get().getFirst("X-Roles")).isEqualTo("ROLE_ADMIN");
+        assertThat(downstreamHeaders.get().getFirst("X-Authorities")).contains("PERM_mcp:chat:execute");
     }
 
     /** Token signed with a different key is rejected as unauthorized. */

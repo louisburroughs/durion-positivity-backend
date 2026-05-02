@@ -46,4 +46,24 @@ class GatewayAuthoritiesFilterTest {
                 .contains("PERM_mcp:chat:execute")
                 .contains("mcp:chat:execute");
     }
+
+    @Test
+    @DisplayName("gateway X-Roles header is merged into downstream granted authorities")
+    void rolesHeaderAddsRoleAuthorities() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/mcp/chat");
+        request.addHeader(GatewaySecurityConstants.HEADER_USER, "alice");
+        request.addHeader(GatewaySecurityConstants.HEADER_AUTHORITIES, "PERM_mcp:chat:execute");
+        request.addHeader(GatewaySecurityConstants.HEADER_ROLES, "ROLE_ADMIN");
+
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        Set<String> authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .map(grantedAuthority -> grantedAuthority.getAuthority())
+                .collect(Collectors.toSet());
+
+        assertThat(authorities)
+                .contains("ROLE_ADMIN")
+                .contains("PERM_mcp:chat:execute")
+                .contains("mcp:chat:execute");
+    }
 }

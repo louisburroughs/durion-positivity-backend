@@ -234,4 +234,23 @@ class SessionAgentManagerTest {
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
         verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool"));
     }
+
+    @Test
+    @DisplayName("chat with empty semantic selection falls back to full role tool set")
+    void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
+        when(toolRegistry.resolveToolsForRole("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(List.of());
+        when(chatModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Stock found"))
+                        .build());
+
+        String response = manager.chat("user-1", "ROLE_ADMIN", "check stock for sku ABC");
+
+        assertThat(response).isEqualTo("Stock found");
+        verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_ADMIN", List.of());
+    }
 }

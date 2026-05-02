@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("alpha")
+@Profile("!test")
 public class ToolEmbeddingInitializer implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolEmbeddingInitializer.class);
@@ -31,11 +31,13 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         long totalStartNanos = System.nanoTime();
-        String query = "SELECT id, description FROM mcp_tool WHERE embedding IS NULL";
+        String query = "SELECT id, name, description FROM mcp_tool WHERE embedding IS NULL";
         List<ToolDescriptionRow> rows = jdbcTemplate.query(
                 query,
                 (resultSet, rowNum) -> new ToolDescriptionRow(
-                        resultSet.getObject("id", UUID.class), resultSet.getString("description")));
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getString("name"),
+                        resultSet.getString("description")));
 
         LOGGER.info("Tool embedding initialization found {} tools missing embeddings", rows.size());
         int populated = 0;
@@ -47,10 +49,15 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
                 jdbcTemplate.update(
                         "UPDATE mcp_tool SET embedding = ?::vector WHERE id = ?", toVectorPGobject(vector), row.id());
                 populated++;
-                LOGGER.info("Populated embedding for tool {} in {} ms", row.id(), elapsedMs(rowStartNanos));
+                LOGGER.info(
+                        "Populated embedding for tool {} ({}) in {} ms",
+                        row.name(),
+                        row.id(),
+                        elapsedMs(rowStartNanos));
             } catch (Exception exception) {
                 LOGGER.warn(
-                        "Failed to populate embedding for tool {} after {} ms",
+                        "Failed to populate embedding for tool {} ({}) after {} ms",
+                        row.name(),
                         row.id(),
                         elapsedMs(rowStartNanos),
                         exception);
@@ -81,7 +88,7 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
     }
 
     private record ToolDescriptionRow(
-            @NonNull UUID id, @NonNull String description) {}
+            @NonNull UUID id, @NonNull String name, @NonNull String description) {}
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);

@@ -12,6 +12,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +30,8 @@ import reactor.core.publisher.Flux;
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:stream" })
 @RequestMapping("/v1/mcp")
 public class McpStreamingChatController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(McpStreamingChatController.class);
 
     private final StreamingAgentOrchestrationService streamingSessionAgentManager;
 
@@ -63,10 +67,17 @@ public class McpStreamingChatController {
                 .filter(Objects::nonNull)
                 .filter(a -> a.startsWith("ROLE_"))
                 .collect(Collectors.toSet());
-        return ROLE_PRIORITY.stream()
+        String resolvedRole = ROLE_PRIORITY.stream()
                 .filter(userRoles::contains)
                 .findFirst()
                 .orElse("ROLE_USER");
+        LOGGER.debug(
+                "MCP streaming role resolution principal={} roleAuthorities={} selectedRole={} fallback={}",
+                auth.getName(),
+                userRoles,
+                resolvedRole,
+                "ROLE_USER".equals(resolvedRole));
+        return resolvedRole;
     }
 
     @Schema(name = "StreamChatRequest", description = "Streaming chat request payload", example = "{\"message\":\"Hello\"}")
