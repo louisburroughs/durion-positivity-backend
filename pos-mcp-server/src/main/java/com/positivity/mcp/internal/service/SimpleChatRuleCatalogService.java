@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,7 @@ public class SimpleChatRuleCatalogService {
     private final Clock clock;
     private final Duration cacheTtl;
 
-    private volatile CatalogSnapshot snapshot;
+    private final AtomicReference<CatalogSnapshot> snapshotRef = new AtomicReference<>();
 
     public SimpleChatRuleCatalogService(
             @NonNull SimpleChatRuleRepository repository,
@@ -31,20 +32,20 @@ public class SimpleChatRuleCatalogService {
     }
 
     public @NonNull SimpleChatRuleCatalog currentCatalog() {
-        CatalogSnapshot current = snapshot;
+        CatalogSnapshot current = snapshotRef.get();
         Instant now = Instant.now(clock);
         if (current != null && current.expiresAt().isAfter(now)) {
             return current.catalog();
         }
 
         synchronized (this) {
-            CatalogSnapshot refreshed = snapshot;
+            CatalogSnapshot refreshed = snapshotRef.get();
             Instant recheckNow = Instant.now(clock);
             if (refreshed != null && refreshed.expiresAt().isAfter(recheckNow)) {
                 return refreshed.catalog();
             }
             CatalogSnapshot loaded = loadSnapshot(recheckNow);
-            snapshot = loaded;
+            snapshotRef.set(loaded);
             return loaded.catalog();
         }
     }
