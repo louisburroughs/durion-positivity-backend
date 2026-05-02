@@ -17,6 +17,7 @@ import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.service.SystemPromptService;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -140,7 +141,13 @@ class SystemPromptControllerTest {
         mockMvc.perform(post("/v1/prompts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(HttpStatus.BAD_REQUEST.value()))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.fieldErrors").isArray())
+                .andExpect(jsonPath("$.fieldErrors[0].field").exists())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     // ─── AC: PUT /v1/prompts/{id} → 200 ──────────────────────────────────────
@@ -162,6 +169,38 @@ class SystemPromptControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(PROMPT_ID.toString()));
+    }
+
+    @Test
+    @WithMockUser(authorities = "mcp:system_prompt:create")
+    @DisplayName("POST /v1/prompts with duplicate name → 400 ApiError")
+    void create_withDuplicateName_returns400ApiError() throws Exception {
+        when(systemPromptService.create(any())).thenThrow(new IllegalArgumentException("Prompt with name already exists: default"));
+
+        SystemPromptRequest request = new SystemPromptRequest("default", "You are a helpful assistant.");
+
+        mockMvc.perform(post("/v1/prompts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(HttpStatus.BAD_REQUEST.value()))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("Prompt with name already exists: default"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @WithMockUser(authorities = "mcp:system_prompt:view")
+    @DisplayName("GET /v1/prompts/{id} missing prompt → 404 ApiError")
+    void get_whenPromptMissing_returns404ApiError() throws Exception {
+        when(systemPromptService.get(PROMPT_ID)).thenThrow(new NoSuchElementException("Prompt not found: " + PROMPT_ID));
+
+        mockMvc.perform(get("/v1/prompts/{id}", PROMPT_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(HttpStatus.NOT_FOUND.value()))
+                .andExpect(jsonPath("$.code").value("SYSTEM_PROMPT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Prompt not found: " + PROMPT_ID))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     // ─── AC: DELETE /v1/prompts/{id} → 204 No Content ────────────────────────
