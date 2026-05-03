@@ -43,6 +43,7 @@ public class OllamaEmbeddingModelConfiguration {
 
         private final RestClient restClient;
         private final String modelName;
+        private final String apiKey;
 
         private HostedOllamaEmbeddingModel(
                 RestClient.Builder restClientBuilder,
@@ -58,6 +59,7 @@ public class OllamaEmbeddingModelConfiguration {
             builder.defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE);
             this.restClient = builder.build();
             this.modelName = modelName;
+            this.apiKey = apiKey;
             this.dimension = dimensions;
             LOGGER.info(
                     "Configured Ollama embedding model baseUrl={} modelName={} dimensions={} timeout={}",
@@ -77,6 +79,11 @@ public class OllamaEmbeddingModelConfiguration {
 
             EmbedResponse response = restClient.post()
                     .uri("/api/embed")
+                    .headers(headers -> {
+                        if (!apiKey.isBlank()) {
+                            headers.setBearerAuth(apiKey);
+                        }
+                    })
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
