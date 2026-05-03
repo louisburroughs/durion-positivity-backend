@@ -17,17 +17,17 @@ spring:
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+      base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      model-name: ${OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
-      base-url: ${OLLAMA_BASE_URL}
-      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
       temperature: 0.2
       timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 

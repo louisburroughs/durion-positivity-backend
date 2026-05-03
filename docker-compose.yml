@@ -494,11 +494,13 @@ services:
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       <<: [*pos-security-client-env, *pos-events-client-env]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
-      # From inside the container, reach Ollama by Compose service name, not localhost.
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-mistral:7b}
+      # Chat and embeddings run against Ollama's hosted API.
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
+      OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-https://ollama.com}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3-next:80b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-qwen3-next:80b}
       OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-180s}
       OLLAMA_STREAMING_CHAT_TIMEOUT: ${OLLAMA_STREAMING_CHAT_TIMEOUT:-180s}
       OLLAMA_EMBEDDING_TIMEOUT: ${OLLAMA_EMBEDDING_TIMEOUT:-30s}
@@ -519,10 +521,6 @@ services:
         condition: service_healthy
       pos-event-receiver:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
     logging: *logging
     networks:
       - pos-network
