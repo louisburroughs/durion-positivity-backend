@@ -28,7 +28,7 @@ langchain4j:
   ollama:
     chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       custom-headers:
         Authorization: Bearer ${OLLAMA_API_KEY}
       temperature: 0.2
@@ -41,7 +41,7 @@ langchain4j:
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       custom-headers:
         Authorization: Bearer ${OLLAMA_API_KEY}
       temperature: 0.2

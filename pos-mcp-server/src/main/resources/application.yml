@@ -41,15 +41,15 @@ mcp:
     cron: "0 0 2 * * ?"
   model:
     fallback:
-      enabled: false
-      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:qwen3-next:80b}
+      enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
+      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:120b}
       timeout: ${OLLAMA_FALLBACK_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 langchain4j:
   ollama:
     chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
@@ -58,7 +58,7 @@ langchain4j:
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3-next:80b}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       temperature: 0.2
       timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 

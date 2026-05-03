@@ -18,7 +18,7 @@ public class ModelFallbackConfiguration {
     @Bean("fallbackChatModel")
     public @NonNull ChatModel fallbackChatModel(
             @Value("${OLLAMA_FALLBACK_BASE_URL:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}") @NonNull String baseUrl,
-            @Value("${mcp.model.fallback.secondary-model-name:qwen3-next:80b}") @NonNull String modelName,
+            @Value("${mcp.model.fallback.secondary-model-name:gpt-oss:120b}") @NonNull String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${mcp.model.fallback.timeout:180s}") @NonNull Duration timeout) {
         OllamaChatModel.OllamaChatModelBuilder builder = OllamaChatModel.builder()
