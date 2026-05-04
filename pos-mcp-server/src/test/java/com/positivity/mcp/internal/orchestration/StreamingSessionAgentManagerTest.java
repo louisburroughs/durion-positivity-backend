@@ -2,13 +2,16 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -16,6 +19,7 @@ import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +67,9 @@ class StreamingSessionAgentManagerTest {
 
     @Mock
     private RolePromptResolver rolePromptResolver;
+
+    @Mock
+    private ToolRegistryService toolRegistryService;
 
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
@@ -140,5 +147,71 @@ class StreamingSessionAgentManagerTest {
         Flux<String> result = manager.streamChat("user-with-role-tool", "ROLE_DUPLICATE", "hello");
 
         assertThat(result).isNotNull();
+    }
+
+    // --- Phase 3: semantic tool selection (toolRegistryService != null) ---
+
+    @Test
+    @DisplayName("streamChat uses semantically narrowed tools when selector returns candidates")
+    void streamChat_semanticSelection_narrowsToolsWhenCandidatesReturned() {
+        ToolMetadata candidate = new ToolMetadata(
+                UUID.randomUUID(), "inventoryTool", "Inventory", "Manage inventory", "inventory",
+                0.8, "LOW", 50, true, "inventoryFacadeTool");
+        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of(candidate));
+        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForRole(any(), any())).thenAnswer(inv -> new ArrayList<>());
+
+        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
+                exaWebSearchTool, rolePromptResolver,
+                toolRegistryService,
+                null, 30, 500, 50, 2, 100);
+        clearInvocations(toolRegistry);
+
+        Flux<String> result = selectorManager.streamChat("user-1", "ROLE_CASHIER", "show me inventory levels");
+
+        assertThat(result).isNotNull();
+        verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("streamChat falls back to full role tools when selector returns empty")
+    void streamChat_semanticSelection_fallsBackToFullRoleToolsOnEmptyResult() {
+        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
+        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+
+        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
+                exaWebSearchTool, rolePromptResolver,
+                toolRegistryService,
+                null, 30, 500, 50, 2, 100);
+        clearInvocations(toolRegistry);
+
+        Flux<String> result = selectorManager.streamChat("user-2", "ROLE_CASHIER", "anything");
+
+        assertThat(result).isNotNull();
+        // resolveToolsForRole(role) is called for the fallback path
+        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("streamChat falls back to full role tools when selector throws")
+    void streamChat_semanticSelection_fallsBackToFullRoleToolsOnException() {
+        when(toolRegistryService.resolveCandidateTools(any(), anyInt()))
+                .thenThrow(new RuntimeException("selector unavailable"));
+        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+
+        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
+                exaWebSearchTool, rolePromptResolver,
+                toolRegistryService,
+                null, 30, 500, 50, 2, 100);
+        clearInvocations(toolRegistry);
+
+        Flux<String> result = selectorManager.streamChat("user-3", "ROLE_CASHIER", "anything");
+
+        assertThat(result).isNotNull();
+        // fallback resolves from role tool set
+        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
     }
 }
