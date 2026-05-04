@@ -58,6 +58,50 @@ mcp:
     memory-max-messages: 50
     candidate-tool-limit: 2
 
+pos:
+  accounting:
+    base-url: ${POS_ACCOUNTING_BASE_URL:http://pos-accounting:8080/v1/accounting}
+  catalog:
+    base-url: ${POS_CATALOG_BASE_URL:http://pos-catalog:8080/v1/catalog}
+  customer:
+    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8080/v1/customers}
+  event-receiver:
+    base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://pos-event-receiver:8080/v1/events}
+  inventory:
+    base-url: ${POS_INVENTORY_BASE_URL:http://pos-inventory:8080/v1/inventory}
+  invoice:
+    base-url: ${POS_INVOICE_BASE_URL:http://pos-invoice:8080/v1/invoices}
+  location:
+    base-url: ${POS_LOCATION_BASE_URL:http://pos-location:8080/v1/locations}
+  order:
+    base-url: ${POS_ORDER_BASE_URL:http://pos-order:8080/v1/orders}
+  pricing:
+    base-url: ${POS_PRICING_BASE_URL:http://pos-price:8080/v1/pricing}
+  reporting:
+    base-url: ${POS_REPORTING_BASE_URL:http://pos-accounting:8080/v1/reporting}
+  security:
+    users:
+      base-url: ${POS_SECURITY_USERS_BASE_URL:http://pos-security-service:8080/v1/users}
+    audit:
+      base-url: ${POS_SECURITY_AUDIT_BASE_URL:http://pos-security-service:8080/v1/audit}
+    user-permissions-path-template: ${POS_SECURITY_USER_PERMISSIONS_PATH_TEMPLATE:/{userId}/permissions}
+    audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/events?eventType={query}}
+  hr:
+    employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://pos-people:8080/v1/people/employees}
+    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://pos-people:8080/v1/people}
+    availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://pos-people:8080/v1/people}
+    employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/{employeeId}}
+    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:?q={query}}
+    schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/availability?employeeId={employeeId}}
+  shopmanager:
+    base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-shop-manager:8080/v1/shop}
+  tax:
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8080/v1/tax}
+  vehicle:
+    base-url: ${POS_VEHICLE_BASE_URL:http://pos-customer:8080/v1/vehicles}
+  workorder:
+    base-url: ${POS_WORKORDER_BASE_URL:http://pos-workorder:8080/v1/workorders}
+
 exa:
   api-key: ${EXA_API_KEY:}
   base-url: https://api.exa.ai
