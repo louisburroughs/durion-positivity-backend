@@ -45,10 +45,8 @@ class ToolRegistryLoaderTest {
     @DisplayName("loadRoleToolMappings resolves bean by handlerBean name for an enabled tool")
     void loadRoleToolMappings_withEnabledTool_resolvesBean() {
         Object fakeTool = new Object();
-        // default: all roles return empty list
+        when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_CASHIER", "ROLE_MANAGER"));
         when(repository.findEnabledByRoleAndWorkflow(anyString(), anyString())).thenReturn(List.of());
-        // override ROLE_CASHIER to return the sample tool (last stub wins for this
-        // matcher)
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_META));
         when(applicationContext.getBean("customerFacadeTool")).thenReturn(fakeTool);
 
@@ -59,20 +57,33 @@ class ToolRegistryLoaderTest {
     }
 
     @Test
-    @DisplayName("loadRoleToolMappings returns empty lists for all known roles when no tools enabled")
+    @DisplayName("loadRoleToolMappings returns empty lists for all roles when no tools enabled")
     void loadRoleToolMappings_withNoEnabledTools_returnsEmptyListsForAllRoles() {
+        when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_CASHIER", "ROLE_TECHNICIAN"));
         when(repository.findEnabledByRoleAndWorkflow(anyString(), anyString())).thenReturn(List.of());
 
         ToolRegistryLoader loader = new ToolRegistryLoader(repository, applicationContext);
         Map<String, List<Object>> result = loader.loadRoleToolMappings();
 
-        assertThat(result).isNotEmpty();
+        assertThat(result).containsOnlyKeys("ROLE_CASHIER", "ROLE_TECHNICIAN");
         result.values().forEach(tools -> assertThat(tools).isEmpty());
+    }
+
+    @Test
+    @DisplayName("loadRoleToolMappings returns empty map when mcp_role table is empty")
+    void loadRoleToolMappings_withNoRoles_returnsEmptyMap() {
+        when(repository.findAllRoleNames()).thenReturn(List.of());
+
+        ToolRegistryLoader loader = new ToolRegistryLoader(repository, applicationContext);
+        Map<String, List<Object>> result = loader.loadRoleToolMappings();
+
+        assertThat(result).isEmpty();
     }
 
     @Test
     @DisplayName("loadRoleToolMappings skips tools whose handler bean is missing from ApplicationContext")
     void loadRoleToolMappings_withMissingBean_skipsSilently() {
+        when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_CASHIER"));
         when(repository.findEnabledByRoleAndWorkflow(anyString(), anyString())).thenReturn(List.of());
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_META));
         when(applicationContext.getBean("customerFacadeTool"))

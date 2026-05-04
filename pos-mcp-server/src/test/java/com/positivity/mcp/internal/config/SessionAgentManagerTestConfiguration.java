@@ -51,8 +51,19 @@ public class SessionAgentManagerTestConfiguration {
     ToolMetadataRepository toolMetadataRepository() {
         return new ToolMetadataRepository() {
             @Override
+            public java.util.List<String> findAllRoleNames() {
+                return List.of();
+            }
+
+            @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByRoleAndWorkflow(
                     String role, String workflowState) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbeddingForRole(
+                    float[] embedding, int limit, String role, String workflowState) {
                 return List.of();
             }
 

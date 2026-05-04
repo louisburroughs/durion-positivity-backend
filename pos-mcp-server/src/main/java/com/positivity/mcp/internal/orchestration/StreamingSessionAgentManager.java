@@ -3,9 +3,14 @@ package com.positivity.mcp.internal.orchestration;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
+import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
+import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
@@ -18,7 +23,12 @@ import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -27,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ClassUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
@@ -37,6 +48,9 @@ public class StreamingSessionAgentManager
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
+    private static final String FULL_TOOL_CACHE_KEY = "full";
+    // TODO(AC8): derive workflow state from session context instead of hardcoding IDLE
+    private static final String WORKFLOW_IDLE = "IDLE";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
 
     private final Cache<String, StreamingPosAssistant> roleAgentCache;
@@ -47,12 +61,18 @@ public class StreamingSessionAgentManager
     private final PgVectorEmbeddingStore embeddingStore;
     private final ToolRegistry toolRegistry;
     private final ExaWebSearchTool exaWebSearchTool;
+    private final InventoryFacadeTool inventoryFacadeTool;
+    private final OrderFacadeTool orderFacadeTool;
     private final RolePromptResolver rolePromptResolver;
+
+    @Nullable
+    private final ToolRegistryService toolRegistryService;
 
     @Nullable
     private final ToolAuditService toolAuditService;
 
     private final int memoryMaxMessages;
+    private final int candidateToolLimit;
     private final int rateLimitPerSession;
 
     public StreamingSessionAgentManager(
@@ -61,20 +81,28 @@ public class StreamingSessionAgentManager
             @NonNull PgVectorEmbeddingStore embeddingStore,
             @NonNull ToolRegistry toolRegistry,
             @NonNull ExaWebSearchTool exaWebSearchTool,
+            @NonNull InventoryFacadeTool inventoryFacadeTool,
+            @NonNull OrderFacadeTool orderFacadeTool,
             @NonNull RolePromptResolver rolePromptResolver,
+            @Nullable ToolRegistryService toolRegistryService,
             @Nullable ToolAuditService toolAuditService,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
+            @Value("${mcp.agent.candidate-tool-limit:2}") int candidateToolLimit,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.streamingChatModel = streamingChatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
         this.toolRegistry = toolRegistry;
         this.exaWebSearchTool = exaWebSearchTool;
+        this.inventoryFacadeTool = inventoryFacadeTool;
+        this.orderFacadeTool = orderFacadeTool;
         this.rolePromptResolver = rolePromptResolver;
+        this.toolRegistryService = toolRegistryService;
         this.toolAuditService = toolAuditService;
         this.memoryMaxMessages = memoryMaxMessages;
+        this.candidateToolLimit = Math.max(1, candidateToolLimit);
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
         this.requestCountCache = Caffeine.newBuilder()
@@ -85,7 +113,10 @@ public class StreamingSessionAgentManager
                 .maximumSize(sanitizedMaxCachedAgents)
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache = Caffeine.newBuilder().maximumSize(sanitizedMaxCachedAgents).build();
+        this.roleAgentCache = Caffeine.newBuilder()
+                .maximumSize(sanitizedMaxCachedAgents)
+                .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
+                .build();
         prebuildRoleAgents();
     }
 
@@ -98,7 +129,6 @@ public class StreamingSessionAgentManager
             throw new RateLimitExceededException("Rate limit exceeded");
         }
 
-        StreamingPosAssistant agent = getOrCreateAgent(userId, role);
         String roleContext = "Current user role: " + role;
         long startMs = System.currentTimeMillis();
         String memoryId = memoryKey(userId, role);
@@ -110,6 +140,27 @@ public class StreamingSessionAgentManager
                 message.length(),
                 tokenCount(message),
                 messagePreview);
+
+        StreamingPosAssistant agent;
+        if (toolRegistryService != null) {
+            List<Object> roleTools = roleToolsForMessage(role, message);
+            List<Object> fallbackTools = fallbackToolsForMessage(message);
+            List<Object> allTools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
+                    fallbackTools.toArray());
+            String cacheKey = toolCacheKey(allTools);
+            LOGGER.debug(
+                    "MCP streaming tool selection userId={} role={} cacheKey={} tools={}",
+                    userId,
+                    role,
+                    cacheKey,
+                    toolNames(allTools));
+            agent = roleAgentCache.get(
+                    role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
+        } else {
+            agent = roleAgentCache.get(
+                    role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, ignored -> buildAgent(role));
+        }
+
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, roleContext, emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -153,15 +204,15 @@ public class StreamingSessionAgentManager
         return roleAgentCache.estimatedSize();
     }
 
-    private @NonNull StreamingPosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
-        return roleAgentCache.get(role, this::buildAgent);
-    }
-
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
-        long startNanos = System.nanoTime();
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
                 toolRegistry.resolveToolsForRole(role), exaWebSearchTool);
+        return buildAgent(role, tools);
+    }
 
+    private @NonNull StreamingPosAssistant buildAgent(
+            @NonNull String role, @NonNull List<Object> tools) {
+        long startNanos = System.nanoTime();
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
@@ -206,7 +257,7 @@ public class StreamingSessionAgentManager
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoles()) {
             try {
-                roleAgentCache.put(role, buildAgent(role));
+                roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
                 prebuilt++;
             } catch (RuntimeException exception) {
                 LOGGER.warn("Failed to prebuild MCP streaming role agent role={}", role, exception);
@@ -224,6 +275,81 @@ public class StreamingSessionAgentManager
         return userId + MEMORY_KEY_SEPARATOR + role;
     }
 
+    private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
+        List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
+        if (toolRegistryService == null) {
+            return fullRoleTools;
+        }
+        try {
+            List<String> selectedNames = toolRegistryService
+                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit)
+                    .stream()
+                    .map(ToolMetadata::name)
+                    .toList();
+            if (selectedNames.isEmpty()) {
+                LOGGER.debug(
+                        "MCP streaming tool selector returned no candidates role={} fullRoleTools={}; using full role tool set",
+                        role,
+                        toolNames(fullRoleTools));
+                return fullRoleTools;
+            }
+            List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
+            if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
+                LOGGER.debug(
+                        "MCP streaming tool candidates resolved to zero role tools role={} candidateNames={}; using full role tool set",
+                        role,
+                        selectedNames);
+                return fullRoleTools;
+            }
+            return resolvedTools;
+        } catch (RuntimeException exception) {
+            LOGGER.warn(
+                    "MCP streaming tool selection failed role={} error={}; using full role tool set",
+                    role,
+                    exception.getClass().getSimpleName(),
+                    exception);
+            return fullRoleTools;
+        }
+    }
+
+    private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
+        String text = message.toLowerCase(Locale.ROOT);
+        List<Object> selected = new ArrayList<>();
+        if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
+            selected.add(exaWebSearchTool);
+        }
+        if (containsAny(
+                text, Set.of("availability", "inventory", "location", "part", "product", "sku", "stock", "store"))) {
+            selected.add(inventoryFacadeTool);
+        }
+        if (containsAny(text, Set.of("order", "po", "purchase", "sale", "sales"))) {
+            selected.add(orderFacadeTool);
+        }
+        LOGGER.debug("MCP streaming fallback tool matches tools={}", toolNames(selected));
+        return selected;
+    }
+
+    private static @NonNull String toolCacheKey(@NonNull List<Object> tools) {
+        TreeSet<String> names = new TreeSet<>(Comparator.naturalOrder());
+        tools.forEach(tool -> names.add(ClassUtils.getUserClass(tool).getSimpleName()));
+        return names.isEmpty() ? "none" : String.join("+", names);
+    }
+
+    private static @NonNull List<String> toolNames(@NonNull List<Object> tools) {
+        return tools.stream()
+                .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                .toList();
+    }
+
+    private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
+        for (String token : tokens) {
+            if (text.matches(".*\\b" + token + "\\b.*")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static @NonNull String preview(@NonNull String text) {
         String normalized = text.replaceAll("\\s+", " ").trim();
         if (normalized.length() <= MAX_LOG_PREVIEW_LENGTH) {
@@ -234,10 +360,6 @@ public class StreamingSessionAgentManager
 
     private static int tokenCount(@NonNull String text) {
         return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text)).size();
-    }
-
-    private static @NonNull List<String> toolNames(@NonNull List<Object> tools) {
-        return tools.stream().map(tool -> tool.getClass().getSimpleName()).toList();
     }
 
     private static long elapsedMs(long startNanos) {

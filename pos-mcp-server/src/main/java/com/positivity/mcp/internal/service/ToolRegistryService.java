@@ -5,11 +5,9 @@ import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -24,32 +22,30 @@ public class ToolRegistryService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistryService.class);
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ADMIN_FACADE_TOOL = "AdminFacadeTool";
-    private static final Set<String> ADMIN_QUERY_KEYWORDS =
-            Set.of(
-                    "user",
-                    "users",
-                    "role",
-                    "roles",
-                    "permission",
-                    "permissions",
-                    "access",
-                    "account",
-                    "accounts",
-                    "audit",
-                    "audits",
-                    "registered",
-                    "registration",
-                    "login",
-                    "logins");
-    private static final Set<String> ADMIN_QUERY_PHRASES =
-            Set.of(
-                    "who has access",
-                    "who can access",
-                    "audit log",
-                    "access review",
-                    "user count",
-                    "registered users",
-                    "account state");
+    private static final Set<String> ADMIN_QUERY_KEYWORDS = Set.of(
+            "user",
+            "users",
+            "role",
+            "roles",
+            "permission",
+            "permissions",
+            "access",
+            "account",
+            "accounts",
+            "audit",
+            "audits",
+            "registered",
+            "registration",
+            "login",
+            "logins");
+    private static final Set<String> ADMIN_QUERY_PHRASES = Set.of(
+            "who has access",
+            "who can access",
+            "audit log",
+            "access review",
+            "user count",
+            "registered users",
+            "account state");
 
     private final ToolMetadataRepository repository;
     private final EmbeddingModel embeddingModel;
@@ -66,8 +62,8 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools =
-                repository.findEnabledByRoleAndWorkflow(context.role(), context.workflowState());
+        List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(context.role(),
+                context.workflowState());
 
         if (gatedTools.isEmpty()) {
             return List.of();
@@ -80,17 +76,31 @@ public class ToolRegistryService {
 
         float[] embedding = embeddingModel.embed(context.userInput()).content().vector();
         int semanticLimit = Math.max(topK, 10);
-        List<ToolMetadata> semanticCandidates = repository.findTopKByEmbedding(embedding, semanticLimit);
 
-        Set<UUID> gatedIds = new HashSet<>();
-        for (ToolMetadata gated : gatedTools) {
-            gatedIds.add(gated.id());
+        // Phase 2 fix: gated ANN — only tools authorized for this role+workflow enter
+        // the
+        // ranking window. Unauthorized tools can never displace authorized ones.
+        List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForRole(
+                embedding, semanticLimit, context.role(), context.workflowState());
+
+        if (semanticCandidates.isEmpty()) {
+            // Fallback: tools have no embeddings yet; return highest-priority gated tools
+            LOGGER.debug(
+                    "MCP tool scoring no-embedding fallback role={} workflow={} returning top-{} by priority",
+                    context.role(),
+                    context.workflowState(),
+                    topK);
+            return gatedTools.stream()
+                    .sorted(Comparator.comparingDouble(ToolMetadata::priority)
+                            .reversed()
+                            .thenComparing(ToolMetadata::name))
+                    .limit(topK)
+                    .toList();
         }
 
-        List<ScoredTool> gatedScoredCandidates = IntStream.range(0, semanticCandidates.size())
+        List<ScoredTool> scoredCandidates = IntStream.range(0, semanticCandidates.size())
                 .mapToObj(index -> new ScoredTool(
                         semanticCandidates.get(index), scorer.score(semanticCandidates.get(index), index), index))
-                .filter(scored -> gatedIds.contains(scored.tool().id()))
                 .sorted(Comparator.comparingDouble((ScoredTool scored) -> scored.score().total())
                         .reversed()
                         .thenComparingInt(ScoredTool::rankPosition)
@@ -99,16 +109,16 @@ public class ToolRegistryService {
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool scoring role={} workflow={} topK={} gatedTools={} semanticCandidates={} gatedCandidateScores={}",
+                    "MCP tool scoring role={} workflow={} topK={} gatedTools={} semanticCandidates={} scoredCandidates={}",
                     context.role(),
                     context.workflowState(),
                     topK,
                     toolNames(gatedTools),
                     semanticCandidateSummaries(semanticCandidates),
-                    scoredCandidateSummaries(gatedScoredCandidates));
+                    scoredCandidateSummaries(scoredCandidates));
         }
 
-        return gatedScoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
+        return scoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
     }
 
     private @NonNull List<ToolMetadata> adminFastPathSelection(
@@ -148,16 +158,16 @@ public class ToolRegistryService {
 
     static final class ToolScorer {
 
-        @NonNull ToolScore score(@NonNull ToolMetadata tool, int rankPosition) {
+        @NonNull
+        ToolScore score(@NonNull ToolMetadata tool, int rankPosition) {
             double semanticScore = 1.0 / (rankPosition + 1);
-            double priorityBoost = tool.priority();
+            double priorityBoost = Math.clamp(tool.priority(), 0.0, 1.0);
             double latencyPenalty = Math.min(tool.avgLatencyMs() / 1000.0, 1.0) * 0.2;
-            double costPenalty =
-                    switch (tool.costLevel().toLowerCase()) {
-                        case "high" -> 0.2;
-                        case "medium" -> 0.1;
-                        default -> 0.0;
-                    };
+            double costPenalty = switch (tool.costLevel().toLowerCase()) {
+                case "high" -> 0.2;
+                case "medium" -> 0.1;
+                default -> 0.0;
+            };
             return new ToolScore(
                     semanticScore + priorityBoost - latencyPenalty - costPenalty,
                     semanticScore,
@@ -195,7 +205,9 @@ public class ToolRegistryService {
     }
 
     private record ToolScore(
-            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {}
+            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {
+    }
 
-    private record ScoredTool(@NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {}
+    private record ScoredTool(@NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {
+    }
 }

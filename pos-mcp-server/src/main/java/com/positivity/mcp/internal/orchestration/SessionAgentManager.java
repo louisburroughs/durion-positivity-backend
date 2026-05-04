@@ -48,6 +48,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
+    // TODO(AC8): derive workflow state from session context instead of hardcoding IDLE
     private static final String WORKFLOW_IDLE = "IDLE";
     private static final String FULL_TOOL_CACHE_KEY = "full";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
@@ -114,7 +115,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache = Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
+        this.roleAgentCache = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxCachedAgents))
+                .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
+                .build();
         prebuildRoleAgents();
     }
 

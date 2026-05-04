@@ -559,6 +559,12 @@ paths:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1llm-apis~1{id}
   /v1/mcp/chat:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1chat
+  /v1/mcp/chat/stream:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1chat~1stream
+  /v1/mcp/documents:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1documents
+  /v1/mcp/documents/jobs/{jobId}:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1documents~1jobs~1{jobId}
   /v1/nlt/audit:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1audit
   /v1/nlt/requests:
@@ -1084,8 +1090,6 @@ paths:
 tags:
 - name: pos-accounting
   description: Operations served by pos-accounting
-- name: pos-api-gateway
-  description: Operations served by pos-api-gateway
 - name: pos-bulk-loader
   description: Operations served by pos-bulk-loader
 - name: pos-catalog
@@ -1128,7 +1132,6 @@ tags:
   description: Operations served by pos-workorder
 x-aggregated-modules:
 - pos-accounting
-- pos-api-gateway
 - pos-bulk-loader
 - pos-catalog
 - pos-customer
