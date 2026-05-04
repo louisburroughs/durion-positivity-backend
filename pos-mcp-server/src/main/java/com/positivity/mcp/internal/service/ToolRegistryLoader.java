@@ -23,6 +23,7 @@ public class ToolRegistryLoader {
 
     private static final Logger log = LoggerFactory.getLogger(ToolRegistryLoader.class);
 
+    // TODO(AC8): preload additional workflow states once session-driven routing is implemented
     private static final String WORKFLOW_IDLE = "IDLE";
 
     private final ToolMetadataRepository repository;

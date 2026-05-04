@@ -49,6 +49,7 @@ public class StreamingSessionAgentManager
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
     private static final String FULL_TOOL_CACHE_KEY = "full";
+    // TODO(AC8): derive workflow state from session context instead of hardcoding IDLE
     private static final String WORKFLOW_IDLE = "IDLE";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
 

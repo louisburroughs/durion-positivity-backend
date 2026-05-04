@@ -87,6 +87,8 @@ Prompts are managed via the `/v1/prompts` CRUD API (requires `mcp:system_prompt:
 
 On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the active tool set using pgvector ANN (`<=>` cosine distance) gated by role, while workflow-state routing beyond `IDLE` is intentionally deferred (current managers evaluate with `WORKFLOW_IDLE` only):
 
+> **TODO (AC8):** Derive workflow state from session context and pass it into `ToolSelectionContext` so non-IDLE states (`CREATING_PO`, `PROCESSING_RETURN`, etc.) activate their respective tool sets. Requires persisting workflow state on `NltiSession` and threading it through both `SessionAgentManager` and `StreamingSessionAgentManager`. `ToolRegistryLoader` will also need to preload tools for active workflow states beyond `IDLE`.
+
 1. `ToolMetadataRepository.findTopKByEmbeddingForRole()` executes an ANN query that JOINs `mcp_tool`, `mcp_role`, `mcp_tool_role`, and `mcp_workflow_state` — only tools authorized for the user's role and the current workflow state enter the scoring window.
 2. `ToolScorer` ranks candidates using a weighted combination of semantic similarity and normalized priority (`Math.clamp(priority, 0.0, 1.0)`).
 3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
