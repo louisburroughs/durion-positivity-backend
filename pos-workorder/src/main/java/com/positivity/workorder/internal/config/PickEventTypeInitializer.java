@@ -24,7 +24,7 @@ public class PickEventTypeInitializer implements ApplicationRunner {
 
     public PickEventTypeInitializer(
             RestClient.Builder restClientBuilder,
-            @Value("${gateway.base-url:http://localhost:8080}") String gatewayBaseUrl,
+            @Value("${gateway.base-url:http://pos-api-gateway:8080}") String gatewayBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret,
             @Value("${pos-events.registration.enabled:true}") boolean enabled) {
         this.restClient = restClientBuilder
