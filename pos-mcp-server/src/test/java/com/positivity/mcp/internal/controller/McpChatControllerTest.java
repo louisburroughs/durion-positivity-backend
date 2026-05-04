@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,7 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.McpRoleResolver;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -46,6 +50,14 @@ class McpChatControllerTest {
 
     @MockitoBean
     private AgentOrchestrationService agentOrchestrationService;
+
+    @MockitoBean
+    private McpRoleResolver mcpRoleResolver;
+
+    @BeforeEach
+    void stubRoleResolver() {
+        when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_USER");
+    }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
@@ -74,6 +86,7 @@ class McpChatControllerTest {
     @WithMockUser(username = "admin.alpha", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat prefers ROLE_ADMIN when present in authorities")
     void chat_withAdminRole_usesAdminRoleForOrchestration() throws Exception {
+        when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_ADMIN");
         when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
                 .thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(

@@ -86,4 +86,15 @@ class ToolMetadataRepositoryImplTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().handlerBean()).isEqualTo("customerFacadeTool");
     }
+
+    @Test
+    @DisplayName("findAllRoleNames delegates to JdbcTemplate and returns role name list")
+    void findAllRoleNames_returnsList() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("ROLE_ADMIN", "ROLE_CASHIER", "ROLE_TECHNICIAN"));
+
+        List<String> result = repository.findAllRoleNames();
+
+        assertThat(result).containsExactly("ROLE_ADMIN", "ROLE_CASHIER", "ROLE_TECHNICIAN");
+    }
 }

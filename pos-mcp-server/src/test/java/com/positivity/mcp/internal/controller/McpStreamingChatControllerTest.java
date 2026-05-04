@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,13 +10,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.service.McpRoleResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -32,6 +36,14 @@ class McpStreamingChatControllerTest {
 
     @MockitoBean
     private StreamingAgentOrchestrationService streamingSessionAgentManager;
+
+    @MockitoBean
+    private McpRoleResolver mcpRoleResolver;
+
+    @BeforeEach
+    void stubRoleResolver() {
+        when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_USER");
+    }
 
     @Test
     @WithMockUser(username = "stream-user", authorities = "mcp:chat:stream")

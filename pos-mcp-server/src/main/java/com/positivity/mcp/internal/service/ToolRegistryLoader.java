@@ -25,9 +25,6 @@ public class ToolRegistryLoader {
 
     private static final String WORKFLOW_IDLE = "IDLE";
 
-    private static final List<String> KNOWN_ROLES =
-            List.of("ROLE_CASHIER", "ROLE_SERVICE_WRITER", "ROLE_MANAGER", "ROLE_ADMIN", "ROLE_SUPPLIER");
-
     private final ToolMetadataRepository repository;
     private final ApplicationContext applicationContext;
 
@@ -46,8 +43,12 @@ public class ToolRegistryLoader {
      * Tools are resolved by their Spring bean name (handler_bean column).
      */
     public @NonNull Map<String, List<Object>> loadRoleToolMappings() {
+        List<String> roles = repository.findAllRoleNames();
+        if (roles.isEmpty()) {
+            log.warn("No roles found in mcp_role table; tool registry will be empty");
+        }
         Map<String, List<Object>> result = new HashMap<>();
-        for (String role : KNOWN_ROLES) {
+        for (String role : roles) {
             List<ToolMetadata> tools = repository.findEnabledByRoleAndWorkflow(role, WORKFLOW_IDLE);
             List<Object> beans = new ArrayList<>();
             for (ToolMetadata meta : tools) {
