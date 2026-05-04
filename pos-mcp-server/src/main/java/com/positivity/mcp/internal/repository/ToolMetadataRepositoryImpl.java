@@ -47,6 +47,29 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull List<ToolMetadata> findTopKByEmbeddingForRole(
+            float @NonNull [] embedding, int limit, @NonNull String role, @NonNull String workflowState) {
+        String sql = """
+                SELECT t.id, t.name, t.display_name, t.description,
+                       t.domain, t.priority, t.cost_level,
+                       t.avg_latency_ms, t.enabled, t.handler_bean
+                FROM mcp_tool t
+                JOIN mcp_tool_role tr ON t.id = tr.tool_id
+                JOIN mcp_role r ON tr.role_id = r.id
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND t.embedding IS NOT NULL
+                  AND r.name = ?
+                  AND ws.name = ?
+                ORDER BY t.embedding <=> ?::vector, t.id
+                LIMIT ?
+                """;
+
+        return jdbcTemplate.query(sql, this::mapRow, role, workflowState, toVectorPGobject(embedding), limit);
+    }
+
+    @Override
     public @NonNull List<ToolMetadata> findTopKByEmbedding(float @NonNull [] embedding, int limit) {
         String sql = """
                 SELECT id, name, display_name, description,

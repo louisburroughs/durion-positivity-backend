@@ -97,4 +97,18 @@ class ToolMetadataRepositoryImplTest {
 
         assertThat(result).containsExactly("ROLE_ADMIN", "ROLE_CASHIER", "ROLE_TECHNICIAN");
     }
+
+    @Test
+    @DisplayName("findTopKByEmbeddingForRole delegates gated ANN query to JdbcTemplate")
+    @SuppressWarnings("unchecked")
+    void findTopKByEmbeddingForRole_returnsBoundedGatedList() {
+        float[] embedding = new float[768];
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("ROLE_CASHIER"), eq("IDLE"), any(PGobject.class), eq(5)))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = repository.findTopKByEmbeddingForRole(embedding, 5, "ROLE_CASHIER", "IDLE");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo("customerFacadeTool");
+    }
 }

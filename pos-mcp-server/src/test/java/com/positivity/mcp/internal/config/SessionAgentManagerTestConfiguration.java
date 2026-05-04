@@ -62,6 +62,12 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
+            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbeddingForRole(
+                    float[] embedding, int limit, String role, String workflowState) {
+                return List.of();
+            }
+
+            @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbedding(
                     float[] embedding, int limit) {
                 return List.of();
