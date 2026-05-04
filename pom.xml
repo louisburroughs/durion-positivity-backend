@@ -80,6 +80,29 @@
 				<scope>test</scope>
 			</dependency>
 
+			<!--
+				CVE mitigations: force patched versions of vulnerable transitive dependencies
+				that Spring Cloud / Netflix Eureka / Archaius pull in.
+				commons-configuration-1.10 (CVE-2025-46392) has no 1.x fix release and is
+				suppressed in build-tools/owasp-suppressions.xml pending Spring Cloud dropping Archaius 1.x.
+				swagger-ui-5.32.2 DOMPurify CVEs are also suppressed there pending a springdoc 3.x update.
+			-->
+			<dependency>
+				<groupId>org.apache.httpcomponents</groupId>
+				<artifactId>httpclient</artifactId>
+				<version>4.5.14</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mozilla</groupId>
+				<artifactId>rhino</artifactId>
+				<version>1.8.0</version>
+			</dependency>
+			<dependency>
+				<groupId>commons-jxpath</groupId>
+				<artifactId>commons-jxpath</artifactId>
+				<version>1.4.0</version>
+			</dependency>
+
 			<!-- UTILITY LIBRARIES -->
 			<dependency>
 				<groupId>org.projectlombok</groupId>
@@ -276,6 +299,8 @@
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 		<spring-cloud.version>2025.1.1</spring-cloud.version>
+		<!-- CVE-2026-42198: override Spring Boot BOM postgresql version -->
+		<postgresql.version>42.7.11</postgresql.version>
 		<archunit.version>1.4.2</archunit.version>
 		<!-- Test Dependencies - JUnit managed by Spring Boot -->
 		<mockito.version>5.20.0</mockito.version>
@@ -361,6 +386,13 @@
 					<groupId>org.sonarsource.scanner.maven</groupId>
 					<artifactId>sonar-maven-plugin</artifactId>
 					<version>${sonar-maven-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.owasp</groupId>
+					<artifactId>dependency-check-maven</artifactId>
+					<configuration>
+						<suppressionFile>${maven.multiModuleProjectDirectory}/build-tools/owasp-suppressions.xml</suppressionFile>
+					</configuration>
 				</plugin>
 			</plugins>
 		</pluginManagement>
