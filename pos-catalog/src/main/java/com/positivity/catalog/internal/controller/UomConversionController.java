@@ -7,6 +7,7 @@ import com.positivity.catalog.service.UomConversionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -52,7 +53,9 @@ public class UomConversionController {
                         "ROLE_CATALOG_VIEW" })
         @GetMapping
         @Operation(summary = "List active conversions", description = "Returns all active unit-of-measure conversion records.", operationId = "listUomConversions")
-        @ApiResponse(responseCode = "200", description = "Conversions listed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto[].class)))
+        @ApiResponse(responseCode = "200", description = "Conversions listed",
+                        content = @Content(mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
         public ResponseEntity<List<UomConversionDto>> list() {
                 return ResponseEntity.ok(uomConversionService.listActiveConversions());
         }

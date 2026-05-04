@@ -93,7 +93,7 @@ On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the a
 2. `ToolScorer` ranks candidates using a weighted combination of semantic similarity and normalized priority (`Math.clamp(priority, 0.0, 1.0)`).
 3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
 4. The streaming manager (`StreamingSessionAgentManager`) applies the same selection per message and caches the resulting agent keyed by `role::toolCacheKey` (sorted tool names joined with `+`).
-5. Role agents expire after `mcp.agent.cache-ttl-minutes` (default 30 min) so tool and prompt edits in the database become effective without a service restart.
+5. Role agents expire after `mcp.agent.cache-ttl-minutes` (default 30 min) so prompt edits and semantic tool-selection rankings in the database become effective without a service restart; changes to the role-tool fallback mapping (ToolRegistry) require a service restart.
 
 Roles are loaded dynamically from the `mcp_role` table (`ToolRegistryLoader`). `McpRoleResolver` resolves the primary role from `Authentication` in priority order: ADMIN > MANAGER > SERVICE_WRITER > CASHIER > SUPPLIER > TECHNICIAN > ROLE_USER fallback.
 
