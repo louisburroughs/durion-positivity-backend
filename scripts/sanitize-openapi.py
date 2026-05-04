@@ -30,8 +30,32 @@ from pathlib import Path
 import yaml
 
 
+# Structural OpenAPI keys that must be preserved even when empty.
+_STRUCTURAL_KEYS = frozenset(
+    {
+        "paths",
+        "components",
+        "tags",
+        "schemas",
+        "responses",
+        "parameters",
+        "requestBodies",
+        "headers",
+        "securitySchemes",
+        "links",
+        "callbacks",
+    }
+)
+
+
 def _is_empty_default(value: object) -> bool:
     return value is None or value == ""
+
+
+def _should_drop_key(key: object, value: object) -> bool:
+    if key == "default" and _is_empty_default(value):
+        return True
+    return key not in _STRUCTURAL_KEYS and (value is None or value == {})
 
 
 def _clean(node: object) -> object:
@@ -43,14 +67,8 @@ def _clean(node: object) -> object:
 
         cleaned: dict[object, object] = {}
         for key, value in node.items():
-            if key == "default" and _is_empty_default(value):
-                continue
-            # Drop any key whose value is null or an empty mapping. Springdoc
-            # emits many such placeholder keys (additionalProperties, contains,
-            # unevaluatedItems, propertyNames, ...) which are syntactically
-            # valid YAML but fail OpenAPI 3.x spec validation because the
-            # validator expects a Schema object.
-            if value is None or value == {}:
+            # Drop springdoc placeholder keys that break OpenAPI 3.x validation.
+            if _should_drop_key(key, value):
                 continue
             cleaned[key] = _clean(value)
         return cleaned

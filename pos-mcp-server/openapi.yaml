@@ -6,10 +6,12 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: LLM API Configuration
+  description: LLM provider API configuration management
+- name: Document Ingestion
+  description: RAG document ingestion job management
 - name: NLTI Audit
   description: NLTI Audit Ledger Query
-- name: MCP Chat API
-  description: Model Context Protocol (MCP) chatbot endpoint for invoking MCP tools
 - name: NLTI
   description: Natural Language Task Interface
 paths:
@@ -29,9 +31,12 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
+      security:
+      - bearerAuth:
+        - mcp:system_prompt:view
     put:
       tags:
       - system-prompt-controller
@@ -53,9 +58,12 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
+      security:
+      - bearerAuth:
+        - mcp:system_prompt:update
     delete:
       tags:
       - system-prompt-controller
@@ -70,10 +78,15 @@ paths:
       responses:
         '200':
           description: OK
+      security:
+      - bearerAuth:
+        - mcp:system_prompt:delete
   /v1/llm-apis/{id}:
     get:
       tags:
-      - llm-api-config-controller
+      - LLM API Configuration
+      summary: Get an LLM API configuration
+      description: Retrieve a single LLM API provider configuration by its identifier.
       operationId: get_1
       parameters:
       - name: id
@@ -86,12 +99,17 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/LlmApiConfigResponse'
+      security:
+      - bearerAuth:
+        - mcp:llm_api:view
     put:
       tags:
-      - llm-api-config-controller
+      - LLM API Configuration
+      summary: Update an LLM API configuration
+      description: Update an existing LLM API provider configuration by its identifier.
       operationId: update_1
       parameters:
       - name: id
@@ -110,12 +128,17 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/LlmApiConfigResponse'
+      security:
+      - bearerAuth:
+        - mcp:llm_api:update
     delete:
       tags:
-      - llm-api-config-controller
+      - LLM API Configuration
+      summary: Delete an LLM API configuration
+      description: Delete an existing LLM API provider configuration by its identifier.
       operationId: delete_1
       parameters:
       - name: id
@@ -127,6 +150,9 @@ paths:
       responses:
         '200':
           description: OK
+      security:
+      - bearerAuth:
+        - mcp:llm_api:delete
   /v1/prompts:
     get:
       tags:
@@ -136,11 +162,14 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/SystemPromptResponse'
+      security:
+      - bearerAuth:
+        - mcp:system_prompt:view
     post:
       tags:
       - system-prompt-controller
@@ -155,9 +184,12 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
+      security:
+      - bearerAuth:
+        - mcp:system_prompt:create
   /v1/nlt/requests:
     post:
       tags:
@@ -180,57 +212,105 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/NltiResponseV1'
-  /v1/mcp/chat:
+      security:
+      - bearerAuth:
+        - nlti:request:submit
+  /v1/mcp/documents:
     post:
       tags:
-      - MCP Chat API
-      summary: Execute MCP Tool
-      description: Synchronously execute an MCP tool with the provided arguments and return the result
-      operationId: chat
+      - Document Ingestion
+      summary: Queue a document for ingestion into the RAG vector store
+      description: Submit a document for asynchronous ingestion into the RAG vector store. The request includes the document content and optional metadata. The response returns a job ID that can be used to track the ingestion status.
+      operationId: ingestDocument
       requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentIngestionRequest'
         required: true
       responses:
-        '400':
-          description: Invalid request - missing or empty toolName
-          content:
-            text/plain:
-              example: '''toolName'' is required'
         '200':
-          description: Tool execution succeeded
+          description: OK
           content:
             application/json:
               schema:
-                description: MCP CallToolResult containing tool output
-              example:
-                content:
-                - type: text
-                  text: Pong from positivity-ping
-                isError: false
-        '500':
-          description: Tool execution failed
+                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+      security:
+      - bearerAuth:
+        - mcp:document:ingest
+  /v1/mcp/chat:
+    post:
+      tags:
+      - mcp-chat-controller
+      summary: Execute MCP chat message
+      operationId: chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
           content:
-            text/plain:
-              example: 'Failed to execute MCP tool: Tool not found'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+  /v1/mcp/chat/stream:
+    post:
+      tags:
+      - mcp-streaming-chat-controller
+      summary: Execute MCP streaming chat - returns SSE token stream
+      operationId: streamChat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamChatRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/event-stream:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServerSentEventString'
+      security:
+      - bearerAuth:
+        - mcp:chat:stream
   /v1/llm-apis:
     get:
       tags:
-      - llm-api-config-controller
+      - LLM API Configuration
+      summary: List LLM API configurations
+      description: Retrieve all configured LLM API provider definitions that are available to the MCP server.
       operationId: list_1
       responses:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/LlmApiConfigResponse'
+      security:
+      - bearerAuth:
+        - mcp:llm_api:view
     post:
       tags:
-      - llm-api-config-controller
+      - LLM API Configuration
+      summary: Create an LLM API configuration
+      description: Create a new LLM API provider configuration for use by the MCP server.
       operationId: create_1
       requestBody:
         content:
@@ -242,14 +322,18 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/LlmApiConfigResponse'
+      security:
+      - bearerAuth:
+        - mcp:llm_api:create
   /v1/nlt/audit:
     get:
       tags:
       - NLTI Audit
       summary: Query the NLTI audit ledger
+      description: Query the NLTI audit ledger with optional filters for correlation ID, time range, and event type. Results are paginated.
       operationId: queryAudit
       parameters:
       - name: correlationId
@@ -280,6 +364,7 @@ paths:
         description: Zero-based page index (0..N)
         required: false
         schema:
+          type: integer
           default: 0
           minimum: 0
       - name: size
@@ -287,6 +372,7 @@ paths:
         description: The size of the page to be returned
         required: false
         schema:
+          type: integer
           default: 20
           minimum: 1
       - name: sort
@@ -297,13 +383,42 @@ paths:
           type: array
           default:
           - timestamp,ASC
+          items:
+            type: string
       responses:
         '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/PageAuditEventResponse'
+      security:
+      - bearerAuth:
+        - nlti:audit:read
+  /v1/mcp/documents/jobs/{jobId}:
+    get:
+      tags:
+      - Document Ingestion
+      summary: Get RAG document ingestion job status
+      description: Retrieve the status and details of an asynchronous document ingestion job using its job ID. The response includes the current status, timestamps, and any error messages if applicable.
+      operationId: getIngestionJob
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+      security:
+      - bearerAuth:
+        - mcp:document:ingest
 components:
   schemas:
     SystemPromptRequest:
@@ -311,8 +426,10 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
         content:
           type: string
+          minLength: 1
       required:
       - content
       - name
@@ -337,12 +454,16 @@ components:
       properties:
         apiId:
           type: string
+          minLength: 1
         model:
           type: string
+          minLength: 1
         baseUrl:
           type: string
+          minLength: 1
         apiKey:
           type: string
+          minLength: 1
         headers:
           type: object
           additionalProperties:
@@ -381,6 +502,7 @@ components:
       properties:
         prompt:
           type: string
+          minLength: 1
         sessionId:
           type: string
           format: uuid
@@ -404,6 +526,86 @@ components:
           type: string
         meta:
           type: object
+    DocumentIngestionRequest:
+      type: object
+      description: Document ingestion payload
+      example:
+        content: sample
+        metadata:
+          document_id: policy-123
+          source: manual
+      properties:
+        content:
+          type: string
+          minLength: 1
+        metadata:
+          type: object
+          description: Optional key-value metadata for the document
+      required:
+      - content
+    DocumentIngestionJobResponse:
+      type: object
+      description: Asynchronous document ingestion job status
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        documentId:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        chunkCount:
+          type: integer
+          format: int32
+        errorMessage:
+          type: string
+    ChatRequest:
+      type: object
+      description: Chat request payload
+      example:
+        message: Hello
+      properties:
+        message:
+          type: string
+          minLength: 1
+      required:
+      - message
+    ChatResponse:
+      type: object
+      description: Chat response payload
+      example:
+        response: Hi!
+      properties:
+        response:
+          type: string
+    StreamChatRequest:
+      type: object
+      description: Streaming chat request payload
+      example:
+        message: Hello
+      properties:
+        message:
+          type: string
+          minLength: 1
+      required:
+      - message
     AuditEventResponse:
       type: object
       properties:
@@ -431,10 +633,6 @@ components:
         totalPages:
           type: integer
           format: int32
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -445,23 +643,25 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/Sortnull'
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/Pageablenull'
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         empty:
           type: boolean
-    Pageablenull:
+    PageableObject:
       type: object
       properties:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/Sortnull'
         paged:
           type: boolean
         pageNumber:
@@ -470,14 +670,16 @@ components:
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
-    Sortnull:
+    SortObject:
       type: object
       properties:
         empty:
           type: boolean
-        unsorted:
-          type: boolean
         sorted:
+          type: boolean
+        unsorted:
           type: boolean

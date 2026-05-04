@@ -668,7 +668,7 @@ public class EstimateController {
             + "line items grouped by type (parts and labor), and financial totals. "
             + "Rendered via pos-documents service.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "PDF generated successfully", content = @Content(mediaType = "application/pdf")),
+            @ApiResponse(responseCode = "200", description = "PDF generated successfully", content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "byte"))),
             @ApiResponse(responseCode = "404", description = "Estimate not found"),
             @ApiResponse(responseCode = "502", description = "Document service unavailable")
     })

@@ -41,7 +41,13 @@ public class McpChatController {
                 this.mcpRoleResolver = mcpRoleResolver;
         }
 
-        @Operation(summary = "Execute MCP chat message")
+        @Operation(
+                        summary = "Execute MCP chat message",
+                        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                                        required = true,
+                                        content = @io.swagger.v3.oas.annotations.media.Content(
+                                                        mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+                                                        schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = McpChatController.ChatRequest.class))))
         @PostMapping("/chat")
         @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
         @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
