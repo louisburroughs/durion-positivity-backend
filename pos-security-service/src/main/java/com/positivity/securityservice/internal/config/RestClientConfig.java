@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -16,11 +17,17 @@ public class RestClientConfig {
             "people:person:create,people:person:delete,people:userLink:view,people:userLink:write";
     private static final String CUSTOMER_AUTHORITIES = "crm:person:read";
 
-        @Bean
-        @LoadBalanced
-        public RestClient.Builder loadBalancedRestClientBuilder() {
-                return RestClient.builder();
-        }
+    @Bean
+    @Primary
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
 
     @Bean
     public RestClient peopleRegistrationRestClient(
