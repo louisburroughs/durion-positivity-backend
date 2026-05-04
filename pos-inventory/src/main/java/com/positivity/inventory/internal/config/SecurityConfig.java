@@ -1,8 +1,11 @@
 package com.positivity.inventory.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.web.client.RestClient;
 
 /**
  * Inventory service security configuration.
@@ -12,4 +15,11 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration
 @Import(GatewaySecurityConfig.class)
-public class SecurityConfig {}
+public class SecurityConfig {
+
+	@Bean
+	@LoadBalanced
+	public RestClient.Builder loadBalancedRestClientBuilder() {
+		return RestClient.builder();
+	}
+}

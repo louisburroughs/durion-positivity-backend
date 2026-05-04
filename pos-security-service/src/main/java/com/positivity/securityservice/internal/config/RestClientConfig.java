@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.config;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -14,6 +15,12 @@ public class RestClientConfig {
     private static final String PEOPLE_AUTHORITIES =
             "people:person:create,people:person:delete,people:userLink:view,people:userLink:write";
     private static final String CUSTOMER_AUTHORITIES = "crm:person:read";
+
+        @Bean
+        @LoadBalanced
+        public RestClient.Builder loadBalancedRestClientBuilder() {
+                return RestClient.builder();
+        }
 
     @Bean
     public RestClient peopleRegistrationRestClient(

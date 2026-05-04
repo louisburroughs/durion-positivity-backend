@@ -2,11 +2,13 @@ package com.positivity.customer.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.client.RestClient;
 
 /**
  * CRM Service Security Configuration.
@@ -34,6 +36,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
 
     /**
      * Password encoder for any user/password operations.

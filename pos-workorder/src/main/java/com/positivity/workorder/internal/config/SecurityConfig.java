@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -24,6 +25,12 @@ import org.springframework.web.client.RestClient;
 @Configuration
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
 
     /**
      * RestClient bean for HTTP client support.
