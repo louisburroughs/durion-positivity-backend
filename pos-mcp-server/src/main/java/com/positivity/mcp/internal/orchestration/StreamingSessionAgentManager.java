@@ -101,7 +101,10 @@ public class StreamingSessionAgentManager
                 .maximumSize(sanitizedMaxCachedAgents)
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache = Caffeine.newBuilder().maximumSize(sanitizedMaxCachedAgents).build();
+        this.roleAgentCache = Caffeine.newBuilder()
+                .maximumSize(sanitizedMaxCachedAgents)
+                .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
+                .build();
         prebuildRoleAgents();
     }
 

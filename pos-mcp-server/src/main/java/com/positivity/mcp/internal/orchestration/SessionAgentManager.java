@@ -114,7 +114,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache = Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
+        this.roleAgentCache = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxCachedAgents))
+                .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
+                .build();
         prebuildRoleAgents();
     }
 
