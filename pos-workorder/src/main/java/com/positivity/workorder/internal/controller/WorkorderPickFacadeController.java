@@ -60,9 +60,7 @@ public class WorkorderPickFacadeController {
                         "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
         @Operation(summary = "Get pick tasks for workorder")
-        @ApiResponse(responseCode = "200", description = "Pick tasks retrieved successfully",
-                        content = @Content(mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = WorkorderPickTaskResponse.class))))
+        @ApiResponse(responseCode = "200", description = "Pick tasks retrieved successfully", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WorkorderPickTaskResponse.class))))
         @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<WorkorderPickTaskResponse>> getPickTasks(

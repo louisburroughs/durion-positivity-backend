@@ -21,74 +21,74 @@ import reactor.core.publisher.Flux;
 @Profile("test")
 public class TestProfileOrchestrationFallbackConfig {
 
-    @Bean
-    @ConditionalOnMissingBean(AgentOrchestrationService.class)
-    AgentOrchestrationService testAgentOrchestrationService() {
-        return new AgentOrchestrationService() {
-            @Override
-            public @NonNull String chat(@NonNull String userId, @NonNull String role, @NonNull String message) {
-                return "OpenAPI test-profile fallback response";
-            }
+  @Bean
+  @ConditionalOnMissingBean(AgentOrchestrationService.class)
+  AgentOrchestrationService testAgentOrchestrationService() {
+    return new AgentOrchestrationService() {
+      @Override
+      public @NonNull String chat(@NonNull String userId, @NonNull String role, @NonNull String message) {
+        return "OpenAPI test-profile fallback response";
+      }
 
-            @Override
-            public void evict(@NonNull String userId) {
-                // No-op fallback for test-profile OpenAPI generation.
-            }
-        };
-    }
+      @Override
+      public void evict(@NonNull String userId) {
+        // No-op fallback for test-profile OpenAPI generation.
+      }
+    };
+  }
 
-    @Bean
-    @ConditionalOnMissingBean(StreamingAgentOrchestrationService.class)
-    StreamingAgentOrchestrationService testStreamingAgentOrchestrationService() {
-        return new StreamingAgentOrchestrationService() {
-            @Override
-            public @NonNull Flux<String> streamChat(
-                    @NonNull String userId, @NonNull String role, @NonNull String message) {
-                return Flux.just("OpenAPI", "test-profile", "fallback", "stream");
-            }
+  @Bean
+  @ConditionalOnMissingBean(StreamingAgentOrchestrationService.class)
+  StreamingAgentOrchestrationService testStreamingAgentOrchestrationService() {
+    return new StreamingAgentOrchestrationService() {
+      @Override
+      public @NonNull Flux<String> streamChat(
+          @NonNull String userId, @NonNull String role, @NonNull String message) {
+        return Flux.just("OpenAPI", "test-profile", "fallback", "stream");
+      }
 
-            @Override
-            public void evict(@NonNull String userId) {
-                // No-op fallback for test-profile OpenAPI generation.
-            }
-        };
-    }
+      @Override
+      public void evict(@NonNull String userId) {
+        // No-op fallback for test-profile OpenAPI generation.
+      }
+    };
+  }
 
-    @Bean
-    @ConditionalOnMissingBean(DocumentIngestionService.class)
-    DocumentIngestionService testDocumentIngestionService() {
-        return new DocumentIngestionService() {
-            @Override
-            public @NonNull DocumentIngestionJob submitDocument(
-                    @NonNull String content, @NonNull Map<String, Object> metadata) {
-                OffsetDateTime now = OffsetDateTime.now();
-                return new DocumentIngestionJob(
-                        UUID.randomUUID(),
-                        "openapi-test-document",
-                        DocumentIngestionJobStatus.PENDING,
-                        now,
-                        now,
-                        null,
-                        null,
-                        null,
-                        null);
-            }
+  @Bean
+  @ConditionalOnMissingBean(DocumentIngestionService.class)
+  DocumentIngestionService testDocumentIngestionService() {
+    return new DocumentIngestionService() {
+      @Override
+      public @NonNull DocumentIngestionJob submitDocument(
+          @NonNull String content, @NonNull Map<String, Object> metadata) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return new DocumentIngestionJob(
+            UUID.randomUUID(),
+            "openapi-test-document",
+            DocumentIngestionJobStatus.PENDING,
+            now,
+            now,
+            null,
+            null,
+            null,
+            null);
+      }
 
-            @Override
-            public @NonNull Optional<DocumentIngestionJob> getIngestionJob(@NonNull UUID jobId) {
-                return Optional.empty();
-            }
+      @Override
+      public @NonNull Optional<DocumentIngestionJob> getIngestionJob(@NonNull UUID jobId) {
+        return Optional.empty();
+      }
 
-            @Override
-            public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
-                // No-op fallback for test-profile OpenAPI generation.
-            }
+      @Override
+      public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
+        // No-op fallback for test-profile OpenAPI generation.
+      }
 
-            @Override
-            public void ingestDocuments(
-                    @NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
-                // No-op fallback for test-profile OpenAPI generation.
-            }
-        };
-    }
+      @Override
+      public void ingestDocuments(
+          @NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
+        // No-op fallback for test-profile OpenAPI generation.
+      }
+    };
+  }
 }

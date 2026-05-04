@@ -42,9 +42,7 @@ public class WorkorderPickedItemsController {
                         "inventory:pick_list:view" })
         @PreAuthorize("hasAuthority('inventory:pick_list:view')")
         @Operation(summary = "Get picked items for workorder")
-        @ApiResponse(responseCode = "200", description = "Picked items retrieved successfully",
-                        content = @Content(mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = WorkorderPickedItemResponse.class))))
+        @ApiResponse(responseCode = "200", description = "Picked items retrieved successfully", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WorkorderPickedItemResponse.class))))
         @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<WorkorderPickedItemResponse>> getPickedItems(
                         @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId) {

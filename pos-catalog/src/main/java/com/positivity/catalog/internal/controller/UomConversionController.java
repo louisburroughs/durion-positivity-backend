@@ -53,9 +53,7 @@ public class UomConversionController {
                         "ROLE_CATALOG_VIEW" })
         @GetMapping
         @Operation(summary = "List active conversions", description = "Returns all active unit-of-measure conversion records.", operationId = "listUomConversions")
-        @ApiResponse(responseCode = "200", description = "Conversions listed",
-                        content = @Content(mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
+        @ApiResponse(responseCode = "200", description = "Conversions listed", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
         public ResponseEntity<List<UomConversionDto>> list() {
                 return ResponseEntity.ok(uomConversionService.listActiveConversions());
         }
