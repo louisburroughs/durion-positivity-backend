@@ -99,8 +99,8 @@ class StreamingSessionAgentManagerTest {
                 embeddingStore,
                 toolRegistry,
                 exaWebSearchTool,
-            inventoryFacadeTool,
-            orderFacadeTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
                 rolePromptResolver,
                 null, // toolRegistryService — null exercises null-safe fallback path
                 null, // toolAuditService
@@ -174,7 +174,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
@@ -193,7 +193,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
@@ -214,7 +214,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
@@ -252,7 +252,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::InventoryFacadeTool")
-            .contains("ROLE_CASHIER::full");
+                .contains("ROLE_CASHIER::full");
     }
 
     @Test
@@ -281,7 +281,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool")
-            .contains("ROLE_CASHIER::full");
+                .contains("ROLE_CASHIER::full");
     }
 
     @Test

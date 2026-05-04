@@ -144,8 +144,8 @@ public class StreamingSessionAgentManager
         if (toolRegistryService != null) {
             List<Object> roleTools = roleToolsForMessage(role, message);
             List<Object> fallbackTools = fallbackToolsForMessage(message);
-            List<Object> allTools =
-                ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray());
+            List<Object> allTools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
+                    fallbackTools.toArray());
             String cacheKey = toolCacheKey(allTools);
             LOGGER.debug(
                     "MCP streaming tool selection userId={} role={} cacheKey={} tools={}",
