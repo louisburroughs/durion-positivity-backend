@@ -70,7 +70,7 @@ class ToolRegistryLoaderTest {
     }
 
     @Test
-    @DisplayName("loadRoleToolMappings returns empty map and logs warning when mcp_role table is empty")
+    @DisplayName("loadRoleToolMappings returns empty map when mcp_role table is empty")
     void loadRoleToolMappings_withNoRoles_returnsEmptyMap() {
         when(repository.findAllRoleNames()).thenReturn(List.of());
 
