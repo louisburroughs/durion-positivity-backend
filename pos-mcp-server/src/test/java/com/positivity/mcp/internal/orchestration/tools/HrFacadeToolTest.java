@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class HrFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-people/v1/hr";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private HrFacadeTool tool;
@@ -27,14 +27,17 @@ class HrFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new HrFacadeTool(builder, BASE_URL);
+        tool = new HrFacadeTool(builder, BASE_URL, BASE_URL, BASE_URL,
+                "/people/v1/people/employees/{employeeId}",
+                "/people/v1/people?q={query}",
+                "/people/v1/people/availability?employeeId={employeeId}");
     }
 
     @Test
     @DisplayName("getEmployee sends GET /{employeeId} and returns body")
     void getEmployee_sendsGetToEmployeeEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/EMP-001"))
+                .expect(requestTo(BASE_URL + "/people/v1/people/employees/EMP-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"EMP-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +51,7 @@ class HrFacadeToolTest {
     @DisplayName("searchEmployees sends GET /search?q={query} and returns body")
     void searchEmployees_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=technician"))
+                .expect(requestTo(BASE_URL + "/people/v1/people?q=technician"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +65,7 @@ class HrFacadeToolTest {
     @DisplayName("getEmployeeSchedule sends GET /{employeeId}/schedule and returns body")
     void getEmployeeSchedule_sendsGetToScheduleEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/EMP-001/schedule"))
+                .expect(requestTo(BASE_URL + "/people/v1/people/availability?employeeId=EMP-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"employeeId\":\"EMP-001\",\"shifts\":[]}", MediaType.APPLICATION_JSON));
 

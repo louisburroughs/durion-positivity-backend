@@ -115,8 +115,13 @@ class SessionAgentManagerTest {
                                 .thenReturn(Response.from(Embedding.from(new float[] { 0.1f })));
                 lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
                 exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
-                inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
-                orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
+                inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://api-gateway",
+                                "/inventory/v1/inventory/stock/{sku}",
+                                "/inventory/v1/inventory/search?q={query}",
+                                "/inventory/v1/inventory/locations/{locationId}/stock");
+                orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://api-gateway",
+                                "/order/v1/orders/{orderId}",
+                                "/order/v1/orders/search?q={query}");
                 simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
                 manager = new SessionAgentManager(
                                 chatModel,

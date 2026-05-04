@@ -108,35 +108,35 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   accounting:
-    base-url: ${POS_ACCOUNTING_BASE_URL:http://pos-accounting/v1/accounting}
-    account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounts/{accountId}/balance}
-    journal-entries-search-uri-template: ${POS_ACCOUNTING_JOURNAL_ENTRIES_SEARCH_URI_TEMPLATE:/journal-entries/search?q={query}}
-    financial-summary-uri-template: ${POS_ACCOUNTING_FINANCIAL_SUMMARY_URI_TEMPLATE:/summary/{period}}
+    base-url: ${POS_ACCOUNTING_BASE_URL:http://api-gateway}
+    account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/accounts/{accountId}/balance}
+    journal-entries-search-uri-template: ${POS_ACCOUNTING_JOURNAL_ENTRIES_SEARCH_URI_TEMPLATE:/accounting/v1/accounting/journal-entries/search?q={query}}
+    financial-summary-uri-template: ${POS_ACCOUNTING_FINANCIAL_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/summary/{period}}
   catalog:
-    base-url: ${POS_CATALOG_BASE_URL:http://pos-catalog/v1/catalog}
-    product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/products/{productId}}
-    search-uri-template: ${POS_CATALOG_SEARCH_URI_TEMPLATE:/search?q={query}}
-    category-uri-template: ${POS_CATALOG_CATEGORY_URI_TEMPLATE:/categories/{category}}
+    base-url: ${POS_CATALOG_BASE_URL:http://api-gateway}
+    product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/catalog/v1/catalog/products/{productId}}
+    search-uri-template: ${POS_CATALOG_SEARCH_URI_TEMPLATE:/catalog/v1/catalog/search?q={query}}
+    category-uri-template: ${POS_CATALOG_CATEGORY_URI_TEMPLATE:/catalog/v1/catalog/categories/{category}}
   customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer/v1/customers}
-    customer-uri-template: ${POS_CUSTOMER_URI_TEMPLATE:/{customerId}}
-    search-uri-template: ${POS_CUSTOMER_SEARCH_URI_TEMPLATE:/search?q={query}}
-    history-uri-template: ${POS_CUSTOMER_HISTORY_URI_TEMPLATE:/{customerId}/history}
+    base-url: ${POS_CUSTOMER_BASE_URL:http://api-gateway}
+    customer-uri-template: ${POS_CUSTOMER_URI_TEMPLATE:/customer/v1/customers/{customerId}}
+    search-uri-template: ${POS_CUSTOMER_SEARCH_URI_TEMPLATE:/customer/v1/customers/search?q={query}}
+    history-uri-template: ${POS_CUSTOMER_HISTORY_URI_TEMPLATE:/customer/v1/customers/{customerId}/history}
   event-receiver:
-    base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://pos-event-receiver/v1/events}
-    event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/eventTypes}
-    search-uri-template: ${POS_EVENT_RECEIVER_SEARCH_URI_TEMPLATE:/events/summary?q={query}}
-    history-uri-template: ${POS_EVENT_RECEIVER_HISTORY_URI_TEMPLATE:/events/summary?entityId={entityId}}
+    base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://api-gateway}
+    event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/events/eventTypes}
+    search-uri-template: ${POS_EVENT_RECEIVER_SEARCH_URI_TEMPLATE:/event-receiver/v1/events/events/summary?q={query}}
+    history-uri-template: ${POS_EVENT_RECEIVER_HISTORY_URI_TEMPLATE:/event-receiver/v1/events/events/summary?entityId={entityId}}
   inventory:
-    base-url: ${POS_INVENTORY_BASE_URL:http://pos-inventory/v1/inventory}
-    stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/stock/{sku}}
-    search-uri-template: ${POS_INVENTORY_SEARCH_URI_TEMPLATE:/search?q={query}}
-    location-stock-uri-template: ${POS_INVENTORY_LOCATION_STOCK_URI_TEMPLATE:/locations/{locationId}/stock}
+    base-url: ${POS_INVENTORY_BASE_URL:http://api-gateway}
+    stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/inventory/v1/inventory/stock/{sku}}
+    search-uri-template: ${POS_INVENTORY_SEARCH_URI_TEMPLATE:/inventory/v1/inventory/search?q={query}}
+    location-stock-uri-template: ${POS_INVENTORY_LOCATION_STOCK_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/stock}
   invoice:
-    base-url: ${POS_INVOICE_BASE_URL:http://pos-invoice/v1/invoices}
-    invoice-uri-template: ${POS_INVOICE_URI_TEMPLATE:/{invoiceId}}
-    search-uri-template: ${POS_INVOICE_SEARCH_URI_TEMPLATE:/search?q={query}}
-    customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/customer/{customerId}}
+    base-url: ${POS_INVOICE_BASE_URL:http://api-gateway}
+    invoice-uri-template: ${POS_INVOICE_URI_TEMPLATE:/invoice/v1/invoices/{invoiceId}}
+    search-uri-template: ${POS_INVOICE_SEARCH_URI_TEMPLATE:/invoice/v1/invoices/search?q={query}}
+    customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/customer/{customerId}}
   nlti:
     session:
       ttl-hours: 24
@@ -144,58 +144,59 @@ pos:
       per-session: 100
       max-tracked-sessions: 100000
   location:
-    base-url: ${POS_LOCATION_BASE_URL:http://pos-location/v1/locations}
-    location-uri-template: ${POS_LOCATION_URI_TEMPLATE:/{locationId}}
-    search-uri-template: ${POS_LOCATION_SEARCH_URI_TEMPLATE:/search?q={query}}
-    inventory-uri-template: ${POS_LOCATION_INVENTORY_URI_TEMPLATE:/{locationId}/inventory}
+    base-url: ${POS_LOCATION_BASE_URL:http://api-gateway}
+    location-uri-template: ${POS_LOCATION_URI_TEMPLATE:/location/v1/locations/{locationId}}
+    search-uri-template: ${POS_LOCATION_SEARCH_URI_TEMPLATE:/location/v1/locations/search?q={query}}
+    inventory-uri-template: ${POS_LOCATION_INVENTORY_URI_TEMPLATE:/location/v1/locations/{locationId}/inventory}
   order:
-    base-url: ${POS_ORDER_BASE_URL:http://pos-order/v1/orders}
-    order-uri-template: ${POS_ORDER_URI_TEMPLATE:/{orderId}}
-    search-uri-template: ${POS_ORDER_SEARCH_URI_TEMPLATE:/search?q={query}}
+    base-url: ${POS_ORDER_BASE_URL:http://api-gateway}
+    order-uri-template: ${POS_ORDER_URI_TEMPLATE:/order/v1/orders/{orderId}}
+    search-uri-template: ${POS_ORDER_SEARCH_URI_TEMPLATE:/order/v1/orders/search?q={query}}
   pricing:
-    base-url: ${POS_PRICING_BASE_URL:http://pos-price/v1/pricing}
-    sku-price-uri-template: ${POS_PRICING_SKU_PRICE_URI_TEMPLATE:/sku/{sku}}
-    search-uri-template: ${POS_PRICING_SEARCH_URI_TEMPLATE:/search?q={query}}
-    price-list-uri-template: ${POS_PRICING_PRICE_LIST_URI_TEMPLATE:/lists/{priceListId}}
+    base-url: ${POS_PRICING_BASE_URL:http://api-gateway}
+    sku-price-uri-template: ${POS_PRICING_SKU_PRICE_URI_TEMPLATE:/price/v1/pricing/sku/{sku}}
+    search-uri-template: ${POS_PRICING_SEARCH_URI_TEMPLATE:/price/v1/pricing/search?q={query}}
+    price-list-uri-template: ${POS_PRICING_PRICE_LIST_URI_TEMPLATE:/price/v1/pricing/lists/{priceListId}}
   reporting:
-    base-url: ${POS_REPORTING_BASE_URL:http://pos-accounting/v1/reporting}
-    sales-report-uri-template: ${POS_REPORTING_SALES_REPORT_URI_TEMPLATE:/sales/{period}}
-    inventory-report-uri-template: ${POS_REPORTING_INVENTORY_REPORT_URI_TEMPLATE:/inventory/{locationId}}
-    revenue-report-uri-template: ${POS_REPORTING_REVENUE_REPORT_URI_TEMPLATE:/revenue/{period}}
+    base-url: ${POS_REPORTING_BASE_URL:http://api-gateway}
+    sales-report-uri-template: ${POS_REPORTING_SALES_REPORT_URI_TEMPLATE:/accounting/v1/reporting/sales/{period}}
+    inventory-report-uri-template: ${POS_REPORTING_INVENTORY_REPORT_URI_TEMPLATE:/accounting/v1/reporting/inventory/{locationId}}
+    revenue-report-uri-template: ${POS_REPORTING_REVENUE_REPORT_URI_TEMPLATE:/accounting/v1/reporting/revenue/{period}}
   security:
     users:
-      base-url: ${POS_SECURITY_USERS_BASE_URL:http://localhost:8086/v1/users}
+      base-url: ${POS_SECURITY_USERS_BASE_URL:http://api-gateway}
     audit:
-      base-url: ${POS_SECURITY_AUDIT_BASE_URL:http://localhost:8086/v1/audit}
-    user-permissions-path-template: ${POS_SECURITY_USER_PERMISSIONS_PATH_TEMPLATE:/{userId}/permissions}
-    audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/events?eventType={query}}
+      base-url: ${POS_SECURITY_AUDIT_BASE_URL:http://api-gateway}
+    user-permissions-path-template: ${POS_SECURITY_USER_PERMISSIONS_PATH_TEMPLATE:/security-service/v1/users/{userId}/permissions}
+    audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/security-service/v1/audit/events?eventType={query}}
   hr:
-    employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://localhost:8085/v1/people/employees}
-    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://localhost:8085/v1/people}
-    availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://localhost:8085/v1/people}
-    employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/{employeeId}}
-    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:?q={query}}
-    schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/availability?employeeId={employeeId}}
+    employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://api-gateway}
+    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://api-gateway}
+    availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://api-gateway}
+    employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/people/v1/people/employees/{employeeId}}
+    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:/people/v1/people?q={query}}
+    schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/people/v1/people/availability?employeeId={employeeId}}
   shopmanager:
-    base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-shop-manager/v1/shop}
-    status-uri-template: ${POS_SHOPMANAGER_STATUS_URI_TEMPLATE:/{shopId}/status}
-    queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/{shopId}/queue}
-    search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/search?q={query}}
+    base-url: ${POS_SHOPMANAGER_BASE_URL:http://api-gateway}
+    status-uri-template: ${POS_SHOPMANAGER_STATUS_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/status}
+    queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/queue}
+    search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/shop-manager/v1/shop/search?q={query}}
   tax:
+    # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration
     base-url: ${POS_TAX_BASE_URL:http://pos-tax/v1/tax}
     tax-rate-uri-template: ${POS_TAX_RATE_URI_TEMPLATE:/rates/{locationId}}
     tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate?amount={amount}&locationId={locationId}}
     tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/summary/{period}}
   vehicle:
-    base-url: ${POS_VEHICLE_BASE_URL:http://pos-customer/v1/vehicles}
-    vehicle-uri-template: ${POS_VEHICLE_URI_TEMPLATE:/{vehicleId}}
-    search-uri-template: ${POS_VEHICLE_SEARCH_URI_TEMPLATE:/search?q={query}}
-    customer-vehicles-uri-template: ${POS_VEHICLE_CUSTOMER_VEHICLES_URI_TEMPLATE:/customer/{customerId}}
+    base-url: ${POS_VEHICLE_BASE_URL:http://api-gateway}
+    vehicle-uri-template: ${POS_VEHICLE_URI_TEMPLATE:/customer/v1/vehicles/{vehicleId}}
+    search-uri-template: ${POS_VEHICLE_SEARCH_URI_TEMPLATE:/customer/v1/vehicles/search?q={query}}
+    customer-vehicles-uri-template: ${POS_VEHICLE_CUSTOMER_VEHICLES_URI_TEMPLATE:/customer/v1/vehicles/customer/{customerId}}
   workorder:
-    base-url: ${POS_WORKORDER_BASE_URL:http://pos-workorder/v1/workorders}
-    workorder-uri-template: ${POS_WORKORDER_URI_TEMPLATE:/{workorderId}}
-    search-uri-template: ${POS_WORKORDER_SEARCH_URI_TEMPLATE:/search?q={query}}
-    status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/{workorderId}/status}
+    base-url: ${POS_WORKORDER_BASE_URL:http://api-gateway}
+    workorder-uri-template: ${POS_WORKORDER_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
+    search-uri-template: ${POS_WORKORDER_SEARCH_URI_TEMPLATE:/workorder/v1/workorders/search?q={query}}
+    status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}/status}
   show-actuator: true
 
 logging:

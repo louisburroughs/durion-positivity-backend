@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -16,7 +17,7 @@ public class OrderFacadeTool {
     private final String orderSearchUriTemplate;
 
     public OrderFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.order.base-url}") @NonNull String baseUrl,
             @Value("${pos.order.order-uri-template}") @NonNull String orderUriTemplate,
             @Value("${pos.order.search-uri-template}") @NonNull String orderSearchUriTemplate) {

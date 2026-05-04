@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class InventoryFacadeTool {
     private final String locationStockUriTemplate;
 
     public InventoryFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.inventory.base-url}") @NonNull String baseUrl,
             @Value("${pos.inventory.stock-uri-template}") @NonNull String stockUriTemplate,
             @Value("${pos.inventory.search-uri-template}") @NonNull String inventorySearchUriTemplate,

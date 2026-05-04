@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class PricingFacadeTool {
     private final String priceListUriTemplate;
 
     public PricingFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.pricing.base-url}") @NonNull String baseUrl,
             @Value("${pos.pricing.sku-price-uri-template}") @NonNull String skuPriceUriTemplate,
             @Value("${pos.pricing.search-uri-template}") @NonNull String pricingSearchUriTemplate,

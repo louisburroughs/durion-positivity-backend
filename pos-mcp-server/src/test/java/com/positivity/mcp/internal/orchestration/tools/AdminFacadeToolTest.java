@@ -18,8 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class AdminFacadeToolTest {
 
-    private static final String SECURITY_BASE_URL = "http://pos-security-service/v1/admin";
-    private static final String USERS_BASE_URL = "http://pos-security-service/v1/users";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private AdminFacadeTool tool;
@@ -28,7 +27,9 @@ class AdminFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new AdminFacadeTool(builder, SECURITY_BASE_URL, USERS_BASE_URL);
+        tool = new AdminFacadeTool(builder, BASE_URL, BASE_URL,
+                "/security-service/v1/users/{userId}/permissions",
+                "/security-service/v1/audit/events?eventType={query}");
     }
 
     @Test
@@ -43,7 +44,7 @@ class AdminFacadeToolTest {
     @DisplayName("getUserPermissions sends GET /users/{userId}/roles to security service")
     void getUserPermissions_sendsGetToRolesEndpoint() {
         mockServer
-                .expect(requestTo(SECURITY_BASE_URL + "/users/USR-001/roles"))
+                .expect(requestTo(BASE_URL + "/security-service/v1/users/USR-001/permissions"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"userId\":\"USR-001\",\"roles\":[]}", MediaType.APPLICATION_JSON));
 
@@ -57,7 +58,7 @@ class AdminFacadeToolTest {
     @DisplayName("getAuditLog sends GET /audit?q={query} to security service")
     void getAuditLog_sendsGetToAuditEndpoint() {
         mockServer
-                .expect(requestTo(SECURITY_BASE_URL + "/audit?q=login"))
+                .expect(requestTo(BASE_URL + "/security-service/v1/audit/events?eventType=login"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"entries\":[]}", MediaType.APPLICATION_JSON));
 

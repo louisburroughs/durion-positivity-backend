@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class CatalogFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-catalog/v1/catalog";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private CatalogFacadeTool tool;
@@ -27,14 +27,17 @@ class CatalogFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new CatalogFacadeTool(builder, BASE_URL);
+        tool = new CatalogFacadeTool(builder, BASE_URL,
+                "/catalog/v1/catalog/products/{productId}",
+                "/catalog/v1/catalog/search?q={query}",
+                "/catalog/v1/catalog/categories/{category}");
     }
 
     @Test
     @DisplayName("getProduct sends GET /products/{productId} and returns body")
     void getProduct_sendsGetToProductEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/products/PROD-001"))
+                .expect(requestTo(BASE_URL + "/catalog/v1/catalog/products/PROD-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"PROD-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +51,7 @@ class CatalogFacadeToolTest {
     @DisplayName("searchCatalog sends GET /search?q={query} and returns body")
     void searchCatalog_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=brake%20pads"))
+                .expect(requestTo(BASE_URL + "/catalog/v1/catalog/search?q=brake%20pads"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +65,7 @@ class CatalogFacadeToolTest {
     @DisplayName("getCatalogByCategory sends GET /categories/{category} and returns body")
     void getCatalogByCategory_sendsGetToCategoryEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/categories/BRAKES"))
+                .expect(requestTo(BASE_URL + "/catalog/v1/catalog/categories/BRAKES"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"category\":\"BRAKES\",\"items\":[]}", MediaType.APPLICATION_JSON));
 
