@@ -34,8 +34,8 @@ langchain4j:
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
-      base-url: ${OLLAMA_EMBEDDING_BASE_URL:https://ollama.com}
-      model-name: ${OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
+      base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
+      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       custom-headers:
         Authorization: Bearer ${OLLAMA_API_KEY}
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}

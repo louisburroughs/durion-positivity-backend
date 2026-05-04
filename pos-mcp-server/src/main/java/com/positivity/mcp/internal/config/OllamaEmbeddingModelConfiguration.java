@@ -30,7 +30,7 @@ public class OllamaEmbeddingModelConfiguration {
     public @NonNull EmbeddingModel embeddingModel(
             RestClient.Builder restClientBuilder,
             @Value("${langchain4j.ollama.embedding-model.base-url:${OLLAMA_EMBEDDING_BASE_URL:http://localhost:11434}}") @NonNull String baseUrl,
-            @Value("${langchain4j.ollama.embedding-model.model-name:${OLLAMA_EMBEDDING_MODEL:qwen3-embedding}}") @NonNull String modelName,
+            @Value("${langchain4j.ollama.embedding-model.model-name:${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}}") @NonNull String modelName,
             @Value("${mcp.rag.dimension:768}") int dimensions,
             @Value("${langchain4j.ollama.embedding-model.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull Duration timeout,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {

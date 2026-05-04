@@ -145,9 +145,7 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command: >
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_CHAT_MODEL:-llama3.1:8b} &&
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text} &&
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_FALLBACK_MODEL:-mistral:7b}
+      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama
@@ -494,12 +492,12 @@ services:
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       <<: [*pos-security-client-env, *pos-events-client-env]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
-      # Chat and embeddings run against Ollama's hosted API.
+      # Chat runs against Ollama's hosted API. Embeddings stay local.
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
-      OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-https://ollama.com}
+      OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-http://ollama:11434}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3.5:cloud}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-gpt-oss:120b}
       OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-180s}
       OLLAMA_STREAMING_CHAT_TIMEOUT: ${OLLAMA_STREAMING_CHAT_TIMEOUT:-180s}
@@ -515,6 +513,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       pos-security-service:

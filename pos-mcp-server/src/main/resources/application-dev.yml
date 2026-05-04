@@ -23,7 +23,7 @@ langchain4j:
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
       base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
+      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
