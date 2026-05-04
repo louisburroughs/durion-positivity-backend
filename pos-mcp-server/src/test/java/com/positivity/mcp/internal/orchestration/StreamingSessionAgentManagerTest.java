@@ -84,10 +84,12 @@ class StreamingSessionAgentManagerTest {
                 toolRegistry,
                 exaWebSearchTool,
                 rolePromptResolver,
-                null,
+                null, // toolRegistryService — null exercises null-safe fallback path
+                null, // toolAuditService
                 30,
                 500,
                 50,
+                2,
                 100);
         clearInvocations(toolRegistry);
     }

@@ -22,32 +22,30 @@ public class ToolRegistryService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistryService.class);
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ADMIN_FACADE_TOOL = "AdminFacadeTool";
-    private static final Set<String> ADMIN_QUERY_KEYWORDS =
-            Set.of(
-                    "user",
-                    "users",
-                    "role",
-                    "roles",
-                    "permission",
-                    "permissions",
-                    "access",
-                    "account",
-                    "accounts",
-                    "audit",
-                    "audits",
-                    "registered",
-                    "registration",
-                    "login",
-                    "logins");
-    private static final Set<String> ADMIN_QUERY_PHRASES =
-            Set.of(
-                    "who has access",
-                    "who can access",
-                    "audit log",
-                    "access review",
-                    "user count",
-                    "registered users",
-                    "account state");
+    private static final Set<String> ADMIN_QUERY_KEYWORDS = Set.of(
+            "user",
+            "users",
+            "role",
+            "roles",
+            "permission",
+            "permissions",
+            "access",
+            "account",
+            "accounts",
+            "audit",
+            "audits",
+            "registered",
+            "registration",
+            "login",
+            "logins");
+    private static final Set<String> ADMIN_QUERY_PHRASES = Set.of(
+            "who has access",
+            "who can access",
+            "audit log",
+            "access review",
+            "user count",
+            "registered users",
+            "account state");
 
     private final ToolMetadataRepository repository;
     private final EmbeddingModel embeddingModel;
@@ -64,8 +62,8 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools =
-                repository.findEnabledByRoleAndWorkflow(context.role(), context.workflowState());
+        List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(context.role(),
+                context.workflowState());
 
         if (gatedTools.isEmpty()) {
             return List.of();
@@ -79,7 +77,8 @@ public class ToolRegistryService {
         float[] embedding = embeddingModel.embed(context.userInput()).content().vector();
         int semanticLimit = Math.max(topK, 10);
 
-        // Phase 2 fix: gated ANN — only tools authorized for this role+workflow enter the
+        // Phase 2 fix: gated ANN — only tools authorized for this role+workflow enter
+        // the
         // ranking window. Unauthorized tools can never displace authorized ones.
         List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForRole(
                 embedding, semanticLimit, context.role(), context.workflowState());
@@ -159,16 +158,16 @@ public class ToolRegistryService {
 
     static final class ToolScorer {
 
-        @NonNull ToolScore score(@NonNull ToolMetadata tool, int rankPosition) {
+        @NonNull
+        ToolScore score(@NonNull ToolMetadata tool, int rankPosition) {
             double semanticScore = 1.0 / (rankPosition + 1);
             double priorityBoost = Math.clamp(tool.priority(), 0.0, 1.0);
             double latencyPenalty = Math.min(tool.avgLatencyMs() / 1000.0, 1.0) * 0.2;
-            double costPenalty =
-                    switch (tool.costLevel().toLowerCase()) {
-                        case "high" -> 0.2;
-                        case "medium" -> 0.1;
-                        default -> 0.0;
-                    };
+            double costPenalty = switch (tool.costLevel().toLowerCase()) {
+                case "high" -> 0.2;
+                case "medium" -> 0.1;
+                default -> 0.0;
+            };
             return new ToolScore(
                     semanticScore + priorityBoost - latencyPenalty - costPenalty,
                     semanticScore,
@@ -206,7 +205,9 @@ public class ToolRegistryService {
     }
 
     private record ToolScore(
-            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {}
+            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {
+    }
 
-    private record ScoredTool(@NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {}
+    private record ScoredTool(@NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {
+    }
 }

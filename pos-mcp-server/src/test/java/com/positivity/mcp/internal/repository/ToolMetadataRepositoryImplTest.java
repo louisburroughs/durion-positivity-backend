@@ -103,7 +103,8 @@ class ToolMetadataRepositoryImplTest {
     @SuppressWarnings("unchecked")
     void findTopKByEmbeddingForRole_returnsBoundedGatedList() {
         float[] embedding = new float[768];
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("ROLE_CASHIER"), eq("IDLE"), any(PGobject.class), eq(5)))
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("ROLE_CASHIER"), eq("IDLE"), any(PGobject.class),
+                eq(5)))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = repository.findTopKByEmbeddingForRole(embedding, 5, "ROLE_CASHIER", "IDLE");

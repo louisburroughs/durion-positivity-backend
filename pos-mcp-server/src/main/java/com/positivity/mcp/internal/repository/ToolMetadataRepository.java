@@ -16,9 +16,11 @@ public interface ToolMetadataRepository {
     List<ToolMetadata> findEnabledByRoleAndWorkflow(@NonNull String role, @NonNull String workflowState);
 
     /**
-     * Returns up to {@code limit} tools ordered by semantic similarity to the given embedding,
+     * Returns up to {@code limit} tools ordered by semantic similarity to the given
+     * embedding,
      * restricted to tools authorized for {@code role} in {@code workflowState}.
-     * Gating is performed in SQL — unauthorized tools never enter the ranking window.
+     * Gating is performed in SQL — unauthorized tools never enter the ranking
+     * window.
      */
     @NonNull
     List<ToolMetadata> findTopKByEmbeddingForRole(

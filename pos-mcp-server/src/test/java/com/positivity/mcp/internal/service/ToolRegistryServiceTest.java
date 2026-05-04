@@ -72,7 +72,7 @@ class ToolRegistryServiceTest {
     @DisplayName("resolveCandidateTools returns scored and limited list when gated tools exist")
     void resolveCandidateTools_withGatedTools_returnsScoredList() {
         ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
-        float[] vector = new float[] {0.1f, 0.2f, 0.3f};
+        float[] vector = new float[] { 0.1f, 0.2f, 0.3f };
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
@@ -110,10 +110,11 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools filters semantic candidates not in gated role-workflow set")
     void resolveCandidateTools_filtersToolsNotInGatedSet() {
-        // This test documents the Phase 2 fix: the gated ANN returns only authorized tools,
+        // This test documents the Phase 2 fix: the gated ANN returns only authorized
+        // tools,
         // so an unauthorized tool can never displace an authorized one.
         ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
-        float[] vector = new float[] {0.1f, 0.2f};
+        float[] vector = new float[] { 0.1f, 0.2f };
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
@@ -133,7 +134,7 @@ class ToolRegistryServiceTest {
         // Phase 2 correctness proof: authorized tool ranks beyond global top-K but is
         // correctly returned because gated ANN searches only authorized tools.
         ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
-        float[] vector = new float[] {0.1f, 0.2f};
+        float[] vector = new float[] { 0.1f, 0.2f };
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
@@ -149,8 +150,8 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools uses admin fast-path for user and access questions")
     void resolveCandidateTools_adminQuery_usesAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("How many users do I have in the system?", "ROLE_ADMIN", "IDLE");
+        ToolSelectionContext context = new ToolSelectionContext("How many users do I have in the system?", "ROLE_ADMIN",
+                "IDLE");
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
                 .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
@@ -163,8 +164,8 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools uses admin fast-path for audit and account-governance questions")
     void resolveCandidateTools_adminAuditQuery_usesAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("Search the audit log for failed admin logins", "ROLE_ADMIN", "IDLE");
+        ToolSelectionContext context = new ToolSelectionContext("Search the audit log for failed admin logins",
+                "ROLE_ADMIN", "IDLE");
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
                 .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
@@ -177,9 +178,9 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools does not use admin fast-path for non-admin roles")
     void resolveCandidateTools_nonAdminRole_doesNotUseAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("How many users do I have in the system?", "ROLE_MANAGER", "IDLE");
-        float[] vector = new float[] {0.4f, 0.5f};
+        ToolSelectionContext context = new ToolSelectionContext("How many users do I have in the system?",
+                "ROLE_MANAGER", "IDLE");
+        float[] vector = new float[] { 0.4f, 0.5f };
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_MANAGER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
