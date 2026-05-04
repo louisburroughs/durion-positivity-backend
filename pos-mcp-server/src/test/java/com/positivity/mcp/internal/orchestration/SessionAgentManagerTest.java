@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -252,5 +253,33 @@ class SessionAgentManagerTest {
         assertThat(response).isEqualTo("Stock found");
         verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN");
         verify(toolRegistry, never()).resolveToolsForRole("ROLE_ADMIN", List.of());
+    }
+
+    @Test
+    @DisplayName("getOrCreateAgent rebuilds agent after cache TTL expiry")
+    void getOrCreateAgent_rebuildsAgentAfterCacheTtlExpiry() {
+        SessionAgentManager expiringManager = new SessionAgentManager(
+                chatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                toolRegistryService,
+                null,
+                rolePromptResolver,
+                simpleChatClassifier,
+                0,
+                500,
+                50,
+                5,
+                100);
+        clearInvocations(toolRegistry);
+
+        expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+        expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+
+        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
     }
 }

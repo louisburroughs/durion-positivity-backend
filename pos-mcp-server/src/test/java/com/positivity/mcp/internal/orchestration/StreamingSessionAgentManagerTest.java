@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 import reactor.core.publisher.Flux;
 
@@ -221,5 +224,98 @@ class StreamingSessionAgentManagerTest {
         assertThat(result).isNotNull();
         // fallback resolves from role tool set
         verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("streamChat with inventory keyword includes inventory fallback tool")
+    void streamChat_withInventoryKeyword_includesInventoryFallbackTool() {
+        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
+
+        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
+                toolRegistryService,
+                null,
+                30,
+                500,
+                50,
+                2,
+                100);
+
+        selectorManager.streamChat("user-1", "ROLE_CASHIER", "stock part 1234");
+
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .contains("ROLE_CASHIER::InventoryFacadeTool")
+            .contains("ROLE_CASHIER::full");
+    }
+
+    @Test
+    @DisplayName("streamChat with web keyword includes exa fallback tool")
+    void streamChat_withWebKeyword_includesExaFallbackTool() {
+        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
+
+        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
+                toolRegistryService,
+                null,
+                30,
+                500,
+                50,
+                2,
+                100);
+
+        selectorManager.streamChat("user-1", "ROLE_CASHIER", "latest internet news");
+
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .contains("ROLE_CASHIER::ExaWebSearchTool")
+            .contains("ROLE_CASHIER::full");
+    }
+
+    @Test
+    @DisplayName("streamChat rebuilds agent after cache TTL expiry")
+    void streamChat_rebuildsAgentAfterCacheTtlExpiry() {
+        StreamingSessionAgentManager expiringManager = new StreamingSessionAgentManager(
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
+                null,
+                null,
+                0,
+                500,
+                50,
+                2,
+                100);
+        clearInvocations(toolRegistry);
+
+        expiringManager.streamChat("user-1", "ROLE_CASHIER", "first");
+        expiringManager.streamChat("user-1", "ROLE_CASHIER", "second");
+
+        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<String> roleAgentCacheKeys(StreamingSessionAgentManager selectorManager) {
+        Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(selectorManager, "roleAgentCache");
+        assertThat(cache).isNotNull();
+        cache.cleanUp();
+        return cache.asMap().keySet();
     }
 }
