@@ -1030,8 +1030,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/UomConversionDto'
+                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN

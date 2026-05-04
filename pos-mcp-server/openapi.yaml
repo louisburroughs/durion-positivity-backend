@@ -191,7 +191,6 @@ paths:
       description: Synchronously execute an MCP tool with the provided arguments and return the result
       operationId: chat
       requestBody:
-        content: {}
         required: true
       responses:
         '400':
