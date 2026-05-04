@@ -166,11 +166,12 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("streamChat uses semantically narrowed tools when selector returns candidates")
     void streamChat_semanticSelection_narrowsToolsWhenCandidatesReturned() {
         ToolMetadata candidate = new ToolMetadata(
-                UUID.randomUUID(), "inventoryTool", "Inventory", "Manage inventory", "inventory",
+                UUID.randomUUID(), "InventoryFacadeTool", "Inventory", "Manage inventory", "inventory",
                 0.8, "LOW", 50, true, "inventoryFacadeTool");
         when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of(candidate));
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.resolveToolsForRole(any(), any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForRole(any())).thenReturn(List.of(exaWebSearchTool));
+        when(toolRegistry.resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool")))
+                .thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
@@ -183,6 +184,8 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
+        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool"));
+        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
     }
 
     @Test
