@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "WIP Dashboard", description = "Endpoints for Work-In-Progress status visibility")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:wip:view" })
 @RequestMapping("/v1/workexec/wip")
 @RequiredArgsConstructor
 @Slf4j
@@ -42,18 +43,14 @@ public class WipController {
 
     private final WipService wipService;
 
-    @Operation(
-            summary = "List active WIP workorders",
-            description = "Returns a paginated list of workorders in active WIP statuses. "
-                    + "When the caller holds workorder:wip:view_all_locations, results span all locations.")
+    @Operation(summary = "List active WIP workorders", description = "Returns a paginated list of workorders in active WIP statuses. "
+            + "When the caller holds workorder:wip:view_all_locations, results span all locations.")
     @GetMapping
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_LIST", apiVersion = "1")
     public ResponseEntity<Page<WorkorderStatusView>> listWip(
             @Parameter(description = "Location ID to filter workorders by") @RequestParam String locationId,
-            @Parameter(description = "Request cross-location results; requires workorder:wip:view_all_locations")
-                    @RequestParam(defaultValue = "false")
-                    boolean multiLocation,
+            @Parameter(description = "Request cross-location results; requires workorder:wip:view_all_locations") @RequestParam(defaultValue = "false") boolean multiLocation,
             @PageableDefault(size = 25) Pageable pageable,
             Authentication authentication) {
 
@@ -69,9 +66,7 @@ public class WipController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(
-            summary = "Get WIP detail for a workorder",
-            description = "Returns full WIP detail for a single workorder including status history.")
+    @Operation(summary = "Get WIP detail for a workorder", description = "Returns full WIP detail for a single workorder including status history.")
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_VIEW", apiVersion = "1")
@@ -88,8 +83,7 @@ public class WipController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

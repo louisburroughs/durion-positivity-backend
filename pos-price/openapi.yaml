@@ -3,13 +3,15 @@ info:
   title: Positivity Price API
   description: Price service for managing product pricing and discounts
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Price Bulk Ingest API
+  description: Bulk import base price records
 - name: Pricing Snapshots
   description: Read operations for immutable pricing snapshots
 - name: Promotion Offers
@@ -30,49 +32,50 @@ paths:
       tags:
       - Promotion Offers
       summary: Create promotion offer
-      description: "Creates a new promotion offer with code, lifecycle settings, and\
-        \ discount policy."
+      description: Creates a new promotion offer with code, lifecycle settings, and discount policy.
       operationId: createOffer
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePromotionOfferRequest"
+              $ref: '#/components/schemas/CreatePromotionOfferRequest'
         required: true
       responses:
-        "409":
-          description: Promotion code already exists.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "400":
-          description: Invalid promotion offer request.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "201":
+        '201':
           description: Promotion offer created.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '400':
+          description: Invalid promotion offer request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '409':
+          description: Promotion code already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules:
     get:
       tags:
       - Promotion Eligibility Rules
       summary: List eligibility rules for promotion offer
-      description: Returns all eligibility rules configured for the specified promotion
-        offer.
+      description: Returns all eligibility rules configured for the specified promotion offer.
       operationId: getRules
       parameters:
       - name: promotionId
@@ -82,38 +85,40 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Eligibility rules returned.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EligibilityRuleResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/EligibilityRuleResponse"
-        "404":
+                  $ref: '#/components/schemas/EligibilityRuleResponse'
+        '404':
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/EligibilityRuleResponse"
+                  $ref: '#/components/schemas/EligibilityRuleResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EligibilityRuleResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
+      x-required-permissions:
+      - Promotion:View
     post:
       tags:
       - Promotion Eligibility Rules
       summary: Add eligibility rule to promotion offer
-      description: Creates and attaches a new eligibility rule to the specified promotion
-        offer.
+      description: Creates and attaches a new eligibility rule to the specified promotion offer.
       operationId: addRule
       parameters:
       - name: promotionId
@@ -126,42 +131,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddEligibilityRuleRequest"
+              $ref: '#/components/schemas/AddEligibilityRuleRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Eligibility rule created.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EligibilityRuleResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EligibilityRuleResponse"
-        "404":
-          description: Promotion offer not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EligibilityRuleResponse"
-        "400":
+                $ref: '#/components/schemas/EligibilityRuleResponse'
+        '400':
           description: Invalid eligibility rule request.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EligibilityRuleResponse"
+                $ref: '#/components/schemas/EligibilityRuleResponse'
+        '404':
+          description: Promotion offer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityRuleResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityRuleResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{promotionId}/rules/evaluate:
     post:
       tags:
       - Promotion Eligibility Rules
       summary: Evaluate promotion eligibility
-      description: Evaluates whether a promotion offer is eligible for the provided
-        evaluation context.
+      description: Evaluates whether a promotion offer is eligible for the provided evaluation context.
       operationId: evaluateEligibility
       parameters:
       - name: promotionId
@@ -174,154 +181,164 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EligibilityContext"
+              $ref: '#/components/schemas/EligibilityContext'
         required: true
       responses:
-        "400":
-          description: Invalid evaluation request.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EligibilityDecisionResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EligibilityDecisionResponse"
-        "404":
-          description: Promotion offer not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EligibilityDecisionResponse"
-        "200":
+        '200':
           description: Eligibility evaluation result returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EligibilityDecisionResponse"
+                $ref: '#/components/schemas/EligibilityDecisionResponse'
+        '400':
+          description: Invalid evaluation request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityDecisionResponse'
+        '404':
+          description: Promotion offer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityDecisionResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityDecisionResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Apply
+      x-required-permissions:
+      - Promotion:Apply
   /v1/promotions/offers/apply:
     post:
       tags:
       - Promotion Offers
       summary: Apply promotion offer during estimate pricing
-      description: Applies a promotion offer to pricing inputs and returns resulting
-        discount and adjusted totals.
+      description: Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.
       operationId: applyPromotion
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApplyPromotionRequest"
+              $ref: '#/components/schemas/ApplyPromotionRequest'
         required: true
       responses:
-        "400":
-          description: Invalid promotion application request.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApplyPromotionResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApplyPromotionResponse"
-        "404":
-          description: Promotion offer not found or not eligible.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApplyPromotionResponse"
-        "200":
+        '200':
           description: Promotion offer applied.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ApplyPromotionResponse"
+                $ref: '#/components/schemas/ApplyPromotionResponse'
+        '400':
+          description: Invalid promotion application request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPromotionResponse'
+        '404':
+          description: Promotion offer not found or not eligible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPromotionResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPromotionResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Apply
+      x-required-permissions:
+      - Promotion:Apply
   /v1/price/restrictions:override:
     post:
       tags:
       - Price Restrictions
       summary: Override price restrictions
-      description: Issues an override for price restrictions. Requires pricing:restriction:override
-        authority.
+      description: Issues an override for price restrictions. Requires pricing:restriction:override authority.
       operationId: overrideRestrictions
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RestrictionOverrideRequest"
+              $ref: '#/components/schemas/RestrictionOverrideRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Override issued. Returns overrideId and expiresAt.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionOverrideResponse"
-        "401":
-          description: Authentication required.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RestrictionOverrideResponse"
-        "400":
+                $ref: '#/components/schemas/RestrictionOverrideResponse'
+        '400':
           description: Invalid request body.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionOverrideResponse"
-        "403":
+                $ref: '#/components/schemas/RestrictionOverrideResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestrictionOverrideResponse'
+        '403':
           description: Insufficient permissions to override restrictions.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionOverrideResponse"
+                $ref: '#/components/schemas/RestrictionOverrideResponse'
+      security:
+      - bearerAuth:
+        - pricing:restriction:override
+      x-required-permissions:
+      - pricing:restriction:override
   /v1/price/restrictions:evaluate:
     post:
       tags:
       - Price Restrictions
       summary: Evaluate price restrictions
-      description: Evaluates whether products are subject to restrictions in the given
-        context.
+      description: Evaluates whether products are subject to restrictions in the given context.
       operationId: evaluateRestrictions
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RestrictionEvaluationRequest"
+              $ref: '#/components/schemas/RestrictionEvaluationRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Evaluation results per product.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionEvaluationResponse"
-        "401":
-          description: Authentication required.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RestrictionEvaluationResponse"
-        "503":
-          description: Restriction evaluation service unavailable (commit path only).
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RestrictionEvaluationResponse"
-        "400":
+                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+        '400':
           description: Invalid request body.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionEvaluationResponse"
+                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+        '503':
+          description: Restriction evaluation service unavailable (commit path only).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+      security:
+      - bearerAuth: []
   /v1/price/restrictions/rules:
     get:
       tags:
@@ -329,22 +346,24 @@ paths:
       summary: List all active restriction rules
       operationId: listRules
       responses:
-        "200":
+        '200':
           description: List of restriction rules.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RestrictionRuleResponse"
-        "401":
+                  $ref: '#/components/schemas/RestrictionRuleResponse'
+        '401':
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RestrictionRuleResponse"
+                  $ref: '#/components/schemas/RestrictionRuleResponse'
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Restriction Rules
@@ -354,66 +373,72 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateRestrictionRuleRequest"
+              $ref: '#/components/schemas/CreateRestrictionRuleRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Restriction rule created.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "400":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '400':
           description: Invalid request.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "401":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '401':
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "403":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '403':
           description: Insufficient permissions.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+      security:
+      - bearerAuth:
+        - pricing:restriction:manage
+      x-required-permissions:
+      - pricing:restriction:manage
   /v1/price/quotes:
     post:
       tags:
       - Price Quotes
       summary: Calculate contextual price quote
-      description: "Calculates a contextual price quote using request inputs such\
-        \ as product, location, customer tier, and pricing context."
+      description: Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.
       operationId: calculatePriceQuote
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PriceQuoteRequest"
+              $ref: '#/components/schemas/PriceQuoteRequest'
         required: true
       responses:
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceQuoteResponse"
-        "200":
+        '200':
           description: Price quote calculated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PriceQuoteResponse"
-        "400":
+                $ref: '#/components/schemas/PriceQuoteResponse'
+        '400':
           description: Invalid quote request.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PriceQuoteResponse"
+                $ref: '#/components/schemas/PriceQuoteResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceQuoteResponse'
+      security:
+      - bearerAuth: []
   /v1/price/normalize:
     post:
       tags:
@@ -424,23 +449,60 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "400":
-          description: Invalid request body.
-          content:
-            '*/*':
-              schema: {}
-        "501":
+        '501':
           description: Not yet implemented.
           content:
-            '*/*':
-              schema: {}
-        "500":
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
           description: Internal server error.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth: []
+  /v1/price/bulk-ingest:
+    post:
+      tags:
+      - Price Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestBasePriceBulkIngestRecord'
+        required: true
+      responses:
+        '200':
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+      security:
+      - bearerAuth:
+        - pricing:base_price:create
+      x-required-permissions:
+      - pricing:base_price:create
   /v1/promotions/offers/{id}/deactivate:
     patch:
       tags:
@@ -456,26 +518,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "404":
-          description: Promotion offer not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "200":
+        '200':
           description: Promotion offer deactivated.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '404':
+          description: Promotion offer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{id}/activate:
     patch:
       tags:
@@ -491,32 +556,35 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Promotion offer activated.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "404":
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '404':
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "409":
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '409':
           description: Promotion offer cannot be activated in current state.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
   /v1/promotions/offers/{id}:
     get:
       tags:
@@ -532,26 +600,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Promotion offer returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "404":
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '404':
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
+      x-required-permissions:
+      - Promotion:View
   /v1/promotions/offers/by-code/{promoCode}:
     get:
       tags:
@@ -566,26 +637,29 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: Promotion offer returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
-        "404":
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '404':
           description: Promotion offer not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionOfferResponse"
+                $ref: '#/components/schemas/PromotionOfferResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:View
+      x-required-permissions:
+      - Promotion:View
   /v1/price/snapshots/{snapshotId}:
     get:
       tags:
@@ -601,24 +675,26 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Pricing snapshot returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PricingSnapshotResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PricingSnapshotResponse"
-        "404":
+                $ref: '#/components/schemas/PricingSnapshotResponse'
+        '404':
           description: Pricing snapshot not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PricingSnapshotResponse"
+                $ref: '#/components/schemas/PricingSnapshotResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingSnapshotResponse'
+      security:
+      - bearerAuth: []
   /v1/price/restrictions/rules/{ruleId}:
     get:
       tags:
@@ -633,24 +709,26 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Restriction rule found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "401":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '401':
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "404":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '404':
           description: Restriction rule not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Restriction Rules
@@ -664,30 +742,35 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Restriction rule deactivated.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "401":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '401':
           description: Authentication required.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "404":
-          description: Restriction rule not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
-        "403":
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '403':
           description: Insufficient permissions.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/RestrictionRuleResponse"
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+        '404':
+          description: Restriction rule not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestrictionRuleResponse'
+      security:
+      - bearerAuth:
+        - pricing:restriction:manage
+      x-required-permissions:
+      - pricing:restriction:manage
   /v1/promotions/offers/{promotionId}/rules/{ruleId}:
     delete:
       tags:
@@ -709,14 +792,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden.
-        "204":
+        '204':
           description: Eligibility rule deleted.
-        "404":
+        '404':
           description: Promotion offer or rule not found.
+        '403':
+          description: Forbidden.
       security:
-      - BearerAuth: []
+      - bearerAuth:
+        - Promotion:Manage
+      x-required-permissions:
+      - Promotion:Manage
 components:
   schemas:
     CreatePromotionOfferRequest:
@@ -736,7 +822,9 @@ components:
           maxLength: 255
           minLength: 0
         description:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Optional promotion description
           example: 20% off labor for seasonal service
           maxLength: 255
@@ -765,12 +853,16 @@ components:
           description: Date when promotion expires
           example: 2026-03-31
         usageLimit:
-          type: integer
+          type:
+          - integer
+          - 'null'
           format: int32
           description: Maximum number of times promotion can be applied
           example: 100
         storeCode:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Optional store/location code that scopes the promotion
           example: NYC-001
           maxLength: 255
@@ -800,7 +892,9 @@ components:
           description: Promotion display name
           example: Summer Labor Discount
         description:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Optional promotion description
         discountType:
           type: string
@@ -825,7 +919,9 @@ components:
           description: Promotion validity end date
           example: 2026-03-31
         usageLimit:
-          type: integer
+          type:
+          - integer
+          - 'null'
           format: int32
           description: Optional usage limit
           example: 100
@@ -844,19 +940,27 @@ components:
           - EXPIRED
           example: ACTIVE
         storeCode:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Optional store code scope
           example: NYC-001
         createdAt:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           description: Record creation timestamp
         updatedAt:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           description: Record last update timestamp
         createdBy:
-          type: string
+          type:
+          - string
+          - 'null'
           description: User that created the record
     AddEligibilityRuleRequest:
       type: object
@@ -882,11 +986,13 @@ components:
         value:
           type: string
           description: Rule threshold or comparison value
-          example: 1000
+          example: '1000'
           maxLength: 255
           minLength: 0
         ruleCombination:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Logical combinator when multiple rules exist
           enum:
           - AND
@@ -930,18 +1036,22 @@ components:
         value:
           type: string
           description: Rule threshold or value
-          example: 1000
+          example: '1000'
     EligibilityContext:
       type: object
       description: Optional account/vehicle context used to evaluate promotion eligibility
       properties:
         accountId:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
           description: Customer account identifier
           example: 9fdaf7eb-b58f-4e4f-8c14-035e9368f7e8
         vehicleId:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
           description: Vehicle identifier used for vehicle-based eligibility rules
           example: 0b4a9f7c-f5a8-4a5f-b3cb-2b7a3f4ec5a1
@@ -980,8 +1090,7 @@ components:
           maxLength: 64
           minLength: 0
         estimateContext:
-          $ref: "#/components/schemas/EstimateContext"
-          description: Estimate context used for promotion evaluation
+          $ref: '#/components/schemas/EstimateContext'
       required:
       - estimateContext
       - promotionCode
@@ -1000,16 +1109,17 @@ components:
           description: Customer identifier
           example: 00000000-0000-0000-0000-000000000002
         vehicleId:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Optional vehicle identifier for vehicle-specific eligibility
-            checks
+          description: Optional vehicle identifier for vehicle-specific eligibility checks
           example: 00000000-0000-0000-0000-000000000003
         lineItems:
           type: array
           description: Line items included in the estimate
           items:
-            $ref: "#/components/schemas/LineItemContext"
+            $ref: '#/components/schemas/LineItemContext'
           maxItems: 2147483647
           minItems: 1
         subtotal:
@@ -1018,7 +1128,9 @@ components:
           example: 500.0
           minimum: 0
         appliedPromoCodes:
-          type: array
+          type:
+          - array
+          - 'null'
           description: Promotion codes already applied to this estimate
           example:
           - SPRING10
@@ -1071,7 +1183,7 @@ components:
           type: array
           description: Adjustments applied during promotion evaluation
           items:
-            $ref: "#/components/schemas/PricingAdjustment"
+            $ref: '#/components/schemas/PricingAdjustment'
     PricingAdjustment:
       type: object
       description: A single pricing adjustment applied to an estimate
@@ -1117,6 +1229,7 @@ components:
           - COMMIT_SALE
         reasonCode:
           type: string
+          minLength: 1
         notes:
           type: string
         approvedBy:
@@ -1178,7 +1291,8 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/RestrictionEvaluationItem"
+            $ref: '#/components/schemas/RestrictionEvaluationItem'
+          minItems: 1
       required:
       - items
     RestrictionEvaluationResponse:
@@ -1187,7 +1301,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/RestrictionEvaluationResult"
+            $ref: '#/components/schemas/RestrictionEvaluationResult'
     RestrictionEvaluationResult:
       type: object
       properties:
@@ -1309,11 +1423,12 @@ components:
           description: Customer tier identifier used for tier pricing rules
           example: ea2f17ef-f06e-40ec-a9d6-c2d1b3e56d8a
         effectiveTimestamp:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          description: Optional timestamp for effective pricing lookup; defaults to
-            current time if omitted
-          example: 2026-03-05T21:15:00Z
+          description: Optional timestamp for effective pricing lookup; defaults to current time if omitted
+          example: 2026-03-05 21:15:00+00:00
       required:
       - customerTierId
       - locationId
@@ -1346,14 +1461,11 @@ components:
           description: Quoted quantity
           example: 2
         msrp:
-          $ref: "#/components/schemas/MoneyAmount"
-          description: Manufacturer suggested retail price
+          $ref: '#/components/schemas/MoneyAmount'
         unitPrice:
-          $ref: "#/components/schemas/MoneyAmount"
-          description: Final unit price after applying applicable rules
+          $ref: '#/components/schemas/MoneyAmount'
         extendedPrice:
-          $ref: "#/components/schemas/MoneyAmount"
-          description: Extended price (unit price multiplied by quantity)
+          $ref: '#/components/schemas/MoneyAmount'
         priceSource:
           type: string
           description: Source from which the final price was resolved
@@ -1362,7 +1474,7 @@ components:
           type: array
           description: Per-rule pricing breakdown entries
           items:
-            $ref: "#/components/schemas/PricingBreakdownEntry"
+            $ref: '#/components/schemas/PricingBreakdownEntry'
         warnings:
           type: array
           description: Non-fatal warnings generated during quote calculation
@@ -1381,11 +1493,81 @@ components:
           description: Rule category/type
           example: CUSTOMER_TIER
         adjustment:
-          $ref: "#/components/schemas/MoneyAmount"
-          description: Amount adjusted by this rule
+          $ref: '#/components/schemas/MoneyAmount'
         resultingValue:
-          $ref: "#/components/schemas/MoneyAmount"
-          description: Running value after this rule adjustment
+          $ref: '#/components/schemas/MoneyAmount'
+    BasePriceBulkIngestRecord:
+      type: object
+      properties:
+        productId:
+          type: string
+          minLength: 1
+        msrp:
+          type: string
+          minLength: 1
+        currency:
+          type: string
+          maxLength: 3
+          minLength: 3
+        effectiveFrom:
+          type: string
+          minLength: 1
+      required:
+      - currency
+      - effectiveFrom
+      - msrp
+      - productId
+    BulkIngestRequestBasePriceBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/BasePriceBulkIngestRecord'
+          minItems: 1
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     PricingSnapshotResponse:
       type: object
       description: Response payload for immutable pricing snapshot retrieval
@@ -1399,9 +1581,11 @@ components:
           type: string
           format: date-time
           description: Snapshot creation timestamp
-          example: 2026-03-05T21:38:21.752Z
+          example: 2026-03-05 21:38:21.752000+00:00
         sourceContext:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Optional source context
           example: quote-checkout
         itemIdentifier:
@@ -1417,9 +1601,16 @@ components:
           type: string
           description: Serialized prices payload
         appliedRules:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Serialized applied-rule details
         policyVersion:
           type: string
           description: Pricing policy version used
           example: 2026.03.1
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

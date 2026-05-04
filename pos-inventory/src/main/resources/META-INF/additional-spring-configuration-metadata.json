@@ -1,0 +1,96 @@
+{
+  "properties": [
+    {
+      "name": "pos.inventory.receiving.source-document-service",
+      "type": "java.lang.String",
+      "description": "Source document provider identifier used by receiving workflows."
+    },
+    {
+      "name": "pos.inventory.receiving.site-id",
+      "type": "java.lang.String",
+      "description": "Default receiving site id used when source documents omit a site."
+    },
+    {
+      "name": "pos.inventory.receiving.staging-location-id",
+      "type": "java.lang.String",
+      "description": "Default staging location id used during receiving.",
+      "defaultValue": ""
+    },
+    {
+      "name": "pos.inventory.receiving.cross-dock-location-id",
+      "type": "java.lang.String",
+      "description": "Default cross-dock location id used during receiving.",
+      "defaultValue": ""
+    },
+    {
+      "name": "pos.inventory.encumbranceEnabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable inventory encumbrance behavior.",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.inventory.default-tax-rate",
+      "type": "java.math.BigDecimal",
+      "description": "Default inventory tax rate used when tax service data is unavailable.",
+      "defaultValue": 0.1
+    },
+    {
+      "name": "pos.inventory.product.substitute.url",
+      "type": "java.lang.String",
+      "description": "Base URL for product substitute lookups.",
+      "defaultValue": "http://localhost:8087"
+    },
+    {
+      "name": "pos.inventory.external.availability.url",
+      "type": "java.lang.String",
+      "description": "Base URL for external inventory availability checks.",
+      "defaultValue": "http://localhost:8086"
+    },
+    {
+      "name": "pos.inventory.receiving.stub.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable receiving source-document stub client.",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.inventory.receiving.stub.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for receiving source-document stub API.",
+      "defaultValue": "http://localhost:8080"
+    },
+    {
+      "name": "pos.inventory.receiving.stub.path",
+      "type": "java.lang.String",
+      "description": "Path for receiving source-document stub endpoint."
+    },
+    {
+      "name": "gateway.url",
+      "type": "java.lang.String",
+      "description": "Gateway base URL used by inventory service RestClient integrations.",
+      "defaultValue": "http://localhost:8080"
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

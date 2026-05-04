@@ -15,7 +15,7 @@ import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -75,7 +75,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                                 }
                                 """, estimateId, testCustomerId);
 
-        Response response = givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -117,7 +117,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                                 """, estimateId, testCustomerId);
 
         // First request - creates workorder
-        Response firstResponse = givenWithGatewayAuth()
+        MockMvcResponse firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -134,7 +134,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         String firstWorkorderId = firstResponse.path("id");
 
         // Second request - same key, should return existing workorder
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -184,7 +184,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                                 """, estimateId2, testCustomerId);
 
         // First request
-        Response firstResponse = givenWithGatewayAuth()
+        MockMvcResponse firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey1)
                 .body(requestBody1)
@@ -201,7 +201,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         String firstWorkorderId = firstResponse.path("id");
 
         // Second request with different key
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey2)
                 .body(requestBody2)
@@ -246,7 +246,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                                 """, secondEstimateId, testCustomerId);
 
         // First request without key
-        Response firstResponse = givenWithGatewayAuth()
+        MockMvcResponse firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(firstRequestBody)
                 .when()
@@ -262,7 +262,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         String firstWorkorderId = firstResponse.path("id");
 
         // Second request without key - should create new workorder
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(secondRequestBody)
                 .when()
@@ -306,7 +306,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                                 """, secondEstimateId, testCustomerId);
 
         // First request with whitespace-only key (spaces)
-        Response firstResponse = givenWithGatewayAuth()
+        MockMvcResponse firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", "   ")
                 .body(firstRequestBody)
@@ -324,7 +324,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
 
         // Second request with whitespace-only key (tabs and spaces) - should create new
         // workorder
-        Response secondResponse = givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", " \t ")
                 .body(secondRequestBody)

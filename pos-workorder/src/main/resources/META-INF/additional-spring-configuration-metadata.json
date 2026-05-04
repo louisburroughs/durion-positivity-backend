@@ -1,0 +1,128 @@
+{
+  "properties": [
+    {
+      "name": "workorder.kafka.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable Kafka-based workorder event publishing and command consumption.",
+      "defaultValue": false
+    },
+    {
+      "name": "workorder.kafka.events-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic used for workorder outbound events.",
+      "defaultValue": "workorder.events.v1"
+    },
+    {
+      "name": "workorder.kafka.commands-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic used for inbound workorder commands.",
+      "defaultValue": "workorder.commands.v1"
+    },
+    {
+      "name": "workorder.kafka.consumer-group",
+      "type": "java.lang.String",
+      "description": "Kafka consumer group for workorder command consumers."
+    },
+    {
+      "name": "pos.customer.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for pos-customer integration.",
+      "defaultValue": "http://pos-customer:8084"
+    },
+    {
+      "name": "pos.vehicle.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for vehicle service integration.",
+      "defaultValue": "http://pos-vehicle:8088"
+    },
+    {
+      "name": "pos.tax.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for tax service integration.",
+      "defaultValue": "http://pos-tax:8091"
+    },
+    {
+      "name": "pos.invoice.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for invoice service integration.",
+      "defaultValue": "http://pos-invoice:8089"
+    },
+    {
+      "name": "pos.documents.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for documents service integration.",
+      "defaultValue": "http://pos-documents:8080"
+    },
+    {
+      "name": "pos.inventory.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for inventory service integration.",
+      "defaultValue": "http://pos-inventory:8087"
+    },
+    {
+      "name": "pos.people.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for people service integration.",
+      "defaultValue": "http://pos-people:8084"
+    },
+    {
+      "name": "pos.shopmgr.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for shop-manager service integration.",
+      "defaultValue": "http://localhost:8080"
+    },
+    {
+      "name": "gateway.base-url",
+      "type": "java.lang.String",
+      "description": "Gateway base URL used for event type registration.",
+      "defaultValue": "http://localhost:8080"
+    },
+    {
+      "name": "customer.service.url",
+      "type": "java.lang.String",
+      "description": "Legacy customer reference service URL.",
+      "defaultValue": "http://localhost:8080/v1/customers"
+    },
+    {
+      "name": "customer.approval.service.url",
+      "type": "java.lang.String",
+      "description": "Customer approval service URL used in workorder approvals.",
+      "defaultValue": "http://localhost:8080/v1/approvals"
+    },
+    {
+      "name": "timekeeping.allowOverlappingSessions",
+      "type": "java.lang.Boolean",
+      "description": "Allow overlapping technician work sessions when enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.documents.supplemental-estimate-template",
+      "type": "java.lang.String",
+      "description": "Template identifier used for supplemental estimate documents.",
+      "defaultValue": "DEFAULT_STANDARD_TEMPLATE"
+    },
+    {
+      "name": "pos-events.registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup event type registration for pos-workorder.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

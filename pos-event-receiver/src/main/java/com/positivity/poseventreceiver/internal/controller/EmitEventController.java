@@ -66,19 +66,13 @@ public class EmitEventController {
      * This is an architectural invariant that must be preserved.
      */
     @PostMapping
-    @Operation(summary = "Receive emitted event", description = "Stores a preregistered emitted event payload")
+    @Operation(summary = "Receive emitted event", description = "Stores a preregistered emitted event payload", tags = {
+            "Event Emission" })
     @ApiResponse(responseCode = "200", description = "Event stored successfully")
     @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Event payload to persist",
-                            required = true,
-                            content = @Content(schema = @Schema(implementation = EmitEventRequest.class)))
-                    @Valid
-                    @NotNull
-                    @RequestBody
-                    EmitEventRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event payload to persist", required = true, content = @Content(schema = @Schema(implementation = EmitEventRequest.class))) @Valid @NotNull @RequestBody EmitEventRequest request) {
         try {
             if (!emitEventService.receiveEvent(request)) {
                 return ResponseEntity.badRequest().body("ID not preregistered");

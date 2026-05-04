@@ -48,6 +48,18 @@ class ToolRegistryServiceTest {
             true,
             "customerFacadeTool");
 
+    private static final ToolMetadata ADMIN_TOOL = new ToolMetadata(
+            UUID.fromString("00000000-0000-0000-0000-000000000010"),
+            "AdminFacadeTool",
+            "Admin",
+            "Administrative controls and access governance",
+            "admin",
+            1.3,
+            "low",
+            320,
+            true,
+            "adminFacadeTool");
+
     @BeforeEach
     void setUp() {
         service = new ToolRegistryService(repository, embeddingModel);
@@ -108,5 +120,49 @@ class ToolRegistryServiceTest {
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveCandidateTools uses admin fast-path for user and access questions")
+    void resolveCandidateTools_adminQuery_usesAdminFastPath() {
+        ToolSelectionContext context =
+                new ToolSelectionContext("How many users do I have in the system?", "ROLE_ADMIN", "IDLE");
+
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(ADMIN_TOOL);
+    }
+
+    @Test
+    @DisplayName("resolveCandidateTools uses admin fast-path for audit and account-governance questions")
+    void resolveCandidateTools_adminAuditQuery_usesAdminFastPath() {
+        ToolSelectionContext context =
+                new ToolSelectionContext("Search the audit log for failed admin logins", "ROLE_ADMIN", "IDLE");
+
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(ADMIN_TOOL);
+    }
+
+    @Test
+    @DisplayName("resolveCandidateTools does not use admin fast-path for non-admin roles")
+    void resolveCandidateTools_nonAdminRole_doesNotUseAdminFastPath() {
+        ToolSelectionContext context =
+                new ToolSelectionContext("How many users do I have in the system?", "ROLE_MANAGER", "IDLE");
+        float[] vector = new float[] {0.4f, 0.5f};
+
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_MANAGER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(repository.findTopKByEmbedding(vector, 10)).thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(SAMPLE_TOOL);
     }
 }

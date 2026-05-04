@@ -1,0 +1,72 @@
+{
+  "properties": [
+    {
+      "name": "pos.tax.test-mode.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable internal test-mode tax calculation behavior.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.tax.test-mode.default-rates",
+      "type": "java.util.Map<java.lang.String, java.math.BigDecimal>",
+      "description": "Default tax rates used in test mode by jurisdiction type."
+    },
+    {
+      "name": "pos.tax.test-mode.postal-code-mapping",
+      "type": "java.util.Map<java.lang.String, java.util.Map<java.lang.String, java.lang.String>>",
+      "description": "Postal-code to jurisdiction mappings used in test mode."
+    },
+    {
+      "name": "pos.tax.external-service.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for external tax provider API.",
+      "defaultValue": "https://api.taxservice.example.com"
+    },
+    {
+      "name": "pos.tax.external-service.api-key",
+      "type": "java.lang.String",
+      "description": "API key for external tax provider authentication."
+    },
+    {
+      "name": "pos.tax.external-service.connect-timeout",
+      "type": "java.lang.Integer",
+      "description": "Connection timeout for external tax provider calls in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "pos.tax.external-service.read-timeout",
+      "type": "java.lang.Integer",
+      "description": "Read timeout for external tax provider calls in milliseconds.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "pos.tax.retry.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Maximum retry attempts for transient external tax call failures.",
+      "defaultValue": 3
+    },
+    {
+      "name": "pos.tax.retry.initial-backoff",
+      "type": "java.lang.Long",
+      "description": "Initial backoff in milliseconds for external tax call retries.",
+      "defaultValue": 500
+    },
+    {
+      "name": "pos.tax.retry.multiplier",
+      "type": "java.lang.Double",
+      "description": "Exponential backoff multiplier for external tax call retries.",
+      "defaultValue": 2.0
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    }
+  ]
+}

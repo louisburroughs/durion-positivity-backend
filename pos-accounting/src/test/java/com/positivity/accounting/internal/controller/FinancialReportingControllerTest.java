@@ -6,25 +6,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.service.FinancialReportingService;
 import java.time.LocalDate;
 import java.util.Collections;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Unit tests for FinancialReportingController input validation.
@@ -32,27 +24,14 @@ import org.springframework.web.context.WebApplicationContext;
  * Focuses on security validation (S5145) to prevent log injection attacks
  * via untrusted path variables like statementLineCode.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("FinancialReportingController Input Validation Tests")
-class FinancialReportingControllerTest {
-
-    @Autowired
-    private WebApplicationContext context;
-
-    private MockMvc mockMvc;
+class FinancialReportingControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private FinancialReportingService financialReportingService;
 
     private static final LocalDate START_DATE = LocalDate.of(2024, 1, 1);
     private static final LocalDate END_DATE = LocalDate.of(2024, 12, 31);
-
-    @BeforeEach
-    void setUp() {
-        // Initialize MockMvc with Spring Security
-        this.mockMvc = webAppContextSetup(context).apply(springSecurity()).build();
-    }
 
     @Nested
     @DisplayName("Drilldown to Accounts - statementLineCode Validation (S5145)")
@@ -68,10 +47,10 @@ class FinancialReportingControllerTest {
 
             // When: Request with valid code
             mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}", validCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Then: Should succeed
                     .andExpect(status().isOk());
 
@@ -86,10 +65,10 @@ class FinancialReportingControllerTest {
 
             // When: Request with invalid code
             mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}", invalidCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Then: Should return 400 Bad Request
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -112,12 +91,12 @@ class FinancialReportingControllerTest {
             // controller
             // This provides defense-in-depth alongside our controller validation
             mockMvc.perform(get(
-                                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
-                                    maliciousCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
+                    maliciousCode)
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Firewall returns 400 Bad Request for blocked URLs
                     .andExpect(status().isBadRequest());
 
@@ -132,10 +111,10 @@ class FinancialReportingControllerTest {
 
             // When: Request with special characters
             mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}", invalidCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Then: Should return 400 Bad Request
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -151,10 +130,10 @@ class FinancialReportingControllerTest {
 
             // When: Request with excessive length
             mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}", tooLongCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Then: Should return 400 Bad Request
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -172,12 +151,12 @@ class FinancialReportingControllerTest {
 
             // When: Request with max length code
             mockMvc.perform(get(
-                                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
-                                    maxLengthCode)
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", START_DATE.toString())
-                            .param("endDate", END_DATE.toString()))
+                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
+                    maxLengthCode)
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", START_DATE.toString())
+                    .param("endDate", END_DATE.toString()))
                     // Then: Should succeed
                     .andExpect(status().isOk());
 
@@ -189,13 +168,13 @@ class FinancialReportingControllerTest {
         void shouldAcceptCommonValidCodes() throws Exception {
             // Test multiple common valid codes
             String[] validCodes = {
-                "REVENUE_SALES",
-                "EXPENSE_COGS",
-                "ASSET_CURRENT_CASH",
-                "LIABILITY_CURRENT_AP",
-                "EQUITY_OWNERS",
-                "PL_REVENUE_TOTAL",
-                "BS_ASSET_TOTAL"
+                    "REVENUE_SALES",
+                    "EXPENSE_COGS",
+                    "ASSET_CURRENT_CASH",
+                    "LIABILITY_CURRENT_AP",
+                    "EQUITY_OWNERS",
+                    "PL_REVENUE_TOTAL",
+                    "BS_ASSET_TOTAL"
             };
 
             for (String code : validCodes) {
@@ -203,10 +182,10 @@ class FinancialReportingControllerTest {
                         .thenReturn(Collections.emptyList());
 
                 mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}", code)
-                                .header("X-Authorities", "reporting:view:financial-statements")
-                                .header("X-User", "test-user")
-                                .param("startDate", START_DATE.toString())
-                                .param("endDate", END_DATE.toString()))
+                        .header("X-Authorities", "reporting:view:financial-statements")
+                        .header("X-User", "test-user")
+                        .param("startDate", START_DATE.toString())
+                        .param("endDate", END_DATE.toString()))
                         .andExpect(status().isOk());
             }
         }
@@ -225,12 +204,12 @@ class FinancialReportingControllerTest {
 
             // When: Request with invalid date range
             mockMvc.perform(get(
-                                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
-                                    "REVENUE_SALES")
-                            .header("X-Authorities", "reporting:view:financial-statements")
-                            .header("X-User", "test-user")
-                            .param("startDate", invalidStartDate.toString())
-                            .param("endDate", invalidEndDate.toString()))
+                    "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
+                    "REVENUE_SALES")
+                    .header("X-Authorities", "reporting:view:financial-statements")
+                    .header("X-User", "test-user")
+                    .param("startDate", invalidStartDate.toString())
+                    .param("endDate", invalidEndDate.toString()))
                     // Then: Should return 400 Bad Request
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))

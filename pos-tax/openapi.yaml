@@ -1,12 +1,11 @@
 openapi: 3.1.0
 info:
   title: POS Tax Service API
-  description: Tax calculation service with external API passthrough and test mode
-    support
+  description: Tax calculation service with external API passthrough and test mode support
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
-  version: "1.0"
+  version: '1.0'
 servers:
 - url: http://localhost:8086
   description: Generated server url
@@ -19,21 +18,20 @@ paths:
       tags:
       - Tax
       summary: Calculate tax
-      description: Calculate tax for line items based on location. Routes to external
-        service in production or test calculator in test mode.
+      description: Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.
       operationId: calculateTax
       requestBody:
         description: International tax calculation request
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TaxCalculationRequest"
+              $ref: '#/components/schemas/TaxCalculationRequest'
             examples:
               US destination example:
                 description: US destination example
                 value:
                   lineItems:
-                  - lineItemId: "1"
+                  - lineItemId: '1'
                     description: Oil Change Service
                     quantity: 1
                     unitPrice: 89.99
@@ -42,7 +40,7 @@ paths:
                     countryCode: US
                     regionCode: CA
                     city: Los Angeles
-                    postalCode: "90001"
+                    postalCode: '90001'
                     line1: 123 Main St
                   currencyCode: USD
                   locale: en-US
@@ -50,39 +48,48 @@ paths:
                   referenceType: ESTIMATE
         required: true
       responses:
-        "500":
-          description: Tax calculation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/TaxCalculationResponse"
-        "200":
+        '200':
           description: Tax calculated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/TaxCalculationResponse"
-        "400":
+                $ref: '#/components/schemas/TaxCalculationResponse'
+        '400':
           description: Invalid tax calculation request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/TaxCalculationResponse"
+                $ref: '#/components/schemas/TaxCalculationResponse'
+        '500':
+          description: Tax calculation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxCalculationResponse'
+      security:
+      - bearerAuth:
+        - tax:calculate
+      x-required-permissions:
+      - tax:calculate
   /v1/tax/mode:
     get:
       tags:
       - Tax
       summary: Get tax service mode
-      description: Check if the tax service is currently in test mode or production
-        mode
+      description: Check if the tax service is currently in test mode or production mode
       operationId: getMode
       responses:
-        "200":
+        '200':
           description: Tax service mode retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ModeResponse"
+                $ref: '#/components/schemas/ModeResponse'
+      security:
+      - bearerAuth:
+        - tax:mode:view
+      x-required-permissions:
+      - tax:mode:view
 components:
   schemas:
     TaxAddress:
@@ -93,6 +100,7 @@ components:
           type: string
           description: Country code in ISO 3166-1 alpha-2 format
           example: US
+          minLength: 1
         regionCode:
           type: string
           description: Region/subdivision code (typically ISO 3166-2 subdivision part)
@@ -104,15 +112,16 @@ components:
         postalCode:
           type: string
           description: Postal/ZIP code
-          example: "90001"
+          example: '"90001"'
+          minLength: 1
         line1:
           type: string
           description: Primary street address line
-          example: 123 Main St
+          example: '"123 Main St"'
         line2:
           type: string
           description: Secondary address line
-          example: Suite 200
+          example: '"Suite 200"'
       required:
       - countryCode
       - postalCode
@@ -121,7 +130,7 @@ components:
       description: International tax calculation request payload
       example:
         lineItems:
-        - lineItemId: "1"
+        - lineItemId: '1'
           description: Oil Change Service
           quantity: 1
           unitPrice: 89.99
@@ -130,7 +139,7 @@ components:
           countryCode: US
           regionCode: CA
           city: Los Angeles
-          postalCode: "90001"
+          postalCode: '90001'
           line1: 123 Main St
         currencyCode: USD
         locale: en-US
@@ -141,10 +150,10 @@ components:
           type: array
           description: Line items to calculate tax for
           items:
-            $ref: "#/components/schemas/TaxLineItem"
+            $ref: '#/components/schemas/TaxLineItem'
+          minItems: 1
         destinationAddress:
-          $ref: "#/components/schemas/TaxAddress"
-          description: Destination address used to determine applicable tax jurisdictions
+          $ref: '#/components/schemas/TaxAddress'
         currencyCode:
           type: string
           description: Transaction currency in ISO 4217 alpha-3 format
@@ -155,13 +164,12 @@ components:
           example: en-US
         customerId:
           type: string
-          description: Optional customer identifier for exemption and tax profile
-            lookups
+          description: Optional customer identifier for exemption and tax profile lookups
           example: CUST-100234
         transactionDate:
           type: string
           description: Optional transaction date/time in ISO 8601 format
-          example: 2026-02-21T09:30:00Z
+          example: 2026-02-21 09:30:00+00:00
         referenceId:
           type: string
           format: uuid
@@ -196,8 +204,10 @@ components:
       properties:
         lineItemId:
           type: string
+          minLength: 1
         description:
           type: string
+          minLength: 1
         quantity:
           type: number
         unitPrice:
@@ -220,7 +230,8 @@ components:
         lineItemId:
           type: string
           description: Line item identifier
-          example: "1"
+          example: '"1"'
+          minLength: 1
         subtotal:
           type: number
           description: Line subtotal before tax
@@ -244,8 +255,7 @@ components:
       - total
     TaxCalculationResponse:
       type: object
-      description: Tax calculation response containing totals and jurisdiction/line-level
-        tax breakdown
+      description: Tax calculation response containing totals and jurisdiction/line-level tax breakdown
       properties:
         subtotal:
           type: number
@@ -267,12 +277,12 @@ components:
           type: array
           description: Applied tax jurisdictions with per-jurisdiction tax amounts
           items:
-            $ref: "#/components/schemas/TaxJurisdiction"
+            $ref: '#/components/schemas/TaxJurisdiction'
         lineItemTaxes:
           type: array
           description: Per-line-item tax breakdown
           items:
-            $ref: "#/components/schemas/LineItemTax"
+            $ref: '#/components/schemas/LineItemTax'
         testMode:
           type: boolean
           description: Whether calculation was performed in test mode
@@ -281,7 +291,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when calculation completed
-          example: 2026-02-21T09:18:40Z
+          example: 2026-02-21 09:18:40+00:00
         referenceId:
           type: string
           format: uuid
@@ -312,14 +322,13 @@ components:
       - totalTax
     TaxJurisdiction:
       type: object
-      description: Tax jurisdiction entry with normalized international location fields
-        and calculated tax values
+      description: Tax jurisdiction entry with normalized international location fields and calculated tax values
       properties:
         countryCode:
           type: string
           description: Country code in ISO 3166-1 alpha-2 format
           example: US
-          pattern: "^[A-Z]{2}$"
+          pattern: ^[A-Z]{2}$
         regionCode:
           type: string
           description: Region/subdivision code (ISO 3166-2 subdivision part)
@@ -331,15 +340,15 @@ components:
         postalCode:
           type: string
           description: Postal/ZIP code
-          example: "90001"
+          example: '"90001"'
         line1:
           type: string
           description: Primary street address line
-          example: 123 Main St
+          example: '"123 Main St"'
         line2:
           type: string
           description: Secondary address line
-          example: Suite 200
+          example: '"Suite 200"'
         taxRate:
           type: number
           description: Tax rate as percentage points
@@ -376,3 +385,8 @@ components:
           type: string
         testMode:
           type: boolean
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

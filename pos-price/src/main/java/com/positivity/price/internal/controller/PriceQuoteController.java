@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #51
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price/quotes")
 @Tag(name = "Price Quotes", description = "Contextual price quote operations")
 public class PriceQuoteController {
@@ -40,10 +41,7 @@ public class PriceQuoteController {
     @PostMapping
     @EmitEvent(id = "PRICE_QUOTE_CALCULATE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
-    @Operation(
-            summary = "Calculate contextual price quote",
-            description =
-                    "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
+    @Operation(summary = "Calculate contextual price quote", description = "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
     @ApiResponse(responseCode = "200", description = "Price quote calculated successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid quote request.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")

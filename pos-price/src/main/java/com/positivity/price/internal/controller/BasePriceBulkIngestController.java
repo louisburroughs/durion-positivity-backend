@@ -19,20 +19,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+    "pricing:base_price:create" })
 @RequestMapping("/v1/price")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('pricing:base_price:create')")
 @Tag(name = "Price Bulk Ingest API", description = "Bulk import base price records")
 public class BasePriceBulkIngestController extends AbstractBulkIngestController<BasePriceBulkIngestRecord> {
 
   private final BasePriceService basePriceService;
 
   @Override
+  @PostMapping("/bulk-ingest")
   @PreAuthorize("hasAuthority('pricing:base_price:create')")
   @EmitEvent(id = "PRICE_BULK_INGEST", apiVersion = "1")
   public ResponseEntity<BulkIngestResponse> bulkIngest(

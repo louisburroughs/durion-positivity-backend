@@ -1,10 +1,9 @@
 openapi: 3.1.0
 info:
   title: Positivity Customer API
-  description: "API documentation for the Customer service, accessible via the API\
-    \ Gateway."
+  description: API documentation for the Customer service, accessible via the API Gateway.
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -19,13 +18,14 @@ tags:
   description: Vehicle management operations for customers
 - name: CRM Snapshots
   description: Consolidated CRM data snapshots
+- name: Customer Bulk Ingest API
+  description: Bulk import customer records
 - name: CRM Party Relationships
   description: Commercial account relationship management APIs
 - name: CRM Contacts
   description: Contact point and role management for parties
 - name: CRM Accounts
-  description: "Account tier management, party creation, search, merge, contacts,\
-    \ preferences, and vehicle operations"
+  description: Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations
 - name: Promotion Redemptions
   description: Operations for recording and querying promotion redemptions
 - name: CRM Persons
@@ -48,18 +48,23 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "200":
+        '200':
           description: Customer found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
-        "404":
+                $ref: '#/components/schemas/CustomerDTO'
+        '404':
           description: Customer not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: '#/components/schemas/CustomerDTO'
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
     put:
       tags:
       - Customer API
@@ -79,21 +84,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CustomerDTO"
+              $ref: '#/components/schemas/CustomerDTO'
         required: true
       responses:
-        "200":
+        '200':
           description: Customer updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
-        "404":
+                $ref: '#/components/schemas/CustomerDTO'
+        '404':
           description: Customer not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: '#/components/schemas/CustomerDTO'
+      security:
+      - bearerAuth:
+        - crm:party:edit
+      x-required-permissions:
+      - crm:party:edit
     delete:
       tags:
       - Customer API
@@ -110,10 +120,15 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "204":
+        '204':
           description: Customer deleted successfully.
-        "404":
+        '404':
           description: Customer not found.
+      security:
+      - bearerAuth:
+        - crm:party:deactivate
+      x-required-permissions:
+      - crm:party:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}:
     get:
       tags:
@@ -137,16 +152,21 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Vehicle found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-        "403":
+                $ref: '#/components/schemas/VehicleResponse'
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Customer or vehicle not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:view
+      x-required-permissions:
+      - crm:vehicle:view
     put:
       tags:
       - CRM Vehicles
@@ -172,21 +192,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
+              $ref: '#/components/schemas/CreateVehicleForPartyRequest'
         required: true
       responses:
-        "400":
-          description: Bad request - invalid input
-        "404":
-          description: Customer or vehicle not found
-        "200":
+        '200':
           description: Vehicle updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "403":
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
+          description: Bad request - invalid input
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Customer or vehicle not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:edit
+      x-required-permissions:
+      - crm:vehicle:edit
     delete:
       tags:
       - CRM Vehicles
@@ -209,12 +234,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Customer or vehicle not found
-        "204":
+        '204':
           description: Vehicle deleted successfully
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Customer or vehicle not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:deactivate
+      x-required-permissions:
+      - crm:vehicle:deactivate
   /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
     put:
       tags:
@@ -241,28 +271,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleTransferRequest"
+              $ref: '#/components/schemas/VehicleTransferRequest'
         required: true
       responses:
-        "400":
-          description: Bad request - invalid input
-        "200":
+        '200':
           description: Vehicle transferred successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-        "403":
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
+          description: Bad request - invalid input
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Customer or vehicle not found
+      security:
+      - bearerAuth:
+        - crm:vehicle_party_association:edit
+      x-required-permissions:
+      - crm:vehicle_party_association:edit
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
       - CRM Contacts
       summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within
-        a party
+      description: Assign or update role assignments for a specific contact within a party
       operationId: updateContactRoles
       parameters:
       - name: partyId
@@ -283,28 +317,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateContactRolesRequest"
+              $ref: '#/components/schemas/UpdateContactRolesRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Roles updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UpdateContactRolesResponse"
-        "400":
+                $ref: '#/components/schemas/UpdateContactRolesResponse'
+        '400':
           description: Invalid request
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
-        "404":
+        '404':
           description: Party or contact not found
+      security:
+      - bearerAuth:
+        - crm:contact_role:assign
+      x-required-permissions:
+      - crm:contact_role:assign
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     put:
       tags:
       - CRM Party Relationships
       summary: Designate primary billing contact
-      description: "Sets a relationship as the primary billing contact, demoting any\
-        \ existing primary"
+      description: Sets a relationship as the primary billing contact, demoting any existing primary
       operationId: designatePrimaryBillingContact
       parameters:
       - name: partyId
@@ -322,23 +360,27 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden - missing required permission
-        "204":
+        '204':
           description: Primary billing contact updated
-        "400":
+        '400':
           description: Invalid request - relationship must have BILLING role
-        "404":
+        '404':
           description: Relationship not found
-        "401":
+        '401':
           description: Unauthorized
+        '403':
+          description: Forbidden - missing required permission
+      security:
+      - bearerAuth:
+        - crm:relationship:update
+      x-required-permissions:
+      - crm:relationship:update
   /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
       - CRM Accounts
       summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within
-        a party
+      description: Assign or update role assignments for a specific contact within a party
       operationId: updateContactRoles_1
       parameters:
       - name: partyId
@@ -359,20 +401,65 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateContactRolesRequest"
+              $ref: '#/components/schemas/UpdateContactRolesRequest'
       responses:
-        "200":
+        '200':
           description: Roles updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UpdateContactRolesResponse"
-        "400":
-          description: Invalid role assignment
-        "404":
+                $ref: '#/components/schemas/UpdateContactRolesResponse'
+        '404':
           description: Party or contact not found
-        "403":
+        '400':
+          description: Invalid role assignment
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:contact_role:assign
+      x-required-permissions:
+      - crm:contact_role:assign
+  /v1/crm/accounts/parties/{partyId}/billing-rules:
+    put:
+      tags:
+      - CRM Accounts
+      summary: Upsert billing rules for a party
+      description: Create or update the billing rules configuration for a commercial party.
+      operationId: upsertBillingRules
+      parameters:
+      - name: partyId
+        in: path
+        description: Party ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertBillingRulesRequest'
+        required: true
+      responses:
+        '200':
+          description: Billing rules updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingRuleRef'
+        '400':
+          description: Invalid request body
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Party not found
+      security:
+      - bearerAuth:
+        - crm:billing_rules:edit
+      x-required-permissions:
+      - crm:billing_rules:edit
   /v1/promotions/redemptions:
     post:
       tags:
@@ -384,31 +471,66 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RecordRedemptionRequest"
+              $ref: '#/components/schemas/RecordRedemptionRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Promotion redemption recorded
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PromotionRedemptionResponse"
-        "409":
+                $ref: '#/components/schemas/PromotionRedemptionResponse'
+        '409':
           description: Duplicate redemption
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - Promotion:RecordRedemption
+      x-required-permissions:
+      - Promotion:RecordRedemption
+  /v1/customer/bulk-ingest:
+    post:
+      tags:
+      - Customer Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestCustomerBulkIngestRecord'
+        required: true
+      responses:
+        '200':
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+      security:
+      - bearerAuth:
+        - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm:
     get:
       tags:
       - Customer API
       summary: Get all customers
-      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL).
-        Defaults to PERSON customers if no type specified.
+      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.
       operationId: getAllCustomers
       parameters:
       - name: customerType
         in: query
-        description: "Customer type filter: PERSON or COMMERCIAL"
+        description: 'Customer type filter: PERSON or COMMERCIAL'
         required: false
         schema:
           type: string
@@ -416,17 +538,22 @@ paths:
         example: PERSON
       - name: pageable
         in: query
-        description: "Pagination parameters (page, size, sort)"
+        description: Pagination parameters (page, size, sort)
         required: true
         schema:
-          $ref: "#/components/schemas/Pageable"
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Page of customers returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PageCustomerDTO"
+                $ref: '#/components/schemas/PageCustomerDTO'
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
     post:
       tags:
       - Customer API
@@ -437,15 +564,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CustomerDTO"
+              $ref: '#/components/schemas/CustomerDTO'
         required: true
       responses:
-        "201":
+        '201':
           description: Customer created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: '#/components/schemas/CustomerDTO'
+      security:
+      - bearerAuth:
+        - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm/{customerId}/vehicles:
     post:
       tags:
@@ -465,21 +597,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
+              $ref: '#/components/schemas/CreateVehicleForPartyRequest'
         required: true
       responses:
-        "404":
-          description: Customer not found
-        "400":
-          description: Bad request - invalid input
-        "403":
-          description: Forbidden - insufficient permissions
-        "201":
+        '201':
           description: Vehicle created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
+          description: Bad request - invalid input
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Customer not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:create
+      x-required-permissions:
+      - crm:vehicle:create
   /v1/crm/persons:
     get:
       tags:
@@ -523,30 +660,35 @@ paths:
           format: int32
           default: 0
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GetPersonResponse"
-        "200":
+        '200':
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/GetPersonResponse"
-        "401":
+                  $ref: '#/components/schemas/GetPersonResponse'
+        '401':
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/GetPersonResponse"
+                  $ref: '#/components/schemas/GetPersonResponse'
+        '403':
+          description: Forbidden - missing required permission
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GetPersonResponse'
+      security:
+      - bearerAuth:
+        - crm:person:read
+      x-required-permissions:
+      - crm:person:read
     post:
       tags:
       - CRM Persons
@@ -557,33 +699,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePersonRequest"
+              $ref: '#/components/schemas/CreatePersonRequest'
         required: true
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-        "201":
+        '201':
           description: Person created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-        "400":
+                $ref: '#/components/schemas/CreatePersonResponse'
+        '400':
           description: Invalid request - validation failed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-        "401":
+                $ref: '#/components/schemas/CreatePersonResponse'
+        '401':
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
+                $ref: '#/components/schemas/CreatePersonResponse'
+        '403':
+          description: Forbidden - missing required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePersonResponse'
+      security:
+      - bearerAuth:
+        - crm:person:create
+      x-required-permissions:
+      - crm:person:create
   /v1/crm/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -600,22 +747,26 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Preferences retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
+                $ref: '#/components/schemas/GetCommunicationPreferencesResponse'
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Party not found
+      security:
+      - bearerAuth:
+        - crm:contact_preference:view
+      x-required-permissions:
+      - crm:contact_preference:view
     post:
       tags:
       - CRM Communication Preferences
       summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a
-        party
+      description: Set or update communication preferences and consent flags for a party
       operationId: upsertCommunicationPreferences
       parameters:
       - name: partyId
@@ -629,28 +780,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
+              $ref: '#/components/schemas/UpsertCommunicationPreferencesRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request
-        "200":
+        '200':
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
-        "404":
-          description: Party not found
-        "403":
+                $ref: '#/components/schemas/UpsertCommunicationPreferencesResponse'
+        '400':
+          description: Invalid request
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Party not found
+      security:
+      - bearerAuth:
+        - crm:contact_preference:edit
+      x-required-permissions:
+      - crm:contact_preference:edit
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
       - CRM Party Relationships
       summary: Create a party relationship
-      description: Creates a relationship between a commercial account and an individual
-        person
+      description: Creates a relationship between a commercial account and an individual person
       operationId: createRelationship
       parameters:
       - name: partyId
@@ -664,45 +819,50 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePartyRelationshipRequest"
+              $ref: '#/components/schemas/CreatePartyRelationshipRequest'
         required: true
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "201":
+        '201':
           description: Relationship created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "404":
-          description: Party or person not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "409":
-          description: Conflict - overlapping relationship exists
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "400":
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+        '400':
           description: Invalid request - validation failed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "401":
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+        '404':
+          description: Party or person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+        '409':
+          description: Conflict - overlapping relationship exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+        '401':
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+        '403':
+          description: Forbidden - missing required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+      security:
+      - bearerAuth:
+        - crm:relationship:create
+      x-required-permissions:
+      - crm:relationship:create
   /v1/crm/accounts/tierResolve:
     post:
       tags:
@@ -714,21 +874,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ResolveAccountTierRequest"
+              $ref: '#/components/schemas/ResolveAccountTierRequest'
         required: true
       responses:
-        "404":
-          description: Account not found
-        "400":
-          description: Invalid request
-        "200":
+        '200':
           description: Tier resolved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ResolveAccountTierResponse"
-        "403":
+                $ref: '#/components/schemas/ResolveAccountTierResponse'
+        '400':
+          description: Invalid request
+        '404':
+          description: Account not found
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties:
     post:
       tags:
@@ -740,18 +905,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateCommercialAccountRequest"
+              $ref: '#/components/schemas/CreateCommercialAccountRequest'
       responses:
-        "201":
+        '201':
           description: Account created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreateCommercialAccountResponse"
-        "400":
+                $ref: '#/components/schemas/CreateCommercialAccountResponse'
+        '400':
           description: Invalid request
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:create
+      x-required-permissions:
+      - crm:party:create
   /v1/crm/accounts/parties/{partyId}/vehicles:
     post:
       tags:
@@ -771,20 +941,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
+              $ref: '#/components/schemas/CreateVehicleForPartyRequest'
       responses:
-        "201":
+        '201':
           description: Vehicle created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreateVehicleForPartyResponse"
-        "404":
+                $ref: '#/components/schemas/CreateVehicleForPartyResponse'
+        '404':
           description: Party not found
-        "400":
+        '400':
           description: Invalid vehicle data
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:vehicle:create
+      x-required-permissions:
+      - crm:vehicle:create
   /v1/crm/accounts/parties/{partyId}/merge:
     post:
       tags:
@@ -804,20 +979,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MergePartiesRequest"
+              $ref: '#/components/schemas/MergePartiesRequest'
       responses:
-        "400":
-          description: Invalid merge request
-        "404":
-          description: Party not found
-        "200":
+        '200':
           description: Parties merged successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MergePartiesResponse"
-        "403":
+                $ref: '#/components/schemas/MergePartiesResponse'
+        '404':
+          description: Party not found
+        '400':
+          description: Invalid merge request
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:merge
+      x-required-permissions:
+      - crm:party:merge
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -834,22 +1014,26 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Preferences retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
-        "404":
+                $ref: '#/components/schemas/GetCommunicationPreferencesResponse'
+        '404':
           description: Party not found
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:contact_preference:view
+      x-required-permissions:
+      - crm:contact_preference:view
     post:
       tags:
       - CRM Accounts
       summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a
-        party
+      description: Set or update communication preferences and consent flags for a party
       operationId: upsertCommunicationPreferences_1
       parameters:
       - name: partyId
@@ -863,20 +1047,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
+              $ref: '#/components/schemas/UpsertCommunicationPreferencesRequest'
       responses:
-        "400":
-          description: Invalid preference data
-        "200":
+        '200':
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
-        "404":
+                $ref: '#/components/schemas/UpsertCommunicationPreferencesResponse'
+        '404':
           description: Party not found
-        "403":
+        '400':
+          description: Invalid preference data
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:contact_preference:edit
+      x-required-permissions:
+      - crm:contact_preference:edit
   /v1/crm/accounts/parties/search:
     post:
       tags:
@@ -888,18 +1077,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SearchPartiesRequest"
+              $ref: '#/components/schemas/SearchPartiesRequest'
       responses:
-        "400":
-          description: Invalid search criteria
-        "403":
-          description: Forbidden - insufficient permissions
-        "200":
+        '200':
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/SearchPartiesResponse"
+                $ref: '#/components/schemas/SearchPartiesResponse'
+        '400':
+          description: Invalid search criteria
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/promotions/redemptions/by-customer/{customerId}:
     get:
       tags:
@@ -915,16 +1109,21 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Promotion redemptions returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PromotionRedemptionResponse"
-        "403":
+                  $ref: '#/components/schemas/PromotionRedemptionResponse'
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - Promotion:ViewRedemption
+      x-required-permissions:
+      - Promotion:ViewRedemption
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -941,22 +1140,27 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Success
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CrmSnapshotDTO"
-        "404":
+                $ref: '#/components/schemas/CrmSnapshotDTO'
+        '404':
           description: Vehicle or owner not found
-        "403":
+        '403':
           description: Access denied
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/snapshot/party/{partyId}:
     get:
       tags:
       - CRM Snapshots
       summary: Fetch snapshot by party
-      description: "Returns complete party snapshot with accounts, contacts, vehicles"
+      description: Returns complete party snapshot with accounts, contacts, vehicles
       operationId: fetchByParty
       parameters:
       - name: partyId
@@ -967,24 +1171,27 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Success
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CrmSnapshotDTO"
-        "403":
-          description: Access denied
-        "404":
+                $ref: '#/components/schemas/CrmSnapshotDTO'
+        '404':
           description: Party not found
+        '403':
+          description: Access denied
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/snapshot/party/{partyId}/billing-rules:
     get:
       tags:
       - CRM Snapshots
       summary: Get billing rules for a commercial party
-      description: Returns the billing rule reference for a commercial party. Returns
-        default billing rules when the party has no explicitly configured rules. Enforcement
-        of these rules is the responsibility of downstream services.
+      description: Returns the billing rule reference for a commercial party. Returns default billing rules when the party has no explicitly configured rules. Enforcement of these rules is the responsibility of downstream services.
       operationId: getBillingRules
       parameters:
       - name: partyId
@@ -995,24 +1202,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Caller lacks PARTY_VIEW authority
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BillingRuleRef"
-        "200":
+        '200':
           description: Billing rules returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BillingRuleRef"
-        "404":
+                $ref: '#/components/schemas/BillingRuleRef'
+        '403':
+          description: Caller lacks PARTY_VIEW authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingRuleRef'
+        '404':
           description: Party not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BillingRuleRef"
+                $ref: '#/components/schemas/BillingRuleRef'
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/persons/{personId}:
     get:
       tags:
@@ -1029,30 +1241,35 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "200":
+        '200':
           description: Person found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "404":
+                $ref: '#/components/schemas/GetPersonResponse'
+        '404':
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "401":
+                $ref: '#/components/schemas/GetPersonResponse'
+        '401':
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetPersonResponse"
+                $ref: '#/components/schemas/GetPersonResponse'
+        '403':
+          description: Forbidden - missing required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPersonResponse'
+      security:
+      - bearerAuth:
+        - crm:person:read
+      x-required-permissions:
+      - crm:person:read
   /v1/crm/parties/{partyId}/contacts:
     get:
       tags:
@@ -1069,23 +1286,27 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetContactsWithRolesResponse"
-        "404":
-          description: Party not found
-        "403":
+                $ref: '#/components/schemas/GetContactsWithRolesResponse'
+        '403':
           description: Forbidden - insufficient permissions
+        '404':
+          description: Party not found
+      security:
+      - bearerAuth:
+        - crm:contact:view
+      x-required-permissions:
+      - crm:contact:view
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
       - CRM Party Relationships
       summary: Get contacts for a commercial account
-      description: Retrieves all individuals associated with a commercial account
-        with their roles
+      description: Retrieves all individuals associated with a commercial account with their roles
       operationId: getContacts
       parameters:
       - name: partyId
@@ -1117,30 +1338,72 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "404":
-          description: Party not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "200":
+        '200':
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "401":
+                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+        '404':
+          description: Party not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+        '401':
           description: Unauthorized
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
+                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+        '403':
+          description: Forbidden - missing required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+      security:
+      - bearerAuth:
+        - crm:relationship:read
+      x-required-permissions:
+      - crm:relationship:read
+  /v1/crm/billing-terms:
+    get:
+      tags:
+      - CRM Accounts
+      summary: List billing terms
+      description: Returns the reference list of all available billing terms. This is a static reference endpoint; it does not vary per party or account.
+      operationId: listBillingTerms
+      responses:
+        '200':
+          description: Billing terms retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingTermsRef'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingTermsRef'
+        '403':
+          description: Forbidden - missing authority crm:party:view
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingTermsRef'
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -1157,16 +1420,21 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Tier retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetAccountTierResponse"
-        "404":
+                $ref: '#/components/schemas/GetAccountTierResponse'
+        '404':
           description: Account not found
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties/{partyId}:
     get:
       tags:
@@ -1183,16 +1451,21 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Party not found
-        "403":
-          description: Forbidden - insufficient permissions
-        "200":
+        '200':
           description: Party details retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetPartyResponse"
+                $ref: '#/components/schemas/GetPartyResponse'
+        '404':
+          description: Party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties/{partyId}/contacts:
     get:
       tags:
@@ -1209,16 +1482,54 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Contacts retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GetContactsWithRolesResponse"
-        "404":
+                $ref: '#/components/schemas/GetContactsWithRolesResponse'
+        '404':
           description: Party not found
-        "403":
+        '403':
           description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:contact:view
+      x-required-permissions:
+      - crm:contact:view
+  /v1/crm/accounts/parties/duplicate-check:
+    get:
+      tags:
+      - CRM Accounts
+      summary: Check for duplicate commercial parties
+      description: Search for existing parties with a similar legal name to detect potential duplicates before creating a new commercial account.
+      operationId: checkPartyDuplicates
+      parameters:
+      - name: legalName
+        in: query
+        description: Legal name to check for duplicates
+        required: true
+        schema:
+          type: string
+          maxLength: 2147483647
+          minLength: 2
+        example: Acme Corporation
+      responses:
+        '200':
+          description: Duplicate check completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateCheckResponse'
+        '400':
+          description: Invalid request - legalName too short or blank
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:search
+      x-required-permissions:
+      - crm:party:search
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1242,14 +1553,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Relationship deactivated
-        "403":
-          description: Forbidden - missing required permission
-        "404":
+        '404':
           description: Relationship not found
-        "401":
+        '401':
           description: Unauthorized
+        '403':
+          description: Forbidden - missing required permission
+      security:
+      - bearerAuth:
+        - crm:relationship:delete
+      x-required-permissions:
+      - crm:relationship:delete
 components:
   schemas:
     CustomerDTO:
@@ -1269,22 +1585,25 @@ components:
           type: string
           description: Last name of the customer
           example: Doe
+          minLength: 1
         firstName:
           type: string
           description: First name of the customer
           example: John
+          minLength: 1
         phoneNumber:
           type: string
           description: Phone number of the customer
           example: +1-555-1234
         email:
           type: string
+          format: email
           description: Email address of the customer
           example: john.doe@example.com
         primaryAddress:
           type: string
           description: Primary address label or identifier for the customer
-          example: 123
+          example: 123 Main St, Springfield
         vehicleVins:
           type: array
           description: List of vehicle VINs associated with the customer
@@ -1292,7 +1611,7 @@ components:
             type: string
         customerType:
           type: string
-          description: "Type of customer (e.g., 'retail', 'commercial')"
+          description: Type of customer (e.g., 'retail', 'commercial')
       required:
       - firstName
       - lastName
@@ -1339,7 +1658,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: 2024 Ford F-150 XL
         licensePlate:
           type: string
           description: License plate value.
@@ -1373,12 +1692,20 @@ components:
           type: string
           format: date-time
           description: Record creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
+          example: 2026-02-27 12:00:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Last update timestamp (UTC).
-          example: 2026-02-27T13:00:00Z
+          example: 2026-02-27 13:00:00+00:00
+        createdBy:
+          type: string
+          description: Username of the actor who created this record.
+          example: jsmith
+        updatedBy:
+          type: string
+          description: Username of the actor who last modified this record.
+          example: jsmith
         version:
           type: integer
           format: int64
@@ -1408,7 +1735,7 @@ components:
         roles:
           type: array
           items:
-            $ref: "#/components/schemas/RoleAssignment"
+            $ref: '#/components/schemas/RoleAssignment'
     UpdateContactRolesResponse:
       type: object
       properties:
@@ -1422,6 +1749,92 @@ components:
           type: string
         updatedAt:
           type: string
+    UpsertBillingRulesRequest:
+      type: object
+      description: Request to upsert billing rules for a commercial party
+      properties:
+        paymentTerms:
+          type: string
+          description: Payment terms string
+          example: Net 30
+          maxLength: 100
+          minLength: 0
+        creditLimit:
+          type: number
+          description: Maximum credit limit; null means no configured limit
+          example: 10000.0
+          minimum: 0.0
+        currency:
+          type: string
+          description: ISO-4217 currency code
+          example: USD
+          pattern: ^[A-Z]{3}$
+        taxExempt:
+          type: boolean
+          description: Whether the account is tax-exempt
+          example: false
+        poRequired:
+          type: boolean
+          description: Whether a PO number is required before order can be finalized
+          example: false
+        creditHold:
+          type: boolean
+          description: Whether the account is on a credit hold
+          example: false
+        autoPayEnabled:
+          type: boolean
+          description: Whether auto-pay is enabled for this account
+          example: false
+        invoiceDeliveryMethod:
+          type: string
+          description: Preferred invoice delivery method
+          enum:
+          - EMAIL
+          - MAIL
+          - PORTAL
+          - EDI
+        billingAddressId:
+          type: string
+          format: uuid
+          description: Billing address ID
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        discountPolicyRef:
+          type: string
+          description: Optional reference to a discount policy
+          example: DISC-GOLD-001
+          maxLength: 200
+          minLength: 0
+    BillingRuleRef:
+      type: object
+      properties:
+        poRequired:
+          type: boolean
+        taxExempt:
+          type: boolean
+        paymentTerms:
+          type: string
+        creditLimit:
+          type: number
+        creditHold:
+          type: boolean
+        invoiceDeliveryMethod:
+          type: string
+          enum:
+          - EMAIL
+          - MAIL
+          - PORTAL
+          - EDI
+        billingAddressId:
+          type: string
+          format: uuid
+        autoPayEnabled:
+          type: boolean
+        discountPolicyRef:
+          type: string
+        currency:
+          type: string
+        extensions:
+          type: object
     RecordRedemptionRequest:
       type: object
       properties:
@@ -1439,11 +1852,13 @@ components:
           format: uuid
         discountAmount:
           type: number
-          minimum: 0.00
+          minimum: 0.0
         discountType:
           type: string
+          minLength: 1
         promotionCode:
           type: string
+          minLength: 1
         recordedOverLimit:
           type: boolean
         redemptionTimestamp:
@@ -1495,6 +1910,77 @@ components:
         createdAt:
           type: string
           format: date-time
+    BulkIngestRequestCustomerBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerBulkIngestRecord'
+          minItems: 1
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    CustomerBulkIngestRecord:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+        lastName:
+          type: string
+          minLength: 1
+        email:
+          type: string
+        phoneNumber:
+          type: string
+        primaryAddress:
+          type: string
+        customerNumber:
+          type: string
+      required:
+      - firstName
+      - lastName
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     CreatePersonRequest:
       type: object
       description: Request to create an individual person record
@@ -1503,10 +1989,12 @@ components:
           type: string
           description: First name of the person
           example: John
+          minLength: 1
         lastName:
           type: string
           description: Last name of the person
           example: Doe
+          minLength: 1
         preferredContactMethod:
           type: string
           description: Preferred method of contact
@@ -1520,12 +2008,12 @@ components:
           type: array
           description: Email addresses for this person
           items:
-            $ref: "#/components/schemas/EmailInput"
+            $ref: '#/components/schemas/EmailInput'
         phones:
           type: array
           description: Phone numbers for this person
           items:
-            $ref: "#/components/schemas/PhoneInput"
+            $ref: '#/components/schemas/PhoneInput'
       required:
       - firstName
       - lastName
@@ -1536,8 +2024,10 @@ components:
       properties:
         value:
           type: string
+          format: email
           description: Email address
           example: john.doe@example.com
+          minLength: 1
         primary:
           type: boolean
       required:
@@ -1550,6 +2040,7 @@ components:
           type: string
           description: Phone number
           example: +1-555-123-4567
+          minLength: 1
         type:
           type: string
           description: Phone type
@@ -1635,8 +2126,7 @@ components:
           type: string
     CreatePartyRelationshipRequest:
       type: object
-      description: Request to create a relationship between a commercial account and
-        an individual
+      description: Request to create a relationship between a commercial account and an individual
       properties:
         personId:
           type: string
@@ -1658,6 +2148,7 @@ components:
             - PRIMARY_CONTACT
             - DRIVER
             - TECHNICAL
+          minItems: 1
           uniqueItems: true
         effectiveStartDate:
           type: string
@@ -1830,7 +2321,7 @@ components:
         duplicateCandidates:
           type: array
           items:
-            $ref: "#/components/schemas/DuplicateCandidate"
+            $ref: '#/components/schemas/DuplicateCandidate'
     DuplicateCandidate:
       type: object
       properties:
@@ -1933,7 +2424,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/PartySummary"
+            $ref: '#/components/schemas/PartySummary'
         totalCount:
           type: integer
           format: int32
@@ -1967,32 +2458,35 @@ components:
         totalElements:
           type: integer
           format: int64
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: "#/components/schemas/CustomerDTO"
+            $ref: '#/components/schemas/CustomerDTO'
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
         empty:
           type: boolean
-    Pageablenull:
+    PageableObject:
       type: object
       properties:
+        offset:
+          type: integer
+          format: int64
         paged:
           type: boolean
         pageNumber:
@@ -2001,19 +2495,16 @@ components:
         pageSize:
           type: integer
           format: int32
-        offset:
-          type: integer
-          format: int64
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
-    Sortnull:
+    SortObject:
       type: object
       properties:
-        sorted:
-          type: boolean
         empty:
+          type: boolean
+        sorted:
           type: boolean
         unsorted:
           type: boolean
@@ -2037,38 +2528,6 @@ components:
           type: boolean
         invoiceDeliveryMethod:
           type: string
-    BillingRuleRef:
-      type: object
-      properties:
-        poRequired:
-          type: boolean
-        taxExempt:
-          type: boolean
-        paymentTerms:
-          type: string
-        creditLimit:
-          type: number
-        creditHold:
-          type: boolean
-        invoiceDeliveryMethod:
-          type: string
-          enum:
-          - EMAIL
-          - MAIL
-          - PORTAL
-          - EDI
-        billingAddressId:
-          type: string
-          format: uuid
-        autoPayEnabled:
-          type: boolean
-        discountPolicyRef:
-          type: string
-        currency:
-          type: string
-        extensions:
-          type: object
-          additionalProperties: {}
     ContactPreferences:
       type: object
       properties:
@@ -2098,34 +2557,34 @@ components:
         phoneNumbers:
           type: array
           items:
-            $ref: "#/components/schemas/PhoneNumberDTO"
+            $ref: '#/components/schemas/PhoneNumberDTO'
         emailAddresses:
           type: array
           items:
-            $ref: "#/components/schemas/EmailAddressDTO"
+            $ref: '#/components/schemas/EmailAddressDTO'
         preferences:
-          $ref: "#/components/schemas/ContactPreferences"
+          $ref: '#/components/schemas/ContactPreferences'
         primary:
           type: boolean
     CrmSnapshotDTO:
       type: object
       properties:
         snapshotMetadata:
-          $ref: "#/components/schemas/SnapshotMetadata"
+          $ref: '#/components/schemas/SnapshotMetadata'
         account:
-          $ref: "#/components/schemas/AccountSummary"
+          $ref: '#/components/schemas/AccountSummary'
         contacts:
           type: array
           items:
-            $ref: "#/components/schemas/ContactSummary"
+            $ref: '#/components/schemas/ContactSummary'
         vehicles:
           type: array
           items:
-            $ref: "#/components/schemas/VehicleSummary"
+            $ref: '#/components/schemas/VehicleSummary'
         preferences:
-          $ref: "#/components/schemas/BillingPreferences"
+          $ref: '#/components/schemas/BillingPreferences'
         billingRules:
-          $ref: "#/components/schemas/BillingRuleRef"
+          $ref: '#/components/schemas/BillingRuleRef'
     EmailAddressDTO:
       type: object
       properties:
@@ -2230,23 +2689,21 @@ components:
           example: EMAIL
         contactPoints:
           type: array
-          description: "Contact points (emails, phones)"
+          description: Contact points (emails, phones)
           items:
-            $ref: "#/components/schemas/ContactPointDto"
+            $ref: '#/components/schemas/ContactPointDto'
         individualCustomer:
           type: boolean
           description: Whether this CRM record represents an individual customer
           example: true
         commercialContact:
           type: boolean
-          description: Whether this person is an active contact on one or more commercial
-            accounts
+          description: Whether this person is an active contact on one or more commercial accounts
           example: false
         commercialAccountCount:
           type: integer
           format: int32
-          description: Number of active commercial accounts where this person is a
-            contact
+          description: Number of active commercial accounts where this person is a contact
           example: 0
         createdAt:
           type: string
@@ -2281,7 +2738,7 @@ components:
         roles:
           type: array
           items:
-            $ref: "#/components/schemas/AssignedRole"
+            $ref: '#/components/schemas/AssignedRole'
         invoiceDeliveryMethod:
           type: string
     GetContactsWithRolesResponse:
@@ -2292,7 +2749,7 @@ components:
         contacts:
           type: array
           items:
-            $ref: "#/components/schemas/ContactWithRoles"
+            $ref: '#/components/schemas/ContactWithRoles'
     GetCommunicationPreferencesResponse:
       type: object
       properties:
@@ -2356,8 +2813,7 @@ components:
           format: date
           description: Effective end date (null if active)
         individual:
-          $ref: "#/components/schemas/IndividualDetails"
-          description: Individual person details
+          $ref: '#/components/schemas/IndividualDetails'
         primaryBilling:
           type: boolean
     GetCommercialAccountContactsResponse:
@@ -2371,7 +2827,7 @@ components:
           type: array
           description: List of contacts with their roles
           items:
-            $ref: "#/components/schemas/ContactWithRole"
+            $ref: '#/components/schemas/ContactWithRole'
     IndividualDetails:
       type: object
       description: Individual person details
@@ -2386,6 +2842,23 @@ components:
         phone:
           type: string
           description: Primary phone number
+    BillingTermsRef:
+      type: object
+      description: Billing term reference entry
+      properties:
+        code:
+          type: string
+          description: Billing term code identifier
+          example: NET_30
+        label:
+          type: string
+          description: Human-readable label
+          example: Net 30
+        netDays:
+          type: integer
+          format: int32
+          description: Net payment days. Negative values indicate prepayment is required.
+          example: 30
     GetAccountTierResponse:
       type: object
       description: Account tier information response
@@ -2443,3 +2916,49 @@ components:
           type: string
         modifiedAt:
           type: string
+    DuplicateCheckResponse:
+      type: object
+      description: Response containing potential duplicate party matches
+      properties:
+        duplicatesFound:
+          type: boolean
+          description: Whether any duplicate matches were found
+          example: true
+        exactMatchPartyId:
+          type: string
+          description: ID of exact-match party, if any
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        potentialDuplicates:
+          type: array
+          description: List of potential duplicate matches
+          items:
+            $ref: '#/components/schemas/PartyMatch'
+    PartyMatch:
+      type: object
+      description: A single potential duplicate party match
+      properties:
+        partyId:
+          type: string
+          description: Party ID
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        legalName:
+          type: string
+          description: Legal name of the party
+          example: Acme Corporation
+        score:
+          type: number
+          format: double
+          description: Match confidence score (0.0-1.0)
+          example: 0.95
+        matchType:
+          type: string
+          description: Type of match
+          enum:
+          - EXACT
+          - FUZZY
+          example: EXACT
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

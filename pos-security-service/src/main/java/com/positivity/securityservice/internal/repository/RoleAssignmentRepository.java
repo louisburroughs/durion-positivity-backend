@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.enums.ScopeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Repository;
 public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, UUID> {
     List<RoleAssignment> findByUser(User user);
 
+    @EntityGraph(attributePaths = {"user", "role"})
     List<RoleAssignment> findAllByUser_Id(UUID userId);
 
     List<RoleAssignment> findByUser_IdAndRole_IdAndScopeType(UUID userId, UUID roleId, ScopeType scopeType);
@@ -26,15 +28,18 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
 
     List<RoleAssignment> findByUserAndRole(User user, Role role);
 
+    @EntityGraph(attributePaths = {"user", "role"})
     @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " + "AND ra.effectiveStartDate <= :date "
             + "AND (ra.effectiveEndDate IS NULL OR ra.effectiveEndDate >= :date)")
     List<RoleAssignment> findEffectiveAssignmentsByUserAndDate(
             @Param("user") User user, @Param("date") LocalDateTime date);
 
+    @EntityGraph(attributePaths = {"user", "role"})
     @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " + "AND ra.effectiveStartDate <= CURRENT_DATE "
             + "AND (ra.effectiveEndDate IS NULL OR ra.effectiveEndDate >= CURRENT_DATE)")
     List<RoleAssignment> findEffectiveAssignmentsByUser(@Param("user") User user);
 
+    @EntityGraph(attributePaths = {"user", "role"})
     @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user.id = :userId " + "AND ra.effectiveStartDate <= CURRENT_DATE "
             + "AND (ra.effectiveEndDate IS NULL OR ra.effectiveEndDate >= CURRENT_DATE)")
     List<RoleAssignment> findEffectiveAssignmentsByUser_Id(@Param("userId") UUID userId);

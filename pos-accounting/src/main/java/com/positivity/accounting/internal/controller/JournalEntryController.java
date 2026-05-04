@@ -43,7 +43,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/v1/accounting/journal-entries")
-@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Journal Entries", description = "Manage journal entries including posting and reversal.")
 @Validated
 public class JournalEntryController {
@@ -56,8 +55,10 @@ public class JournalEntryController {
     }
 
     @GetMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:view" })
     @PreAuthorize("hasAuthority('accounting:je:view')")
-    @Operation(summary = "List journal entries", description = "Retrieve paginated journal entries.")
+    @Operation(summary = "List journal entries", description = "Retrieve paginated journal entries.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal entries listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
@@ -82,8 +83,10 @@ public class JournalEntryController {
     }
 
     @GetMapping("/{journalEntryId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:view" })
     @PreAuthorize("hasAuthority('accounting:je:view')")
-    @Operation(summary = "Get journal entry", description = "Retrieve a journal entry by identifier.")
+    @Operation(summary = "Get journal entry", description = "Retrieve a journal entry by identifier.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal entry returned")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     public ResponseEntity<JournalEntryResponse> getJournalEntry(
@@ -94,8 +97,10 @@ public class JournalEntryController {
     }
 
     @GetMapping("/{journalEntryId}/traceability")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:view" })
     @PreAuthorize("hasAuthority('accounting:je:view')")
-    @Operation(summary = "Get journal traceability", description = "Trace a journal entry across related records.")
+    @Operation(summary = "Get journal traceability", description = "Trace a journal entry across related records.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal traceability returned")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     public ResponseEntity<JournalEntryTraceabilityResponse> getJournalTraceability(
@@ -106,8 +111,10 @@ public class JournalEntryController {
     }
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:create" })
     @PreAuthorize("hasAuthority('accounting:je:create')")
-    @Operation(summary = "Create journal entry", description = "Create a new journal entry.")
+    @Operation(summary = "Create journal entry", description = "Create a new journal entry.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "201", description = "Journal entry created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
@@ -120,8 +127,10 @@ public class JournalEntryController {
     }
 
     @PutMapping("/{journalEntryId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:create" })
     @PreAuthorize("hasAuthority('accounting:je:create')")
-    @Operation(summary = "Update journal entry", description = "Update an existing journal entry.")
+    @Operation(summary = "Update journal entry", description = "Update an existing journal entry.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal entry updated")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
@@ -135,8 +144,10 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{journalEntryId}/post")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:post" })
     @PreAuthorize("hasAuthority('accounting:je:post')")
-    @Operation(summary = "Post journal entry", description = "Post a draft journal entry to the ledger.")
+    @Operation(summary = "Post journal entry", description = "Post a draft journal entry to the ledger.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal entry posted")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
@@ -149,8 +160,10 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{journalEntryId}/reverse")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:je:reverse" })
     @PreAuthorize("hasAuthority('accounting:je:reverse')")
-    @Operation(summary = "Reverse journal entry", description = "Reverse a posted journal entry.")
+    @Operation(summary = "Reverse journal entry", description = "Reverse a posted journal entry.", tags = {
+            "Journal Entries" })
     @ApiResponse(responseCode = "200", description = "Journal entry reversed")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")

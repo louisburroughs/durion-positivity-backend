@@ -1,0 +1,75 @@
+{
+  "properties": [
+    {
+      "name": "pos.crm.connect-timeout-ms",
+      "type": "java.lang.Integer",
+      "description": "CRM RestClient connect timeout in milliseconds.",
+      "defaultValue": 200
+    },
+    {
+      "name": "pos.crm.read-timeout-ms",
+      "type": "java.lang.Integer",
+      "description": "CRM RestClient read timeout in milliseconds.",
+      "defaultValue": 2000
+    },
+    {
+      "name": "pos.crm.customer-base-url",
+      "type": "java.lang.String",
+      "description": "CRM customer service base URL.",
+      "defaultValue": "http://localhost:8080/v1/customers"
+    },
+    {
+      "name": "pos.crm.vehicle-base-url",
+      "type": "java.lang.String",
+      "description": "CRM vehicle service base URL.",
+      "defaultValue": "http://localhost:8080/v1/vehicles"
+    },
+    {
+      "name": "catalog.service.url",
+      "type": "java.lang.String",
+      "description": "Catalog service base URL used by shop manager clients.",
+      "defaultValue": "http://localhost:8080/v1/services"
+    },
+    {
+      "name": "people.service.url",
+      "type": "java.lang.String",
+      "description": "People service base URL used by shop manager clients.",
+      "defaultValue": "http://localhost:8080/v1/people"
+    },
+    {
+      "name": "location.service.url",
+      "type": "java.lang.String",
+      "description": "Location service base URL used by shop manager clients.",
+      "defaultValue": "http://localhost:8084"
+    },
+    {
+      "name": "pos.hr.base-url",
+      "type": "java.lang.String",
+      "description": "HR service base URL used by shop manager clients.",
+      "defaultValue": "http://localhost:8086"
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

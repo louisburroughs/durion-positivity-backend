@@ -3,10 +3,12 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Service for AP payment orchestration and queries.
@@ -57,9 +59,12 @@ public interface APPaymentService {
      * @param currentUser User initiating payment (for audit)
      * @return APPaymentResponse with status, allocations, gateway reference
      * @throws IllegalArgumentException if validation fails (e.g., negative amounts,
-     *                                  invalid bills or inconsistent idempotency payload)
-     * @throws RuntimeException         if payment processing fails at runtime (e.g.,
-     *                                  gateway rejection or unexpected downstream error)
+     *                                  invalid bills or inconsistent idempotency
+     *                                  payload)
+     * @throws RuntimeException         if payment processing fails at runtime
+     *                                  (e.g.,
+     *                                  gateway rejection or unexpected downstream
+     *                                  error)
      */
     @NonNull
     APPaymentResponse executePayment(@NonNull ExecuteAPPaymentRequest request, @NonNull String currentUser);
@@ -89,7 +94,7 @@ public interface APPaymentService {
      * @return List of payable bills ordered by due date (oldest first, nulls last)
      */
     @NonNull
-    List<VendorBillSummaryResponse> listEligibleBills(@NonNull UUID vendorId);
+    Page<VendorBillSummaryResponse> listEligibleBills(@Nullable UUID vendorId, @NonNull Pageable pageable);
 
     /**
      * Acknowledge GL posting completion (called by accounting service after journal

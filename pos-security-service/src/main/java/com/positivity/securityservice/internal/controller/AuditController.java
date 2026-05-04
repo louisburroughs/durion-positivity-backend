@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditEventCreatedResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
@@ -21,6 +22,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,149 +47,117 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/audit")
 @RequiredArgsConstructor
 @Tag(name = "Audit", description = "Audit event and pricing snapshot endpoints with immutable write-once behavior")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 public class AuditController {
 
-    private final AuditEventService auditEventService;
-    private final PricingSnapshotService pricingSnapshotService;
+        private final AuditEventService auditEventService;
+        private final PricingSnapshotService pricingSnapshotService;
 
-    @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
-    @PostMapping("/events")
-    @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Create audit event",
-            description = "Creates an immutable audit event record and returns the generated event identifier.")
-    @ApiResponse(responseCode = "201", description = "Audit event created")
-    @ApiResponse(
-            responseCode = "400",
-            description = "Invalid audit event payload",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<AuditEventCreatedResponse> createEvent(@RequestBody @NonNull AuditLogEventRequest request) {
-        AuditLogEventDto created = auditEventService.createEvent(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(AuditEventCreatedResponse.builder()
-                        .eventId(created.getEventId())
-                        .timestamp(created.getTimestamp())
-                        .build());
-    }
-
-    @GetMapping("/events/{eventId}")
-    @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            summary = "Get audit event",
-            description = "Returns a previously recorded audit event by its event identifier.")
-    @ApiResponse(responseCode = "200", description = "Audit event returned successfully")
-    @ApiResponse(
-            responseCode = "404",
-            description = "Audit event not found",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<AuditLogEventDto> getEvent(@PathVariable @NonNull UUID eventId) {
-        return ResponseEntity.ok(auditEventService.getEvent(eventId));
-    }
-
-    @GetMapping("/events")
-    @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            summary = "Search audit events",
-            description =
-                    "Searches audit events by event type alone or by entity identity with an optional time range.")
-    @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
-    @ApiResponse(
-            responseCode = "400",
-            description = "Invalid audit search criteria",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<List<AuditLogEventDto>> searchEvents(
-            @Parameter(description = "Entity identifier to match. Must be supplied together with entityType.")
-                    @RequestParam(required = false)
-                    String entityId,
-            @Parameter(description = "Entity type to match. Must be supplied together with entityId.")
-                    @RequestParam(required = false)
-                    String entityType,
-            @Parameter(description = "Event type code to search by when not searching by entity.")
-                    @RequestParam(required = false)
-                    String eventType,
-            @Parameter(
-                            description = "Inclusive start timestamp for the audit search window.",
-                            example = "2026-01-01T00:00:00Z")
-                    @RequestParam(required = false)
-                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-                    Instant from,
-            @Parameter(
-                            description = "Inclusive end timestamp for the audit search window.",
-                            example = "2026-01-31T23:59:59Z")
-                    @RequestParam(required = false)
-                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-                    Instant to) {
-        if (eventType != null
-                && !eventType.isBlank()
-                && entityId == null
-                && entityType == null
-                && from == null
-                && to == null) {
-            return ResponseEntity.ok(auditEventService.searchByEventType(eventType));
+        @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
+        @PostMapping("/events")
+        @PreAuthorize("hasAuthority('security:audit:create')")
+        @Operation(summary = "Create audit event", description = "Creates an immutable audit event record and returns the generated event identifier.")
+        @ApiResponse(responseCode = "201", description = "Audit event created", content = @Content(schema = @Schema(implementation = AuditEventCreatedResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid audit event payload", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<AuditEventCreatedResponse> createEvent(
+                        @RequestBody @NonNull AuditLogEventRequest request) {
+                AuditLogEventDto created = auditEventService.createEvent(request);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(AuditEventCreatedResponse.builder()
+                                                .eventId(created.getEventId())
+                                                .timestamp(created.getTimestamp())
+                                                .build());
         }
 
-        if ((entityId == null) != (entityType == null)) {
-            throw new IllegalArgumentException("entityId and entityType must be provided together");
+        @GetMapping("/events/{eventId}")
+        @PreAuthorize("hasAuthority('security:audit:view')")
+        @Operation(summary = "Get audit event", description = "Returns a previously recorded audit event by its event identifier.")
+        @ApiResponse(responseCode = "200", description = "Audit event returned successfully", content = @Content(schema = @Schema(implementation = AuditLogEventDto.class)))
+        @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "404", description = "Audit event not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<AuditLogEventDto> getEvent(@PathVariable @NonNull UUID eventId) {
+                return ResponseEntity.ok(auditEventService.getEvent(eventId));
         }
 
-        if (entityId == null && entityType == null) {
-            throw new IllegalArgumentException("Provide eventType or both entityId and entityType");
+        @GetMapping("/events")
+        @PreAuthorize("hasAuthority('security:audit:view')")
+        @Operation(operationId = "searchAuditEvents", summary = "Search audit events", description = "Searches audit events using rich filter criteria with pagination support.")
+        @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
+        @ApiResponse(responseCode = "400", description = "Invalid filter criteria", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<Page<AuditLogEventDto>> searchAuditEvents(
+                        @Parameter(description = "Inclusive start timestamp (ISO-8601)", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
+                        @Parameter(description = "Exclusive end timestamp (ISO-8601)", example = "2026-12-31T23:59:59Z") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate,
+                        @Parameter(description = "Actor username or user identifier", example = "advisor.jane") @RequestParam(required = false) String actorId,
+                        @Parameter(description = "Workorder UUID - one word per workspace naming policy") @RequestParam(required = false) UUID workorderId,
+                        @Parameter(description = "Movement UUID", example = "77777777-7777-7777-7777-777777777777") @RequestParam(required = false) UUID movementId,
+                        @Parameter(description = "Product UUID", example = "88888888-8888-8888-8888-888888888888") @RequestParam(required = false) UUID productId,
+                        @Parameter(description = "SKU code", example = "BRAKE-PAD-001") @RequestParam(required = false) String sku,
+                        @Parameter(description = "Event type code", example = "PERMISSION_DENIED") @RequestParam(required = false) String eventType,
+                        @Parameter(description = "Aggregate identifier", example = "role:manager") @RequestParam(required = false) String aggregateId,
+                        @Parameter(description = "Correlation ID UUID for distributed tracing", example = "99999999-9999-9999-9999-999999999999") @RequestParam(required = false) UUID correlationId,
+                        @Parameter(description = "Reason code string", example = "MANUAL_REVIEW") @RequestParam(required = false) String reasonCode,
+                        @Parameter(description = "Cursor token for page navigation", example = "eyJwYWdlIjoyfQ") @RequestParam(required = false) String pageToken,
+                        @Parameter(description = "Location UUID list - repeated query param", example = "11111111-1111-1111-1111-111111111111") @RequestParam(required = false) List<String> locationIds,
+                        @Parameter(hidden = true) Pageable pageable) {
+
+                AuditEventSearchFilter filter = AuditEventSearchFilter.builder()
+                                .fromDate(fromDate)
+                                .toDate(toDate)
+                                .actorId(actorId)
+                                .workorderId(workorderId)
+                                .movementId(movementId)
+                                .productId(productId)
+                                .sku(sku)
+                                .eventType(eventType)
+                                .aggregateId(aggregateId)
+                                .correlationId(correlationId)
+                                .reasonCode(reasonCode)
+                                .pageToken(pageToken)
+                                .locationIds(locationIds)
+                                .build();
+
+                return ResponseEntity.ok(auditEventService.searchEventsFiltered(filter, pageable));
         }
 
-        return ResponseEntity.ok(auditEventService.searchEvents(entityId, entityType, from, to));
-    }
+        @DeleteMapping("/events/**")
+        @PreAuthorize("hasAuthority('security:audit:create')")
+        @Operation(summary = "Delete audit events not allowed", description = "Audit events are immutable and cannot be deleted once recorded.")
+        @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
+        public ResponseEntity<Void> deleteNotAllowed() {
+                return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
+        }
 
-    @DeleteMapping("/events/**")
-    @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Delete audit events not allowed",
-            description = "Audit events are immutable and cannot be deleted once recorded.")
-    @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
-    public ResponseEntity<Void> deleteNotAllowed() {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
-    }
+        @PutMapping("/events/**")
+        @PreAuthorize("hasAuthority('security:audit:create')")
+        @Operation(summary = "Update audit events not allowed", description = "Audit events are immutable and cannot be modified after creation.")
+        @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
+        public ResponseEntity<Void> updateNotAllowed() {
+                return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
+        }
 
-    @PutMapping("/events/**")
-    @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Update audit events not allowed",
-            description = "Audit events are immutable and cannot be modified after creation.")
-    @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
-    public ResponseEntity<Void> updateNotAllowed() {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
-    }
+        @EmitEvent(id = "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE", apiVersion = "1")
+        @PostMapping("/pricing-snapshots")
+        @PreAuthorize("hasAuthority('security:audit:create')")
+        @Operation(summary = "Create pricing snapshot", description = "Creates an immutable pricing snapshot record for later audit and traceability.")
+        @ApiResponse(responseCode = "201", description = "Pricing snapshot created")
+        @ApiResponse(responseCode = "400", description = "Invalid pricing snapshot payload", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<PricingSnapshotCreatedResponse> createPricingSnapshot(
+                        @RequestBody @NonNull PricingSnapshotRequest request) {
+                PricingSnapshotDto created = pricingSnapshotService.createSnapshot(request);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(PricingSnapshotCreatedResponse.builder()
+                                                .snapshotId(created.getSnapshotId())
+                                                .build());
+        }
 
-    @EmitEvent(id = "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE", apiVersion = "1")
-    @PostMapping("/pricing-snapshots")
-    @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Create pricing snapshot",
-            description = "Creates an immutable pricing snapshot record for later audit and traceability.")
-    @ApiResponse(responseCode = "201", description = "Pricing snapshot created")
-    @ApiResponse(
-            responseCode = "400",
-            description = "Invalid pricing snapshot payload",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<PricingSnapshotCreatedResponse> createPricingSnapshot(
-            @RequestBody @NonNull PricingSnapshotRequest request) {
-        PricingSnapshotDto created = pricingSnapshotService.createSnapshot(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(PricingSnapshotCreatedResponse.builder()
-                        .snapshotId(created.getSnapshotId())
-                        .build());
-    }
-
-    @GetMapping("/pricing-snapshots/{snapshotId}")
-    @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            summary = "Get pricing snapshot",
-            description = "Returns an immutable pricing snapshot by its snapshot identifier.")
-    @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")
-    @ApiResponse(
-            responseCode = "404",
-            description = "Pricing snapshot not found",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<PricingSnapshotDto> getPricingSnapshot(@PathVariable @NonNull UUID snapshotId) {
-        return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
-    }
+        @GetMapping("/pricing-snapshots/{snapshotId}")
+        @PreAuthorize("hasAuthority('security:audit:view')")
+        @Operation(summary = "Get pricing snapshot", description = "Returns an immutable pricing snapshot by its snapshot identifier.")
+        @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")
+        @ApiResponse(responseCode = "404", description = "Pricing snapshot not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+        public ResponseEntity<PricingSnapshotDto> getPricingSnapshot(@PathVariable @NonNull UUID snapshotId) {
+                return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
+        }
 }

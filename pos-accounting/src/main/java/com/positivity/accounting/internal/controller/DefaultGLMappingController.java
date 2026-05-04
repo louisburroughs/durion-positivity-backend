@@ -46,10 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/v1/accounting/default-mappings")
-@SecurityRequirement(name = "bearerAuth")
-@Tag(
-        name = "Default GL Mappings",
-        description = "Manage default GL account mappings for event types without explicit posting rules")
+@Tag(name = "Default GL Mappings", description = "Manage default GL account mappings for event types without explicit posting rules")
 @RequiredArgsConstructor
 @Validated
 public class DefaultGLMappingController {
@@ -57,10 +54,10 @@ public class DefaultGLMappingController {
     private final DefaultGLMappingService defaultGLMappingService;
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:create" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:create')")
-    @Operation(
-            summary = "Create default GL mapping",
-            description = "Create a new default GL account mapping for an event type")
+    @Operation(summary = "Create default GL mapping", description = "Create a new default GL account mapping for an event type", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "201", description = "Default mapping created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -76,8 +73,10 @@ public class DefaultGLMappingController {
     }
 
     @PutMapping("/{id}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:edit" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:edit')")
-    @Operation(summary = "Update default GL mapping", description = "Update an existing default GL account mapping")
+    @Operation(summary = "Update default GL mapping", description = "Update an existing default GL account mapping", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Default mapping updated")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -91,8 +90,10 @@ public class DefaultGLMappingController {
     }
 
     @DeleteMapping("/{id}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:delete" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:delete')")
-    @Operation(summary = "Deactivate default GL mapping", description = "Soft delete (deactivate) a default GL mapping")
+    @Operation(summary = "Deactivate default GL mapping", description = "Soft delete (deactivate) a default GL mapping", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "204", description = "Default mapping deactivated")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -105,8 +106,10 @@ public class DefaultGLMappingController {
     }
 
     @GetMapping("/{id}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:view" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
-    @Operation(summary = "Get default GL mapping", description = "Retrieve a default GL mapping by identifier")
+    @Operation(summary = "Get default GL mapping", description = "Retrieve a default GL mapping by identifier", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Default mapping returned")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -118,8 +121,10 @@ public class DefaultGLMappingController {
     }
 
     @GetMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:view" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
-    @Operation(summary = "List default GL mappings", description = "Retrieve paginated list of default GL mappings")
+    @Operation(summary = "List default GL mappings", description = "Retrieve paginated list of default GL mappings", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Default mappings listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_LIST", apiVersion = "1")
@@ -132,16 +137,15 @@ public class DefaultGLMappingController {
     }
 
     @GetMapping("/search")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:view" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
-    @Operation(
-            summary = "Search default GL mappings",
-            description = "Find default GL mappings by event type or organization")
+    @Operation(summary = "Search default GL mappings", description = "Find default GL mappings by event type or organization", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Matching default mappings returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<List<DefaultGLMappingResponse>> searchDefaultMappings(
             @Parameter(description = "Filter by event type") @RequestParam(required = false) @Nullable String eventType,
-            @Parameter(description = "Filter by organization ID") @RequestParam(required = false) @Nullable
-                    UUID organizationId) {
+            @Parameter(description = "Filter by organization ID") @RequestParam(required = false) @Nullable UUID organizationId) {
         log.info("Search default GL mappings: eventType={}, orgId={}", eventType, organizationId);
 
         List<DefaultGLMappingResponse> response;
@@ -158,10 +162,10 @@ public class DefaultGLMappingController {
     }
 
     @GetMapping("/global")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:view" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
-    @Operation(
-            summary = "List global default mappings",
-            description = "Retrieve all global default GL mappings (organizationId IS NULL)")
+    @Operation(summary = "List global default mappings", description = "Retrieve all global default GL mappings (organizationId IS NULL)", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Global default mappings returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<List<DefaultGLMappingResponse>> listGlobalDefaults() {
@@ -171,21 +175,20 @@ public class DefaultGLMappingController {
     }
 
     @GetMapping("/resolve")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:default-mapping:view" })
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
-    @Operation(
-            summary = "Resolve default mapping for event",
-            description = "Find the most specific active default mapping for an event type and organization")
+    @Operation(summary = "Resolve default mapping for event", description = "Find the most specific active default mapping for an event type and organization", tags = {
+            "Default GL Mappings" })
     @ApiResponse(responseCode = "200", description = "Default mapping resolved")
     @ApiResponse(responseCode = "404", description = "No default mapping found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<DefaultGLMappingResponse> resolveDefaultMapping(
             @Parameter(description = "Event type") @NotBlank @RequestParam String eventType,
-            @Parameter(description = "Organization ID (optional)") @RequestParam(required = false) @Nullable
-                    UUID organizationId) {
+            @Parameter(description = "Organization ID (optional)") @RequestParam(required = false) @Nullable UUID organizationId) {
         log.info("Resolve default GL mapping: eventType={}, orgId={}", eventType, organizationId);
 
-        DefaultGLMappingResponse response =
-                defaultGLMappingService.findActiveDefaultForEvent(eventType, organizationId);
+        DefaultGLMappingResponse response = defaultGLMappingService.findActiveDefaultForEvent(eventType,
+                organizationId);
         if (response == null) {
             return ResponseEntity.notFound().build();
         }

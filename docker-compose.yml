@@ -11,6 +11,12 @@ x-pos-security-client-env: &pos-security-client-env
   SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
   SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # Observability Stack for Local Development
 
@@ -30,6 +36,7 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
       LOG_LEVEL: debug
+    logging: *logging
     networks:
       - pos-network
 
@@ -48,6 +55,7 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'
+    logging: *logging
     networks:
       - pos-network
 
@@ -67,6 +75,7 @@ services:
     depends_on:
       - prometheus
       - jaeger
+    logging: *logging
     networks:
       - pos-network
 
@@ -86,6 +95,7 @@ services:
     depends_on:
       - jaeger
       - prometheus
+    logging: *logging
     networks:
       - pos-network
 
@@ -110,6 +120,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging: *logging
     networks:
       - pos-network
 
@@ -125,6 +136,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging: *logging
     networks:
       - pos-network
 
@@ -135,12 +147,11 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command: >
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_CHAT_MODEL:-llama3.1:8b} &&
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text} &&
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_FALLBACK_MODEL:-mistral:7b}
+      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama
+    logging: *logging
     networks:
       - pos-network
 
@@ -160,6 +171,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck: # Optional but recommended for sequential startup
@@ -193,6 +205,39 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pos-bulk-loader:
+    build:
+      context: ./pos-bulk-loader
+      dockerfile: Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_bulk_loader_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_CATALOG_BASE_URL: http://pos-catalog:8080
+      POS_CUSTOMER_BASE_URL: http://pos-customer:8080
+      POS_PEOPLE_BASE_URL: http://pos-people:8080
+      POS_PRICE_BASE_URL: http://pos-price:8080
+      POS_VEHICLE_INVENTORY_BASE_URL: http://pos-vehicle-inventory:8080
+      POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
+      <<: [*pos-security-client-env, *pos-events-client-env]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+    depends_on:
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -221,6 +266,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -251,6 +297,7 @@ services:
         condition: service_healthy
       pos-vehicle-inventory:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -285,6 +332,7 @@ services:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -313,6 +361,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -365,6 +414,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -391,6 +441,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -419,6 +470,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -442,11 +494,13 @@ services:
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       <<: [*pos-security-client-env, *pos-events-client-env]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
-      # From inside the container, reach Ollama by Compose service name, not localhost.
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
+      # Chat runs against Ollama's hosted API. Embeddings stay local.
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
+      OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-http://ollama:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3.5:cloud}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-mistral:7b}
+      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-gpt-oss:120b}
       OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-180s}
       OLLAMA_STREAMING_CHAT_TIMEOUT: ${OLLAMA_STREAMING_CHAT_TIMEOUT:-180s}
       OLLAMA_EMBEDDING_TIMEOUT: ${OLLAMA_EMBEDDING_TIMEOUT:-30s}
@@ -461,16 +515,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       pos-security-service:
         condition: service_healthy
       pos-event-receiver:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -525,6 +580,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -551,6 +607,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -588,6 +645,7 @@ services:
         condition: service_healthy
       pos-event-receiver:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -616,6 +674,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -674,6 +733,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -759,6 +819,7 @@ services:
     depends_on:
       pos-security-service:
         condition: service_healthy
+    logging: *logging
     networks:
       - pos-network
     healthcheck:
@@ -786,33 +847,35 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging: *logging
     networks:
       - pos-network
 
-  # pos-frontend:
-  #   build:
-  #     context: ../durion-positivity-frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "4200:4000"
-  #   environment:
-  #     PORT: 4000
-  #     NODE_ENV: production
-  #     API_GATEWAY_URL: http://pos-api-gateway:8080
-  #     NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
-  #     OTEL_SERVICE_NAME: pos-frontend
-  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-  #     OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-group,deployment.environment=pre-production"
-  #   depends_on:
-  #     pos-api-gateway:
-  #       condition: service_healthy
-  #   healthcheck:
-  #     test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>process.exit(1));"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 20
-  #   networks:
-  #     - pos-network
+  pos-frontend:
+    build:
+      context: ../durion-positivity-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      API_GATEWAY_URL: http://pos-api-gateway:8080
+      NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
+      OTEL_SERVICE_NAME: pos-frontend
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-group,deployment.environment=pre-production"
+    depends_on:
+      pos-api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>process.exit(1));"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+    networks:
+      - pos-network
 
 # Docker Networks
 networks:

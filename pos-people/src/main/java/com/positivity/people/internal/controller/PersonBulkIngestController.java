@@ -22,20 +22,24 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "people:employee:create" })
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('people:employee:create')")
 @Tag(name = "People Bulk Ingest API", description = "Bulk import employee records")
 public class PersonBulkIngestController extends AbstractBulkIngestController<PersonBulkIngestRecord> {
 
   private final EmployeeService employeeService;
 
   @Override
+  @PostMapping("/bulk-ingest")
   @PreAuthorize("hasAuthority('people:employee:create')")
   @EmitEvent(id = "PEOPLE_BULK_INGEST", apiVersion = "1")
   public ResponseEntity<BulkIngestResponse> bulkIngest(
@@ -52,13 +56,7 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
     for (int i = 0; i < request.getRecords().size(); i++) {
       PersonBulkIngestRecord ingestRecord = request.getRecords().get(i);
       try {
-        LocalDate hireDate;
-        try {
-          hireDate = LocalDate.parse(ingestRecord.getHireDate());
-        } catch (DateTimeParseException exception) {
-          throw new IllegalArgumentException(
-              "Invalid hireDate format; expected YYYY-MM-DD", exception);
-        }
+        LocalDate hireDate = parseHireDate(ingestRecord.getHireDate());
 
         CreateEmployeeRequest createEmployeeRequest = new CreateEmployeeRequest();
         createEmployeeRequest.setLegalName(ingestRecord.getLegalName());
@@ -105,5 +103,14 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
   private String errorMessage(@NonNull Exception exception) {
     String message = exception.getMessage();
     return message == null || message.isBlank() ? "People ingest failed" : message;
+  }
+
+  private LocalDate parseHireDate(String hireDateValue) {
+    try {
+      return LocalDate.parse(hireDateValue);
+    } catch (DateTimeParseException exception) {
+      throw new IllegalArgumentException(
+          "Invalid hireDate format; expected YYYY-MM-DD", exception);
+    }
   }
 }

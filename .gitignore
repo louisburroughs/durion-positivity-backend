@@ -61,6 +61,7 @@ PR-Review-Processing.md
 
 /logs/
 /logs/*
+*.log
 
 # Agent-local temporary output (avoid /tmp approval prompts)
 .agent-tmp/*
@@ -71,9 +72,7 @@ PR-Review-Processing.md
 /docs/SECRETS_UPDATE_SUMMARY.txt
 /docs/SECRETS_MANAGEMENT_GUIDE.md
 
-
 .attach*
-
 
 .env
 pos-mcp-server/src/main/resources/exa.prompt.md

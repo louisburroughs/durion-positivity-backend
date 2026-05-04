@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -82,11 +83,12 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         }
 
         String authoritiesHeader = request.getHeader(GatewaySecurityConstants.HEADER_AUTHORITIES);
+        String rolesHeader = request.getHeader(GatewaySecurityConstants.HEADER_ROLES);
         String userHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER);
         String authorizationHeader = request.getHeader(AUTHORIZATION_HEADER);
 
-        if (authoritiesHeader != null && !authoritiesHeader.isBlank()) {
-            List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader);
+        if (StringUtils.hasText(authoritiesHeader) || StringUtils.hasText(rolesHeader)) {
+            List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader, rolesHeader);
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
@@ -101,10 +103,14 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
             if (loggr.isDebugEnabled()) {
                 loggr.debug(
-                        "Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
+                        "Authenticated user '{}' (userId='{}') with {} authorities and {} role authorities from gateway headers",
                         username,
                         userId.orElse(null),
-                        authorities.size());
+                        authorities.size(),
+                        authorities.stream()
+                                .map(SimpleGrantedAuthority::getAuthority)
+                                .filter(authority -> authority.startsWith(GatewaySecurityConstants.ROLE_PREFIX))
+                                .count());
             }
         } else {
             // No authentication headers - clear any existing context
@@ -176,18 +182,25 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
      *                          "ROLE_ADMIN,crm:party:view")
      * @return list of granted authorities
      */
-    private List<SimpleGrantedAuthority> parseAuthorities(String authoritiesHeader) {
-        if (authoritiesHeader == null || authoritiesHeader.isBlank()) {
+    private List<SimpleGrantedAuthority> parseAuthorities(String authoritiesHeader, String rolesHeader) {
+        if (!StringUtils.hasText(authoritiesHeader) && !StringUtils.hasText(rolesHeader)) {
             return Collections.emptyList();
         }
 
-        return Arrays.stream(authoritiesHeader.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .flatMap(this::expandAuthority)
+        Stream<String> authorityStream = csvValues(authoritiesHeader).flatMap(this::expandAuthority);
+        Stream<String> roleStream = csvValues(rolesHeader);
+
+        return Stream.concat(authorityStream, roleStream)
                 .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
+    }
+
+    private Stream<String> csvValues(String headerValue) {
+        if (!StringUtils.hasText(headerValue)) {
+            return Stream.empty();
+        }
+        return Arrays.stream(headerValue.split(",")).map(String::trim).filter(s -> !s.isEmpty());
     }
 
     private Stream<String> expandAuthority(String authority) {

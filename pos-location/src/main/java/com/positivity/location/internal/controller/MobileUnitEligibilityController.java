@@ -4,6 +4,7 @@ import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,14 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #76
  */
 @RestController
+@SecurityRequirement(name = "bearerAuth", scopes = { "location:mobile-unit:read" })
 @RequiredArgsConstructor
 public class MobileUnitEligibilityController {
 
     private final MobileUnitService mobileUnitService;
 
-    @Operation(
-            summary = "Find eligible mobile units",
-            description = "Return eligible active units for a service request.")
+    @Operation(summary = "Find eligible mobile units", description = "Return eligible active units for a service request.")
     @ApiResponse(responseCode = "200", description = "Eligible mobile units returned.")
     @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping("/v1/mobile-units:eligible")

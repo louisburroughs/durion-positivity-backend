@@ -27,7 +27,7 @@ public class ExaWebSearchTool {
             @Value("${exa.api-key:}") @NonNull String apiKey,
             @Value("${exa.search-type:auto}") @NonNull String searchType,
             @Value("${exa.max-results:5}") int maxResults) {
-        this.restClient = restClientBuilder
+        this.restClient = ToolRestClientSupport.instrumentedBuilder(restClientBuilder)
                 .baseUrl(baseUrl)
                 .defaultHeader("Content-Type", "application/json")
                 .build();

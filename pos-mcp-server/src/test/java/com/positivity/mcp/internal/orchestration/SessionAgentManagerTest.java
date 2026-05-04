@@ -12,19 +12,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
-import com.positivity.mcp.service.SystemPromptService;
+import com.positivity.mcp.service.RolePromptResolver;
+import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +47,7 @@ import org.springframework.web.client.RestClient;
  * Unit tests for {@link SessionAgentManager}: cache behaviour and eviction.
  *
  * <p>
- * {@code SessionAgentManager} is annotated {@code @Profile("!test")} so Spring
+ * {@code SessionAgentManager} is annotated {@code @Profile("alpha")} so Spring
  * never
  * instantiates it during slice tests. Here we construct it directly via
  * {@code new},
@@ -81,13 +85,14 @@ class SessionAgentManagerTest {
     private ToolRegistryService toolRegistryService;
 
     @Mock
-    private SystemPromptService systemPromptService;
+    private RolePromptResolver rolePromptResolver;
 
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in LangChain4j
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
+    private SimpleChatClassifier simpleChatClassifier;
 
     private SessionAgentManager manager;
 
@@ -103,9 +108,14 @@ class SessionAgentManagerTest {
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
+        lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
+        lenient().when(embeddingModel.embed(anyString()))
+                .thenReturn(Response.from(Embedding.from(new float[] { 0.1f })));
+        lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
         orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
+        simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         manager = new SessionAgentManager(
                 chatModel,
                 embeddingModel,
@@ -116,7 +126,8 @@ class SessionAgentManagerTest {
                 orderFacadeTool,
                 toolRegistryService,
                 null,
-                systemPromptService,
+                rolePromptResolver,
+                simpleChatClassifier,
                 30,
                 500,
                 50,
@@ -222,5 +233,24 @@ class SessionAgentManagerTest {
         assertThat(response).isEqualTo("Stock found");
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
         verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool"));
+    }
+
+    @Test
+    @DisplayName("chat with empty semantic selection falls back to full role tool set")
+    void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
+        when(toolRegistry.resolveToolsForRole("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(List.of());
+        when(chatModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Stock found"))
+                        .build());
+
+        String response = manager.chat("user-1", "ROLE_ADMIN", "check stock for sku ABC");
+
+        assertThat(response).isEqualTo("Stock found");
+        verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN");
+        verify(toolRegistry, never()).resolveToolsForRole("ROLE_ADMIN", List.of());
     }
 }

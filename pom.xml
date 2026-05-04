@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.5</version>
+		<version>4.0.6</version>
 		<relativePath/>
 		<!-- lookup parent from repository -->
 	</parent>
@@ -108,11 +108,11 @@
 				<artifactId>swagger-annotations</artifactId>
 				<version>${swagger-annotations.version}</version>
 			</dependency>
-			<!-- Kotlin Reflect - required by springdoc-openapi 2.8+ -->
+			<!-- Kotlin Reflect - required by springdoc-openapi 3.x -->
 			<dependency>
 				<groupId>org.jetbrains.kotlin</groupId>
 				<artifactId>kotlin-reflect</artifactId>
-				<version>2.1.10</version>
+				<version>${kotlin.version}</version>
 			</dependency>
 
 			<!-- OPENTELEMETRY (Optional - for gradual observability adoption) -->
@@ -143,7 +143,7 @@
 			<dependency>
 				<groupId>io.micrometer</groupId>
 				<artifactId>micrometer-tracing-bridge-otel</artifactId>
-				<version>1.6.2</version>
+				<version>${micrometer-tracing.version}</version>
 				<optional>true</optional>
 			</dependency>
 
@@ -154,26 +154,26 @@
 				<version>${uuid-creator.version}</version>
 			</dependency>
 
-			<!-- JACKSON 3.0 (for JSON serialization/deserialization) -->
+			<!-- JACKSON 3.1 (for JSON serialization/deserialization) -->
 			<dependency>
 				<groupId>tools.jackson.core</groupId>
 				<artifactId>jackson-databind</artifactId>
-				<version>3.0.4</version>
+				<version>3.1.2</version>
 			</dependency>
 			<dependency>
 				<groupId>tools.jackson.core</groupId>
 				<artifactId>jackson-annotations</artifactId>
-				<version>3.0.4</version>
+				<version>3.1.2</version>
 			</dependency>
 			<dependency>
 				<groupId>tools.jackson.datatype</groupId>
 				<artifactId>jackson-datatype-jdk8</artifactId>
-				<version>3.0.4</version>
+				<version>3.1.2</version>
 			</dependency>
 			<dependency>
 				<groupId>tools.jackson.datatype</groupId>
 				<artifactId>jackson-datatype-jsr310</artifactId>
-				<version>3.0.4</version>
+				<version>3.1.2</version>
 			</dependency>
 
 			<!-- RESILIENCE4J (for Retry Patterns) -->
@@ -184,7 +184,7 @@
 			</dependency>
 			<dependency>
 				<groupId>io.github.resilience4j</groupId>
-				<artifactId>resilience4j-spring-boot3</artifactId>
+				<artifactId>resilience4j-spring-boot4</artifactId>
 				<version>${resilience4j.version}</version>
 			</dependency>
 
@@ -276,24 +276,22 @@
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 		<spring-cloud.version>2025.1.1</spring-cloud.version>
-		<archunit.version>1.4.1</archunit.version>
-		<postgresql.version>42.7.9</postgresql.version>
-		<tomcat.version>10.1.52</tomcat.version>
+		<archunit.version>1.4.2</archunit.version>
 		<!-- Test Dependencies - JUnit managed by Spring Boot -->
-		<mockito.version>5.9.0</mockito.version>
+		<mockito.version>5.20.0</mockito.version>
 		<assertj.version>3.27.7</assertj.version>
-		<rest-assured.version>4.5.1</rest-assured.version>
+		<rest-assured.version>5.5.7</rest-assured.version>
 		<!-- Utility Libraries -->
-		<lombok.version>1.18.38</lombok.version>
-		<slf4j.version>2.0.13</slf4j.version>
-		<springdoc-openapi.version>2.8.0</springdoc-openapi.version>
-		<swagger-annotations.version>2.2.44</swagger-annotations.version>
+		<lombok.version>1.18.46</lombok.version>
+		<slf4j.version>2.0.17</slf4j.version>
+		<springdoc-openapi.version>3.0.3</springdoc-openapi.version>
+		<swagger-annotations.version>2.2.48</swagger-annotations.version>
 		<!-- OpenTelemetry -->
-		<opentelemetry.version>1.44.1</opentelemetry.version>
+		<opentelemetry.version>1.55.0</opentelemetry.version>
 		<!-- UUID v7 Generator -->
 		<uuid-creator.version>5.3.7</uuid-creator.version>
 		<!-- Resilience4j for Retry Patterns and Vavr for Functional Programming -->
-		<resilience4j.version>2.2.0</resilience4j.version>
+		<resilience4j.version>2.4.0</resilience4j.version>
 		<vavr.version>0.10.4</vavr.version>
 		<langchain4j.version>1.13.0</langchain4j.version>
 		<langchain4j.spring.version>1.13.0-beta23</langchain4j.spring.version>
@@ -305,8 +303,8 @@
 		<checkstyle.version>10.21.4</checkstyle.version>
 		<spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
 		<palantir-java-format.version>2.90.0</palantir-java-format.version>
-		<spotbugs-maven-plugin.version>4.9.8.1</spotbugs-maven-plugin.version>
-		<sonar-maven-plugin.version>5.5.0.6356</sonar-maven-plugin.version>
+		<spotbugs-maven-plugin.version>4.9.8.3</spotbugs-maven-plugin.version>
+		<sonar-maven-plugin.version>5.6.0.6792</sonar-maven-plugin.version>
 		<sonar.organization>louisburroughs</sonar.organization>
 		<!-- Test runtime tuning -->
 		<tests.forkCount>1</tests.forkCount>
@@ -401,7 +399,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.5.4</version>
+				<version>3.5.5</version>
 				<configuration>
 					<forkCount>${tests.forkCount}</forkCount>
 					<reuseForks>${tests.reuseForks}</reuseForks>
@@ -411,7 +409,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>3.5.4</version>
+				<version>3.5.5</version>
 				<configuration>
 					<forkCount>${tests.forkCount}</forkCount>
 					<reuseForks>${tests.reuseForks}</reuseForks>

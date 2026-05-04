@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @Tag(name = "Work Sessions API", description = "Operations for managing work sessions and breaks")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/people/workSessions")
 @RequiredArgsConstructor
 public class WorkSessionController {
@@ -33,8 +34,7 @@ public class WorkSessionController {
     @PostMapping("/start")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkSessionDto> startWorkSession(
-            @Parameter(description = "Work session start request body") @Valid @RequestBody @NonNull
-                    WorkSessionRequest request) {
+            @Parameter(description = "Work session start request body") @Valid @RequestBody @NonNull WorkSessionRequest request) {
         log.info("Starting work session for personId(mask)={}", maskForLog(request.getPersonId()));
         WorkSessionDto response = workSessionService.startSession(request.getPersonId());
         return ResponseEntity.ok(response);
@@ -46,8 +46,7 @@ public class WorkSessionController {
     @PostMapping("/stop")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkSessionDto> stopWorkSession(
-            @Parameter(description = "Work session stop request body") @Valid @RequestBody @NonNull
-                    WorkSessionRequest request) {
+            @Parameter(description = "Work session stop request body") @Valid @RequestBody @NonNull WorkSessionRequest request) {
         log.info("Stopping work session for personId(mask)={}", maskForLog(request.getPersonId()));
         WorkSessionDto response = workSessionService.stopSession(request.getPersonId());
         return ResponseEntity.ok(response);
@@ -60,10 +59,7 @@ public class WorkSessionController {
     @PostMapping("/{id}/breaks/start")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<BreakDto> startWorkSessionBreak(
-            @Parameter(description = "Work session ID", example = "7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c")
-                    @PathVariable
-                    @NonNull
-                    UUID id) {
+            @Parameter(description = "Work session ID", example = "7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c") @PathVariable @NonNull UUID id) {
         log.info("Starting break for work session ID(mask): {}", maskForLog(id));
         BreakDto response = workSessionService.startBreak(id);
         return ResponseEntity.ok(response);
@@ -76,10 +72,7 @@ public class WorkSessionController {
     @PostMapping("/{id}/breaks/stop")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<BreakDto> stopWorkSessionBreak(
-            @Parameter(description = "Work session ID", example = "7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c")
-                    @PathVariable
-                    @NonNull
-                    UUID id) {
+            @Parameter(description = "Work session ID", example = "7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c") @PathVariable @NonNull UUID id) {
         log.info("Stopping break for work session ID(mask): {}", maskForLog(id));
         BreakDto response = workSessionService.stopBreak(id);
         return ResponseEntity.ok(response);
@@ -89,8 +82,7 @@ public class WorkSessionController {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

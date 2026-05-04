@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.controller;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -67,6 +68,30 @@ class McpChatControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.response").value("assistant reply"));
+    }
+
+    @Test
+    @WithMockUser(username = "admin.alpha", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat prefers ROLE_ADMIN when present in authorities")
+    void chat_withAdminRole_usesAdminRoleForOrchestration() throws Exception {
+        when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
+                .thenReturn("assistant reply");
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "admin.alpha",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_ADMIN"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.response").value("assistant reply"));
+
+        verify(agentOrchestrationService).chat("admin.alpha", "ROLE_ADMIN", "test");
     }
 
     @Test

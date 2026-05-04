@@ -180,6 +180,14 @@
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- RestAssured MockMvc adapter — bypasses real HTTP transport to avoid
+             Groovy 5 / Java 25 ClosureMetaClass NPE on GET requests -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>spring-mock-mvc</artifactId>
+            <version>${rest-assured.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

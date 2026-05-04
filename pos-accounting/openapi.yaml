@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: POS Accounting Service API
-  description: "Accounting service for invoice, journal entry, and GL account management"
+  description: Accounting service for invoice, journal entry, and GL account management
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Audit Trail
   description: Audit trail operations for tracking accounting exceptions and overrides
+- name: Accounting Exports
+  description: Manage timekeeping and generic data export jobs.
 - name: Payment Applications
   description: Manage payment applications to invoices (AR)
 - name: Posting Rules
@@ -35,11 +37,9 @@ tags:
 - name: Financial Reporting
   description: Income Statement and Balance Sheet generation with drilldown
 - name: Vendor Bill API
-  description: "Endpoints for vendor bill creation, matching, retrieval, and exception\
-    \ resolution"
+  description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
 - name: Default GL Mappings
-  description: Manage default GL account mappings for event types without explicit
-    posting rules
+  description: Manage default GL account mappings for event types without explicit posting rules
 - name: Accounting Events
   description: Ingest and manage accounting events for journal processing.
 paths:
@@ -59,26 +59,28 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "200":
+        '200':
           description: Posting rule set returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
+                $ref: '#/components/schemas/PostingRuleSetResponse'
+        '404':
+          description: Posting rule set not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleSetResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
     put:
       tags:
       - Posting Rules
       summary: Update posting rule set metadata
-      description: Update a posting rule set (only possible if no PUBLISHED version
-        exists).
+      description: Update a posting rule set (only possible if no PUBLISHED version exists).
       operationId: updatePostingRuleSet
       parameters:
       - name: postingRuleSetId
@@ -92,29 +94,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
+              $ref: '#/components/schemas/PostingRuleSetCreateRequest'
         required: true
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "200":
+        '200':
           description: Posting rule set updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "409":
+                $ref: '#/components/schemas/PostingRuleSetResponse'
+        '404':
+          description: Posting rule set not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleSetResponse'
+        '409':
           description: Cannot modify published rule set
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
+                $ref: '#/components/schemas/PostingRuleSetResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:create
+      x-required-permissions:
+      - accounting:posting_rules:create
   /v1/accounting/posting-categories/{postingCategoryId}:
     get:
       tags:
@@ -131,20 +136,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
+        '200':
           description: Posting category returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
+                $ref: '#/components/schemas/PostingCategoryResponse'
+        '404':
+          description: Posting category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingCategoryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting-category:view
+      x-required-permissions:
+      - accounting:posting-category:view
     put:
       tags:
       - Posting Categories
@@ -163,29 +171,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostingCategoryUpdateRequest"
+              $ref: '#/components/schemas/PostingCategoryUpdateRequest'
         required: true
       responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "200":
+        '200':
           description: Posting category updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "400":
+                $ref: '#/components/schemas/PostingCategoryResponse'
+        '404':
+          description: Posting category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingCategoryResponse'
+        '400':
           description: Invalid request or duplicate name
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
+                $ref: '#/components/schemas/PostingCategoryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting-category:edit
+      x-required-permissions:
+      - accounting:posting-category:edit
   /v1/accounting/mapping-keys/{mappingKeyId}:
     get:
       tags:
@@ -202,20 +213,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Mapping key returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "404":
+                $ref: '#/components/schemas/MappingKeyResponse'
+        '404':
           description: Mapping key not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
+                $ref: '#/components/schemas/MappingKeyResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:mapping-key:view
+      x-required-permissions:
+      - accounting:mapping-key:view
     put:
       tags:
       - Mapping Keys
@@ -234,29 +248,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MappingKeyUpdateRequest"
+              $ref: '#/components/schemas/MappingKeyUpdateRequest'
         required: true
       responses:
-        "404":
-          description: Mapping key not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "400":
-          description: Invalid request or duplicate name
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "200":
+        '200':
           description: Mapping key updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
+                $ref: '#/components/schemas/MappingKeyResponse'
+        '404':
+          description: Mapping key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingKeyResponse'
+        '400':
+          description: Invalid request or duplicate name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingKeyResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:mapping-key:edit
+      x-required-permissions:
+      - accounting:mapping-key:edit
   /v1/accounting/journal-entries/{journalEntryId}:
     get:
       tags:
@@ -273,20 +290,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
+        '200':
           description: Journal entry returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
     put:
       tags:
       - Journal Entries
@@ -305,23 +325,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/JournalEntryCreateRequest"
+              $ref: '#/components/schemas/JournalEntryCreateRequest'
         required: true
       responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
+        '200':
           description: Journal entry updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:create
+      x-required-permissions:
+      - accounting:je:create
   /v1/accounting/gl-accounts/{glAccountId}:
     get:
       tags:
@@ -338,20 +361,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
+        '200':
           description: GL account returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
+        '404':
+          description: GL account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
     put:
       tags:
       - GL Accounts
@@ -370,23 +396,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GLAccountUpdateRequest"
+              $ref: '#/components/schemas/GLAccountUpdateRequest'
         required: true
       responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
+        '200':
           description: GL account updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
+        '404':
+          description: GL account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:edit
+      x-required-permissions:
+      - accounting:coa:edit
   /v1/accounting/default-mappings/{id}:
     get:
       tags:
@@ -403,26 +432,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Default mapping returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '404':
           description: Default mapping not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
     put:
       tags:
       - Default GL Mappings
@@ -441,29 +473,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DefaultGLMappingRequest"
+              $ref: '#/components/schemas/DefaultGLMappingRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Default mapping updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '404':
           description: Default mapping not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:edit
+      x-required-permissions:
+      - accounting:default-mapping:edit
     delete:
       tags:
       - Default GL Mappings
@@ -479,14 +514,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-        "404":
-          description: Default mapping not found
-        "204":
+        '204':
           description: Default mapping deactivated
+        '404':
+          description: Default mapping not found
+        '403':
+          description: Forbidden
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:delete
+      x-required-permissions:
+      - accounting:default-mapping:delete
   /v1/accounting/vendor-bills:
     post:
       tags:
@@ -498,29 +536,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GoodsReceivedEvent"
+              $ref: '#/components/schemas/GoodsReceivedEvent'
         required: true
       responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "201":
+        '201':
           description: Vendor bill created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
       tags:
       - Vendor Bill API
       summary: Resolve bill match exception
-      description: "Resolves a matching exception with action ACCEPT, VOID, or CORRECT"
+      description: Resolves a matching exception with action ACCEPT, VOID, or CORRECT
       operationId: resolveMatchException
       parameters:
       - name: billId
@@ -535,52 +576,57 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ExceptionResolutionRequest"
+              $ref: '#/components/schemas/ExceptionResolutionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Exception resolved
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
+                $ref: '#/components/schemas/VendorBillResponse'
+        '404':
           description: Vendor bill not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/match:
     post:
       tags:
       - Vendor Bill API
       summary: Match vendor invoice
-      description: Performs matching for a received vendor invoice and creates/updates
-        bill state
+      description: Performs matching for a received vendor invoice and creates/updates bill state
       operationId: matchVendorInvoice
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
+              $ref: '#/components/schemas/VendorInvoiceReceivedEvent'
         required: true
       responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "201":
+        '201':
           description: Invoice matched and bill created/updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
     post:
       tags:
@@ -601,23 +647,105 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CandidateSelectionRequest"
+              $ref: '#/components/schemas/CandidateSelectionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Candidate selected
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
+                $ref: '#/components/schemas/VendorBillResponse'
+        '404':
           description: Candidate not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
+  /v1/accounting/reports/export:
+    get:
+      tags:
+      - Financial Reporting
+      summary: List export history
+      description: List all async report export jobs, paginated and sorted by most-recent first.
+      operationId: getExportHistory
+      parameters:
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Export history returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageReportExportResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageReportExportResponse'
+        '403':
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageReportExportResponse'
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
+    post:
+      tags:
+      - Financial Reporting
+      summary: Request async report export
+      description: Submit an asynchronous report export job. Returns immediately with PENDING status.
+      operationId: requestExport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportExportRequest'
+        required: true
+      responses:
+        '201':
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '403':
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -643,6 +771,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -650,21 +779,25 @@ paths:
         schema:
           type: string
           default: createdAt
+          minLength: 1
       responses:
-        "200":
+        '200':
           description: Posting rule sets listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetListResponse"
-        "403":
+                $ref: '#/components/schemas/PostingRuleSetListResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetListResponse"
+                $ref: '#/components/schemas/PostingRuleSetListResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
     post:
       tags:
       - Posting Rules
@@ -675,23 +808,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
+              $ref: '#/components/schemas/PostingRuleSetCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Posting rule set created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
-        "400":
+                $ref: '#/components/schemas/PostingRuleSetResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleSetResponse"
+                $ref: '#/components/schemas/PostingRuleSetResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:create
+      x-required-permissions:
+      - accounting:posting_rules:create
   /v1/accounting/posting-rules/{postingRuleSetId}/publish:
     post:
       tags:
@@ -708,26 +844,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
+        '200':
           description: Posting rule set published
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "400":
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+        '404':
+          description: Posting rule set not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+        '400':
           description: No DRAFT version to publish
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:publish
+      x-required-permissions:
+      - accounting:posting_rules:publish
   /v1/accounting/posting-rules/{postingRuleSetId}/archive:
     post:
       tags:
@@ -744,26 +883,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting rule set not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "400":
-          description: No PUBLISHED version to archive
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "200":
+        '200':
           description: Posting rule set archived
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingRuleVersionResponse"
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+        '404':
+          description: Posting rule set not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+        '400':
+          description: No PUBLISHED version to archive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:archive
+      x-required-permissions:
+      - accounting:posting_rules:archive
   /v1/accounting/posting-categories:
     get:
       tags:
@@ -789,6 +931,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -796,6 +939,7 @@ paths:
         schema:
           type: string
           default: categoryName
+          minLength: 1
       - name: isActive
         in: query
         description: Filter by active status
@@ -803,20 +947,23 @@ paths:
         schema:
           type: boolean
       responses:
-        "200":
+        '200':
           description: Posting categories listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryListResponse"
-        "403":
+                $ref: '#/components/schemas/PostingCategoryListResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryListResponse"
+                $ref: '#/components/schemas/PostingCategoryListResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting-category:view
+      x-required-permissions:
+      - accounting:posting-category:view
     post:
       tags:
       - Posting Categories
@@ -827,23 +974,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostingCategoryCreateRequest"
+              $ref: '#/components/schemas/PostingCategoryCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Posting category created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
-        "400":
+                $ref: '#/components/schemas/PostingCategoryResponse'
+        '400':
           description: Invalid request or duplicate name
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostingCategoryResponse"
+                $ref: '#/components/schemas/PostingCategoryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting-category:create
+      x-required-permissions:
+      - accounting:posting-category:create
   /v1/accounting/posting-categories/{postingCategoryId}/deactivate:
     post:
       tags:
@@ -860,14 +1010,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Posting category not found
-        "204":
+        '204':
           description: Posting category deactivated
-        "409":
+        '404':
+          description: Posting category not found
+        '409':
           description: Cannot deactivate - active mappings exist
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting-category:deactivate
+      x-required-permissions:
+      - accounting:posting-category:deactivate
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
@@ -886,16 +1039,20 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "409":
-          description: Payment already applied; reverse applications first
-        "204":
+        '204':
           description: Payment voided
-        "404":
+        '404':
           description: Payment not found
+        '409':
+          description: Payment already applied; reverse applications first
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/payments/{paymentId}/reverse:
     post:
       tags:
@@ -915,17 +1072,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
+              $ref: '#/components/schemas/PaymentApplicationReversalRequest'
         required: true
       responses:
-        "204":
+        '204':
           description: Payment applications reversed
-        "409":
-          description: Payment has no applications to reverse
-        "404":
+        '404':
           description: Payment not found
+        '409':
+          description: Payment has no applications to reverse
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/payments/{paymentId}/applications:
     post:
       tags:
@@ -945,42 +1105,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PaymentApplicationRequest"
+              $ref: '#/components/schemas/PaymentApplicationRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Payment applied successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "409":
-          description: Currency mismatch or invoice not applicable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "400":
+                $ref: '#/components/schemas/PaymentApplicationResponse'
+        '400':
           description: Invalid request or insufficient funds
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
-        "404":
+                $ref: '#/components/schemas/PaymentApplicationResponse'
+        '404':
           description: Payment not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PaymentApplicationResponse"
+                $ref: '#/components/schemas/PaymentApplicationResponse'
+        '409':
+          description: Currency mismatch or invoice not applicable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentApplicationResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:payment:apply
+      x-required-permissions:
+      - accounting:payment:apply
   /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       tags:
       - Payment Applications
       summary: Reverse payment application
-      description: Reverse a payment application with compensating transaction (no
-        deletion).
+      description: Reverse a payment application with compensating transaction (no deletion).
       operationId: reversePaymentApplication
       parameters:
       - name: applicationId
@@ -994,17 +1156,24 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
+              $ref: '#/components/schemas/PaymentApplicationReversalRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request or already reversed
-        "404":
-          description: Payment application not found
-        "204":
+        '204':
           description: Payment application reversed
+        '400':
+          description: Invalid request or already reversed
+        '404':
+          description: Payment application not found
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:payment:reverse
+        - ACCOUNTING_ADMIN
+        - AR_MANAGER
+      x-required-permissions:
+      - accounting:payment:reverse
+      - ACCOUNTING_ADMIN
+      - AR_MANAGER
   /v1/accounting/mappings:
     post:
       tags:
@@ -1017,53 +1186,58 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GLMappingCreateRequest"
+              $ref: '#/components/schemas/GLMappingCreateRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingCreateResponse"
-        "201":
+        '201':
           description: GL mapping created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLMappingCreateResponse"
+                $ref: '#/components/schemas/GLMappingCreateResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLMappingCreateResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:gl-mapping:create
+      x-required-permissions:
+      - accounting:gl-mapping:create
   /v1/accounting/mappings/resolve:
     post:
       tags:
       - GL Mapping API
       summary: Resolve GL mapping
-      description: Resolves source-system external code to a GL account using effective-date
-        rules
+      description: Resolves source-system external code to a GL account using effective-date rules
       operationId: resolveGLMapping
       requestBody:
         description: GL mapping resolve request
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GLMappingResolveRequest"
+              $ref: '#/components/schemas/GLMappingResolveRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingResolveResponse"
-        "200":
+        '200':
           description: GL mapping resolved
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLMappingResolveResponse"
+                $ref: '#/components/schemas/GLMappingResolveResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLMappingResolveResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:gl-mapping:resolve
+      x-required-permissions:
+      - accounting:gl-mapping:resolve
   /v1/accounting/mapping-keys:
     post:
       tags:
@@ -1075,23 +1249,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MappingKeyCreateRequest"
+              $ref: '#/components/schemas/MappingKeyCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Mapping key created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
-        "400":
+                $ref: '#/components/schemas/MappingKeyResponse'
+        '400':
           description: Invalid request or duplicate name
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyResponse"
+                $ref: '#/components/schemas/MappingKeyResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:mapping-key:create
+      x-required-permissions:
+      - accounting:mapping-key:create
   /v1/accounting/mapping-keys/{mappingKeyId}/deactivate:
     post:
       tags:
@@ -1108,14 +1285,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Mapping key deactivated
-        "404":
+        '404':
           description: Mapping key not found
-        "409":
+        '409':
           description: Cannot deactivate - active mappings exist
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:mapping-key:deactivate
+      x-required-permissions:
+      - accounting:mapping-key:deactivate
   /v1/accounting/journal-entries:
     get:
       tags:
@@ -1141,6 +1321,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -1148,21 +1329,25 @@ paths:
         schema:
           type: string
           default: createdAt
+          minLength: 1
       responses:
-        "200":
+        '200':
           description: Journal entries listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
-        "403":
+                $ref: '#/components/schemas/PagedResponseJournalEntryResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
+                $ref: '#/components/schemas/PagedResponseJournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
     post:
       tags:
       - Journal Entries
@@ -1173,23 +1358,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/JournalEntryCreateRequest"
+              $ref: '#/components/schemas/JournalEntryCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Journal entry created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "400":
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
+                $ref: '#/components/schemas/JournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:create
+      x-required-permissions:
+      - accounting:je:create
   /v1/accounting/journal-entries/{journalEntryId}/reverse:
     post:
       tags:
@@ -1209,23 +1397,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/JournalEntryReversalRequest"
+              $ref: '#/components/schemas/JournalEntryReversalRequest'
         required: true
       responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "200":
+        '200':
           description: Journal entry reversed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:reverse
+      x-required-permissions:
+      - accounting:je:reverse
   /v1/accounting/journal-entries/{journalEntryId}/post:
     post:
       tags:
@@ -1244,22 +1435,26 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "200":
+        '200':
           description: Journal entry posted
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
-        "404":
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '404':
           description: Journal entry not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryResponse"
+                $ref: '#/components/schemas/JournalEntryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:post
+      x-required-permissions:
+      - accounting:je:post
   /v1/accounting/invoice/invoices:
     post:
       tags:
@@ -1271,42 +1466,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegenerateInvoiceFromWorkorderRequest"
+              $ref: '#/components/schemas/RegenerateInvoiceFromWorkorderRequest'
         required: true
       responses:
-        "404":
-          description: Workorder not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "503":
-          description: Workorder service unavailable
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "409":
-          description: Workorder is not in COMPLETED state
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
-        "200":
+        '200':
           description: Invoice regenerated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceGenerationResponse"
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '404':
+          description: Workorder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '409':
+          description: Workorder is not in COMPLETED state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '503':
+          description: Workorder service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/gl-accounts:
     get:
       tags:
       - GL Accounts
       summary: List GL accounts
-      description: Retrieve paginated GL accounts filtered by status and sorted by
-        a field.
+      description: Retrieve paginated GL accounts filtered by status and sorted by a field.
       operationId: listGLAccounts
       parameters:
       - name: page
@@ -1326,6 +1523,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -1333,6 +1531,7 @@ paths:
         schema:
           type: string
           default: accountCode
+          minLength: 1
       - name: status
         in: query
         description: Filter by account status
@@ -1340,20 +1539,23 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountListResponse"
-        "200":
+        '200':
           description: GL accounts listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountListResponse"
+                $ref: '#/components/schemas/GLAccountListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountListResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
     post:
       tags:
       - GL Accounts
@@ -1364,23 +1566,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GLAccountCreateRequest"
+              $ref: '#/components/schemas/GLAccountCreateRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: GL account created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "400":
+                $ref: '#/components/schemas/GLAccountResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:create
+      x-required-permissions:
+      - accounting:coa:create
   /v1/accounting/gl-accounts/{glAccountId}/deactivate:
     post:
       tags:
@@ -1399,22 +1604,26 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "200":
+        '200':
           description: GL account deactivated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "404":
+                $ref: '#/components/schemas/GLAccountResponse'
+        '404':
           description: GL account not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:deactivate
+      x-required-permissions:
+      - accounting:coa:deactivate
   /v1/accounting/gl-accounts/{glAccountId}/archive:
     post:
       tags:
@@ -1433,22 +1642,26 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
+        '200':
           description: GL account archived
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
+        '404':
+          description: GL account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:deactivate
+      x-required-permissions:
+      - accounting:coa:deactivate
   /v1/accounting/gl-accounts/{glAccountId}/activate:
     post:
       tags:
@@ -1468,76 +1681,160 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GLAccountActivateRequest"
+              $ref: '#/components/schemas/GLAccountActivateRequest'
         required: true
       responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountResponse"
-        "200":
+        '200':
           description: GL account activated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountResponse"
+                $ref: '#/components/schemas/GLAccountResponse'
+        '404':
+          description: GL account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:edit
+      x-required-permissions:
+      - accounting:coa:edit
+  /v1/accounting/export:
+    post:
+      tags:
+      - Accounting Exports
+      summary: Request timekeeping export
+      description: Submit an export job request.
+      operationId: requestExport_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportJobRequest'
+        required: true
+      responses:
+        '202':
+          description: Export job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+      security:
+      - bearerAuth:
+        - accounting:export:request
+      x-required-permissions:
+      - accounting:export:request
   /v1/accounting/events:
     get:
       tags:
       - Accounting Events
-      summary: List events
+      summary: List accounting events
       description: Retrieve paginated accounting events with optional filters.
-      operationId: listEvents
+      operationId: listAccountingEvents
       parameters:
       - name: organizationId
         in: query
-        description: Organization identifier
-        required: true
+        description: Filter by organization
+        required: false
         schema:
           type: string
           format: uuid
-      - name: page
+      - name: eventType
         in: query
-        description: Page index (0-based)
+        description: Filter by event type
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - name: size
+          type: string
+      - name: idempotencyOutcome
         in: query
-        description: Page size
+        description: Filter by idempotency outcome
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 20
+          type: string
+      - name: receivedAtFrom
+        in: query
+        description: Filter by received-at range start (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: receivedAtTo
+        in: query
+        description: Filter by received-at range end (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: eventId
+        in: query
+        description: Filter by event UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: ingestionId
+        in: query
+        description: Filter by ingestion job UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: domainKeyId
+        in: query
+        description: Filter by domain key
+        required: false
+        schema:
+          type: string
+      - name: invoiceId
+        in: query
+        description: Filter by invoice UUID
+        required: false
+        schema:
+          type: string
+          format: uuid
       - name: status
         in: query
         description: Filter by processing status
         required: false
         schema:
           type: string
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Events listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
-        "403":
+                $ref: '#/components/schemas/PageAccountingEventResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+                $ref: '#/components/schemas/PageAccountingEventResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
     post:
       tags:
       - Accounting Events
@@ -1548,23 +1845,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AccountingEventSubmitRequest"
+              $ref: '#/components/schemas/AccountingEventSubmitRequest'
         required: true
       responses:
-        "202":
+        '202':
           description: Event accepted for processing
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "400":
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
+                $ref: '#/components/schemas/AccountingEventResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/events/{eventId}/retry:
     post:
       tags:
@@ -1583,29 +1883,32 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              type: object
       responses:
-        "202":
+        '202':
           description: Retry requested
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '404':
           description: Event not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
+                $ref: '#/components/schemas/AccountingEventResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:retry
+      x-required-permissions:
+      - accounting:events:retry
   /v1/accounting/events/{eventId}/reprocess:
     post:
       tags:
       - Accounting Events
       summary: Reprocess suspended event
-      description: Reprocess a SUSPENDED accounting event after mapping/rule correction.
-        Idempotent - returns 409 Conflict if already PROCESSED.
+      description: Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.
       operationId: reprocessSuspendedEvent
       parameters:
       - name: eventId
@@ -1619,35 +1922,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReprocessEventRequest"
+              $ref: '#/components/schemas/ReprocessEventRequest'
         required: true
       responses:
-        "409":
-          description: Event already PROCESSED (idempotency violation)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
-          description: Event not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "202":
+        '202':
           description: Reprocessing accepted
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "400":
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '409':
+          description: Event already PROCESSED (idempotency violation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingEventResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:reprocess
+      x-required-permissions:
+      - accounting:events:reprocess
   /v1/accounting/default-mappings:
     get:
       tags:
@@ -1673,21 +1979,25 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       responses:
-        "200":
+        '200':
           description: Default mappings listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingListResponse"
-        "403":
+                $ref: '#/components/schemas/DefaultGLMappingListResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingListResponse"
+                $ref: '#/components/schemas/DefaultGLMappingListResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
     post:
       tags:
       - Default GL Mappings
@@ -1698,37 +2008,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DefaultGLMappingRequest"
+              $ref: '#/components/schemas/DefaultGLMappingRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Default mapping created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "400":
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:create
+      x-required-permissions:
+      - accounting:default-mapping:create
   /v1/accounting/credit-memos:
     get:
       tags:
       - Credit Memos
       summary: List credit memos
-      description: "Retrieve paginated credit memos with optional filters. Filter\
-        \ by customer, invoice, or status. Supports standard pagination parameters\
-        \ (page, size, sort)."
+      description: Retrieve paginated credit memos with optional filters. Filter by customer, invoice, or status. Supports standard pagination parameters (page, size, sort).
       operationId: listCreditMemos
       parameters:
       - name: customerId
@@ -1747,7 +2058,7 @@ paths:
           format: uuid
       - name: status
         in: query
-        description: "Filter by status (DRAFT, POSTED, APPLIED, VOIDED)"
+        description: Filter by status (DRAFT, POSTED, APPLIED, VOIDED)
         required: false
         schema:
           type: string
@@ -1760,147 +2071,165 @@ paths:
         in: query
         required: true
         schema:
-          $ref: "#/components/schemas/Pageable"
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Credit memos retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PageCreditMemoResponse"
-        "400":
+                $ref: '#/components/schemas/PageCreditMemoResponse'
+        '400':
           description: Invalid pagination or filter parameters
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PageCreditMemoResponse"
+                $ref: '#/components/schemas/PageCreditMemoResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:credit-memo:read
+      x-required-permissions:
+      - accounting:credit-memo:read
     post:
       tags:
       - Credit Memos
       summary: Create credit memo
-      description: Create a new Credit Memo to reverse invoice charges. Reduces Accounts
-        Receivable by posting offsetting GL entries. Requires finalized invoice and
-        credit amount within outstanding balance.
+      description: Create a new Credit Memo to reverse invoice charges. Reduces Accounts Receivable by posting offsetting GL entries. Requires finalized invoice and credit amount within outstanding balance.
       operationId: createCreditMemo
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateCreditMemoRequest"
+              $ref: '#/components/schemas/CreateCreditMemoRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request - validation errors
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "409":
-          description: Business rule violation - amount exceeds balance or invoice
-            not finalized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "201":
+        '201':
           description: Credit memo created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "404":
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '400':
+          description: Invalid request - validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '404':
           description: Invoice not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '409':
+          description: Business rule violation - amount exceeds balance or invoice not finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:credit-memo:create
+      x-required-permissions:
+      - accounting:credit-memo:create
   /v1/accounting/audit/refund:
     post:
       tags:
       - Audit Trail
       summary: Record a refund
-      description: Creates an audit trail entry for a refund exception with policy
-        validation and settlement handling
+      description: Creates an audit trail entry for a refund exception with policy validation and settlement handling
       operationId: recordRefund
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RefundRequest"
+              $ref: '#/components/schemas/RefundRequest'
         required: true
       responses:
-        "403":
-          description: Authorization denied - separate authorization required
-          content:
-            '*/*':
-              schema: {}
-        "201":
+        '201':
           description: Refund recorded successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
           description: Invalid request parameters
           content:
-            '*/*':
-              schema: {}
-        "422":
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Authorization denied - separate authorization required
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
           description: Refund policy validation failed
           content:
-            '*/*':
-              schema: {}
-        "500":
+            application/json:
+              schema:
+                type: object
+        '500':
           description: Internal server error
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/audit/price-override:
     post:
       tags:
       - Audit Trail
       summary: Record a price override
-      description: Creates an audit trail entry for a price override exception with
-        policy validation
+      description: Creates an audit trail entry for a price override exception with policy validation
       operationId: recordPriceOverride
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PriceOverrideRequest"
+              $ref: '#/components/schemas/PriceOverrideRequest'
         required: true
       responses:
-        "403":
-          description: Authorization denied - insufficient privileges for override
-            amount
-          content:
-            '*/*':
-              schema: {}
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
-        "201":
+        '201':
           description: Price override recorded successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
-        "422":
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Authorization denied - insufficient privileges for override amount
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
           description: Policy validation failed
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/audit/cancellation:
     post:
       tags:
@@ -1912,78 +2241,87 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CancellationRequest"
+              $ref: '#/components/schemas/CancellationRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
-        "404":
-          description: Source document not found
-          content:
-            '*/*':
-              schema: {}
-        "201":
+        '201':
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Source document not found
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - accounting:events:submit
+      x-required-permissions:
+      - accounting:events:submit
   /v1/accounting/ap/payments:
     post:
       tags:
       - AP Payments
       summary: Execute vendor payment
-      description: "Execute a vendor payment with optional explicit allocations to\
-        \ bills. Idempotent using paymentRef: same ref + same payload returns existing\
-        \ payment; same ref + different payload yields 409 conflict."
+      description: 'Execute a vendor payment with optional explicit allocations to bills. Idempotent using paymentRef: same ref + same payload returns existing payment; same ref + different payload yields 409 conflict.'
       operationId: executePayment
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ExecuteAPPaymentRequest"
+              $ref: '#/components/schemas/ExecuteAPPaymentRequest'
         required: true
       responses:
-        "409":
-          description: "Conflict: paymentRef exists with different payload"
+        '200':
+          description: 'Idempotent replay: existing payment returned'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "400":
-          description: "Validation error: negative amounts, invalid bills, etc."
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "200":
-          description: "Idempotent replay: existing payment returned"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "500":
-          description: Payment gateway failure
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "201":
+                $ref: '#/components/schemas/APPaymentResponse'
+        '201':
           description: Payment executed successfully (new payment created)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
+                $ref: '#/components/schemas/APPaymentResponse'
+        '400':
+          description: 'Validation error: negative amounts, invalid bills, etc.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+        '409':
+          description: 'Conflict: paymentRef exists with different payload'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+        '500':
+          description: Payment gateway failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:pay
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
@@ -2001,20 +2339,23 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
-        "200":
+        '200':
           description: Vendor bill found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
+                $ref: '#/components/schemas/VendorBillResponse'
+        '404':
           description: Vendor bill not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
     get:
       tags:
@@ -2032,14 +2373,17 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
-        "200":
+        '200':
           description: Match candidates returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
+                $ref: '#/components/schemas/VendorBillMatchCandidateResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/event/{eventId}:
     get:
       tags:
@@ -2057,27 +2401,29 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
-        "200":
+        '200':
           description: Vendor bill found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
-        "404":
+                $ref: '#/components/schemas/VendorBillResponse'
+        '404':
           description: Vendor bill not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VendorBillResponse"
+                $ref: '#/components/schemas/VendorBillResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
       - Financial Reporting
       summary: Generate Income Statement
-      description: "Generate Profit & Loss report for a date range with revenue, expenses,\
-        \ and net income"
+      description: Generate Profit & Loss report for a date range with revenue, expenses, and net income
       operationId: generateIncomeStatement
       parameters:
       - name: startDate
@@ -2097,32 +2443,35 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "400":
-          description: Invalid date range
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "200":
+        '200':
           description: Income statement generated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "401":
+                $ref: '#/components/schemas/IncomeStatementReport'
+        '400':
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeStatementReport'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
+                $ref: '#/components/schemas/IncomeStatementReport'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeStatementReport'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/drilldown/journal-lines/{accountId}:
     get:
       tags:
@@ -2137,7 +2486,8 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          minLength: 1
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         example: 123e4567-e89b-12d3-a456-426614174000
       - name: startDate
         in: query
@@ -2156,40 +2506,43 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "200":
+        '200':
           description: Journal line drilldown successful
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "400":
+                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
+        '400':
           description: Invalid account ID or date range
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "401":
+                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
+                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
     get:
       tags:
@@ -2200,11 +2553,12 @@ paths:
       parameters:
       - name: statementLineCode
         in: path
-        description: "Statement line code (e.g., REVENUE_SALES)"
+        description: Statement line code (e.g., REVENUE_SALES)
         required: true
         schema:
           type: string
-          pattern: "^[A-Z_]{1,100}$"
+          minLength: 1
+          pattern: ^[A-Z_]{1,100}$
       - name: startDate
         in: query
         description: Period start date (YYYY-MM-DD)
@@ -2222,47 +2576,49 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "400":
-          description: Invalid statement line code or date range
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
+        '200':
           description: Account drilldown successful
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "401":
+                  $ref: '#/components/schemas/AccountDrilldownResponse'
+        '400':
+          description: Invalid statement line code or date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountDrilldownResponse'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
+                  $ref: '#/components/schemas/AccountDrilldownResponse'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountDrilldownResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/balance-sheet:
     get:
       tags:
       - Financial Reporting
       summary: Generate Balance Sheet
-      description: "Generate Balance Sheet as of a specific date with assets, liabilities,\
-        \ and equity"
+      description: Generate Balance Sheet as of a specific date with assets, liabilities, and equity
       operationId: generateBalanceSheet
       parameters:
       - name: asOfDate
@@ -2274,32 +2630,80 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
+        '200':
           description: Balance sheet generated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "400":
+                $ref: '#/components/schemas/BalanceSheetReport'
+        '400':
           description: Invalid date
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "401":
+                $ref: '#/components/schemas/BalanceSheetReport'
+        '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
+                $ref: '#/components/schemas/BalanceSheetReport'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheetReport'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/export/{exportId}:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Get export status
+      description: Poll the current status of an async report export job.
+      operationId: getExportStatus
+      parameters:
+      - name: exportId
+        in: path
+        description: Export job UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Export status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '403':
+          description: Forbidden - missing accounting:report:export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+        '404':
+          description: Export job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportExportResponse'
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - accounting:report:export
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     get:
       tags:
@@ -2332,25 +2736,29 @@ paths:
           type: integer
           format: int32
           default: 10
+          exclusiveMinimum: 0
       responses:
-        "200":
+        '200':
           description: Posting rule versions listed
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PostingRuleVersionResponse"
-        "404":
+                  $ref: '#/components/schemas/PostingRuleVersionResponse'
+        '404':
           description: Posting rule set not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PostingRuleVersionResponse"
+                  $ref: '#/components/schemas/PostingRuleVersionResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
   /v1/accounting/posting-categories/{postingCategoryId}/mapping-keys:
     get:
       tags:
@@ -2383,6 +2791,7 @@ paths:
           type: integer
           format: int32
           default: 20
+          exclusiveMinimum: 0
       - name: sort
         in: query
         description: Sort field
@@ -2390,6 +2799,7 @@ paths:
         schema:
           type: string
           default: keyName
+          minLength: 1
       - name: isActive
         in: query
         description: Filter by active status
@@ -2397,26 +2807,29 @@ paths:
         schema:
           type: boolean
       responses:
-        "404":
-          description: Posting category not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
-        "200":
+        '200':
           description: Mapping keys listed
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
-        "403":
+                $ref: '#/components/schemas/MappingKeyListResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MappingKeyListResponse"
+                $ref: '#/components/schemas/MappingKeyListResponse'
+        '404':
+          description: Posting category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingKeyListResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:mapping-key:view
+      x-required-permissions:
+      - accounting:mapping-key:view
   /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
@@ -2433,20 +2846,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Journal entry not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
-        "200":
+        '200':
           description: Journal traceability returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
+                $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:je:view
+      x-required-permissions:
+      - accounting:je:view
   /v1/accounting/invoice/{invoiceId}/status:
     get:
       tags:
@@ -2463,26 +2879,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Invoice status returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
-        "500":
-          description: Error retrieving invoice status
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
+                $ref: '#/components/schemas/InvoiceStatusResponse'
+        '404':
           description: Invoice not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
+                $ref: '#/components/schemas/InvoiceStatusResponse'
+        '500':
+          description: Error retrieving invoice status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceStatusResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/invoice/rules/{customerId}:
     get:
       tags:
@@ -2499,26 +2918,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Billing rules returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
-        "404":
+                $ref: '#/components/schemas/BillingRuleRefResponse'
+        '404':
           description: Customer not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
-        "503":
+                $ref: '#/components/schemas/BillingRuleRefResponse'
+        '503':
           description: Customer service unavailable
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BillingRuleRefResponse"
+                $ref: '#/components/schemas/BillingRuleRefResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/gl-accounts/{glAccountId}/balance:
     get:
       tags:
@@ -2535,20 +2957,93 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: GL account not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLAccountBalanceResponse"
-        "200":
+        '200':
           description: Balance returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/GLAccountBalanceResponse"
+                $ref: '#/components/schemas/GLAccountBalanceResponse'
+        '404':
+          description: GL account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountBalanceResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:coa:view
+      x-required-permissions:
+      - accounting:coa:view
+  /v1/accounting/export/status/{jobId}:
+    get:
+      tags:
+      - Accounting Exports
+      summary: Get export job status
+      description: Retrieve the current status of an export job.
+      operationId: getExportStatus_1
+      parameters:
+      - name: jobId
+        in: path
+        description: Export job identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Export job status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '404':
+          description: Export job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+      security:
+      - bearerAuth:
+        - accounting:export:view
+      x-required-permissions:
+      - accounting:export:view
+  /v1/accounting/export/history:
+    get:
+      tags:
+      - Accounting Exports
+      summary: List export history
+      description: Retrieve paginated export job history.
+      operationId: listExportHistory
+      parameters:
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Export history returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageExportJobResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageExportJobResponse'
+      security:
+      - bearerAuth:
+        - accounting:export:view
+      x-required-permissions:
+      - accounting:export:view
   /v1/accounting/events/{eventId}:
     get:
       tags:
@@ -2565,27 +3060,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Event returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
-        "404":
+                $ref: '#/components/schemas/AccountingEventResponse'
+        '404':
           description: Event not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AccountingEventResponse"
+                $ref: '#/components/schemas/AccountingEventResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/{eventId}/reprocessing-history:
     get:
       tags:
       - Accounting Events
       summary: Get reprocessing history
-      description: Retrieve all reprocessing attempts for a suspended accounting event.
-        Returns an empty list if the event does not exist or has no reprocessing history.
+      description: Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.
       operationId: getReprocessingHistory
       parameters:
       - name: eventId
@@ -2596,22 +3093,25 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Reprocessing history returned (may be empty list)
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ReprocessingAttemptHistoryResponse"
+                  $ref: '#/components/schemas/ReprocessingAttemptHistoryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/events/{eventId}/processing-log:
     get:
       tags:
       - Accounting Events
       summary: Get event processing log
-      description: Retrieve the processing log for an accounting event.
+      description: Retrieve the structured processing audit log for an accounting event. Returns an empty list if the event has no processing log.
       operationId: getEventProcessingLog
       parameters:
       - name: eventId
@@ -2622,20 +3122,44 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Processing log returned
           content:
-            '*/*':
+            application/json:
               schema:
-                type: string
-        "404":
-          description: Event not found
-          content:
-            '*/*':
-              schema:
-                type: string
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventProcessingLogEntry'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
+  /v1/accounting/events/contract:
+    get:
+      tags:
+      - Accounting Events
+      summary: Get event envelope contract
+      description: Returns the current event envelope schema contract for SDK validation.
+      operationId: getEventContract
+      responses:
+        '200':
+          description: Contract returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventEnvelopeContract'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventEnvelopeContract'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/default-mappings/search:
     get:
       tags:
@@ -2658,31 +3182,33 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "200":
+        '200':
           description: Matching default mappings returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+                  $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/default-mappings/resolve:
     get:
       tags:
       - Default GL Mappings
       summary: Resolve default mapping for event
-      description: Find the most specific active default mapping for an event type
-        and organization
+      description: Find the most specific active default mapping for an event type and organization
       operationId: resolveDefaultMapping
       parameters:
       - name: eventType
@@ -2691,6 +3217,7 @@ paths:
         required: true
         schema:
           type: string
+          minLength: 1
       - name: organizationId
         in: query
         description: Organization ID (optional)
@@ -2699,26 +3226,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "200":
+        '200':
           description: Default mapping resolved
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "404":
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '404':
           description: No default mapping found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/DefaultGLMappingResponse"
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/default-mappings/global:
     get:
       tags:
@@ -2727,31 +3257,33 @@ paths:
       description: Retrieve all global default GL mappings (organizationId IS NULL)
       operationId: listGlobalDefaults
       responses:
-        "200":
+        '200':
           description: Global default mappings returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
-        "403":
+                  $ref: '#/components/schemas/DefaultGLMappingResponse'
+        '403':
           description: Forbidden
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+                  $ref: '#/components/schemas/DefaultGLMappingResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:default-mapping:view
+      x-required-permissions:
+      - accounting:default-mapping:view
   /v1/accounting/credit-memos/{creditMemoId}:
     get:
       tags:
       - Credit Memos
       summary: Get credit memo
-      description: Retrieve details for a specific Credit Memo by ID. Includes full
-        audit trail and current invoice balance.
+      description: Retrieve details for a specific Credit Memo by ID. Includes full audit trail and current invoice balance.
       operationId: getCreditMemo
       parameters:
       - name: creditMemoId
@@ -2762,27 +3294,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Credit memo retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
-        "404":
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '404':
           description: Credit memo not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/CreditMemoResponse"
+                $ref: '#/components/schemas/CreditMemoResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:credit-memo:read
+      x-required-permissions:
+      - accounting:credit-memo:read
   /v1/accounting/audit/type/{type}:
     get:
       tags:
       - Audit Trail
       summary: Get audit trail by exception type
-      description: Retrieves audit trail entries filtered by exception type and date
-        range
+      description: Retrieves audit trail entries filtered by exception type and date range
       operationId: getByType
       parameters:
       - name: type
@@ -2802,7 +3336,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -2810,30 +3344,35 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range or exception type
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
+          description: Invalid date range or exception type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/range:
     get:
       tags:
@@ -2849,7 +3388,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -2857,30 +3396,35 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
-        "400":
-          description: Invalid date range
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2898,28 +3442,33 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "404":
-          description: Invoice not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2937,28 +3486,33 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "404":
-          description: Order not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/by-order/{orderId}:
     get:
       tags:
@@ -2976,35 +3530,39 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "404":
-          description: Order not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
       - Audit Trail
       summary: Get audit trail by actor
-      description: Retrieves audit trail entries for a specific actor (user) within
-        a date range
+      description: Retrieves audit trail entries for a specific actor (user) within a date range
       operationId: getByActor
       parameters:
       - name: actorId
@@ -3021,7 +3579,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -3029,45 +3587,49 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
-        "404":
-          description: Actor not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid date range or actor ID
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
+        '200':
           description: Audit entries retrieved successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
+                $ref: '#/components/schemas/AuditTrailResponse'
+        '400':
+          description: Invalid date range or actor ID
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '404':
+          description: Actor not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+      security:
+      - bearerAuth:
+        - accounting:events:view
+      x-required-permissions:
+      - accounting:events:view
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
       - AP Payments
       summary: Get payment details
-      description: Retrieve AP payment details including allocations and GL posting
-        status.
+      description: Retrieve AP payment details including allocations and GL posting status.
       operationId: getPayment
       parameters:
       - name: paymentId
@@ -3079,20 +3641,23 @@ paths:
           format: uuid
         example: 01936e5c-7890-7a3d-8b6e-2b3456789012
       responses:
-        "200":
+        '200':
           description: Payment found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "404":
+                $ref: '#/components/schemas/APPaymentResponse'
+        '404':
           description: Payment not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
+                $ref: '#/components/schemas/APPaymentResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/ap/payments/by-ref/{paymentRef}:
     get:
       tags:
@@ -3109,60 +3674,65 @@ paths:
           type: string
           maxLength: 100
           minLength: 1
-          pattern: "^[^\\r\\n]+$"
+          pattern: ^[^\r\n]+$
         example: 01936e5c-7890-7a3d-8b6e-2b3456789012
       responses:
-        "200":
+        '200':
           description: Payment found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
-        "404":
+                $ref: '#/components/schemas/APPaymentResponse'
+        '404':
           description: Payment not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/APPaymentResponse"
+                $ref: '#/components/schemas/APPaymentResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/ap/bills:
     get:
       tags:
       - AP Payments
       summary: List eligible vendor bills
-      description: "Get eligible vendor bills for payment (status = APPROVED). Bills\
-        \ are ordered by due date (oldest first, nulls last), then bill date, then\
-        \ bill ID."
-      operationId: listBills
+      description: Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID. Sort order is server-controlled.
+      operationId: listApBills
       parameters:
       - name: vendorId
         in: query
         description: Vendor UUID
-        required: true
+        required: false
         schema:
           type: string
           format: uuid
         example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
       responses:
-        "200":
+        '200':
           description: Bills retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
-        "400":
+                $ref: '#/components/schemas/PageVendorBillSummaryResponse'
+        '400':
           description: Invalid vendor ID
           content:
-            '*/*':
+            application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+                $ref: '#/components/schemas/PageVendorBillSummaryResponse'
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
 components:
   schemas:
     PostingRuleSetCreateRequest:
@@ -3182,6 +3752,7 @@ components:
           minLength: 0
         rulesDefinition:
           type: string
+          minLength: 1
         createdBy:
           type: string
           maxLength: 50
@@ -3206,7 +3777,7 @@ components:
         versions:
           type: array
           items:
-            $ref: "#/components/schemas/PostingRuleVersionResponse"
+            $ref: '#/components/schemas/PostingRuleVersionResponse'
         createdAt:
           type: string
           format: date-time
@@ -3345,7 +3916,7 @@ components:
           type: string
           format: date-time
           description: Journal transaction date and time
-          example: 2026-01-15T10:30:00
+          example: 2026-01-15 10:30:00
         description:
           type: string
           description: Journal entry description
@@ -3375,7 +3946,8 @@ components:
           type: array
           description: Journal lines (must net to a balanced entry)
           items:
-            $ref: "#/components/schemas/JournalEntryLineRequest"
+            $ref: '#/components/schemas/JournalEntryLineRequest'
+          minItems: 1
       required:
       - lines
       - transactionDate
@@ -3392,12 +3964,12 @@ components:
           type: number
           description: Debit amount for this line
           example: 1250.0
-          minimum: 0.00
+          minimum: 0.0
         creditAmount:
           type: number
           description: Credit amount for this line
           example: 1250.0
-          minimum: 0.00
+          minimum: 0.0
         description:
           type: string
           description: Line description
@@ -3483,7 +4055,7 @@ components:
           type: string
           format: date-time
           description: Transaction date and time
-          example: 2026-01-15T10:30:00
+          example: 2026-01-15 10:30:00
         description:
           type: string
           description: Journal entry description
@@ -3529,12 +4101,12 @@ components:
           type: array
           description: Journal entry lines
           items:
-            $ref: "#/components/schemas/JournalEntryLineResponse"
+            $ref: '#/components/schemas/JournalEntryLineResponse'
         createdAt:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-01-15T10:31:00Z
+          example: 2026-01-15 10:31:00+00:00
         createdBy:
           type: string
           description: Created by username
@@ -3543,7 +4115,7 @@ components:
           type: string
           format: date-time
           description: Last modified timestamp
-          example: 2026-01-15T10:32:00Z
+          example: 2026-01-15 10:32:00+00:00
         modifiedBy:
           type: string
           description: Last modified by username
@@ -3552,7 +4124,7 @@ components:
           type: string
           format: date-time
           description: Posted timestamp
-          example: 2026-01-15T10:40:00Z
+          example: 2026-01-15 10:40:00+00:00
         postedBy:
           type: string
           description: Posted by username
@@ -3561,7 +4133,7 @@ components:
           type: string
           format: date-time
           description: Reversed timestamp
-          example: 2026-01-16T08:20:00Z
+          example: 2026-01-16 08:20:00+00:00
     GLAccountUpdateRequest:
       type: object
       description: Request payload for updating mutable GL account fields
@@ -3723,12 +4295,12 @@ components:
           type: string
           format: date-time
           description: Date goods were received
-          example: 2026-01-15T10:30:00
+          example: 2026-01-15 10:30:00
         lineItems:
           type: array
           description: Line items received
           items:
-            $ref: "#/components/schemas/ReceivedLineItem"
+            $ref: '#/components/schemas/ReceivedLineItem'
         dimensions:
           type: object
           additionalProperties:
@@ -3747,6 +4319,8 @@ components:
       type: object
       description: Line item received from vendor
       properties:
+        inventoryItem:
+          type: boolean
         productId:
           type: string
           format: uuid
@@ -3756,6 +4330,7 @@ components:
           type: string
           description: Product description
           example: Widget Type A
+          minLength: 1
         quantity:
           type: number
           description: Quantity received
@@ -3799,12 +4374,12 @@ components:
           type: string
           format: date-time
           description: Bill date
-          example: 2026-01-15T00:00:00
+          example: 2026-01-15 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Due date
-          example: 2026-02-14T00:00:00
+          example: 2026-02-14 00:00:00
         totalAmount:
           type: number
           description: Total bill amount
@@ -3815,11 +4390,9 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
-          - PENDING_REVIEW
           - APPROVED
           - REJECTED
           - PAID
-          - CANCELLED
           - VOIDED
           example: PENDING_RECEIPT_MATCH
         originEventId:
@@ -3845,7 +4418,7 @@ components:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00+00:00
         createdBy:
           type: string
           description: Created by user
@@ -3870,14 +4443,17 @@ components:
           - VOID
           - CORRECT
           example: ACCEPT
+          minLength: 1
         reason:
           type: string
           description: Reason for chosen resolution
           example: Invoice variance approved by manager
+          minLength: 1
         operatorId:
           type: string
           description: Operator identifier performing resolution
           example: manager-001
+          minLength: 1
       required:
       - operatorId
       - reason
@@ -3895,6 +4471,7 @@ components:
           type: string
           description: Product description
           example: Widget Type A
+          minLength: 1
         quantity:
           type: number
           description: Invoiced quantity
@@ -3931,21 +4508,22 @@ components:
           type: string
           description: Vendor invoice number
           example: INV-2026-001234
+          minLength: 1
         invoiceDate:
           type: string
           format: date-time
           description: Invoice date
-          example: 2026-01-16T00:00:00
+          example: 2026-01-16 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Invoice due date
-          example: 2026-02-15T00:00:00
+          example: 2026-02-15 00:00:00
         lineItems:
           type: array
           description: Invoice line items
           items:
-            $ref: "#/components/schemas/InvoiceLineItem"
+            $ref: '#/components/schemas/InvoiceLineItem'
       required:
       - eventId
       - invoiceDate
@@ -3961,8 +4539,100 @@ components:
           type: string
           description: Operator identifier performing selection
           example: advisor-001
+          minLength: 1
       required:
       - operatorId
+    ReportExportRequest:
+      type: object
+      description: Request payload for exporting a financial report
+      properties:
+        format:
+          type: string
+          description: Export format
+          enum:
+          - PDF
+          - CSV
+          - XLSX
+          - JSON
+          example: CSV
+        reportType:
+          type: string
+          description: Report type key
+          example: JOURNAL_LINES
+          maxLength: 100
+          minLength: 0
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive, YYYY-MM-DD)
+          example: 2026-01-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive, YYYY-MM-DD)
+          example: 2026-03-31
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization UUID to scope the export
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        filename:
+          type: string
+          description: Optional output filename without extension
+          example: journal-lines-q1-2026
+          maxLength: 150
+          minLength: 0
+      required:
+      - endDate
+      - format
+      - organizationId
+      - reportType
+      - startDate
+    ReportExportResponse:
+      type: object
+      description: Async report export job state
+      properties:
+        exportId:
+          type: string
+          format: uuid
+          description: Unique export job identifier
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        status:
+          type: string
+          description: Current export status
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+          example: PENDING
+        requestedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when the export was requested
+          example: 2026-04-25 10:00:00+00:00
+        completedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when export completed (null if not finished)
+          example: 2026-04-25 10:00:05+00:00
+        downloadUrl:
+          type: string
+          description: Download URL (only present when status is COMPLETED)
+          example: https://storage.example.com/exports/export-abc.csv
+        format:
+          type: string
+          description: Export format
+          enum:
+          - PDF
+          - CSV
+          - XLSX
+          - JSON
+          example: CSV
+        reportType:
+          type: string
+          description: Report type that was exported
+          example: JOURNAL_LINES
     PostingCategoryCreateRequest:
       type: object
       properties:
@@ -4012,7 +4682,8 @@ components:
         applications:
           type: array
           items:
-            $ref: "#/components/schemas/InvoiceApplication"
+            $ref: '#/components/schemas/InvoiceApplication'
+          minItems: 1
       required:
       - applicationRequestId
       - applications
@@ -4071,9 +4742,9 @@ components:
         applications:
           type: array
           items:
-            $ref: "#/components/schemas/ApplicationDetail"
+            $ref: '#/components/schemas/ApplicationDetail'
         customerCredit:
-          $ref: "#/components/schemas/CustomerCreditInfo"
+          $ref: '#/components/schemas/CustomerCreditInfo'
         applicationTimestamp:
           type: string
           format: date-time
@@ -4084,8 +4755,10 @@ components:
       properties:
         sourceSystem:
           type: string
+          minLength: 1
         externalCode:
           type: string
+          minLength: 1
         glAccountId:
           type: string
           format: uuid
@@ -4108,7 +4781,7 @@ components:
       type: object
       properties:
         mapping:
-          $ref: "#/components/schemas/GLMappingResponse"
+          $ref: '#/components/schemas/GLMappingResponse'
     GLMappingResponse:
       type: object
       properties:
@@ -4149,8 +4822,10 @@ components:
       properties:
         sourceSystem:
           type: string
+          minLength: 1
         externalCode:
           type: string
+          minLength: 1
         transactionDate:
           type: string
           format: date-time
@@ -4191,6 +4866,7 @@ components:
       properties:
         reason:
           type: string
+          minLength: 1
       required:
       - reason
     RegenerateInvoiceFromWorkorderRequest:
@@ -4247,15 +4923,17 @@ components:
           type: string
           format: date-time
           description: Creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
+          example: 2026-02-27 12:00:00+00:00
     GLAccountCreateRequest:
       type: object
       properties:
         accountCode:
           type: string
-          pattern: "^\\d{4}(-\\d{3})?$"
+          minLength: 1
+          pattern: ^\d{4}(-\d{3})?$
         accountName:
           type: string
+          minLength: 1
         accountType:
           type: string
           enum:
@@ -4285,6 +4963,58 @@ components:
           format: date
       required:
       - effectiveDate
+    ExportJobRequest:
+      type: object
+      description: Request body for a timekeeping export job
+      properties:
+        exportType:
+          type: string
+          description: Type of export
+          minLength: 1
+        filters:
+          type: object
+          description: Optional filter criteria as key-value pairs
+        format:
+          type: string
+          description: 'Export format: CSV or JSON'
+          minLength: 1
+        deliveryMode:
+          type: string
+          description: How the export will be delivered
+      required:
+      - exportType
+      - format
+    ExportJobResponse:
+      type: object
+      description: Status and metadata for an export job
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Unique job identifier
+        status:
+          type: string
+          description: Current job status
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the export was requested
+        completedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the export completed
+        downloadUrl:
+          type:
+          - string
+          - 'null'
+          description: Download URL when available
+        errorMessage:
+          type:
+          - string
+          - 'null'
+          description: Error message if job failed
     AccountingEventSubmitRequest:
       type: object
       description: Request payload for submitting an accounting event for ingestion
@@ -4292,8 +5022,7 @@ components:
         eventId:
           type: string
           format: uuid
-          description: "Optional event UUID (idempotency key). If omitted, service\
-            \ computes idempotency hash."
+          description: Optional event UUID (idempotency key). If omitted, service computes idempotency hash.
           example: 01936e5c-1234-7a3d-8b6e-123456789012
         eventType:
           type: string
@@ -4308,19 +5037,17 @@ components:
           example: 00000000-0000-4000-a000-000000000010
         sourceSystem:
           type: string
-          description: "Source system name. If omitted, defaults to POS_ACCOUNTING_API."
+          description: Source system name. If omitted, defaults to POS_ACCOUNTING_API.
           example: POS_ORDER
           maxLength: 100
           minLength: 0
         transactionDate:
           type: string
           format: date-time
-          description: "Event transaction timestamp. If omitted, defaults to current\
-            \ time."
-          example: 2026-01-15T10:30:00
+          description: Event transaction timestamp. If omitted, defaults to current time.
+          example: 2026-01-15 10:30:00
         payload:
           type: object
-          additionalProperties: {}
           description: Event-specific payload content
       required:
       - eventType
@@ -4344,7 +5071,6 @@ components:
           format: date-time
         payload:
           type: object
-          additionalProperties: {}
         status:
           type: string
           enum:
@@ -4380,11 +5106,22 @@ components:
           type: string
         mappingVersionAttempted:
           type: string
+        idempotencyOutcome:
+          type: string
+        ingestionId:
+          type: string
+          format: uuid
+        domainKeyId:
+          type: string
+        invoiceId:
+          type: string
+          format: uuid
     ReprocessEventRequest:
       type: object
       properties:
         triggeredByUserId:
           type: string
+          minLength: 1
         mappingVersionToUse:
           type: string
         reprocessingNotes:
@@ -4683,7 +5420,7 @@ components:
           type: number
           description: Amount to apply to this bill
           example: 750.0
-          minimum: 0.00
+          minimum: 0.0
       required:
       - appliedAmount
       - vendorBillId
@@ -4723,7 +5460,7 @@ components:
           minLength: 1
         paymentMethod:
           type: string
-          description: "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)"
+          description: Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)
           enum:
           - ACH
           - CHECK
@@ -4733,8 +5470,7 @@ components:
           example: ACH
         paymentSource:
           type: string
-          description: "Payment source token or identifier from the payment provider\
-            \ (e.g., Stripe token, bank account ID)"
+          description: Payment source token or identifier from the payment provider (e.g., Stripe token, bank account ID)
           example: tok_visa
           maxLength: 255
           minLength: 0
@@ -4746,10 +5482,9 @@ components:
           minLength: 0
         allocations:
           type: array
-          description: "Optional explicit allocations to vendor bills. If omitted,\
-            \ automatic allocation applied."
+          description: Optional explicit allocations to vendor bills. If omitted, automatic allocation applied.
           items:
-            $ref: "#/components/schemas/AllocationLineRequest"
+            $ref: '#/components/schemas/AllocationLineRequest'
       required:
       - currency
       - grossAmount
@@ -4818,7 +5553,7 @@ components:
           type: string
           format: date-time
           description: Gateway response timestamp
-          example: 2026-02-09T10:30:00Z
+          example: 2026-02-09 10:30:00+00:00
         glJournalEntryId:
           type: string
           format: uuid
@@ -4828,7 +5563,7 @@ components:
           type: string
           format: date-time
           description: GL posting timestamp
-          example: 2026-02-09T10:31:00Z
+          example: 2026-02-09 10:31:00+00:00
         glPostError:
           type: string
           description: GL posting error message (if failed)
@@ -4841,12 +5576,12 @@ components:
           type: array
           description: Allocations to vendor bills
           items:
-            $ref: "#/components/schemas/AllocationLineResponse"
+            $ref: '#/components/schemas/AllocationLineResponse'
         createdAt:
           type: string
           format: date-time
           description: Payment created timestamp
-          example: 2026-02-09T10:29:00Z
+          example: 2026-02-09 10:29:00+00:00
         createdBy:
           type: string
           description: User who initiated payment
@@ -4979,13 +5714,87 @@ components:
           type: number
         balanced:
           type: boolean
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PageReportExportResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportExportResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
     PostingRuleSetListResponse:
       type: object
       properties:
         ruleSets:
           type: array
           items:
-            $ref: "#/components/schemas/PostingRuleSetResponse"
+            $ref: '#/components/schemas/PostingRuleSetResponse'
         totalElements:
           type: integer
           format: int32
@@ -5004,7 +5813,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/PostingCategoryResponse"
+            $ref: '#/components/schemas/PostingCategoryResponse'
         totalCount:
           type: integer
           format: int64
@@ -5023,7 +5832,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/MappingKeyResponse"
+            $ref: '#/components/schemas/MappingKeyResponse'
         totalCount:
           type: integer
           format: int64
@@ -5042,7 +5851,7 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/JournalEntryResponse"
+            $ref: '#/components/schemas/JournalEntryResponse'
         pageNumber:
           type: integer
           format: int32
@@ -5058,7 +5867,7 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/JournalEntryResponse"
+            $ref: '#/components/schemas/JournalEntryResponse'
         totalElements:
           type: integer
           format: int64
@@ -5072,15 +5881,15 @@ components:
           type: string
           format: uuid
         journalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
+          $ref: '#/components/schemas/JournalEntryResponse'
         originalJournalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
+          $ref: '#/components/schemas/JournalEntryResponse'
         reversalJournalEntry:
-          $ref: "#/components/schemas/JournalEntryResponse"
+          $ref: '#/components/schemas/JournalEntryResponse'
         relatedJournalEntries:
           type: array
           items:
-            $ref: "#/components/schemas/JournalEntryResponse"
+            $ref: '#/components/schemas/JournalEntryResponse'
     InvoiceStatusResponse:
       type: object
       properties:
@@ -5132,7 +5941,6 @@ components:
           type: string
         extensions:
           type: object
-          additionalProperties: {}
     GLAccountListResponse:
       type: object
       properties:
@@ -5148,7 +5956,7 @@ components:
         glAccounts:
           type: array
           items:
-            $ref: "#/components/schemas/GLAccountResponse"
+            $ref: '#/components/schemas/GLAccountResponse'
         totalElements:
           type: integer
           format: int64
@@ -5167,32 +5975,70 @@ components:
         asOfDate:
           type: string
           format: date-time
-    PagedResponseAccountingEventResponse:
+    PageExportJobResponse:
       type: object
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountingEventResponse"
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        totalCount:
+        totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
+        size:
+          type: integer
+          format: int32
         content:
           type: array
           items:
-            $ref: "#/components/schemas/AccountingEventResponse"
+            $ref: '#/components/schemas/ExportJobResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageAccountingEventResponse:
+      type: object
+      properties:
         totalElements:
           type: integer
           format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountingEventResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
     ReprocessingAttemptHistoryResponse:
       type: object
       properties:
@@ -5216,13 +6062,71 @@ components:
           type: string
         mappingVersionUsed:
           type: string
+    EventProcessingLogEntry:
+      type: object
+      description: A single entry in an accounting event's processing audit log
+      properties:
+        entryId:
+          type: string
+          format: uuid
+          description: Unique identifier for this log entry
+        occurredAt:
+          type: string
+          format: date-time
+          description: When this log entry was created
+        severity:
+          type: string
+          description: 'Severity level: INFO, WARN, or ERROR'
+        message:
+          type: string
+          description: Human-readable log message
+        contextJson:
+          type:
+          - string
+          - 'null'
+          description: Optional JSON context for debugging
+    ContractField:
+      type: object
+      description: A single field definition in an event envelope contract
+      properties:
+        name:
+          type: string
+        jsonPath:
+          type: string
+        type:
+          type: string
+        required:
+          type: boolean
+        description:
+          type: string
+        enumValues:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+    EventEnvelopeContract:
+      type: object
+      description: Describes the expected structure of accounting event envelopes
+      properties:
+        version:
+          type: string
+          description: Contract schema version
+        fields:
+          type: array
+          description: Field definitions in the event envelope
+          items:
+            $ref: '#/components/schemas/ContractField'
+        examples:
+          type: array
+          description: Example event payloads
     DefaultGLMappingListResponse:
       type: object
       properties:
         mappings:
           type: array
           items:
-            $ref: "#/components/schemas/DefaultGLMappingResponse"
+            $ref: '#/components/schemas/DefaultGLMappingResponse'
         page:
           type: integer
           format: int32
@@ -5235,21 +6139,6 @@ components:
         totalPages:
           type: integer
           format: int32
-    Pageable:
-      type: object
-      properties:
-        page:
-          type: integer
-          format: int32
-          minimum: 0
-        size:
-          type: integer
-          format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
     PageCreditMemoResponse:
       type: object
       properties:
@@ -5259,55 +6148,60 @@ components:
         totalPages:
           type: integer
           format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: "#/components/schemas/CreditMemoResponse"
+            $ref: '#/components/schemas/CreditMemoResponse'
         number:
           type: integer
           format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
         empty:
           type: boolean
-    Pageablenull:
+    PageVendorBillSummaryResponse:
       type: object
       properties:
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        paged:
-          type: boolean
-        offset:
+        totalElements:
           type: integer
           format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/VendorBillSummaryResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         sort:
-          $ref: "#/components/schemas/Sortnull"
-        unpaged:
+          $ref: '#/components/schemas/SortObject'
+        first:
           type: boolean
-    Sortnull:
-      type: object
-      properties:
-        sorted:
+        last:
           type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
         empty:
-          type: boolean
-        unsorted:
           type: boolean
     VendorBillSummaryResponse:
       type: object
@@ -5335,12 +6229,12 @@ components:
           type: string
           format: date-time
           description: Bill date
-          example: 2026-01-15T00:00:00
+          example: 2026-01-15 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Due date
-          example: 2026-02-14T00:00:00
+          example: 2026-02-14 00:00:00
         totalAmount:
           type: number
           description: Total bill amount
@@ -5355,10 +6249,13 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
-          - PENDING_REVIEW
           - APPROVED
           - REJECTED
           - PAID
-          - CANCELLED
           - VOIDED
           example: APPROVED
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

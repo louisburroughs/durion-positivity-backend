@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.service;
 
+import jakarta.persistence.criteria.Predicate;
 import com.positivity.catalog.internal.dto.CostTierDto;
 import com.positivity.catalog.internal.dto.SupplierItemCostCreateRequestDto;
 import com.positivity.catalog.internal.dto.SupplierItemCostDto;
@@ -18,7 +19,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,8 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SupplierItemCostServiceImpl implements SupplierItemCostService {
 
     private static final String NOT_FOUND_BY_ID = "Supplier item cost not found for id=";
-    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE =
-            "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
+    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE = "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
 
     private final SupplierItemCostRepository supplierItemCostRepository;
 
@@ -74,6 +78,29 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
                 .findById(id)
                 .map(this::toDto)
                 .orElseThrow(() -> new CatalogNotFoundException(NOT_FOUND_BY_ID + id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SupplierItemCostDto> listCostStructures(
+            @Nullable UUID itemId, @Nullable UUID supplierId, @NonNull Pageable pageable) {
+        if (itemId == null && supplierId == null) {
+            throw new CatalogValidationException(
+                    "MISSING_FILTER: At least one of itemId or supplierId must be provided");
+        }
+
+        Specification<SupplierItemCostEntity> spec = (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (itemId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("itemId"), itemId));
+            }
+            if (supplierId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("supplierId"), supplierId));
+            }
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return supplierItemCostRepository.findAll(spec, pageable).map(this::toDto);
     }
 
     @Override

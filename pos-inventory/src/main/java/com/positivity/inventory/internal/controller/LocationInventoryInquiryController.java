@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.service.LocationInventoryInquiryService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,19 +31,16 @@ public class LocationInventoryInquiryController {
 
     @GetMapping("/{locationId}/inventory-inquiry")
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @Operation(
-            summary = "Get location inventory summary",
-            description = "Returns on-hand quantity aggregated for a storage location.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Location inventory returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+            "inventory:on_hand:view" })
+    @Operation(operationId = "getLocationInventory", summary = "Get location inventory summary", description = "Returns on-hand quantity aggregated for a storage location.", tags = {
+            "Inventory Locations" })
+    @ApiResponse(responseCode = "200", description = "Location inventory returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid location identifier")
+    @ApiResponse(responseCode = "403", description = "User lacks required on-hand view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryInquiryResponse> getLocationInventory(
-            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId) {
-        return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventory(locationId));
+            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
+            @Parameter(description = "Product SKU filter") @RequestParam(required = false) String sku) {
+        return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventory(locationId, sku));
     }
 }

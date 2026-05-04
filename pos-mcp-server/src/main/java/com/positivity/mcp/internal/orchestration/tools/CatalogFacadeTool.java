@@ -15,7 +15,7 @@ public class CatalogFacadeTool {
     public CatalogFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.catalog.base-url:http://pos-catalog/v1/catalog}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get product details from the catalog by product ID")

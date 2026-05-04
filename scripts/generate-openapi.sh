@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 MVNW="./mvnw"
@@ -242,6 +243,46 @@ else
 fi
 echo
 
+JMX_PORT=9119
+CURRENT_MODULE=""
+
+kill_port_if_held() {
+  local port="$1"
+  local pid
+  pid=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+  if [[ -n "$pid" ]]; then
+    echo "  WARNING: port $port held by PID $pid — killing before start..." >&2
+    kill "$pid" 2>/dev/null || true
+    local i
+    for i in 1 2 3; do
+      sleep 1
+      lsof -ti tcp:"$port" >/dev/null 2>&1 || break
+    done
+  fi
+}
+
+stop_spring_boot() {
+  local module="$1"
+  echo "  Attempting spring-boot:stop for $module..." >&2
+  if "$MVNW" -pl "$module" -P"$PROFILE" spring-boot:stop -q 2>/dev/null; then
+    echo "  spring-boot:stop succeeded for $module." >&2
+  else
+    echo "  spring-boot:stop failed or not applicable; falling back to port kill." >&2
+    kill_port_if_held "$JMX_PORT"
+  fi
+}
+
+cleanup_current_module() {
+  if [[ -n "$CURRENT_MODULE" ]]; then
+    echo >&2
+    echo "Interrupted — cleaning up $CURRENT_MODULE..." >&2
+    stop_spring_boot "$CURRENT_MODULE"
+    CURRENT_MODULE=""
+  fi
+}
+
+trap 'cleanup_current_module' INT TERM EXIT
+
 FAILED_MODULES=()
 
 for module in "${MODULES[@]}"; do
@@ -249,6 +290,9 @@ for module in "${MODULES[@]}"; do
     echo "Skipping $module (no openapi.yaml output configured in pom.xml)"
     continue
   fi
+
+  kill_port_if_held "$JMX_PORT"
+  CURRENT_MODULE="$module"
 
   cmd=("$MVNW" "-pl" "$module" "-am" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
   echo "==> $module"
@@ -261,22 +305,42 @@ for module in "${MODULES[@]}"; do
         if [[ "$module_status" -eq 124 ]]; then
           echo "ERROR: Timed out after ${MODULE_TIMEOUT_SECONDS}s while generating OpenAPI for $module." >&2
           echo "This usually indicates Spring Boot failed to start or startup never reached readiness." >&2
+          stop_spring_boot "$module"
         elif [[ "$module_status" -ne 0 ]]; then
           echo "ERROR: OpenAPI generation failed for $module (exit code: $module_status)." >&2
+          stop_spring_boot "$module"
         fi
       else
         echo "WARN: 'timeout' command not found; running without timeout for $module." >&2
-        "${cmd[@]}" || module_status=$?
+        "${cmd[@]}" || { module_status=$?; stop_spring_boot "$module"; }
       fi
     else
-      "${cmd[@]}" || module_status=$?
+      "${cmd[@]}" || { module_status=$?; stop_spring_boot "$module"; }
     fi
 
     if [[ "$module_status" -ne 0 ]]; then
       FAILED_MODULES+=("$module:$module_status")
       echo "Continuing to next module..." >&2
+    else
+      # Strip semantically meaningless `default: ""` and `default: null` lines
+      # from the generated spec. Springdoc emits them for primitive/UUID/object
+      # fields, which causes OpenAPI Generator to emit invalid Java initializers
+      # like `private Integer x = ;` in downstream SDKs.
+      spec_file="$module/openapi.yaml"
+      if [[ -f "$spec_file" ]]; then
+        # Strip springdoc emissions that break downstream tooling: empty
+        # `default` values, sibling-of-$ref keys, and empty
+        # `additionalProperties`. See scripts/sanitize-openapi.py for details.
+        sanitizer="$SCRIPT_DIR/sanitize-openapi.py"
+        if [[ -x "$sanitizer" ]] || [[ -f "$sanitizer" ]]; then
+          python3 "$sanitizer" "$spec_file" || {
+            echo "WARN: sanitize-openapi.py failed for $spec_file" >&2
+          }
+        fi
+      fi
     fi
   fi
+  CURRENT_MODULE=""
   echo
 done
 

@@ -95,7 +95,7 @@ public class VendorBillGLPostingEventHandler {
      *
      * The payload structure follows the accounting event schema with:
      * - eventType: VENDOR_BILL_GL_POSTING
-     * - sourceSystem: POS (Durion POS backend)
+     * - sourceSystem: POS (Durion Positivity backend)
      * - transactionDate: Bill date
      * - payload: Vendor bill details including line items with isInventoryItem flag
      *

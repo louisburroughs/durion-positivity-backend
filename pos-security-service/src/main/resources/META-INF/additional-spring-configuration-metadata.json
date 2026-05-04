@@ -1,0 +1,97 @@
+{
+  "properties": [
+    {
+      "name": "pos.security.lockout.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Maximum failed login attempts before lockout.",
+      "defaultValue": 5
+    },
+    {
+      "name": "pos.security.lockout.window",
+      "type": "java.time.Duration",
+      "description": "Rolling lockout evaluation window duration.",
+      "defaultValue": "10m"
+    },
+    {
+      "name": "pos.security.lockout.backoff-multiplier",
+      "type": "java.lang.Integer",
+      "description": "Progressive lockout backoff multiplier.",
+      "defaultValue": 2
+    },
+    {
+      "name": "pos.security.lockout.max-backoff-window",
+      "type": "java.time.Duration",
+      "description": "Maximum lockout backoff duration.",
+      "defaultValue": "30m"
+    },
+    {
+      "name": "security.jwt.secret",
+      "type": "java.lang.String",
+      "description": "JWT signing secret for token issuance and validation."
+    },
+    {
+      "name": "security.redis.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable Redis-backed token revocation support.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.security.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret required for permission-registration callbacks."
+    },
+    {
+      "name": "pos.security.metrics-scrape.username",
+      "type": "java.lang.String",
+      "description": "Basic auth username for actuator metrics scrape endpoint.",
+      "defaultValue": "prometheus"
+    },
+    {
+      "name": "pos.security.metrics-scrape.password",
+      "type": "java.lang.String",
+      "description": "Basic auth password for actuator metrics scrape endpoint.",
+      "defaultValue": "prometheus-scrape"
+    },
+    {
+      "name": "security.http-to-https.http-port",
+      "type": "java.lang.Integer",
+      "description": "HTTP port listened on for redirecting requests to HTTPS.",
+      "defaultValue": 8080
+    },
+    {
+      "name": "pos.people.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for people service integration.",
+      "defaultValue": "http://pos-people:8084"
+    },
+    {
+      "name": "pos.customer.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for customer service integration.",
+      "defaultValue": "http://pos-customer:8084"
+    },
+    {
+      "name": "pos.restclient.connect.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient connect timeout in milliseconds.",
+      "defaultValue": 3000
+    },
+    {
+      "name": "pos.restclient.read.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient read timeout in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    }
+  ]
+}

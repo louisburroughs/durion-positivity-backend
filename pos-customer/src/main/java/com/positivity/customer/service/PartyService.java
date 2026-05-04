@@ -9,10 +9,12 @@ import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
@@ -61,4 +63,23 @@ public interface PartyService {
      */
     @Nullable
     BillingRuleRef getBillingRulesForParty(@NonNull UUID partyId);
+
+    /**
+     * Check for potential duplicate parties by legal name.
+     *
+     * @param legalName the legal name to search for duplicates (min length 2)
+     * @return DuplicateCheckResponse with match results
+     */
+    @NonNull
+    DuplicateCheckResponse checkPartyDuplicates(@NonNull String legalName);
+
+    /**
+     * Upsert (create or update) billing rules for a commercial party.
+     *
+     * @param partyId the party UUID (must exist)
+     * @param request the billing rules to apply
+     * @return the updated BillingRuleRef
+     */
+    @NonNull
+    BillingRuleRef upsertBillingRulesForParty(@NonNull UUID partyId, @NonNull UpsertBillingRulesRequest request);
 }

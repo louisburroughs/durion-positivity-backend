@@ -1,15 +1,26 @@
 package com.positivity.bulkloader.internal.service;
 
-import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
-import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
-import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import com.positivity.bulkloader.service.ReviewQueueService;
+import com.positivity.bulkloader.internal.dto.AuditRecordResponse;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
+import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
+import com.positivity.bulkloader.internal.dto.CorrectionResultDto;
+import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
+import com.positivity.bulkloader.internal.enums.CorrectionStatus;
+import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.enums.ReviewStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
+import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -17,12 +28,15 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
 public class ReviewQueueServiceImpl implements ReviewQueueService {
 
     private final BulkLoadRecordAuditRepository auditRepository;
+    private final BulkLoadJobRepository jobRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -74,5 +88,81 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
                 .originalValues(audit.getOriginalValues())
                 .createdAt(audit.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CorrectionResultDto submitSingleCorrection(
+            @NonNull UUID jobId, @NonNull BulkCorrectionItem item, @NonNull String operatorId) {
+        BulkCorrectionRequest singleRequest = BulkCorrectionRequest.builder()
+                .corrections(java.util.List.of(item))
+                .build();
+        BulkCorrectionResponse response = submitCorrections(jobId, singleRequest, operatorId);
+        CorrectionStatus status = response.getAcceptedCount() > 0
+                ? CorrectionStatus.ACCEPTED
+                : CorrectionStatus.REJECTED;
+        return CorrectionResultDto.builder()
+                .auditRecordId(item.getAuditRecordId())
+                .status(status)
+                .rejectionReason(status == CorrectionStatus.REJECTED
+                        ? "Record was rejected during correction processing"
+                        : null)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public BulkCorrectionResponse submitCorrections(
+            @NonNull UUID jobId, @NonNull BulkCorrectionRequest request, @NonNull String operatorId) {
+        var job = jobRepository
+                .findById(jobId)
+                .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
+        if (!job.getOperatorId().equals(operatorId)) {
+            throw new JobOwnershipViolationException(jobId.toString());
+        }
+        if (job.getStatus() != JobStatus.FAILED) {
+            throw new IllegalStateException(
+                    "Corrections can only be submitted for jobs in FAILED state, current state: " + job.getStatus());
+        }
+
+        int acceptedCount = 0;
+        int rejectedCount = 0;
+        List<String> rejections = new ArrayList<>();
+
+        for (BulkCorrectionItem item : request.getCorrections()) {
+            var auditOpt = auditRepository.findById(item.getAuditRecordId());
+            if (auditOpt.isEmpty() || !auditOpt.get().getJobId().equals(jobId)) {
+                rejectedCount++;
+                rejections.add("Audit record not found or does not belong to this job: " + item.getAuditRecordId());
+            } else {
+                var audit = auditOpt.get();
+                String serialized = trySerialize(item.getCorrectedData());
+                if (serialized == null) {
+                    rejectedCount++;
+                    rejections.add("Failed to serialize corrected values for record: " + item.getAuditRecordId());
+                } else {
+                    audit.setCorrectedValues(serialized);
+                    audit.setReviewStatus(ReviewStatus.CORRECTED);
+                    auditRepository.save(audit);
+                    acceptedCount++;
+                }
+            }
+        }
+
+        return BulkCorrectionResponse.builder()
+                .jobId(jobId)
+                .submittedCount(request.getCorrections().size())
+                .acceptedCount(acceptedCount)
+                .rejectedCount(rejectedCount)
+                .rejections(rejections)
+                .build();
+    }
+
+    private String trySerialize(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception _) {
+            return null;
+        }
     }
 }

@@ -1,0 +1,57 @@
+{
+  "properties": [
+    {
+      "name": "billing.defaults.purchase-order-required",
+      "type": "java.lang.Boolean",
+      "description": "Default billing rule requiring purchase order numbers.",
+      "defaultValue": false
+    },
+    {
+      "name": "billing.defaults.payment-terms-code",
+      "type": "java.lang.String",
+      "description": "Default billing payment terms code.",
+      "defaultValue": "NET_30"
+    },
+    {
+      "name": "billing.defaults.invoice-delivery-method",
+      "type": "java.lang.String",
+      "description": "Default invoice delivery method.",
+      "defaultValue": "EMAIL"
+    },
+    {
+      "name": "billing.defaults.invoice-grouping-strategy",
+      "type": "java.lang.String",
+      "description": "Default invoice grouping strategy.",
+      "defaultValue": "PER_WORKORDER"
+    },
+    {
+      "name": "invoice.tax.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for tax calculation requests from pos-invoice.",
+      "defaultValue": "http://pos-tax:8090/v1/tax"
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

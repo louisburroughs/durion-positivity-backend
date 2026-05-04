@@ -22,6 +22,12 @@ mcp:
     table-name: mcp_document_embedding
     dimension: 768
     index-type: ivfflat
+    preload:
+      docs:
+        - id: "accounting.de-bookkeeping"
+          source-path: "classpath:rag/de-bookkeeping-rag.md"
+        - id: "inventory.inv-cntrl"
+          source-path: "classpath:rag/inv-cntrl-rag.md"
     chunking:
       enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
       max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}
@@ -35,21 +41,26 @@ mcp:
     cron: "0 0 2 * * ?"
   model:
     fallback:
-      enabled: false
-      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:mistral:7b}
+      enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
+      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:120b}
       timeout: ${OLLAMA_FALLBACK_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
+    streaming-chat-model:
+      base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
+      temperature: 0.2
+      timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 exa:
   api-key: ${EXA_API_KEY:}
@@ -94,6 +105,7 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
+  default-produces-media-type: application/json
 pos:
   nlti:
     session:

@@ -7,6 +7,7 @@ import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,7 @@ public class StorageLocationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_CREATE", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:write" })
     public StorageLocationResponse create(@PathVariable UUID siteId, @RequestBody StorageLocationRequest request) {
         return storageLocationService.createStorageLocation(siteId, request);
     }
@@ -46,6 +48,7 @@ public class StorageLocationController {
     @GetMapping
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_LIST", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:read" })
     public Page<StorageLocationResponse> list(
             @PathVariable UUID siteId,
             @RequestParam(required = false) StorageLocationType type,
@@ -57,6 +60,7 @@ public class StorageLocationController {
     @GetMapping("/{storageLocationId}")
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_GET", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:read" })
     public StorageLocationResponse get(@PathVariable UUID siteId, @PathVariable UUID storageLocationId) {
         return storageLocationService.getStorageLocation(siteId, storageLocationId);
     }
@@ -64,6 +68,7 @@ public class StorageLocationController {
     @PatchMapping("/{storageLocationId}")
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_UPDATE", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "location:write" })
     public StorageLocationResponse patch(
             @PathVariable UUID siteId,
             @PathVariable UUID storageLocationId,

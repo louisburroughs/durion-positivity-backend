@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Price Normalization", description = "Price normalization and standardization operations")
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price")
 public class PriceNormalizationController {
 

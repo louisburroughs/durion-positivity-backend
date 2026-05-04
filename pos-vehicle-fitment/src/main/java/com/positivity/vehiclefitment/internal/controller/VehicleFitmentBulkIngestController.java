@@ -18,20 +18,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+    "vehicle-fitment:hint:create" })
 @RequestMapping("/v1/fitments")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
 @Tag(name = "Vehicle Fitment Bulk Ingest API", description = "Bulk import vehicle fitment records")
 public class VehicleFitmentBulkIngestController extends AbstractBulkIngestController<FitmentBulkIngestRecord> {
 
   private final VehicleFitmentService vehicleFitmentService;
 
   @Override
+  @PostMapping("/bulk-ingest")
   @PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
   @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
   public ResponseEntity<BulkIngestResponse> bulkIngest(

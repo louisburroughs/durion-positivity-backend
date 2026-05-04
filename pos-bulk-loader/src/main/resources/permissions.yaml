@@ -2,7 +2,7 @@ domain: bulk-import
 serviceName: pos-bulk-loader
 version: "1.0"
 permissions:
-  - name: "BULK_IMPORT_EXECUTE"
+  - name: "bulkImport:upload:execute"
     description: "Submit bulk import jobs, upload files, and trigger processing"
-  - name: "BULK_IMPORT_READ"
+  - name: "bulkImport:status:read"
     description: "View bulk import jobs, column mappings, and review queue"

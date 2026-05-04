@@ -1,156 +1,73 @@
 # pos-bulk-loader
 
-Bulk import orchestrator service for Durion POS. Provides CSV file upload, column mapping, Spring Batch processing, and review queue for failed records.
+Bulk data import orchestrator for Durion Positivity ETSMS. Accepts CSV file uploads, proposes column mappings, drives Spring Batch processing against domain service bulk-ingest endpoints, and queues failed records for operator review.
 
-## Module Overview
+## Responsibilities
 
-- **Service Name**: `POS-BULK-LOADER`
-- **Port**: `8090` (default, overridable via `SERVER_PORT`)
-- **Database**: `pos_bulk_loader_db` (PostgreSQL)
-- **Eureka**: Registers with service discovery
-- **Gateway Route**: `/bulk-loader/**` → `lb://POS-BULK-LOADER` (StripPrefix=1)
+- Create and manage bulk load jobs (catalog, inventory, location, vehicle, vehicle fitment)
+- Accept file uploads via standard HTTP or tus resumable upload protocol
+- Auto-propose CSV column-to-field mappings with confidence scores
+- Launch Spring Batch jobs that chunk records and POST to domain service `/bulk-ingest` endpoints
+- Maintain a per-row audit trail; surface an error report CSV for failed rows
+- Authenticate outbound bulk-ingest calls using the caller's forwarded bearer token
 
-## Architecture
+## Key Classes
 
-This module orchestrates bulk data imports across multiple domain services:
+- `BulkLoadJobService` — job lifecycle (create, cancel, status)
+- `BulkLoadBatchLauncher` / `SpringBatchBulkLoadLauncher` — triggers Spring Batch jobs via API
+- `TusUploadService` — manages tus resumable upload sessions and local file storage
+- `ColumnMappingService` — proposes and persists CSV column mappings
+- `ReviewQueueService` — surfaces failed rows with structured error codes
+- `ContentDetectionService` — detects domain type from uploaded file content
 
-1. **Job Creation**: Operator creates a bulk load job specifying target domain (catalog, inventory, location)
-2. **File Upload**: CSV file uploaded and parsed
-3. **Column Mapping**: Automatic mapping proposal with manual review/override capability
-4. **Spring Batch Processing**: Chunk-based processing (500 records/chunk) with domain-specific validation
-5. **Review Queue**: Failed records captured with error details for operator review
-
-## API Surface (Wave 1)
+## API Endpoints
 
 Base path: `/v1/bulk-jobs`
 
-- `POST /v1/bulk-jobs` - create bulk load job (`201`)
-- `GET /v1/bulk-jobs/{jobId}` - get job (`200`)
-- `GET /v1/bulk-jobs` - list operator jobs (`200`)
-- `POST /v1/bulk-jobs/{jobId}/cancel` - cancel job (`200`)
-- `POST /v1/bulk-jobs/{jobId}/upload` - upload source file (`200`)
-- `POST /v1/bulk-jobs/{jobId}/process` - start processing (`200`)
-- `GET /v1/bulk-jobs/{jobId}/mappings` - read proposed mappings (`200`)
-- `PUT /v1/bulk-jobs/{jobId}/mappings` - approve mappings (`200`)
-- `GET /v1/bulk-jobs/{jobId}/audit` - list row audit records (`200`)
-- `GET /v1/bulk-jobs/{jobId}/error-report` - download CSV error report (`200`)
+- `POST /v1/bulk-jobs` — create a bulk load job
+- `GET /v1/bulk-jobs` — list jobs for the operator
+- `GET /v1/bulk-jobs/{jobId}` — get job status
+- `POST /v1/bulk-jobs/{jobId}/cancel` — cancel a job
+- `POST /v1/bulk-jobs/{jobId}/upload` — upload source file
+- `POST /v1/bulk-jobs/{jobId}/process` — launch Spring Batch processing
+- `GET /v1/bulk-jobs/{jobId}/mappings` — read proposed column mappings
+- `PUT /v1/bulk-jobs/{jobId}/mappings` — approve/override column mappings
+- `GET /v1/bulk-jobs/{jobId}/audit` — list per-row audit records
+- `GET /v1/bulk-jobs/{jobId}/error-report` — download CSV error report
+- `POST /v1/bulk-jobs/bulk-jobs/{jobId}/tus` — initiate tus upload
+- `DELETE /v1/tus/{uploadId}` — cancel tus upload
 
-## Security
+## Configuration
 
-- Uses gateway header-based security via `pos-security-common` (`GatewaySecurityConfig`).
-- State-changing endpoints require `BULK_IMPORT_EXECUTE`.
-- Read endpoints require `BULK_IMPORT_READ`.
+| Property                          | Default                 | Description                            |
+| --------------------------------- | ----------------------- | -------------------------------------- |
+| `bulk-loader.storage.local-root`  | `/tmp/bulk-loader`      | Local directory for uploaded files     |
+| `bulk-loader.tus.max-upload-size` | `536870912` (512 MB)    | Maximum tus upload size                |
+| `bulk-loader.tus.expiry-hours`    | `24`                    | Hours before incomplete uploads expire |
+| `pos.catalog.base-url`            | `http://localhost:8082` | Catalog bulk-ingest target             |
+| `pos.vehicle-inventory.base-url`  | `http://localhost:8091` | Vehicle inventory target               |
+| `pos.vehicle-fitment.base-url`    | `http://localhost:8092` | Vehicle fitment target                 |
 
-## Event Logging
+## Dependencies
 
-State-changing routes emit `pos-events` events with apiVersion `1`:
+- `pos-security-common` — gateway header-based security
+- `pos-events` — audit event emission
+- `pos-shared-dtos` — shared DTOs
+- `pos-bulk-ingest-lib` — bulk-ingest request/response contract
 
-- `BULK_LOADER_JOB_CREATE`
-- `BULK_LOADER_JOB_CANCEL`
-- `BULK_LOADER_FILE_UPLOAD`
-- `BULK_LOADER_JOB_START`
-- `BULK_LOADER_MAPPING_APPROVE`
+## Database
 
-Registered event types are defined in:
+Uses Flyway with PostgreSQL. Key tables:
 
-- `src/main/java/com/positivity/bulkloader/internal/config/BulkLoaderEventTypes.java`
-- `src/main/java/com/positivity/bulkloader/internal/config/BulkLoaderEventTypeInitializer.java`
+- `bulk_load_job` — job metadata
+- `bulk_load_record_audit` — per-row processing results
+- `bulk_load_column_mapping` — CSV column mappings
+- Spring Batch metadata tables (via `V2__init_spring_batch_schema.sql`)
 
-## Spring Batch Configuration
-
-### Jobs
-
-- **Job Name**: `catalogBulkLoadJob` (Wave 1 - catalog domain)
-- **Step Name**: `catalogBulkLoadStep`
-- **Chunk Size**: 500 records
-- **Auto-start**: Disabled in production (`spring.batch.job.enabled: false`)
-- **Trigger**: Jobs started via API endpoint (`POST /v1/bulk-jobs/{jobId}/process`)
-
-### Spring Batch Tables
-
-Spring Batch metadata tables are created via Flyway migration `V2__init_spring_batch_schema.sql`:
-
-- `BATCH_JOB_INSTANCE`
-- `BATCH_JOB_EXECUTION`
-- `BATCH_JOB_EXECUTION_PARAMS`
-- `BATCH_JOB_EXECUTION_CONTEXT`
-- `BATCH_STEP_EXECUTION`
-- `BATCH_STEP_EXECUTION_CONTEXT`
-- `BATCH_JOB_SEQ`, `BATCH_JOB_EXECUTION_SEQ`, `BATCH_STEP_EXECUTION_SEQ`
-
-**Note**: `spring.batch.jdbc.initialize-schema: never` — schema managed by Flyway only.
-
-## Database Schema
-
-### Flyway Migrations
-
-- **V1__init_bulk_loader_schema.sql**: Domain tables (`bulk_load_job`, `bulk_load_record_audit`, `bulk_load_column_mapping`)
-- **V2__init_spring_batch_schema.sql**: Spring Batch metadata tables
-
-### Domain Tables
-
-| Table | Purpose |
-| ----- | ------- |
-| `bulk_load_job` | Job metadata (domain, status, operator_id, location_id, file statistics) |
-| `bulk_load_record_audit` | Per-row processing audit trail (review status, reason codes, original/corrected values) |
-| `bulk_load_column_mapping` | CSV column → domain field mappings with confidence scores |
-
-## Running Locally
-
-### Prerequisites
-
-- PostgreSQL 14+ running on `localhost:5432`
-- Database `pos_bulk_loader_db` created
-- Eureka server running on `localhost:8761` (pos-service-discovery)
-- Target domain services running (pos-catalog, pos-inventory, pos-location)
-
-### Quick Start
+## Development
 
 ```bash
-# From backend root
-cd durion-positivity-backend
-
-# Build module
-./mvnw -pl pos-bulk-loader -am clean package
-
-# Run with dev profile
-java -jar pos-bulk-loader/target/pos-bulk-loader-*.jar --spring.profiles.active=dev
-
-# Service registers at http://localhost:8090
+./mvnw -pl pos-bulk-loader -am spring-boot:run --spring.profiles.active=dev
 ```
 
-### Configuration Properties
-
-| Property | Default | Description |
-| -------- | ------- | ----------- |
-| `server.port` | `8090` | Default service port (overridable via `SERVER_PORT`) |
-| `spring.datasource.url` | `jdbc:postgresql://localhost:5432/pos_bulk_loader_db` | Database URL |
-| `spring.batch.job.enabled` | `false` | Auto-start jobs (disabled for API-driven execution) |
-| `spring.flyway.enabled` | `true` | Flyway migrations enabled |
-| `eureka.client.service-url.defaultZone` | `http://localhost:8761/eureka/` | Eureka server URL |
-
-## Integration with Domain Services
-
-This service depends on domain-specific bulk ingest endpoints provided by:
-
-- **pos-catalog**: `/v1/catalog/bulk-ingest` (via `pos-bulk-ingest-lib`)
-- **pos-inventory**: `/v1/inventory/bulk-ingest` (via `pos-bulk-ingest-lib`)
-- **pos-location**: `/v1/locations/bulk-ingest` (via `pos-bulk-ingest-lib`)
-
-See [pos-bulk-ingest-lib/README.md](../pos-bulk-ingest-lib/README.md) for contract details.
-
-## Supported Domain Types (Wave 1..3)
-
-- `CATALOG`
-- `INVENTORY`
-- `LOCATION`
-- `VEHICLE`  ← added in Wave 3 (writes to pos-vehicle-inventory `/v1/vehicles/bulk-ingest`)
-- `VEHICLE_FITMENT`  ← added in Wave 3 (writes to pos-vehicle-fitment `/v1/fitments/bulk-ingest`)
-
-## New Wave 3: Vehicle bulk-ingest
-
-- Job: `vehicleBulkLoadJob` — stub; validates `VehicleBulkRecord` rows but HTTP writer is not yet implemented. Will POST to `pos-vehicle-inventory` at `/v1/vehicles/bulk-ingest` once wiring is complete.
-- Job: `vehicleFitmentBulkLoadJob` — stub; validates `VehicleFitmentRecord` rows but HTTP writer is not yet implemented. Will POST to `pos-vehicle-fitment` at `/v1/fitments/bulk-ingest` once wiring is complete.
-- Records validated by `VehicleLoaderStrategy` and `VehicleFitmentLoaderStrategy` before callout.
-
-Permissions: service calls target endpoints that require domain-specific create permissions (see target module README for exact scopes).
+Requires PostgreSQL (`pos_bulk_loader_db`) and Eureka (`pos-service-discovery`) running.

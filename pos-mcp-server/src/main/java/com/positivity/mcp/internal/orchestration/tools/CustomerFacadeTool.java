@@ -15,7 +15,7 @@ public class CustomerFacadeTool {
     public CustomerFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.customer.base-url:http://pos-customer/v1/customers}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get customer profile details by customer ID")

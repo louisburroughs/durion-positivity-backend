@@ -7,28 +7,39 @@
 #   BACKEND_TAG   – e.g. sha-a1b2c3d  (set by backend build workflow)
 #   FRONTEND_TAG  – e.g. sha-44455b8  (set by frontend build workflow)
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
 
   # ── Infrastructure ─────────────────────────────────────────────────────────
 
   postgres:
     restart: unless-stopped
+    logging: *logging
 
   # ── Observability ──────────────────────────────────────────────────────────
 
   prometheus:
     restart: unless-stopped
+    logging: *logging
 
   grafana:
     restart: unless-stopped
+    logging: *logging
 
   otel-collector:
     restart: unless-stopped
+    logging: *logging
 
   # ── Ollama (Docker Hub image — no ECR) ─────────────────────────────────────
 
   ollama:
     restart: unless-stopped
+    logging: *logging
 
   # ollama-init runs once (restart: no) — no override needed.
 
@@ -37,73 +48,96 @@ services:
   eureka-server:
     image: ${ECR_REGISTRY}/durion/eureka-server:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-accounting:
     image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-api-gateway:
     image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
+
+  pos-bulk-loader:
+    image: ${ECR_REGISTRY}/durion/pos-bulk-loader:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
 
   pos-catalog:
     image: ${ECR_REGISTRY}/durion/pos-catalog:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-customer:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-event-receiver:
     image: ${ECR_REGISTRY}/durion/pos-event-receiver:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-image:
     image: ${ECR_REGISTRY}/durion/pos-image:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-inventory:
     image: ${ECR_REGISTRY}/durion/pos-inventory:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-invoice:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-location:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-people:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-price:
     image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-security-service:
     image: ${ECR_REGISTRY}/durion/pos-security-service:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-shop-manager:
     image: ${ECR_REGISTRY}/durion/pos-shop-manager:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-vehicle-inventory:
     image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   pos-workorder:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
     restart: unless-stopped
+    logging: *logging
 
   # ── Frontend ───────────────────────────────────────────────────────────────
 
   pos-frontend:
     image: ${ECR_REGISTRY}/durion/durion-positivity-frontend:${FRONTEND_TAG}
     restart: unless-stopped
+    logging: *logging

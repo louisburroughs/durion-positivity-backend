@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "bulkImport:upload:execute",
+        "bulkImport:status:read" })
 @RequestMapping("/v1/bulk-jobs")
 @RequiredArgsConstructor
 @Slf4j
@@ -36,9 +38,9 @@ public class BulkLoadJobController {
     private final BulkLoadJobService bulkLoadJobService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_CREATE", apiVersion = "1")
-    @Operation(summary = "Create a new bulk load job")
+    @Operation(summary = "Create a new bulk load job", description = "Creates a new bulk load job for the authenticated operator. Each operator can only have one active job at a time. The job starts in CREATED state and must be populated with a file upload before processing can begin.")
     @ApiResponse(responseCode = "201", description = "Job created")
     @ApiResponse(responseCode = "409", description = "Operator already has an active job")
     public ResponseEntity<BulkLoadJobResponse> createJob(
@@ -49,8 +51,8 @@ public class BulkLoadJobController {
     }
 
     @GetMapping("/{jobId}")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "Get a bulk load job by ID")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "Get a bulk load job by ID", description = "Retrieves the details of a bulk load job for the authenticated operator. The operator can only access their own jobs.")
     @ApiResponse(responseCode = "200", description = "Job found")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
@@ -60,8 +62,8 @@ public class BulkLoadJobController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('BULK_IMPORT_READ')")
-    @Operation(summary = "List bulk load jobs for the authenticated operator")
+    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @Operation(summary = "List bulk load jobs for the authenticated operator", description = "Retrieves a paginated list of bulk load jobs for the authenticated operator. The operator can only access their own jobs.")
     @ApiResponse(responseCode = "200", description = "Jobs listed")
     public ResponseEntity<Page<BulkLoadJobResponse>> listJobs(@NonNull Pageable pageable) {
         String operatorId = currentOperatorId();
@@ -69,14 +71,28 @@ public class BulkLoadJobController {
     }
 
     @PostMapping("/{jobId}/cancel")
-    @PreAuthorize("hasAuthority('BULK_IMPORT_EXECUTE')")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_CANCEL", apiVersion = "1")
-    @Operation(summary = "Cancel a running bulk load job")
+    @Operation(summary = "Cancel a running bulk load job", description = "Cancels a bulk load job that is currently in progress. The operator can only cancel their own jobs.")
     @ApiResponse(responseCode = "200", description = "Job cancelled")
     @ApiResponse(responseCode = "409", description = "Job is already in terminal state")
     public ResponseEntity<BulkLoadJobResponse> cancelJob(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(bulkLoadJobService.cancelJob(jobId, operatorId));
+    }
+
+    @PostMapping("/{jobId}/retry")
+    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_JOB_RETRY", apiVersion = "1")
+    @Operation(summary = "Retry a failed bulk load job", description = "Retries a bulk load job that has reached the FAILED state, resetting it to CREATED and re-queuing it for processing. The operator can only retry their own jobs. Returns 409 if the job is not in FAILED state.")
+    @ApiResponse(responseCode = "200", description = "Job reset and re-queued for retry")
+    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
+    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(responseCode = "409", description = "Job is not in FAILED state")
+    public ResponseEntity<BulkLoadJobResponse> retryJob(
+            @io.swagger.v3.oas.annotations.Parameter(description = "ID of the failed bulk load job to retry", required = true) @PathVariable @NonNull UUID jobId) {
+        String operatorId = currentOperatorId();
+        return ResponseEntity.ok(bulkLoadJobService.retryJob(jobId, operatorId));
     }
 
     private String currentOperatorId() {

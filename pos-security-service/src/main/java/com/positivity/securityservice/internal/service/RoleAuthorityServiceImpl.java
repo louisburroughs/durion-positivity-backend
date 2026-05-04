@@ -31,10 +31,12 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     @Override
     public Set<String> expandRolesToAuthorities(Set<String> roles) {
         Set<String> authorities = new HashSet<>();
-        if (roles == null || roles.isEmpty()) return authorities;
+        if (roles == null || roles.isEmpty())
+            return authorities;
 
         for (String role : roles) {
-            if (role == null || role.isBlank()) continue;
+            if (role == null || role.isBlank())
+                continue;
             String normalized = normalizeRole(role);
             // Always include the ROLE_* itself
             authorities.add(ROLE_PREFIX + normalized);
@@ -51,7 +53,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 case ROLE_AP_CLERK -> authorities.addAll(apClerkAuthorities());
                 case ROLE_ACCOUNTANT -> authorities.addAll(accountantAuthorities());
                 case ROLE_CONTROLLER -> authorities.addAll(controllerAuthorities());
-                default -> {}
+                default -> {
+                    /* unknown role — ROLE_* prefix already added above */ }
             }
         }
         return authorities;
@@ -104,13 +107,45 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         return set;
     }
 
-    private Set<String> adminAuthorities() {
+    private Set<String> customerAuthorities() {
         Set<String> set = new HashSet<>(fleetManagerAuthorities());
-        // CRM high-risk operations
-        set.addAll(List.of("crm:party:deactivate", "crm:party:merge"));
-        // Accounting admin (all permissions)
+        set.addAll(List.of(
+                "crm:party:create",
+                "crm:party:deactivate",
+                "crm:party:merge",
+                "crm:contact:delete",
+                "crm:contact_role:revoke",
+                "crm:vehicle:deactivate",
+                "crm:integration:audit",
+                "crm:billing_rules:edit"));
+        return set;
+    }
+
+    private Set<String> adminAuthorities() {
+        Set<String> set = new HashSet<>(customerAuthorities());
+        // Accounting — full controller hierarchy
         set.addAll(controllerAuthorities());
+        // Security — full admin set
         set.addAll(adminSecurityAuthorities());
+        // All other service domains
+        set.addAll(locationAuthorities());
+        set.addAll(bulkImportAuthorities());
+        set.addAll(catalogAuthorities());
+        set.addAll(inventoryAuthorities());
+        set.addAll(orderAuthorities());
+        set.addAll(workorderAuthorities());
+        set.addAll(shopAuthorities());
+        set.addAll(peopleAuthorities());
+        set.addAll(pricingAuthorities());
+        set.addAll(appointmentAuthorities());
+        set.addAll(invoiceAuthorities());
+        set.addAll(nltiAuthorities());
+        set.addAll(productLifecycleAuthorities());
+        set.addAll(mcpAuthorities());
+        set.addAll(taxAuthorities());
+        set.addAll(vehicleFitmentAuthorities());
+        set.addAll(vehicleInventoryAuthorities());
+        set.add("documents:render");
         return set;
     }
 
@@ -170,6 +205,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 // Events
                 "accounting:events:view",
                 "accounting:events:submit",
+                // Export
+                "accounting:export:view",
                 // AP
                 "accounting:ap:view"));
         return authorities;
@@ -195,14 +232,283 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "accounting:posting_rules:publish",
                 "accounting:je:post",
                 "accounting:je:reverse",
-                "accounting:events:retry"));
+                "accounting:events:retry",
+                "accounting:events:reprocess"));
         return set;
     }
 
     private Set<String> controllerAuthorities() {
         Set<String> set = new HashSet<>(accountantAuthorities());
         // Additional Controller permissions (includes ACCOUNTANT)
-        set.addAll(List.of("accounting:posting_rules:archive"));
+        set.addAll(List.of(
+                "accounting:posting_rules:archive",
+                "accounting:export:request"));
         return set;
+    }
+
+    // ============================================================================
+    // Other Service Domain Authorities (admin-only at this time)
+    // ============================================================================
+
+    private Set<String> locationAuthorities() {
+        return new HashSet<>(List.of(
+                "location:read",
+                "location:write",
+                "location:bay:read",
+                "location:bay:manage",
+                "location:mobile-unit:read",
+                "location:mobile-unit:manage",
+                "location:service-area:read",
+                "location:service-area:manage",
+                "location:travel-buffer-policy:read",
+                "location:travel-buffer-policy:manage"));
+    }
+
+    private Set<String> bulkImportAuthorities() {
+        return new HashSet<>(List.of(
+                "bulkImport:status:read",
+                "bulkImport:upload:execute"));
+    }
+
+    private Set<String> catalogAuthorities() {
+        return new HashSet<>(List.of(
+                "catalog:category:view",
+                "catalog:category:create",
+                "catalog:category:edit",
+                "catalog:category:delete",
+                "catalog:product:view",
+                "catalog:product:create",
+                "catalog:product:edit",
+                "catalog:product:delete",
+                "catalog:variant:view",
+                "catalog:variant:create",
+                "catalog:variant:edit",
+                "catalog:service_type:view",
+                "catalog:service_type:create",
+                "catalog:service_type:edit",
+                "catalog:price_book:read",
+                "catalog:price_book:write",
+                "catalog:msrp:read",
+                "catalog:msrp:write",
+                "catalog:supplier_cost:read",
+                "catalog:supplier_cost:write"));
+    }
+
+    private Set<String> inventoryAuthorities() {
+        return new HashSet<>(List.of(
+                "inventory:on_hand:view",
+                "inventory:on_hand:search",
+                "inventory:ledger:view",
+                "inventory:location:view",
+                "inventory:location:admin",
+                "inventory:adjustment:view",
+                "inventory:adjustment:create",
+                "inventory:adjustment:approve",
+                "inventory:asn:view",
+                "inventory:asn:create",
+                "inventory:goods_receipt:view",
+                "inventory:goods_receipt:create",
+                "inventory:goods_receipt:override",
+                "inventory:purchase_order:view",
+                "inventory:purchase_order:create",
+                "inventory:purchase_order:approve",
+                "inventory:purchase_order:receive",
+                "inventory:receiving:view",
+                "inventory:receiving:create",
+                "inventory:receiving:complete",
+                "inventory:putaway:view",
+                "inventory:putaway:generate",
+                "inventory:putaway:claim",
+                "inventory:putaway:execute",
+                "inventory:putaway:override_location_capacity",
+                "inventory:putaway:override_location_compatibility",
+                "inventory:pick_list:view",
+                "inventory:pick_list:create",
+                "inventory:pick_list:execute",
+                "inventory:cycle_count:view",
+                "inventory:cycle_count:initiate",
+                "inventory:cycle_count:complete",
+                "inventory:shortage:view",
+                "inventory:shortage:resolve",
+                "inventory:stock_movement:create",
+                "inventory:allocations:reallocate",
+                "inventory:issue:parts",
+                "inventory:return:view",
+                "inventory:return:write",
+                "inventory:override:part-match"));
+    }
+
+    private Set<String> orderAuthorities() {
+        return new HashSet<>(List.of(
+                "order:order:view",
+                "order:order:create",
+                "order:order:edit",
+                "order:order:cancel",
+                "order:line:view",
+                "order:line:create",
+                "order:line:edit",
+                "order:line:delete",
+                "order:line:enter_manual_price",
+                "order:price_override:view",
+                "order:price_override:apply",
+                "order:price_override:approve",
+                "order:price_override:reject"));
+    }
+
+    private Set<String> workorderAuthorities() {
+        return new HashSet<>(List.of(
+                "workorder:workorder:view",
+                "workorder:workorder:create",
+                "workorder:workorder:edit",
+                "workorder:workorder:approve",
+                "workorder:workorder:start",
+                "workorder:workorder:complete",
+                "workorder:workorder:delete",
+                "workorder:workorder:reopen_completed",
+                "workorder:wip:view",
+                "workorder:wip:view_all_locations",
+                "workorder:estimate:view",
+                "workorder:estimate:create",
+                "workorder:estimate:edit",
+                "workorder:estimate:calculate",
+                "workorder:estimate:approve",
+                "workorder:estimate:decline",
+                "workorder:estimate:delete",
+                "workorder:estimate:reopen",
+                "workorder:estimate_item:view",
+                "workorder:estimate_item:add",
+                "workorder:estimate_item:edit",
+                "workorder:estimate_item:delete",
+                "workorder:estimate_snapshot:view",
+                "workorder:estimate_snapshot:create",
+                "workorder:change_request:view",
+                "workorder:change_request:create",
+                "workorder:change_request:approve",
+                "workorder:change_request:decline",
+                "workorder:change_request:emergency_override",
+                "workorder:approval_config:view",
+                "workorder:approval_config:create",
+                "workorder:approval_config:edit",
+                "workorder:approval_config:delete",
+                "workorder:labor:view",
+                "workorder:labor:add",
+                "workorder:parts:view",
+                "workorder:parts:add",
+                "workorder:parts:consume",
+                "workorder:invoice:view",
+                "workorder:invoice:create"));
+    }
+
+    private Set<String> shopAuthorities() {
+        return new HashSet<>(List.of(
+                "shop:location:view",
+                "shop:location:create",
+                "shop:location:edit",
+                "shop:location:deactivate",
+                "shop:bay:view",
+                "shop:bay:create",
+                "shop:bay:edit",
+                "shop:bay:assign",
+                "shop:schedule:view",
+                "shop:schedule:edit"));
+    }
+
+    private Set<String> peopleAuthorities() {
+        return new HashSet<>(List.of(
+                "people:employee:view",
+                "people:employee:create",
+                "people:employee:edit",
+                "people:employee:deactivate",
+                "people:role:view",
+                "people:role:assign",
+                "people:role:revoke",
+                "people:skill:view",
+                "people:skill:edit",
+                "people:skill:assign"));
+    }
+
+    private Set<String> pricingAuthorities() {
+        return new HashSet<>(List.of(
+                "pricing:price_book:view",
+                "pricing:price_book:create",
+                "pricing:price_book:edit",
+                "pricing:price_book:delete",
+                "pricing:rule:view",
+                "pricing:rule:create",
+                "pricing:rule:edit",
+                "pricing:rule:delete",
+                "pricing:base_price:create",
+                "pricing:normalization:view",
+                "pricing:normalization:edit",
+                "pricing:restrictions:view",
+                "pricing:restrictions:edit"));
+    }
+
+    private Set<String> appointmentAuthorities() {
+        return new HashSet<>(List.of(
+                "appointments:view",
+                "appointments:create",
+                "appointments:reschedule",
+                "appointments:cancel"));
+    }
+
+    private Set<String> invoiceAuthorities() {
+        return new HashSet<>(List.of(
+                "invoice:manage",
+                "invoice:finalize",
+                "invoice:billing-rules"));
+    }
+
+    private Set<String> nltiAuthorities() {
+        return new HashSet<>(List.of(
+                "nlti:request:read",
+                "nlti:request:submit",
+                "nlti:audit:read"));
+    }
+
+    private Set<String> productLifecycleAuthorities() {
+        return new HashSet<>(List.of(
+                "product:lifecycle:update",
+                "product:lifecycle:override_discontinued"));
+    }
+
+    private Set<String> mcpAuthorities() {
+        return new HashSet<>(List.of(
+                "mcp:chat:execute",
+                "mcp:chat:stream",
+                "mcp:document:ingest",
+                "mcp:llm_api:view",
+                "mcp:llm_api:create",
+                "mcp:llm_api:update",
+                "mcp:llm_api:delete",
+                "mcp:system_prompt:view",
+                "mcp:system_prompt:create",
+                "mcp:system_prompt:update",
+                "mcp:system_prompt:delete"));
+    }
+
+    private Set<String> taxAuthorities() {
+        return new HashSet<>(List.of(
+                "tax:calculate",
+                "tax:mode:view"));
+    }
+
+    private Set<String> vehicleFitmentAuthorities() {
+        return new HashSet<>(List.of(
+                "vehicle-fitment:catalog:view",
+                "vehicle-fitment:hint:view",
+                "vehicle-fitment:hint:create",
+                "vehicle-fitment:hint:update",
+                "vehicle-fitment:hint:delete"));
+    }
+
+    private Set<String> vehicleInventoryAuthorities() {
+        return new HashSet<>(List.of(
+                "vehicle-inventory:registry:view",
+                "vehicle-inventory:registry:create",
+                "vehicle-inventory:registry:update",
+                "vehicle-inventory:registry:delete",
+                "vehicle-inventory:preferences:manage",
+                "vehicle-inventory:search:view"));
     }
 }

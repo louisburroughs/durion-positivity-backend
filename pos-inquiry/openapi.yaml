@@ -3,11 +3,15 @@ info:
   title: Positivity Inquiry API
   description: API documentation for the Inquiry service
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
 - url: http://localhost:8086
   description: Generated server url
-paths: {}
-components: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

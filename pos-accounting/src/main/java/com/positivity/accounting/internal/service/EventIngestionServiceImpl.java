@@ -2,7 +2,11 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventFilter;
+import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.EventEnvelopeContract;
+import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryMapper;
@@ -31,6 +35,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,12 +73,15 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private static final String TRANSACTION_DATE = "transactionDate";
     private static final String ORGANIZATION_ID = "organizationId";
     private static final String SOURCE_SYSTEM = "sourceSystem";
+    private static final String PAYLOAD = "payload";
+    private static final String STRING_TYPE = "string";
+    private static final String UUID_TYPE = "uuid";
+    private static final String DATE_TYPE = "date";
+    private static final String OBJECT_TYPE = "object";
     private final AccountingEventRepository accountingEventRepository;
-    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository
-            reprocessingAttemptHistoryRepository;
+    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
-    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository
-            auditTrailEntryRepository;
+    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
 
     /**
@@ -294,15 +302,14 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
             PostingResult postingResult = postingEngineOrchestrator.processEvent(
                     event, mappingVersion, request.getTriggeredByUserId(), true // autoPost=true for reprocessing flow
-                    );
+            );
 
             boolean reprocessingSucceeded = postingResult.isSuccess();
 
             if (reprocessingSucceeded) {
                 // Orchestrator already updated event status to PROCESSED,
                 // set finalPostingReferenceId, processedAt, and resolvedByUserId.
-                String finalPostingRef =
-                        (String) postingResult.getEvaluationDetails().get("postingReference");
+                String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
                 log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
             } else {
                 // Orchestrator already updated event status to SUSPENDED/FAILED
@@ -345,8 +352,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public List<ReprocessingAttemptHistoryResponse> getReprocessingHistory(@NonNull UUID eventId) {
         log.debug("Retrieving reprocessing history for event {}", eventId);
 
-        List<ReprocessingAttemptHistory> history =
-                reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
+        List<ReprocessingAttemptHistory> history = reprocessingAttemptHistoryRepository
+                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
 
         return history.stream()
                 .map(ReprocessingAttemptHistoryMapper::toResponse)
@@ -358,68 +365,142 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * Contains matched rules, generated journal entries, any errors.
      */
     @Override
-    public List<String> getEventProcessingLog(@NonNull UUID eventId) {
+    @Transactional(readOnly = true)
+    public List<EventProcessingLogEntry> getEventProcessingLog(@NonNull UUID eventId) {
         // Query audit trail entries linked to this accounting event
-        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries =
-                auditTrailEntryRepository.findBySourceEventId(eventId);
+        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries = auditTrailEntryRepository
+                .findBySourceEventId(eventId);
 
         if (auditEntries.isEmpty()) {
             log.debug("No audit trail entries found for event {}", eventId);
-            return List.of(EVENT_SPACE + eventId + ": No processing log entries found");
+            return List.of();
         }
 
-        // Format audit entries as log messages
-        return auditEntries.stream()
-                .map(entry -> String.format(
-                        "[%s] %s - Actor: %s (%s) - Status: %s - %s",
-                        entry.getTimestamp(),
-                        entry.getExceptionType(),
-                        entry.getActorId(),
-                        entry.getActorRole(),
-                        entry.getAccountingStatus(),
-                        entry.getReason() != null ? entry.getReason() : "No reason provided"))
-                .toList();
-    }
+        String severity = accountingEventRepository
+                .findById(eventId)
+                .map(AccountingEvent::getStatus)
+                .filter(status -> status == AccountingEventStatus.FAILED || status == AccountingEventStatus.SUSPENDED)
+                .map(status -> "ERROR")
+                .orElse("INFO");
 
-    /**
-     * Retrieves the processing log for an event as a string.
-     */
-    @Override
-    public String getProcessingLog(UUID eventId) {
-        List<String> log = getEventProcessingLog(eventId);
-        return String.join("\n", log);
+        return auditEntries.stream()
+                .map(entry -> EventProcessingLogEntry.builder()
+                        .entryId(entry.getAuditId())
+                        .occurredAt(entry.getTimestamp())
+                        .severity(severity)
+                        .message(entry.getReason() != null ? entry.getReason() : "No reason provided")
+                        .contextJson(entry.getLinkedSourceIds())
+                        .build())
+                .toList();
     }
 
     /**
      * Lists all events with filtering, returning a page of response DTOs.
      *
-     * @param organizationId the organization identifier
-     * @param status         optional status filter
-     * @param pageable       pagination parameters
+     * @param filter   filtering parameters
+     * @param pageable pagination parameters
      * @return paginated accounting event responses
      */
     @Override
-    public Page<AccountingEventResponse> listEvents(
-            @NonNull UUID organizationId, String status, @NonNull Pageable pageable) {
-        log.debug("Listing events for organization {} with status filter: {}", organizationId, status);
+    @Transactional(readOnly = true)
+    public Page<AccountingEventResponse> listEvents(@NonNull AccountingEventFilter filter, @NonNull Pageable pageable) {
+        log.debug(
+                "Listing events with filter [organizationId={}, status={}, eventType={}]",
+                filter.getOrganizationId(),
+                filter.getStatus(),
+                filter.getEventType());
 
-        Page<AccountingEvent> eventPage;
+        Specification<AccountingEvent> specs = (root, query, cb) -> cb.conjunction();
 
-        if (status != null && !status.isBlank()) {
-            try {
-                AccountingEventStatus eventStatus =
-                        AccountingEventStatus.valueOf(status.trim().toUpperCase());
-                eventPage =
-                        accountingEventRepository.findByOrganizationIdAndStatus(organizationId, eventStatus, pageable);
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid status filter '{}', returning all events for organization", status);
-                eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
-            }
-        } else {
-            eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
+        if (filter.getOrganizationId() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get(ORGANIZATION_ID), filter.getOrganizationId()));
+        }
+        if (filter.getEventType() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get(EVENT_TYPE), filter.getEventType()));
+        }
+        if (filter.getStatus() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
+        }
+        if (filter.getIdempotencyOutcome() != null) {
+            specs = specs
+                    .and((root, query, cb) -> cb.equal(root.get("idempotencyOutcome"), filter.getIdempotencyOutcome()));
+        }
+        if (filter.getReceivedAtFrom() != null) {
+            specs = specs.and(
+                    (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("receivedAt"), filter.getReceivedAtFrom()));
+        }
+        if (filter.getReceivedAtTo() != null) {
+            specs = specs
+                    .and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("receivedAt"), filter.getReceivedAtTo()));
+        }
+        if (filter.getEventId() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get("eventId"), filter.getEventId()));
+        }
+        if (filter.getIngestionId() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get("ingestionId"), filter.getIngestionId()));
+        }
+        if (filter.getDomainKeyId() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get("domainKeyId"), filter.getDomainKeyId()));
+        }
+        if (filter.getInvoiceId() != null) {
+            specs = specs.and((root, query, cb) -> cb.equal(root.get("invoiceId"), filter.getInvoiceId()));
         }
 
-        return eventPage.map(AccountingEventMapper::toEventResponse);
+        return accountingEventRepository.findAll(specs, pageable).map(AccountingEventMapper::toEventResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull EventEnvelopeContract getEventContract() {
+        List<ContractField> fields = List.of(
+                ContractField.builder()
+                        .name(EVENT_TYPE)
+                        .jsonPath("$." + EVENT_TYPE)
+                        .type(STRING_TYPE)
+                        .required(true)
+                        .description("The type of accounting event (e.g., INVOICE_POSTED, PAYMENT_RECEIVED)")
+                        .build(),
+                ContractField.builder()
+                        .name(ORGANIZATION_ID)
+                        .jsonPath("$." + ORGANIZATION_ID)
+                        .type(UUID_TYPE)
+                        .required(false)
+                        .description("Organization context for multi-tenant routing")
+                        .build(),
+                ContractField.builder()
+                        .name(SOURCE_SYSTEM)
+                        .jsonPath("$." + SOURCE_SYSTEM)
+                        .type(STRING_TYPE)
+                        .required(true)
+                        .description("Originating system identifier")
+                        .build(),
+                ContractField.builder()
+                        .name(TRANSACTION_DATE)
+                        .jsonPath("$." + TRANSACTION_DATE)
+                        .type(DATE_TYPE)
+                        .required(true)
+                        .description("Business date for journal entry posting (ISO-8601)")
+                        .build(),
+                ContractField.builder()
+                        .name(PAYLOAD)
+                        .jsonPath("$." + PAYLOAD)
+                        .type(OBJECT_TYPE)
+                        .required(true)
+                        .description("Event-type-specific data payload")
+                        .build(),
+                ContractField.builder()
+                        .name("idempotencyKey")
+                        .jsonPath("$.idempotencyKey")
+                        .type(STRING_TYPE)
+                        .required(false)
+                        .description("Client-supplied deduplication key")
+                        .build());
+
+        return EventEnvelopeContract.builder()
+                .version("1.0")
+                .fields(fields)
+                .examples(List.of())
+                .build();
     }
 
     /**
@@ -454,7 +535,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // Query all FAILED and SUSPENDED events that haven't exceeded max retries
         List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
-                                || event.getStatus() == AccountingEventStatus.SUSPENDED)
+                        || event.getStatus() == AccountingEventStatus.SUSPENDED)
                         && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries))
                 .toList();
 
@@ -500,7 +581,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         if (event.get(EVENT_TYPE) == null) {
             errors.add("eventType is required");
         }
-        if (event.get("payload") == null) {
+        if (event.get(PAYLOAD) == null) {
             errors.add("payload is required");
         }
 
@@ -516,7 +597,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 + "|" + event.get(SOURCE_SYSTEM)
                 + "|" + event.get(EVENT_TYPE)
                 + "|" + event.get(TRANSACTION_DATE)
-                + "|" + event.get("payload");
+                + "|" + event.get(PAYLOAD);
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));

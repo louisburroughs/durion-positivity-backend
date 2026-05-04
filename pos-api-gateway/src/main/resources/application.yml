@@ -189,6 +189,8 @@ springdoc:
         url: /v3/api-docs
       - name: Accounting
         url: /accounting/v3/api-docs
+      - name: Bulk Loader
+        url: /bulk-loader/v3/api-docs
       - name: Catalog
         url: /catalog/v3/api-docs
       - name: Customer
@@ -222,6 +224,7 @@ springdoc:
       - name: Workorder
         url: /workorder/v3/api-docs
 
+  default-produces-media-type: application/json
 logging:
   level:
     root: INFO

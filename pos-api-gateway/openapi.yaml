@@ -1,39 +1,57 @@
 openapi: 3.1.0
 info:
   title: Positivity API Gateway
-  description: |-
-    Unified API Gateway for all POS microservices.
+  description: 'Unified API Gateway for all POS microservices.
+
 
     **API Versioning**: All requests must include the `X-API-Version` header.
 
+
     **Available Routes**:
+
     - `/accounting/**` - General ledger, journal entries, financial operations
+
     - `/catalog/**` - Product information, categorization, details
+
     - `/customer/**` - Customer profiles, preferences, history
+
     - `/event-receiver/**` - Event ingestion and processing
+
     - `/image/**` - Image storage, retrieval, transformation
+
     - `/inquiry/**` - Customer inquiries and support tracking
+
     - `/inventory/**` - Stock management and availability
+
     - `/invoice/**` - Invoice generation, tracking, management
+
     - `/location/**` - Store locations, warehouses, branches
+
     - `/order/**` - Order creation, fulfillment, tracking
+
     - `/people/**` - Employee management, staff administration
+
     - `/price/**` - Pricing rules, discounts, cost calculations
+
     - `/security-service/**` - Authentication, authorization, access control
+
     - `/shop-manager/**` - Shop operations, scheduling, resources
+
     - `/vehicle-fitment/**` - Vehicle compatibility, parts installation
+
     - `/vehicle-inventory/**` - Vehicle stock and availability
+
     - `/workorder/**` - Service requests, job tracking, assignments
 
-    **Example**: `curl -H "X-API-Version: 1" http://localhost:8080/inventory/items`
+
+    **Example**: `curl -H "X-API-Version: 1" http://localhost:8080/inventory/items`'
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: 1.0.0
 servers:
 - url: http://localhost:8080
   description: API Gateway - All services routed through this endpoint
-paths: {}
 components:
   parameters:
     X-API-Version:
@@ -43,6 +61,11 @@ components:
       required: true
       schema:
         type: string
-        default: "1"
-        example: "1"
+        default: '1'
+        example: '1'
       x-purpose: Documented for gateway header routing; no local $ref expected
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

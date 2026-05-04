@@ -1,232 +1,460 @@
-# Durion Positivity Backend - Scripts
+# Durion Positivity Backend — Scripts
 
-Utility scripts for managing the project build, versioning, and deployment.
+Utility scripts for development, operations, testing, and deployment.
 
-## Available Scripts
+---
 
-### `check-flyway-hygiene.sh` - Flyway Migration Guardrails
+## Script Index
 
-Validates migration hygiene rules across `pos-*` modules.
+| Script | Category | Purpose |
+|--------|----------|---------|
+| [`start-all-services.sh`](#start-all-servicessh) | Service Lifecycle | Start all services via Maven Spring Boot plugin |
+| [`start-services-local.sh`](#start-services-localsh) | Service Lifecycle | Build JARs then start a local subset from disk |
+| [`stop-all-services.sh`](#stop-all-servicessh) | Service Lifecycle | Stop all services tracked in `logs/*.pid` |
+| [`workorder-kafka-local.sh`](#workorder-kafka-localsh) | Kafka | Manage the local Kafka stack for `pos-workorder` |
+| [`check-noarg-now.sh`](#check-noarg-nowsh) | Code Quality | Detect forbidden no-arg `Instant.now()` / `LocalDateTime.now()` calls |
+| [`check-flyway-hygiene.sh`](#check-flyway-hygienesh) | Code Quality | Validate Flyway migration hygiene across `pos-*` modules |
+| [`verify-secrets.sh`](#verify-secretssh) | Security | Scan `application.yml` files for hardcoded secrets |
+| [`verify-docker-compose-secrets.sh`](#verify-docker-compose-secretssh) | Security | Verify `docker-compose.yml` secrets are fully externalized |
+| [`inventory-flyway-modules.sh`](#inventory-flyway-modulessh) | Database | Inventory Flyway-managed modules for baseline planning |
+| [`emit-pos-accounting-baseline.sh`](#emit-pos-accounting-baselinesh) | Database | Emit accounting schema from a disposable Postgres container |
+| [`compare-schema-tables.py`](#compare-schema-tablespy) | Database | Table-aware diff of two schema SQL files |
+| [`build-pos-accounting-baseline-from-dump.py`](#build-pos-accounting-baseline-from-dumpy) | Database | Convert `pg_dump` output to a Flyway baseline SQL file |
+| [`verify-observability.sh`](#verify-observabilitysh) | Observability | Check Jaeger, Prometheus, Grafana, and OTEL Collector health |
+| [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
+| [`export-permission-registrations-yaml.py`](#export-permission-registrations-yamlpy) | Permissions | Aggregate all `permissions.yaml` manifests into one report |
+| [`redeploy-backend-tag.sh`](#redeploy-backend-tagsh) | Deployment | Update `BACKEND_TAG` and redeploy services on the alpha EC2 host |
+| [`update-version.sh`](#update-versionsh) | Versioning | Bump the Maven project version (patch / minor / major) |
+| [`quick-reference.sh`](#quick-referencesh) | Versioning | Print version management quick-reference to stdout |
+| [`story_export.sh`](#story_exportsh) | CI / Stories | Export `story-implementation` GitHub issues to `.story-work/inbox/` |
+| [`test-gateway-refactoring.sh`](#test-gateway-refactoringsh) | Testing | Integration checks for the gateway API versioning refactor |
+| [`run_test.sh`](#run_testsh) | Testing | Run a focused set of `pos-accounting` tests and grep failures |
+| [`fix_uuids*.py`](#fix_uuidspy-family) | Migration | One-time UUID normalization helpers for test files |
+
+---
+
+## Service Lifecycle
+
+### `start-all-services.sh`
+
+Starts the full service stack using `mvn spring-boot:run` with the `dev` profile (H2 databases). Services are launched in dependency order: Eureka → Security → Gateway → business services.
 
 **Usage:**
 ```bash
-./check-flyway-hygiene.sh
+./scripts/start-all-services.sh
+```
+
+**Notes:**
+- Assumes modules are already compiled. To rebuild first: `./mvnw clean compile -DskipTests`
+- Writes PID files and logs to `./logs/`
+- Eureka Dashboard: http://localhost:8761 | Gateway: http://localhost:8080
+
+---
+
+### `start-services-local.sh`
+
+Builds all service JARs (`mvn clean package -DskipTests`) then starts a local subset — Eureka, Security, and Accounting — from the built JARs.
+
+**Usage:**
+```bash
+./scripts/start-services-local.sh
+```
+
+**Notes:**
+- Useful for iterating on a specific service without starting the full stack
+- Writes PID files and logs to `./logs/`
+- To stop services: `./scripts/stop-all-services.sh`
+
+---
+
+### `stop-all-services.sh`
+
+Stops all services whose PID files exist in `./logs/`. Also sends `pkill` for any lingering `spring-boot` processes in the project.
+
+**Usage:**
+```bash
+./scripts/stop-all-services.sh
+```
+
+---
+
+## Kafka
+
+### `workorder-kafka-local.sh`
+
+Manages the local Kafka Docker Compose stack for the `pos-workorder` module (`pos-workorder/docker-compose.kafka.yml`).
+
+**Usage:**
+```bash
+./scripts/workorder-kafka-local.sh up
+./scripts/workorder-kafka-local.sh down
+./scripts/workorder-kafka-local.sh restart
+./scripts/workorder-kafka-local.sh logs [service]   # defaults to 'kafka'
+./scripts/workorder-kafka-local.sh topics
+```
+
+**Notes:**
+- Kafka bootstrap: `localhost:9092`
+- Kafka UI: http://localhost:8098
+
+---
+
+## Code Quality
+
+### `check-noarg-now.sh`
+
+Scans `src/main` and `src/test` for forbidden no-arg clock calls (`Instant.now()`, `LocalDateTime.now()`). These must receive a `Clock` argument to support deterministic testing.
+
+**Usage:**
+```bash
+./scripts/check-noarg-now.sh
+```
+
+Exits non-zero and prints offending lines if any are found.
+
+---
+
+### `check-flyway-hygiene.sh`
+
+Validates Flyway migration hygiene rules across all `pos-*` modules.
+
+**Usage:**
+```bash
+./scripts/check-flyway-hygiene.sh
 ```
 
 **Checks:**
-- Duplicate `V<version>__...` migration numbers in a module
+- Duplicate `V<version>__...` migration numbers within a module
 - Modules with `db/migration/*.sql` but missing Flyway dependencies
 - Non-test runtime configs using `ddl-auto: update` for Flyway-managed modules
 - Migration filenames not matching `V<integer>__<description>.sql` or `R__<description>.sql`
 
-### `inventory-flyway-modules.sh` - Baseline Reset Inventory
+---
 
-Inventories Flyway-managed modules and summarizes the inputs needed for a
-collapsed-baseline reset.
+## Security
+
+### `verify-secrets.sh`
+
+Scans `pos-*/src/main/resources/application.yml` for hardcoded secrets: `pos_password`, `changeit` keystore passwords, and `admin` passwords.
 
 **Usage:**
 ```bash
-./inventory-flyway-modules.sh
-./inventory-flyway-modules.sh --format tsv
+./scripts/verify-secrets.sh
+```
+
+Prints a pass/fail summary for each check and lists services that have been migrated to environment variables.
+
+---
+
+### `verify-docker-compose-secrets.sh`
+
+Checks that `docker-compose.yml` contains no hardcoded PostgreSQL, Grafana, or datasource passwords, and that all services reference `${...}` environment variables instead.
+
+**Usage:**
+```bash
+./scripts/verify-docker-compose-secrets.sh
+```
+
+Also checks that `.env` contains `CHANGE_ME` placeholders and `.env.example` is safe to commit.
+
+---
+
+## Database / Flyway
+
+### `inventory-flyway-modules.sh`
+
+Inventories Flyway-managed modules and summarizes the inputs needed for a collapsed-baseline reset.
+
+**Usage:**
+```bash
+./scripts/inventory-flyway-modules.sh
+./scripts/inventory-flyway-modules.sh --format tsv
 ```
 
 **Includes:**
-- module name
-- compose database name
-- versioned vs repeatable migration counts
-- first and last versioned migration file
+- Module name and compose database name
+- Versioned vs. repeatable migration counts
+- First and last versioned migration file
 - H2 migration layout (`split`, `nested`, `none`)
-- whether a custom `FlywayConfig` exists
-- detected extension usage (`timescaledb`, `pgvector`)
-- rough count of parity/gap-style migrations
+- Whether a custom `FlywayConfig` exists
+- Detected extension usage (`timescaledb`, `pgvector`)
+- Rough count of parity/gap-style migrations
 
-### `emit-pos-accounting-baseline.sh` - Scratch Schema Emitter
+---
 
-Bootstraps `pos-accounting` against a disposable Postgres database with Flyway
-disabled and Hibernate schema creation enabled, then dumps the emitted schema to
-a host file for baseline curation.
+### `emit-pos-accounting-baseline.sh`
+
+Bootstraps `pos-accounting` against a disposable Postgres container with Flyway disabled and Hibernate schema creation enabled, then dumps the emitted schema to a host file for baseline curation.
 
 **Usage:**
 ```bash
-./emit-pos-accounting-baseline.sh
+./scripts/emit-pos-accounting-baseline.sh
 ```
 
 **Default behavior:**
-- recreates `pos_accounting_baseline_tmp` inside Docker container `pos-accounting-baseline-pg`
-- starts `pos-accounting` with the required local-only overrides
-- waits for core tables to appear
-- dumps schema to `/tmp/pos_accounting_baseline_emitted.sql`
+- Recreates `pos_accounting_baseline_tmp` inside Docker container `pos-accounting-baseline-pg`
+- Starts `pos-accounting` with the required local-only overrides
+- Waits for core tables to appear
+- Dumps schema to `/tmp/pos_accounting_baseline_emitted.sql`
 
 **Useful overrides:**
-- `POSTGRES_CONTAINER`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `HOST_DB_PORT`
-- `SCRATCH_DB`
-- `EMITTED_SCHEMA_OUTPUT`
-- `BOOTSTRAP_LOG`
+- `POSTGRES_CONTAINER`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HOST_DB_PORT`
+- `SCRATCH_DB`, `EMITTED_SCHEMA_OUTPUT`, `BOOTSTRAP_LOG`
 
-### `compare-schema-tables.py` - Table-Aware Schema Diff
+---
 
-Compares two schema SQL files by table name instead of raw line order.
-Useful when diffing `pg_dump` output against a hand-written baseline file.
+### `compare-schema-tables.py`
+
+Compares two schema SQL files by table name instead of raw line order. Useful when diffing `pg_dump` output against a hand-written baseline file.
 
 **Usage:**
 ```bash
-./compare-schema-tables.py left.sql right.sql
-./compare-schema-tables.py left.sql right.sql --summary-only
-./compare-schema-tables.py left.sql right.sql --tables accounting_event vendor_bill
+./scripts/compare-schema-tables.py left.sql right.sql
+./scripts/compare-schema-tables.py left.sql right.sql --summary-only
+./scripts/compare-schema-tables.py left.sql right.sql --tables accounting_event vendor_bill
 ```
 
 **What it does:**
-- groups `CREATE TABLE`, `ALTER TABLE`, and `CREATE INDEX` statements by table
-- normalizes whitespace and schema qualifiers
-- prints a per-table unified diff instead of a file-order diff
+- Groups `CREATE TABLE`, `ALTER TABLE`, and `CREATE INDEX` statements by table
+- Normalizes whitespace and schema qualifiers
+- Prints a per-table unified diff instead of a file-order diff
 
-### `build-pos-accounting-baseline-from-dump.py` - Dump To Flyway Baseline
+---
 
-Transforms emitted `pg_dump` schema output for `pos-accounting` into a
-Flyway-ready baseline SQL file while leaving repeatable seed/data scripts
-separate.
+<a id="build-pos-accounting-baseline-from-dumpy"></a>
+
+### `build-pos-accounting-baseline-from-dump.py`
+
+Transforms emitted `pg_dump` schema output for `pos-accounting` into a Flyway-ready baseline SQL file while leaving repeatable seed/data scripts separate.
 
 **Usage:**
 ```bash
-./build-pos-accounting-baseline-from-dump.py
-./build-pos-accounting-baseline-from-dump.py /tmp/pos_accounting_baseline_emitted.sql
-./build-pos-accounting-baseline-from-dump.py input.sql output.sql
+./scripts/build-pos-accounting-baseline-from-dump.py
+./scripts/build-pos-accounting-baseline-from-dump.py /tmp/pos_accounting_baseline_emitted.sql
+./scripts/build-pos-accounting-baseline-from-dump.py input.sql output.sql
 ```
 
 **Default behavior:**
-- reads `/tmp/pos_accounting_baseline_emitted.sql`
-- keeps `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE INDEX`, `ALTER TABLE`, and `ALTER SEQUENCE`
-- drops `pg_dump` noise such as `SET`, ownership, grants, comments, and `setval`
-- writes the cleaned result to
-  `pos-accounting/src/main/resources/db/baseline-reset/V1__baseline_accounting_schema.sql`
+- Reads `/tmp/pos_accounting_baseline_emitted.sql`
+- Keeps `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE INDEX`, `ALTER TABLE`, and `ALTER SEQUENCE`
+- Drops `pg_dump` noise (`SET`, ownership, grants, comments, `setval`)
+- Writes the cleaned result to `pos-accounting/src/main/resources/db/baseline-reset/V1__baseline_accounting_schema.sql`
 
-**Temporary rollout note:**
-- `ddl-auto: update` currently emits a warning by default (non-blocking).
-- Set `ENFORCE_DDL_AUTO_UPDATE_CHECK=true` to make it fail the script again.
+---
 
-### `redeploy-backend-tag.sh` - Update Tag + Redeploy Services on EC2
+## Observability
 
-Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, reconciles the shared `postgres`
-service if its compose image changed, then runs `docker compose pull` and
-`docker compose up -d --force-recreate` using the alpha compose files.
+### `verify-observability.sh`
+
+Checks that the full observability stack is running and accessible, then reports on active Prometheus targets and Jaeger traces.
 
 **Usage:**
 ```bash
-./redeploy-backend-tag.sh <backend-tag> [service...]
+./scripts/verify-observability.sh
 ```
 
-**Examples:**
-```bash
-# Redeploy one service with a new backend image tag
-./redeploy-backend-tag.sh sha-a20f156 pos-vehicle-inventory
+**Checks:**
+- Docker Compose services: `jaeger`, `prometheus`, `grafana`, `otel-collector`
+- HTTP health endpoints for each
+- Active Prometheus targets count
+- POS services registered in Docker Compose
+- Services with traces in Jaeger
+- Required config files (`application-observability.yml`, `prometheus.yml`, OTEL config)
+- Dockerfiles that include the OpenTelemetry agent
 
-# Same, but pass short commit form (script adds "sha-")
-./redeploy-backend-tag.sh a20f156 pos-security-service pos-api-gateway
+**Endpoint summary (when running):**
+| Service | URL |
+|---------|-----|
+| Grafana | http://localhost:3000 |
+| Jaeger | http://localhost:16686 |
+| Prometheus | http://localhost:9090 |
+| OTEL Collector | http://localhost:13133 |
 
-# Redeploy all services with the new backend tag
-./redeploy-backend-tag.sh sha-a20f156
-```
+---
 
-**Notes:**
-- Run this on the EC2 host where `/opt/durion/alpha` exists.
-- Supports optional env overrides: `ALPHA_ROOT`, `BACKEND_DIR`, `ENV_FILE`, `PROD_OVERRIDE`, `LOG_TAIL`.
-- If the deployed `postgres` container is still on an older image than the merged compose
-  config, the script automatically pulls and recreates `postgres` before the app rollout.
+## API & Permissions
 
-### `generate-openapi.sh` - Per-Module + Aggregate OpenAPI Generation
+### `generate-openapi.sh`
 
-Generates `openapi.yaml` for every configured module and then creates an aggregate index spec.
+Generates `openapi.yaml` for every configured module and creates an aggregate index spec.
 
 **Usage:**
 ```bash
-./generate-openapi.sh [options] [module...]
-```
-
-**Examples:**
-
-```bash
-# Generate for all configured modules + aggregate file
-./generate-openapi.sh
-
-# Generate only selected modules + aggregate file
-./generate-openapi.sh pos-api-gateway pos-workorder
-
-# Generate and write aggregate file to a custom location
-./generate-openapi.sh --aggregate-output docs/openapi-aggregate.yaml
-
-# Generate module specs only (skip aggregate)
-./generate-openapi.sh --no-aggregate
+./scripts/generate-openapi.sh
+./scripts/generate-openapi.sh pos-api-gateway pos-workorder
+./scripts/generate-openapi.sh --aggregate-output docs/openapi-aggregate.yaml
+./scripts/generate-openapi.sh --no-aggregate
 ```
 
 **What it does:**
 1. Discovers modules configured to output `openapi.yaml`
 2. Runs Maven generation per module (`verify` by default)
-3. Produces aggregate index spec at `pos-api-gateway/docs/openapi-aggregate.yaml` by default
-    - The aggregate file uses `$ref` pointers to each module's `openapi.yaml`
-    - Duplicate path keys across modules are skipped and listed in `x-duplicate-paths-skipped`
+3. Produces an aggregate index spec at `pos-api-gateway/docs/openapi-aggregate.yaml`
+   - The aggregate uses `$ref` pointers to each module's `openapi.yaml`
+   - Duplicate paths across modules are skipped and listed in `x-duplicate-paths-skipped`
 
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
-- Module generation still works if aggregate generation is disabled via `--no-aggregate`.
+- Module generation still works with `--no-aggregate`.
 
-### `update-version.sh` - Semantic Version Management
+---
+
+### `export-permission-registrations-yaml.py`
+
+Walks the repository for `permissions.yaml` manifests and aggregates them into a single YAML report with a flat permissions list, per-module breakdown, duplicate detection, and parse-error summary.
+
+**Usage:**
+```bash
+./scripts/export-permission-registrations-yaml.py
+./scripts/export-permission-registrations-yaml.py -o docs/permissions-report.yaml
+./scripts/export-permission-registrations-yaml.py --strict        # exit 1 on duplicates or parse errors
+./scripts/export-permission-registrations-yaml.py --root /path/to/root
+```
+
+**Output includes:**
+- `generatedAt`, `root`, `summary` (counts)
+- `manifests` — per-module breakdown with permission list
+- `permissions` — flat sorted list with domain, serviceName, and source path
+- `duplicates` — permission names that appear in more than one module
+- `parseIssues` — manifests that failed to parse
+
+**Notes:**
+- Works with or without `PyYAML` installed (falls back to a line-by-line parser).
+
+---
+
+## Deployment
+
+### `redeploy-backend-tag.sh`
+
+Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, reconciles the shared `postgres` service if its compose image changed, then runs `docker compose pull` and `docker compose up -d --force-recreate` using the alpha compose files.
+
+**Usage:**
+```bash
+./scripts/redeploy-backend-tag.sh <backend-tag> [service...]
+```
+
+**Examples:**
+```bash
+# Redeploy one service with a new backend image tag
+./scripts/redeploy-backend-tag.sh sha-a20f156 pos-vehicle-inventory
+
+# Short commit form (script prepends "sha-" automatically)
+./scripts/redeploy-backend-tag.sh a20f156 pos-security-service pos-api-gateway
+
+# Redeploy all services with the new backend tag
+./scripts/redeploy-backend-tag.sh sha-a20f156
+```
+
+**Notes:**
+- Run this on the EC2 host where `/opt/durion/alpha` exists.
+- Env overrides: `ALPHA_ROOT`, `BACKEND_DIR`, `ENV_FILE`, `PROD_OVERRIDE`, `LOG_TAIL`.
+- If the deployed `postgres` container lags behind the merged compose config, the script automatically pulls and recreates `postgres` before the app rollout.
+
+---
+
+## Version Management
+
+### `update-version.sh`
 
 Automated semantic versioning for the multi-module Maven project.
 
 **Usage:**
 ```bash
-./update-version.sh [patch|minor|major] [--commit]
+./scripts/update-version.sh [patch|minor|major] [--commit]
 ```
 
 **Examples:**
-
 ```bash
-# Preview patch bump (0.1.0 → 0.1.1-SNAPSHOT)
-./update-version.sh patch
-
-# Bump minor version and auto-commit
-./update-version.sh minor --commit
-
-# Bump major version and auto-commit
-./update-version.sh major --commit
+./scripts/update-version.sh patch              # Preview 0.1.0 → 0.1.1-SNAPSHOT
+./scripts/update-version.sh minor --commit     # Bump minor and auto-commit
+./scripts/update-version.sh major --commit     # Bump major and auto-commit
 ```
 
 **What it does:**
 1. Extracts current version from root `pom.xml`
-2. Calculates new version based on semantic versioning rules
-3. Updates ALL 27 module `pom.xml` files using Maven Versions Plugin
-4. Displays preview of changes
-5. Optionally commits changes (with `--commit` flag)
+2. Calculates new version based on semver rules
+3. Updates all module `pom.xml` files via the Maven Versions Plugin
+4. Displays a diff preview
+5. Optionally commits with `--commit`
 
-**Key Features:**
-- ✅ Safe preview mode (no --commit = no changes written)
-- ✅ Updates all 27 modules automatically
-- ✅ Semantic versioning support (major/minor/patch)
-- ✅ Clear git workflow instructions
-- ✅ Smart version extraction (ignores Spring Boot parent version)
+---
 
-**Output Example:**
+### `quick-reference.sh`
+
+Prints a concise version management quick-reference to stdout. Useful as a one-line reminder without opening the full README.
+
+**Usage:**
+```bash
+./scripts/quick-reference.sh
 ```
-📦 Current version: 0.1.0
-🚀 Updating to version: 0.2.0-SNAPSHOT
 
-⏳ Updating all pom.xml files...
-✅ Version updated successfully
+---
 
-Changed files:
-pom.xml
-pos-accounting/pom.xml
-pos-agent-framework/pom.xml
-... (27 modules total)
+## CI / Stories
 
-Preview of changes:
-diff --git a/pom.xml b/pom.xml
--       <version>0.1.0-SNAPSHOT</version>
-+       <version>0.2.0-SNAPSHOT</version>
+### `story_export.sh`
+
+Exports all GitHub issues labelled `story-implementation` from the backend repository to `.story-work/inbox/<number>.json`.
+
+**Usage:**
+```bash
+./scripts/story_export.sh
 ```
+
+**Notes:**
+- Requires `gh` CLI authenticated to the repo.
+- Output directory is `.story-work/inbox/` relative to the repo root.
+
+---
+
+### `test-gateway-refactoring.sh`
+
+Integration test suite that verifies the gateway API versioning refactoring is complete and correct.
+
+**Usage:**
+```bash
+./scripts/test-gateway-refactoring.sh
+```
+
+**Checks:**
+1. `spring.application.name` updated correctly in all 17 services
+2. `pos-api-gateway` module compiles
+3. Sample services (`pos-inventory`, `pos-order`, `pos-catalog`, `pos-security-service`) compile
+4. `ApiVersionHeaderToPathFilter` exists and has the required methods/constants
+5. Gateway discovery locator config and lower-case service ID enabled
+6. Gateway dev profile configuration (port 8080, segregated management port)
+
+---
+
+### `run_test.sh`
+
+Convenience script to run the three primary `pos-accounting` integration/unit tests and grep for failures.
+
+**Usage:**
+```bash
+./scripts/run_test.sh
+```
+
+Output is written to `./mvn_test_output.log` and the failure block is printed to stdout.
+
+---
+
+## Migration Utilities
+
+### `fix_uuids*.py` family
+
+One-time migration helpers used to normalize hardcoded `UUID.fromString` literals in `pos-accounting` test files. These are historical scripts and are not needed for regular development.
+
+| Script | What it did |
+|--------|------------|
+| `fix_uuids.py` | Reformatted 32-digit UUID strings to dashed form |
+| `fix_fixed_uuids.py` | Replaced repeated `00000000-0000-0000-0000-000000000001` with incrementing hex suffixes |
+| `fix_user_uuids.py` | Variant of the above for user UUID constants |
+| `fix_uuids2.py` | Iterative refinement pass on the same test files |
+| `fix_uuids_properly.py` | Final pass — injected `nextUuid()` helper and replaced all fixed UUIDs with calls to it |
+
+---
 
 ## Version Management Workflow
 
@@ -234,10 +462,9 @@ diff --git a/pom.xml b/pom.xml
 
 ```bash
 # 1. Work on features in -SNAPSHOT version
-#    (currently 0.1.0-SNAPSHOT)
 
 # 2. When ready to release, bump version
-./update-version.sh minor --commit
+./scripts/update-version.sh minor --commit
 
 # 3. Create release (without -SNAPSHOT)
 ./mvnw release:prepare release:perform
@@ -245,28 +472,21 @@ diff --git a/pom.xml b/pom.xml
 
 ### Semantic Versioning Rules
 
-| Type  | When to use | Example |
-|-------|-----------|---------|
+| Type | When to use | Example |
+|------|-------------|---------|
 | Patch | Bug fixes | 0.1.0 → 0.1.1 |
-| Minor | New features (backwards-compatible) | 0.1.0 → 0.2.0 |
+| Minor | New backwards-compatible features | 0.1.0 → 0.2.0 |
 | Major | Breaking changes | 0.2.0 → 1.0.0 |
 
 ### Release Workflow
 
 ```bash
-# 1. Bump version to next development cycle
-./update-version.sh minor --commit
-
-# 2. Create git tag for the release
+./scripts/update-version.sh minor --commit
 git tag v0.2.0
-
-# 3. Push to remote
 git push origin main --tags
 ```
 
 ## Manual Version Commands
-
-If you prefer not to use the script:
 
 ```bash
 # Check current version
@@ -281,6 +501,9 @@ git diff pom.xml **/pom.xml
 # Commit if satisfied
 git add pom.xml **/pom.xml
 git commit -m "chore: bump version to 0.2.0-SNAPSHOT"
+
+# Undo version changes
+git checkout pom.xml **/pom.xml
 ```
 
 ## Configuration
@@ -298,34 +521,8 @@ The Maven Versions Plugin is configured in the root `pom.xml`:
 </plugin>
 ```
 
-## Troubleshooting
-
-### Script Permission Error
-
-```bash
-chmod +x scripts/update-version.sh
-```
-
-### Maven Not Found
-
-The script uses `./mvnw` (Maven Wrapper). If it's not available:
-```bash
-# Use system Maven if available
-mvn versions:set -DnewVersion=0.2.0-SNAPSHOT -DprocessAllModules
-```
-
-### Wrong Version Detected
-
-The script intelligently skips the Spring Boot parent version (4.0.1) and reads the actual project version. If it's still wrong, check that `pom.xml` has the correct version element after the `<artifactId>positivity</artifactId>` tag.
-
-### Undo Version Changes
-
-```bash
-git checkout pom.xml **/pom.xml
-```
-
 ## Additional Resources
 
-- See [VERSION_MANAGEMENT.md](../docs/VERSION_MANAGEMENT.md) for comprehensive guide
+- `docs/VERSION_MANAGEMENT.md` — comprehensive version guide (if present)
 - [Maven Versions Plugin](https://www.mojohaus.org/versions/versions-maven-plugin/)
 - [Semantic Versioning](https://semver.org/)

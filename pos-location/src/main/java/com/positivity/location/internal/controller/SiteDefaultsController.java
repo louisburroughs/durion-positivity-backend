@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -32,45 +33,33 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Site Defaults API", description = "Operations for managing location site default settings")
 public class SiteDefaultsController {
 
-    private final SiteDefaultsService siteDefaultsService;
+        private final SiteDefaultsService siteDefaultsService;
 
-    @PutMapping
-    @Operation(
-            summary = "Configure site defaults",
-            description = "Create or update default site configuration for a location.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Site defaults configured",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = SiteDefaultsResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    @PreAuthorize("hasAuthority('location:write')")
-    @EmitEvent(id = "LOCATION_SITE_DEFAULTS_PUT", apiVersion = "1")
-    public ResponseEntity<SiteDefaultsResponse> configureDefaults(
-            @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId,
-            @RequestBody SiteDefaultsRequest request) {
-        return ResponseEntity.ok(siteDefaultsService.configureDefaults(locationId, request));
-    }
+        @PutMapping
+        @Operation(summary = "Configure site defaults", description = "Create or update default site configuration for a location.")
+        @ApiResponse(responseCode = "200", description = "Site defaults configured", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SiteDefaultsResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request payload")
+        @ApiResponse(responseCode = "403", description = "Forbidden")
+        @ApiResponse(responseCode = "404", description = "Location not found")
+        @PreAuthorize("hasAuthority('location:write')")
+        @EmitEvent(id = "LOCATION_SITE_DEFAULTS_PUT", apiVersion = "1")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "location:write" })
+        public ResponseEntity<SiteDefaultsResponse> configureDefaults(
+                        @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId,
+                        @RequestBody SiteDefaultsRequest request) {
+                return ResponseEntity.ok(siteDefaultsService.configureDefaults(locationId, request));
+        }
 
-    @GetMapping
-    @Operation(summary = "Get site defaults", description = "Retrieve default site configuration for a location.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Site defaults returned",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = SiteDefaultsResponse.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    @PreAuthorize("hasAuthority('location:read')")
-    @EmitEvent(id = "LOCATION_SITE_DEFAULTS_GET", apiVersion = "1")
-    public ResponseEntity<SiteDefaultsResponse> getDefaults(
-            @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId) {
-        return ResponseEntity.ok(siteDefaultsService.getDefaults(locationId));
-    }
+        @GetMapping
+        @Operation(summary = "Get site defaults", description = "Retrieve default site configuration for a location.")
+        @ApiResponse(responseCode = "200", description = "Site defaults returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SiteDefaultsResponse.class)))
+        @ApiResponse(responseCode = "403", description = "Forbidden")
+        @ApiResponse(responseCode = "404", description = "Location not found")
+        @PreAuthorize("hasAuthority('location:read')")
+        @EmitEvent(id = "LOCATION_SITE_DEFAULTS_GET", apiVersion = "1")
+        @SecurityRequirement(name = "bearerAuth", scopes = { "location:read" })
+        public ResponseEntity<SiteDefaultsResponse> getDefaults(
+                        @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId) {
+                return ResponseEntity.ok(siteDefaultsService.getDefaults(locationId));
+        }
 }

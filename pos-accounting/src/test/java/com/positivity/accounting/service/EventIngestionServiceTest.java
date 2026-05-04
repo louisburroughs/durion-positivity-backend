@@ -3,10 +3,12 @@ package com.positivity.accounting.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
+import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
@@ -36,6 +38,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 /**
  * Unit tests for EventIngestionService
@@ -110,11 +113,13 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
+        AccountingEventFilter filter = AccountingEventFilter.builder().organizationId(testOrganizationId).build();
+        Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
         assertThat(result).isNotNull();
@@ -123,7 +128,8 @@ class EventIngestionServiceTest {
         assertThat(result.getContent().get(0).getEventType()).isEqualTo("INVOICE_RECEIVED");
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
+        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable));
     }
 
     @Test
@@ -134,42 +140,48 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findByOrganizationIdAndStatus(
-                        testOrganizationId, AccountingEventStatus.RECEIVED, pageable))
+        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "RECEIVED", pageable);
+        AccountingEventFilter filter = AccountingEventFilter.builder()
+                .organizationId(testOrganizationId)
+                .status(AccountingEventStatus.RECEIVED)
+                .build();
+        Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        verify(accountingEventRepository)
-                .findByOrganizationIdAndStatus(testOrganizationId, AccountingEventStatus.RECEIVED, pageable);
+        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable));
     }
 
     @Test
-    @DisplayName("listEvents should handle invalid status filter gracefully")
-    void testListEvents_WithInvalidStatusFilter() {
+    @DisplayName("listEvents should return all events when organization filter is absent")
+    void testListEvents_WithoutOrganizationFilter() {
         // Arrange
         List<AccountingEvent> events = List.of(testEvent);
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "INVALID_STATUS", pageable);
+        AccountingEventFilter filter = AccountingEventFilter.builder().build();
+        Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);
 
-        // Should fall back to listing all events without status filter
-        verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
+        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable));
     }
 
     @Test
@@ -179,11 +191,13 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
+                eq(pageable)))
                 .thenReturn(emptyPage);
 
         // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
+        AccountingEventFilter filter = AccountingEventFilter.builder().organizationId(testOrganizationId).build();
+        Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
         assertThat(result).isNotNull();

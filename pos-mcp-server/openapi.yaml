@@ -26,12 +26,12 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/SystemPromptResponse"
+                $ref: '#/components/schemas/SystemPromptResponse'
     put:
       tags:
       - system-prompt-controller
@@ -47,15 +47,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SystemPromptRequest"
+              $ref: '#/components/schemas/SystemPromptRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/SystemPromptResponse"
+                $ref: '#/components/schemas/SystemPromptResponse'
     delete:
       tags:
       - system-prompt-controller
@@ -68,7 +68,7 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
   /v1/llm-apis/{id}:
     get:
@@ -83,12 +83,12 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/LlmApiConfigResponse"
+                $ref: '#/components/schemas/LlmApiConfigResponse'
     put:
       tags:
       - llm-api-config-controller
@@ -104,15 +104,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LlmApiConfigRequest"
+              $ref: '#/components/schemas/LlmApiConfigRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/LlmApiConfigResponse"
+                $ref: '#/components/schemas/LlmApiConfigResponse'
     delete:
       tags:
       - llm-api-config-controller
@@ -125,7 +125,7 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
   /v1/prompts:
     get:
@@ -133,14 +133,14 @@ paths:
       - system-prompt-controller
       operationId: list
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/SystemPromptResponse"
+                  $ref: '#/components/schemas/SystemPromptResponse'
     post:
       tags:
       - system-prompt-controller
@@ -149,15 +149,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SystemPromptRequest"
+              $ref: '#/components/schemas/SystemPromptRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/SystemPromptResponse"
+                $ref: '#/components/schemas/SystemPromptResponse'
   /v1/nlt/requests:
     post:
       tags:
@@ -174,34 +174,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NltiRequestDTO"
+              $ref: '#/components/schemas/NltiRequestDTO'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/NltiResponseV1"
+                $ref: '#/components/schemas/NltiResponseV1'
   /v1/mcp/chat:
     post:
       tags:
       - MCP Chat API
       summary: Execute MCP Tool
-      description: Synchronously execute an MCP tool with the provided arguments and
-        return the result
+      description: Synchronously execute an MCP tool with the provided arguments and return the result
       operationId: chat
       requestBody:
-        content:
-          application/json: {}
+        content: {}
         required: true
       responses:
-        "400":
+        '400':
           description: Invalid request - missing or empty toolName
           content:
             text/plain:
               example: '''toolName'' is required'
-        "200":
+        '200':
           description: Tool execution succeeded
           content:
             application/json:
@@ -212,25 +210,25 @@ paths:
                 - type: text
                   text: Pong from positivity-ping
                 isError: false
-        "500":
+        '500':
           description: Tool execution failed
           content:
             text/plain:
-              example: "Failed to execute MCP tool: Tool not found"
+              example: 'Failed to execute MCP tool: Tool not found'
   /v1/llm-apis:
     get:
       tags:
       - llm-api-config-controller
       operationId: list_1
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/LlmApiConfigResponse"
+                  $ref: '#/components/schemas/LlmApiConfigResponse'
     post:
       tags:
       - llm-api-config-controller
@@ -239,15 +237,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LlmApiConfigRequest"
+              $ref: '#/components/schemas/LlmApiConfigRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/LlmApiConfigResponse"
+                $ref: '#/components/schemas/LlmApiConfigResponse'
   /v1/nlt/audit:
     get:
       tags:
@@ -294,21 +292,19 @@ paths:
           minimum: 1
       - name: sort
         in: query
-        description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
+        description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
         required: false
         schema:
           type: array
           default:
-          - "timestamp,ASC"
-          items: {}
+          - timestamp,ASC
       responses:
-        "200":
+        '200':
           description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PageAuditEventResponse"
+                $ref: '#/components/schemas/PageAuditEventResponse'
 components:
   schemas:
     SystemPromptRequest:
@@ -391,7 +387,6 @@ components:
           format: uuid
         clientContext:
           type: object
-          additionalProperties: {}
       required:
       - prompt
     NltiResponseV1:
@@ -408,10 +403,8 @@ components:
           format: uuid
         status:
           type: string
-        result: {}
         meta:
           type: object
-          additionalProperties: {}
     AuditEventResponse:
       type: object
       properties:
@@ -449,17 +442,17 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/AuditEventResponse"
+            $ref: '#/components/schemas/AuditEventResponse'
         number:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: '#/components/schemas/Sortnull'
         numberOfElements:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/Pageablenull"
+          $ref: '#/components/schemas/Pageablenull'
         empty:
           type: boolean
     Pageablenull:
@@ -469,7 +462,7 @@ components:
           type: integer
           format: int64
         sort:
-          $ref: "#/components/schemas/Sortnull"
+          $ref: '#/components/schemas/Sortnull'
         paged:
           type: boolean
         pageNumber:

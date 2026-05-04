@@ -30,89 +30,77 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Catalog API", description = "API for managing catalogs")
 public class CatalogController {
 
-    private final CatalogService catalogService;
+        private final CatalogService catalogService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/{catalogId}")
-    @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Successfully retrieved catalog",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
-    public ResponseEntity<CatalogDto> getCatalogById(
-            @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
-        return catalogService
-                .getCatalogById(catalogId)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
-    }
+        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
+        @GetMapping("/{catalogId}")
+        @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved catalog", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+        @ApiResponse(responseCode = "404", description = "Catalog not found")
+        public ResponseEntity<CatalogDto> getCatalogById(
+                        @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
+                return catalogService
+                                .getCatalogById(catalogId)
+                                .map(ResponseEntity::ok)
+                                .orElseGet(() -> ResponseEntity.notFound().build());
+        }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/name/{name}")
-    @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Successfully retrieved catalogs",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    public List<CatalogDto> getCatalogByName(
-            @Parameter(description = "Name of the catalogs to be obtained") @PathVariable String name) {
-        return catalogService.getCatalogsByName(name);
-    }
+        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_VIEW" })
+        @GetMapping("/name/{name}")
+        @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved catalogs", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+        public List<CatalogDto> getCatalogByName(
+                        @Parameter(description = "Name of the catalogs to be obtained") @PathVariable String name) {
+                return catalogService.getCatalogsByName(name);
+        }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PostMapping
-    @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Catalog created successfully",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request body")
-    @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
-    public ResponseEntity<CatalogDto> addCatalog(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Catalog object to be added",
-                            required = true,
-                            content = @Content(schema = @Schema(implementation = CatalogDto.class)))
-                    @RequestBody
-                    CatalogDto request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.addCatalog(request));
-    }
+        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
+        @PostMapping
+        @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
+        @ApiResponse(responseCode = "201", description = "Catalog created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request body")
+        @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
+        public ResponseEntity<CatalogDto> addCatalog(
+                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Catalog object to be added", required = true, content = @Content(schema = @Schema(implementation = CatalogDto.class))) @RequestBody CatalogDto request) {
+                return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.addCatalog(request));
+        }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PutMapping("/{catalogId}")
-    @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Catalog updated successfully",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request body")
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
-    @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
-    public ResponseEntity<CatalogDto> updateCatalog(
-            @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Updated catalog object",
-                            required = true,
-                            content = @Content(schema = @Schema(implementation = CatalogDto.class)))
-                    @RequestBody
-                    CatalogDto request) {
-        return catalogService
-                .updateCatalog(catalogId, request)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
-    }
+        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_EDIT" })
+        @PutMapping("/{catalogId}")
+        @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
+        @ApiResponse(responseCode = "200", description = "Catalog updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid request body")
+        @ApiResponse(responseCode = "404", description = "Catalog not found")
+        @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
+        public ResponseEntity<CatalogDto> updateCatalog(
+                        @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
+                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated catalog object", required = true, content = @Content(schema = @Schema(implementation = CatalogDto.class))) @RequestBody CatalogDto request) {
+                return catalogService
+                                .updateCatalog(catalogId, request)
+                                .map(ResponseEntity::ok)
+                                .orElseGet(() -> ResponseEntity.notFound().build());
+        }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
-    @DeleteMapping("/{catalogId}")
-    @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
-    @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
-    @EmitEvent(id = "CATALOG_CATALOG_DELETE", apiVersion = "1")
-    public ResponseEntity<Void> deleteCatalog(
-            @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {
-        return catalogService.deleteCatalog(catalogId)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
-    }
+        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
+        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
+                        "ROLE_CATALOG_DELETE" })
+        @DeleteMapping("/{catalogId}")
+        @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
+        @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
+        @ApiResponse(responseCode = "404", description = "Catalog not found")
+        @EmitEvent(id = "CATALOG_CATALOG_DELETE", apiVersion = "1")
+        public ResponseEntity<Void> deleteCatalog(
+                        @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {
+                return catalogService.deleteCatalog(catalogId)
+                                ? ResponseEntity.noContent().build()
+                                : ResponseEntity.notFound().build();
+        }
 }

@@ -5,26 +5,18 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.service.APPaymentService;
 import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Unit tests for APPaymentController input validation.
@@ -32,24 +24,11 @@ import org.springframework.web.context.WebApplicationContext;
  * Focuses on security validation (S5145) to prevent log injection attacks
  * via untrusted path variables like paymentRef.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("APPaymentController Input Validation Tests")
-class APPaymentControllerTest {
-
-    @Autowired
-    private WebApplicationContext context;
-
-    private MockMvc mockMvc;
+class APPaymentControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private APPaymentService apPaymentService;
-
-    @BeforeEach
-    void setUp() {
-        // Initialize MockMvc with Spring Security
-        this.mockMvc = webAppContextSetup(context).apply(springSecurity()).build();
-    }
 
     @Nested
     @DisplayName("Get Payment By Ref - paymentRef Validation (S5145)")

@@ -1,8 +1,8 @@
-# Durion POS Backend - Observability Stack
+# Durion Positivity Backend - Observability Stack
 
 ## Overview
 
-This directory contains the observability infrastructure for the Durion POS Backend system. The stack includes:
+This directory contains the observability infrastructure for the Durion Positivity Backend system. The stack includes:
 
 - **Jaeger**: Distributed tracing system for monitoring and troubleshooting microservices
 - **Prometheus**: Time-series database for metrics collection
@@ -314,7 +314,7 @@ Grafana is automatically configured with:
    ```yaml
    processors:
      memory_limiter:
-       limit_mib: 256  # Reduce from 512
+       limit_mib: 256 # Reduce from 512
    ```
 
 3. **Reduce trace sampling** in production:
@@ -323,7 +323,7 @@ Grafana is automatically configured with:
    otel:
      traces:
        sampler:
-         probability: 0.1  # Sample 10%
+         probability: 0.1 # Sample 10%
    ```
 
 ## Production Considerations

@@ -7,8 +7,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -24,8 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
  * The agent has role-specific tools, Exa web search, and RAG.
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:execute" })
 @RequestMapping("/v1/mcp")
 public class McpChatController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(McpChatController.class);
 
     private final AgentOrchestrationService agentOrchestrationService;
 
@@ -41,24 +49,42 @@ public class McpChatController {
             @RequestBody @Valid @NonNull ChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-        @NonNull String userId = authentication.getName();
-        @NonNull String role = extractPrimaryRole(authentication);
+        @NonNull
+        String userId = authentication.getName();
+        @NonNull
+        String role = extractPrimaryRole(authentication);
         String response = agentOrchestrationService.chat(userId, role, request.message());
         return ResponseEntity.ok(new ChatResponse(response));
     }
 
+    private static final List<String> ROLE_PRIORITY = List.of(
+            "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_SERVICE_WRITER",
+            "ROLE_CASHIER", "ROLE_SUPPLIER", "ROLE_TECHNICIAN");
+
     private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
-        return Objects.requireNonNull(auth.getAuthorities().stream()
+        Set<String> userRoles = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .filter(Objects::nonNull)
                 .filter(a -> a.startsWith("ROLE_"))
+                .collect(Collectors.toSet());
+        String resolvedRole = ROLE_PRIORITY.stream()
+                .filter(userRoles::contains)
                 .findFirst()
-                .orElse("ROLE_USER"));
+                .orElse("ROLE_USER");
+        LOGGER.debug(
+                "MCP chat role resolution principal={} roleAuthorities={} selectedRole={} fallback={}",
+                auth.getName(),
+                userRoles,
+                resolvedRole,
+                "ROLE_USER".equals(resolvedRole));
+        return resolvedRole;
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
-    public record ChatRequest(@NotBlank @NonNull String message) {}
+    public record ChatRequest(@NotBlank @NonNull String message) {
+    }
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
-    public record ChatResponse(@NonNull String response) {}
+    public record ChatResponse(@NonNull String response) {
+    }
 }

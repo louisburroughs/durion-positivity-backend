@@ -27,17 +27,23 @@ server:
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL}
-      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
+      custom-headers:
+        Authorization: Bearer ${OLLAMA_API_KEY}
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
     embedding-model:
-      base-url: ${OLLAMA_BASE_URL}
+      base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+      custom-headers:
+        Authorization: Bearer ${OLLAMA_API_KEY}
       timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
     streaming-chat-model:
-      base-url: ${OLLAMA_BASE_URL}
-      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
+      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
+      custom-headers:
+        Authorization: Bearer ${OLLAMA_API_KEY}
       temperature: 0.2
       timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
@@ -50,9 +56,18 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
+    candidate-tool-limit: 2
 
 exa:
   api-key: ${EXA_API_KEY:}
   base-url: https://api.exa.ai
   search-type: auto
   max-results: 5
+
+logging:
+  level:
+    com:
+      positivity:
+        mcp:
+          internal:
+            orchestration: DEBUG

@@ -15,7 +15,7 @@ public class PricingFacadeTool {
     public PricingFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.pricing.base-url:http://pos-price/v1/pricing}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get current price details for a specific SKU")

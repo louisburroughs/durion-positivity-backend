@@ -15,7 +15,7 @@ public class InvoiceFacadeTool {
     public InvoiceFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.invoice.base-url:http://pos-invoice/v1/invoices}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get invoice details by invoice ID")

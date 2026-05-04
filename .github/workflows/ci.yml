@@ -102,10 +102,44 @@ jobs:
             echo "Changed modules (+${ARCHUNIT_MODULE}): ${MATRIX_MODULES_JSON}"
           fi
 
+  build-reactor:
+    name: Build Reactor (install all)
+    runs-on: ubuntu-latest
+    needs: detect-test-modules
+    if: needs.detect-test-modules.outputs.has-changes == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Install all modules (skip tests)
+        run: ./mvnw install -DskipTests -DskipITs -T 1C -B -q
+
+      - name: Save reactor build to cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+
   unit-tests:
     name: Unit Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: detect-test-modules
+    needs: [detect-test-modules, build-reactor]
     if: needs.detect-test-modules.outputs.has-changes == 'true'
 
     strategy:
@@ -124,7 +158,19 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
+
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Restore reactor build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
@@ -132,8 +178,8 @@ jobs:
       - name: Enforce Flyway migration hygiene
         run: ./scripts/check-flyway-hygiene.sh
 
-      - name: Run unit tests (module + reactor deps)
-        run: ./mvnw -pl ${{ matrix.module }} -am test org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q
+      - name: Run unit tests
+        run: ./mvnw -pl ${{ matrix.module }} test org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
 
       - name: Upload test results
         if: always()
@@ -157,7 +203,7 @@ jobs:
   integration-tests-modules:
     name: Integration Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: detect-test-modules
+    needs: [detect-test-modules, build-reactor]
     if: needs.detect-test-modules.outputs.has-changes == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
 
     strategy:
@@ -176,10 +222,22 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
+
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Restore reactor build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Run integration tests
-        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests=false verify -T 1C -B -q
+        run: ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
 
       - name: Upload integration test results
         if: always()
@@ -208,13 +266,28 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
-      - name: Cache OWASP dependency-check data
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Install internal snapshot artifacts
+        run: ./mvnw install -DskipTests -DskipITs -B -q
+
+      - name: Get current week for cache key
+        id: date
+        run: echo "week=$(date +'%Y-%W')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OWASP NVD data
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/org/owasp
-          key: ${{ runner.os }}-owasp-dc-${{ hashFiles('**/pom.xml') }}
+          # NVD data is time-sensitive, not pom-sensitive — bust weekly so stale
+          # CVE data doesn't linger, but pom changes don't force a re-download.
+          key: ${{ runner.os }}-owasp-nvd-${{ steps.date.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-owasp-dc-
+            ${{ runner.os }}-owasp-nvd-
 
       - name: Run OWASP Dependency Check
         env:
@@ -298,6 +371,12 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Build service JAR
         run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T 1C -B
 
@@ -355,6 +434,12 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Run Checkstyle
         if: github.event_name != 'pull_request'
         run: ./mvnw checkstyle:check -B
@@ -408,6 +493,12 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
@@ -449,6 +540,7 @@ jobs:
       SPRING_DATASOURCE_USERNAME: positivity
       SPRING_DATASOURCE_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
       SECURITY_JWT_SECRET: ci-jwt-secret-key-0123456789abcdef0123456789
+      SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.CI_SEED_ADMIN_PASSWORD_HASH }}
       STRIPE_API_KEY: sk_test_ci_placeholder_key
       POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: 11111111-1111-1111-1111-111111111111
       POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID: 22222222-2222-2222-2222-222222222222
@@ -471,6 +563,12 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
+
+      - name: Cache Maven wrapper binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build all modules
         run: ./mvnw clean package -DskipTests -DskipITs -B

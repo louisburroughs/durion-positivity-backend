@@ -1,0 +1,81 @@
+{
+  "properties": [
+    {
+      "name": "pos.people.reports.threshold-cache.max-resolution-cache-entries",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of entries in the people threshold resolution cache.",
+      "defaultValue": 4096
+    },
+    {
+      "name": "pos.people.reports.threshold-cache.preload-location-policies",
+      "type": "java.lang.Boolean",
+      "description": "Preload location-specific threshold policies into cache at startup.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.people.reports.threshold-cache.preload-global-policies",
+      "type": "java.lang.Boolean",
+      "description": "Preload global threshold policies into cache at startup.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.people.matching.threshold",
+      "type": "java.lang.Integer",
+      "description": "Minimum matching score threshold for person matching.",
+      "defaultValue": 30
+    },
+    {
+      "name": "pos.location-service.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for pos-location service integration.",
+      "defaultValue": "http://pos-location:8084"
+    },
+    {
+      "name": "pos.security-service.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for pos-security-service integration.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.workexec.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for work execution integration.",
+      "defaultValue": "http://workorder:8087"
+    },
+    {
+      "name": "pos.restclient.connect.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient connect timeout in milliseconds.",
+      "defaultValue": 3000
+    },
+    {
+      "name": "pos.restclient.read.timeout",
+      "type": "java.lang.Integer",
+      "description": "RestClient read timeout in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://localhost:8085"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8086"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    }
+  ]
+}

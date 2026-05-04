@@ -53,6 +53,7 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_USER_ID = "X-User-Id";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
+    private static final String CLAIM_ROLES = "roles";
     private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
     private static final String METRIC_AUTH_HEADER_STRIP_COUNT = "auth.header.strip.count";
     private static final String METRIC_AUTH_LEGACY_DECODE_COUNT = "auth.legacy.decode.count";
@@ -227,9 +228,10 @@ public class SecurityGatewayConfig {
         }
 
         Optional<String> legacyAuthoritiesHeader = resolveLegacyAuthoritiesHeader(claims, context, jti);
+        String rolesHeader = resolveRolesHeader(claims);
         if (legacyAuthoritiesHeader.isPresent()) {
             return Optional.of(new AuthenticatedIdentity(
-                    subject, claims.get("uid", String.class), legacyAuthoritiesHeader.get(), jti));
+                    subject, claims.get("uid", String.class), legacyAuthoritiesHeader.get(), rolesHeader, jti));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -251,7 +253,8 @@ public class SecurityGatewayConfig {
         }
 
         String authoritiesHeader = buildAuthoritiesHeader(decodedPermissions.get());
-        return Optional.of(new AuthenticatedIdentity(subject, claims.get("uid", String.class), authoritiesHeader, jti));
+        return Optional.of(new AuthenticatedIdentity(
+                subject, claims.get("uid", String.class), authoritiesHeader, rolesHeader, jti));
     }
 
     private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
@@ -309,6 +312,21 @@ public class SecurityGatewayConfig {
         return String.join(",", authorities);
     }
 
+    private String resolveRolesHeader(Claims claims) {
+        Object rolesClaim = claims.get(CLAIM_ROLES);
+        if (!(rolesClaim instanceof List<?> rolesList)) {
+            return "";
+        }
+
+        return rolesList.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .map(this::normalizeRoleClaim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.joining(","));
+    }
+
     /**
      * Compares the X-Authorities header value with the authorities derived from the
      * token
@@ -362,8 +380,23 @@ public class SecurityGatewayConfig {
                         headers.set(HEADER_X_USER_ID, identity.userId());
                     }
                     headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
+                    if (StringUtils.hasText(identity.rolesHeader())) {
+                        headers.set(HEADER_X_ROLES, identity.rolesHeader());
+                    } else {
+                        headers.remove(HEADER_X_ROLES);
+                    }
                 })
                 .build();
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                    "Forwarding authenticated request path={} user={} userId={} roles={} permissions={}",
+                    context.path(),
+                    identity.subject(),
+                    identity.userId(),
+                    countCsvEntries(identity.rolesHeader()),
+                    countCsvEntries(identity.authoritiesHeader()));
+        }
 
         return chain.filter(
                 context.exchange().mutate().request(authenticatedRequest).build());
@@ -507,6 +540,21 @@ public class SecurityGatewayConfig {
         return exchange.getResponse().setComplete();
     }
 
+    private String normalizeRoleClaim(String role) {
+        if (!StringUtils.hasText(role)) {
+            return "";
+        }
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper.replaceFirst("^ROLE", "");
+    }
+
+    private static int countCsvEntries(String csv) {
+        if (!StringUtils.hasText(csv)) {
+            return 0;
+        }
+        return (int) Arrays.stream(csv.split(",")).map(String::trim).filter(StringUtils::hasText).count();
+    }
+
     private String tokenValidationReason(JwtException ex) {
         if (ex instanceof ExpiredJwtException) {
             return "expired";
@@ -549,5 +597,6 @@ public class SecurityGatewayConfig {
             String path,
             InboundIdentityHeaders inboundHeaders) {}
 
-    private record AuthenticatedIdentity(String subject, String userId, String authoritiesHeader, String jti) {}
+    private record AuthenticatedIdentity(
+            String subject, String userId, String authoritiesHeader, String rolesHeader, String jti) {}
 }

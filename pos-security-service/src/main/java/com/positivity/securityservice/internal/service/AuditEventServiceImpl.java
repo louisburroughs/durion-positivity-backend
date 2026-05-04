@@ -2,16 +2,22 @@ package com.positivity.securityservice.internal.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import com.positivity.securityservice.service.AuditEventService;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -52,7 +58,8 @@ public class AuditEventServiceImpl implements AuditEventService {
     public AuditLogEventDto getEvent(@NonNull UUID eventId) {
         AuditLogEvent event = auditLogEventRepository
                 .findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Audit event not found: " + eventId));
+                .orElseThrow(
+                        () -> new jakarta.persistence.EntityNotFoundException("Audit event not found: " + eventId));
         return toDto(event);
     }
 
@@ -84,6 +91,47 @@ public class AuditEventServiceImpl implements AuditEventService {
         return auditLogEventRepository.findByEventTypeOrderByTimestampDesc(eventType).stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public Page<AuditLogEventDto> searchEventsFiltered(
+            @NonNull AuditEventSearchFilter filter, @NonNull Pageable pageable) {
+        if (filter.getFromDate() != null && filter.getToDate() != null
+                && !filter.getFromDate().isBefore(filter.getToDate())) {
+            throw new IllegalArgumentException("fromDate must be before toDate");
+        }
+
+        Specification<AuditLogEvent> specification = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (filter.getFromDate() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), filter.getFromDate()));
+            }
+            if (filter.getToDate() != null) {
+                predicates.add(cb.lessThan(root.get("timestamp"), filter.getToDate()));
+            }
+            if (!isBlank(filter.getEventType())) {
+                predicates.add(cb.equal(root.get("eventType"), filter.getEventType()));
+            }
+            if (!isBlank(filter.getActorId())) {
+                predicates.add(cb.equal(root.get("actorId"), filter.getActorId()));
+            }
+            if (!isBlank(filter.getAggregateId())) {
+                predicates.add(cb.equal(root.get("entityId"), filter.getAggregateId()));
+            }
+
+            // TODO(B-3): workorderId filter - column 'workorder_id' not yet indexed on
+            // audit_log_event; planned for follow-on story
+            // TODO(B-3): movementId filter - column not yet present on audit_log_event
+            // TODO(B-3): productId filter - column not yet present
+            // TODO(B-3): sku filter - column not yet present
+            // TODO(B-3): correlationId filter - column not yet present
+            // TODO(B-3): reasonCode filter - column not yet present
+            // TODO(B-3): locationIds filter - column not yet present
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+        return auditLogEventRepository.findAll(specification, pageable).map(this::toDto);
     }
 
     private void validateCreateRequest(@NonNull AuditLogEventRequest request) {

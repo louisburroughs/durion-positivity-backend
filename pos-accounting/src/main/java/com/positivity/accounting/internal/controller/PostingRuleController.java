@@ -40,7 +40,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/v1/accounting/posting-rules")
-@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Posting Rules", description = "Manage posting rule sets and their lifecycle.")
 @RequiredArgsConstructor
 @Validated
@@ -51,8 +50,10 @@ public class PostingRuleController {
     private final PostingRuleService postingRuleService;
 
     @GetMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:view" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
-    @Operation(summary = "List posting rule sets", description = "Retrieve paginated posting rule sets.")
+    @Operation(summary = "List posting rule sets", description = "Retrieve paginated posting rule sets.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule sets listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
@@ -66,8 +67,10 @@ public class PostingRuleController {
     }
 
     @GetMapping("/{postingRuleSetId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:view" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
-    @Operation(summary = "Get posting rule set", description = "Retrieve a posting rule set by identifier.")
+    @Operation(summary = "Get posting rule set", description = "Retrieve a posting rule set by identifier.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule set returned")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
     public ResponseEntity<PostingRuleSetResponse> getPostingRuleSet(
@@ -78,10 +81,10 @@ public class PostingRuleController {
     }
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:create" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
-    @Operation(
-            summary = "Create posting rule set",
-            description = "Create a new posting rule set with initial DRAFT version.")
+    @Operation(summary = "Create posting rule set", description = "Create a new posting rule set with initial DRAFT version.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "201", description = "Posting rule set created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
@@ -93,8 +96,10 @@ public class PostingRuleController {
     }
 
     @PostMapping("/{postingRuleSetId}/publish")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:publish" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:publish')")
-    @Operation(summary = "Publish posting rule set", description = "Publish the latest DRAFT version.")
+    @Operation(summary = "Publish posting rule set", description = "Publish the latest DRAFT version.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule set published")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
     @ApiResponse(responseCode = "400", description = "No DRAFT version to publish")
@@ -107,10 +112,10 @@ public class PostingRuleController {
     }
 
     @PutMapping("/{postingRuleSetId}")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:create" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
-    @Operation(
-            summary = "Update posting rule set metadata",
-            description = "Update a posting rule set (only possible if no PUBLISHED version exists).")
+    @Operation(summary = "Update posting rule set metadata", description = "Update a posting rule set (only possible if no PUBLISHED version exists).", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule set updated")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
     @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
@@ -126,8 +131,10 @@ public class PostingRuleController {
     }
 
     @PostMapping("/{postingRuleSetId}/archive")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:archive" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:archive')")
-    @Operation(summary = "Archive posting rule set", description = "Archive the PUBLISHED version.")
+    @Operation(summary = "Archive posting rule set", description = "Archive the PUBLISHED version.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule set archived")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
     @ApiResponse(responseCode = "400", description = "No PUBLISHED version to archive")
@@ -140,8 +147,10 @@ public class PostingRuleController {
     }
 
     @GetMapping("/{postingRuleSetId}/versions")
+    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting_rules:view" })
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
-    @Operation(summary = "List posting rule versions", description = "List versions for a posting rule set.")
+    @Operation(summary = "List posting rule versions", description = "List versions for a posting rule set.", tags = {
+            "Posting Rules" })
     @ApiResponse(responseCode = "200", description = "Posting rule versions listed")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
     public ResponseEntity<List<PostingRuleVersionResponse>> listPostingRuleVersions(
@@ -149,8 +158,8 @@ public class PostingRuleController {
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "10") int size) {
         log.info("List posting rule versions");
-        List<PostingRuleVersionResponse> responses =
-                postingRuleService.listVersionsAsResponse(postingRuleSetId, page, size);
+        List<PostingRuleVersionResponse> responses = postingRuleService.listVersionsAsResponse(postingRuleSetId, page,
+                size);
         return ResponseEntity.ok(responses);
     }
 }

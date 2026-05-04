@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -15,8 +16,10 @@ import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.FileStorageService;
+import com.positivity.security.common.GatewaySecurityConstants;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -46,7 +49,7 @@ class FileUploadControllerTest {
         // ─── POST /v1/bulk-jobs/{jobId}/upload ───────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void uploadFile_validMultipart_returns200() throws Exception {
                 MockMultipartFile file = new MockMultipartFile("file", "products.csv", "text/csv",
                                 "sku,name\nABC-001,Widget".getBytes());
@@ -61,6 +64,8 @@ class FileUploadControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.jobId").value(JOB_ID.toString()))
                                 .andExpect(jsonPath("$.fileName").value("products.csv"));
+
+                verify(bulkLoadJobService).markUploadStored(JOB_ID, "test-operator", "/uploads/products.csv");
         }
 
         @Test
@@ -70,14 +75,14 @@ class FileUploadControllerTest {
 
                 mockMvc.perform(multipart("/v1/bulk-jobs/{jobId}/upload", JOB_ID)
                                 .file(file)
-                                .header("X-Authorities", "BULK_IMPORT_READ"))
+                                .header("X-Authorities", "bulkImport:status:read"))
                                 .andExpect(status().isForbidden());
         }
 
         // ─── POST /v1/bulk-jobs/{jobId}/process ──────────────────────────────────
 
         @Test
-        @WithMockUser(username = "test-operator", authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
         void startProcessing_whenJobExists_returns200() throws Exception {
                 BulkLoadJobResponse response = BulkLoadJobResponse.builder()
                                 .id(JOB_ID)
@@ -91,5 +96,47 @@ class FileUploadControllerTest {
                 mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", null);
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void startProcessing_withAuthorizationHeader_forwardsBearerToken() throws Exception {
+                BulkLoadJobResponse response = BulkLoadJobResponse.builder()
+                                .id(JOB_ID)
+                                .operatorId("test-operator")
+                                .domainType(DomainType.CATALOG_PRODUCT)
+                                .status(JobStatus.PROCESSING)
+                                .build();
+
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer token-123"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", "Bearer token-123");
+        }
+
+        @Test
+        @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+        void startProcessing_withGatewayTokenHeader_normalizesToBearerToken() throws Exception {
+                BulkLoadJobResponse response = BulkLoadJobResponse.builder()
+                                .id(JOB_ID)
+                                .operatorId("test-operator")
+                                .domainType(DomainType.CATALOG_PRODUCT)
+                                .status(JobStatus.PROCESSING)
+                                .build();
+
+                when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenReturn(response);
+
+                mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                                .header(GatewaySecurityConstants.HEADER_TOKEN, "token-456"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+                verify(bulkLoadJobService).startProcessing(JOB_ID, "test-operator", "Bearer token-456");
         }
 }

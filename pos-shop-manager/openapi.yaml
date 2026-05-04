@@ -3,7 +3,7 @@ info:
   title: POS Shop Manager Service API
   description: Shop Manager service for managing shop operations and staff
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -13,7 +13,9 @@ tags:
 - name: Appointments API
   description: Operations for creating and loading appointments in shop management
 - name: Shop API
-  description: "Endpoints for shop management, technicians, and services"
+  description: Endpoints for shop management, technicians, and services
+- name: Shop Audit
+  description: Shop schedule and assignment audit trail.
 - name: Workorder Operational Context API
   description: Read-only operational context view for workorders
 - name: Shop Mobile Unit API
@@ -30,16 +32,21 @@ paths:
       tags:
       - Shop Mobile Unit API
       summary: Get mobile units
-      description: List all mobile units or get a specific mobile unit detail by locationId
-        and bayId.
+      description: List all mobile units or get a specific mobile unit detail by locationId and bayId.
       operationId: getMobileUnits
       parameters: []
       responses:
-        "200":
+        '200':
           description: Mobile units retrieved successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     put:
       tags:
       - Shop Mobile Unit API
@@ -50,13 +57,20 @@ paths:
         content:
           application/json:
             schema:
+              type: object
               description: Mobile unit management request body
       responses:
-        "200":
+        '200':
           description: Mobile units managed successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/shop-manager/bays:
     get:
       tags:
@@ -66,11 +80,17 @@ paths:
       operationId: getBays
       parameters: []
       responses:
-        "200":
+        '200':
           description: Bays retrieved successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     put:
       tags:
       - Shop Bay API
@@ -81,13 +101,20 @@ paths:
         content:
           application/json:
             schema:
+              type: object
               description: Bay management request body
       responses:
-        "200":
+        '200':
           description: Bays managed successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/appointments/{appointmentId}/reschedule:
     put:
       tags:
@@ -106,42 +133,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RescheduleAppointmentRequest"
+              $ref: '#/components/schemas/RescheduleAppointmentRequest'
         required: true
       responses:
-        "409":
-          description: Appointment state conflict — appointment is not in a reschedulable
-            status.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "400":
-          description: "Validation error — invalid times, missing mandatory fields,\
-            \ or blank notes required for OTHER reason."
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "404":
-          description: Appointment not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "200":
+        '200':
           description: Appointment rescheduled successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AppointmentResponse"
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '404':
+          description: Appointment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '409':
+          description: Appointment state conflict — appointment is not in a reschedulable status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+      security:
+      - bearerAuth:
+        - appointments:reschedule
+      x-required-permissions:
+      - appointments:reschedule
   /v1/shop-manager/{locationId}/mobileUnit:
     post:
       tags:
       - Shop Mobile Unit API
       summary: Create mobile unit
-      description: Create a new mobile unit for a specific shop location. Validate
-        baseLocationId and capabilities.
+      description: Create a new mobile unit for a specific shop location. Validate baseLocationId and capabilities.
       operationId: createMobileUnit
       parameters:
       - name: locationId
@@ -156,13 +185,20 @@ paths:
         content:
           application/json:
             schema:
+              type: object
               description: Mobile unit creation request body
       responses:
-        "200":
+        '200':
           description: Mobile unit created successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:create
+      x-required-permissions:
+      - shop:bay:create
   /v1/shop-manager/{locationId}/bays:
     post:
       tags:
@@ -183,13 +219,20 @@ paths:
         content:
           application/json:
             schema:
+              type: object
               description: Bay creation request body
       responses:
-        "200":
+        '200':
           description: Bay created successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:create
+      x-required-permissions:
+      - shop:bay:create
   /v1/appointments:
     post:
       tags:
@@ -215,42 +258,46 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AppointmentCreateRequest"
+              $ref: '#/components/schemas/AppointmentCreateRequest'
         required: true
       responses:
-        "501":
-          description: Not implemented.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "422":
-          description: Source not eligible — estimate or work order cannot be scheduled
-            (ineligible status).
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "400":
-          description: "Validation or conflict error — requested slot is unavailable,\
-            \ duplicate source appointment, or request fields are invalid."
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "201":
+        '201':
           description: Appointment created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AppointmentResponse"
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '422':
+          description: Source not eligible — estimate or work order cannot be scheduled (ineligible status).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '501':
+          description: Not implemented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+      security:
+      - bearerAuth:
+        - appointments:create
+        - shop:schedule:edit
+      x-required-permissions:
+      - appointments:create
+      - shop:schedule:edit
   /v1/appointments/{appointmentId}/conflict-override:
     post:
       tags:
       - Conflict Override API
       summary: Execute appointment conflict override
-      description: Executes a conflict override for the specified appointment when
-        authorized.
+      description: Executes a conflict override for the specified appointment when authorized.
       operationId: executeOverride
       parameters:
       - name: appointmentId
@@ -264,33 +311,40 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConflictOverrideRequest"
+              $ref: '#/components/schemas/ConflictOverrideRequest'
         required: true
       responses:
-        "404":
-          description: Appointment not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ConflictOverrideResponse"
-        "403":
-          description: Forbidden.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ConflictOverrideResponse"
-        "400":
-          description: Invalid request or appointment ID mismatch.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ConflictOverrideResponse"
-        "201":
+        '201':
           description: Conflict override executed.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ConflictOverrideResponse"
+                $ref: '#/components/schemas/ConflictOverrideResponse'
+        '400':
+          description: Invalid request or appointment ID mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictOverrideResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictOverrideResponse'
+        '404':
+          description: Appointment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictOverrideResponse'
+      security:
+      - bearerAuth:
+        - shop:schedule:edit
+        - appointments:reschedule
+      x-required-permissions:
+      - shop:schedule:edit
+      - appointments:reschedule
   /v1/appointments/{appointmentId}/assignments:
     get:
       tags:
@@ -304,14 +358,21 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AssignmentResponse"
+                  $ref: '#/components/schemas/AssignmentResponse'
+      security:
+      - bearerAuth:
+        - appointments:view
+        - shop:schedule:view
+      x-required-permissions:
+      - appointments:view
+      - shop:schedule:view
     post:
       tags:
       - assignment-controller
@@ -327,40 +388,66 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateAssignmentRequest"
+              $ref: '#/components/schemas/CreateAssignmentRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AssignmentResponse"
+                $ref: '#/components/schemas/AssignmentResponse'
+      security:
+      - bearerAuth:
+        - shop:bay:assign
+      x-required-permissions:
+      - shop:bay:assign
   /v1/shop/audit:
     get:
       tags:
-      - shop-audit-controller
-      operationId: searchAudit
+      - Shop Audit
+      summary: Search shop audit trail
+      description: Searches the shop audit trail using filter criteria. At least one filter criterion is required.
+      operationId: searchShopAudit
       parameters:
       - name: filter
         in: query
         required: true
         schema:
-          $ref: "#/components/schemas/ShopAuditFilter"
+          $ref: '#/components/schemas/ShopAuditFilter'
       responses:
-        "200":
-          description: OK
+        '200':
+          description: Audit entries returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ShopAuditEntryResponse"
+                  $ref: '#/components/schemas/ShopAuditEntryResponse'
+        '400':
+          description: No filter criteria provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - shop:schedule:view
+      - appointments:view
   /v1/shop/audit/{id}:
     get:
       tags:
-      - shop-audit-controller
-      operationId: getAuditById
+      - Shop Audit
+      summary: Get shop audit entry by ID
+      description: Returns a single shop audit entry by its UUID.
+      operationId: getShopAuditEntry
       parameters:
       - name: id
         in: path
@@ -369,19 +456,35 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: OK
+        '200':
+          description: Audit entry returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ShopAuditEntryResponse"
+                $ref: '#/components/schemas/ShopAuditEntryResponse'
+        '403':
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Audit entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - shop:schedule:view
+      - appointments:view
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
       - Workorder Operational Context API
       summary: View workorder operational context
-      description: Read-only operational context view for workorders used by UI with
-        optional filters.
+      description: Read-only operational context view for workorders used by UI with optional filters.
       operationId: getOperationalContext
       parameters:
       - name: locationId
@@ -407,11 +510,17 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: Operational context retrieved successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:schedule:view
+      x-required-permissions:
+      - shop:schedule:view
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       tags:
@@ -437,18 +546,23 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174001
       responses:
-        "404":
-          description: Technician or person not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PersonDTO"
-        "200":
+        '200':
           description: Person details returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PersonDTO"
+                $ref: '#/components/schemas/PersonDTO'
+        '404':
+          description: Technician or person not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonDTO'
+      security:
+      - bearerAuth:
+        - shop:location:view
+      x-required-permissions:
+      - shop:location:view
   /v1/shop-manager/{locationId}/services/{serviceId}/details:
     get:
       tags:
@@ -474,25 +588,29 @@ paths:
           format: uuid
         example: 1
       responses:
-        "404":
-          description: Service not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ServiceEntityDTO"
-        "200":
+        '200':
           description: Service details returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ServiceEntityDTO"
+                $ref: '#/components/schemas/ServiceEntityDTO'
+        '404':
+          description: Service not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceEntityDTO'
+      security:
+      - bearerAuth:
+        - shop:location:view
+      x-required-permissions:
+      - shop:location:view
   /v1/shop-manager/{locationId}/mobileUnit/{bayId}:
     get:
       tags:
       - Shop Mobile Unit API
       summary: Get mobile units
-      description: List all mobile units or get a specific mobile unit detail by locationId
-        and bayId.
+      description: List all mobile units or get a specific mobile unit detail by locationId and bayId.
       operationId: getMobileUnits_1
       parameters:
       - name: locationId
@@ -510,11 +628,17 @@ paths:
           type: integer
           format: int64
       responses:
-        "200":
+        '200':
           description: Mobile units retrieved successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     delete:
       tags:
       - Shop Mobile Unit API
@@ -539,10 +663,15 @@ paths:
           format: int64
         example: 1
       responses:
-        "204":
+        '204':
           description: Mobile unit deleted successfully.
-        "404":
+        '404':
           description: Mobile unit not found.
+      security:
+      - bearerAuth:
+        - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/shop-manager/{locationId}/bays/{bayId}:
     get:
       tags:
@@ -566,11 +695,17 @@ paths:
           type: integer
           format: int64
       responses:
-        "200":
+        '200':
           description: Bays retrieved successfully.
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - shop:bay:view
+      x-required-permissions:
+      - shop:bay:view
     delete:
       tags:
       - Shop Bay API
@@ -595,10 +730,15 @@ paths:
           format: int64
         example: 1
       responses:
-        "404":
-          description: Bay not found.
-        "204":
+        '204':
           description: Bay deleted successfully.
+        '404':
+          description: Bay not found.
+      security:
+      - bearerAuth:
+        - shop:bay:edit
+      x-required-permissions:
+      - shop:bay:edit
   /v1/schedules/view:
     get:
       tags:
@@ -655,30 +795,35 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
-          description: Invalid input parameters
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ScheduleViewResponse"
-        "200":
+        '200':
           description: Schedule retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ScheduleViewResponse"
-        "403":
+                $ref: '#/components/schemas/ScheduleViewResponse'
+        '400':
+          description: Invalid input parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleViewResponse'
+        '403':
           description: Not authorized for this location
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ScheduleViewResponse"
-        "404":
+                $ref: '#/components/schemas/ScheduleViewResponse'
+        '404':
           description: Location or resource not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ScheduleViewResponse"
+                $ref: '#/components/schemas/ScheduleViewResponse'
+      security:
+      - bearerAuth:
+        - shop:schedule:view
+      x-required-permissions:
+      - shop:schedule:view
   /v1/appointments/{appointmentId}:
     get:
       tags:
@@ -702,24 +847,31 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "404":
-          description: Appointment not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "200":
+        '200':
           description: Appointment retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AppointmentResponse"
+                $ref: '#/components/schemas/AppointmentResponse'
+        '404':
+          description: Appointment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '501':
+          description: Not implemented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+      security:
+      - bearerAuth:
+        - appointments:view
+        - shop:schedule:view
+      x-required-permissions:
+      - appointments:view
+      - shop:schedule:view
   /v1/appointments/{appointmentId}/cancel:
     delete:
       tags:
@@ -738,21 +890,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CancelAppointmentRequest"
+              $ref: '#/components/schemas/CancelAppointmentRequest'
         required: true
       responses:
-        "409":
-          description: Appointment state conflict.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AppointmentResponse"
-        "200":
+        '200':
           description: Appointment cancelled successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AppointmentResponse"
+                $ref: '#/components/schemas/AppointmentResponse'
+        '409':
+          description: Appointment state conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+      security:
+      - bearerAuth:
+        - appointments:cancel
+      x-required-permissions:
+      - appointments:cancel
 components:
   schemas:
     RescheduleAppointmentRequest:
@@ -825,10 +982,8 @@ components:
             format: uuid
         customerSnapshot:
           type: object
-          additionalProperties: {}
         vehicleSnapshot:
           type: object
-          additionalProperties: {}
     AppointmentCreateRequest:
       type: object
       description: Appointment creation request body
@@ -907,7 +1062,7 @@ components:
         mechanics:
           type: array
           items:
-            $ref: "#/components/schemas/MechanicAssignmentItem"
+            $ref: '#/components/schemas/MechanicAssignmentItem'
         resourceId:
           type: string
           format: uuid
@@ -950,7 +1105,7 @@ components:
         mechanics:
           type: array
           items:
-            $ref: "#/components/schemas/AssignedMechanicInfo"
+            $ref: '#/components/schemas/AssignedMechanicInfo'
         resourceId:
           type: string
           format: uuid
@@ -975,17 +1130,23 @@ components:
           format: date-time
     ShopAuditFilter:
       type: object
+      description: Filter criteria for querying the shop audit trail. At least one field must be non-null.
       properties:
         workorderId:
           type: string
+          description: Workorder UUID to filter by - one word per workspace naming policy
         appointmentId:
           type: string
+          description: Appointment UUID to filter by
         mechanicId:
           type: string
+          description: Mechanic user ID to filter by
         actorUserId:
           type: string
+          description: Actor user ID to filter by
         eventType:
           type: string
+          description: Specific audit event type to filter by
           enum:
           - SCHEDULE_CREATED
           - SCHEDULE_UPDATED
@@ -994,12 +1155,68 @@ components:
           - ASSIGNMENT_REMOVED
         locationId:
           type: string
+          description: Location ID to filter by
         fromDateTime:
           type: string
           format: date-time
+          description: Inclusive start timestamp for date-time range filter
+          example: 2026-01-01 00:00:00+00:00
         toDateTime:
           type: string
           format: date-time
+          description: Inclusive end timestamp for date-time range filter
+          example: 2026-12-31 23:59:59+00:00
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
     ShopAuditEntryResponse:
       type: object
       properties:
@@ -1095,7 +1312,7 @@ components:
         severity:
           type: string
         conflictDetails:
-          $ref: "#/components/schemas/ConflictDetails"
+          $ref: '#/components/schemas/ConflictDetails'
     ScheduleResourceView:
       type: object
       properties:
@@ -1108,7 +1325,7 @@ components:
         events:
           type: array
           items:
-            $ref: "#/components/schemas/ScheduleEventView"
+            $ref: '#/components/schemas/ScheduleEventView'
     ScheduleViewResponse:
       type: object
       properties:
@@ -1136,7 +1353,7 @@ components:
         resources:
           type: array
           items:
-            $ref: "#/components/schemas/ScheduleResourceView"
+            $ref: '#/components/schemas/ScheduleResourceView'
     CancelAppointmentRequest:
       type: object
       properties:
@@ -1152,3 +1369,8 @@ components:
           type: string
       required:
       - cancellationReason
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

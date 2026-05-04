@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -15,89 +16,96 @@ import org.springframework.stereotype.Repository;
  * Repository for {@link InventoryLedgerEntry} entities.
  */
 @Repository
-public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, UUID> {
+public interface InventoryLedgerEntryRepository
+                extends JpaRepository<InventoryLedgerEntry, UUID>, JpaSpecificationExecutor<InventoryLedgerEntry> {
 
-    List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
-            String stockItemId, InventoryLedgerEventType eventType, String notesFragment);
+        List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+                        String stockItemId, InventoryLedgerEventType eventType, String notesFragment);
 
-    List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
+        List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
 
-    List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);
+        List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);
 
-    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId, UUID locationId);
+        List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId,
+                        UUID locationId);
 
-    Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
+        List<InventoryLedgerEntry> findByLocationIdAndEventTypeIn(
+                        UUID locationId, Collection<InventoryLedgerEventType> eventTypes);
 
-    default Integer calculateOnHandQuantity(UUID stockItemId) {
-        return calculateOnHandQuantityForEventTypes(
-                stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
-    }
+        Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
-    @Query("""
-            SELECT COALESCE(SUM(e.changeInQuantity), 0)
-            FROM InventoryLedgerEntry e
-            WHERE e.stockItemId = :stockItemId
-              AND e.eventType IN :eventTypes
-            """)
-    Integer calculateOnHandQuantityForEventTypes(
-            @Param("stockItemId") String stockItemId,
-            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+        default Integer calculateOnHandQuantity(UUID stockItemId) {
+                return calculateOnHandQuantityForEventTypes(
+                                stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
+        }
 
-    default Integer calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
-        return calculateOnHandQuantityAtLocationForEventTypes(
-                stockItemId.toString(), locationId, InventoryLedgerEventType.onHandAffectingTypes());
-    }
+        @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType IN :eventTypes
+                        """)
+        Integer calculateOnHandQuantityForEventTypes(
+                        @Param("stockItemId") String stockItemId,
+                        @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
-    default Integer calculateOnHandQuantityAtLocation(
-            UUID stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
-        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId, eventTypes);
-    }
+        default Integer calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
+                return calculateOnHandQuantityAtLocationForEventTypes(
+                                stockItemId.toString(), locationId, InventoryLedgerEventType.onHandAffectingTypes());
+        }
 
-    default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
-        return calculateOnHandQuantityAtLocationForEventTypes(
-                stockItemId, locationId, InventoryLedgerEventType.onHandAffectingTypes());
-    }
+        default Integer calculateOnHandQuantityAtLocation(
+                        UUID stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
+                return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId, eventTypes);
+        }
 
-    default Integer calculateOnHandQuantityAtLocation(
-            String stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
-        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId, eventTypes);
-    }
+        default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
+                return calculateOnHandQuantityAtLocationForEventTypes(
+                                stockItemId, locationId, InventoryLedgerEventType.onHandAffectingTypes());
+        }
 
-    @Query("""
-            SELECT COALESCE(SUM(e.changeInQuantity), 0)
-            FROM InventoryLedgerEntry e
-            WHERE e.stockItemId = :stockItemId
-              AND e.locationId = :locationId
-              AND e.eventType IN :eventTypes
-            """)
-    Integer calculateOnHandQuantityAtLocationForEventTypes(
-            @Param("stockItemId") String stockItemId,
-            @Param("locationId") UUID locationId,
-            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+        default Integer calculateOnHandQuantityAtLocation(
+                        String stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
+                return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId, eventTypes);
+        }
 
-    @Query("""
-            SELECT COALESCE(SUM(e.changeInQuantity), 0)
-            FROM InventoryLedgerEntry e
-            WHERE e.locationId = :locationId
-              AND e.eventType IN :eventTypes
-            """)
-    Integer calculateOnHandQuantityAtLocation(
-            @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+        @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                        """)
+        Integer calculateOnHandQuantityAtLocationForEventTypes(
+                        @Param("stockItemId") String stockItemId,
+                        @Param("locationId") UUID locationId,
+                        @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
-    @Query("""
-            SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
-            FROM InventoryLedgerEntry e
-            WHERE e.locationId = :locationId
-              AND e.eventType IN :eventTypes
-            GROUP BY e.stockItemId
-            HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
-            """)
-    List<LocationOnHand> findPositiveOnHandByLocation(
-            @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+        @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                        """)
+        Integer calculateOnHandQuantityAtLocation(
+                        @Param("locationId") UUID locationId,
+                        @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
-    interface LocationOnHand {
-        String getStockItemId();
+        @Query("""
+                        SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                        GROUP BY e.stockItemId
+                        HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
+                        """)
+        List<LocationOnHand> findPositiveOnHandByLocation(
+                        @Param("locationId") UUID locationId,
+                        @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
-        Long getOnHandQuantity();
-    }
+        interface LocationOnHand {
+                String getStockItemId();
+
+                Long getOnHandQuantity();
+        }
 }

@@ -48,7 +48,7 @@ class ColumnMappingControllerTest {
         // ─── GET /v1/bulk-jobs/{jobId}/mappings — 200 OK ─────────────────────────
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_READ")
+        @WithMockUser(authorities = "bulkImport:status:read")
         void getMappings_returnsList() throws Exception {
                 ColumnMappingResponse mapping = ColumnMappingResponse.builder()
                                 .id(MAPPING_ID)
@@ -71,7 +71,7 @@ class ColumnMappingControllerTest {
         @Test
         void getMappings_withoutReadAuthority_returns403() throws Exception {
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)
-                                .header("X-Authorities", "BULK_IMPORT_EXECUTE")) // READ required
+                                .header("X-Authorities", "bulkImport:upload:execute")) // READ required
                                 .andExpect(status().isForbidden());
         }
 
@@ -84,14 +84,14 @@ class ColumnMappingControllerTest {
 
                 mockMvc.perform(get("/v1/bulk-jobs/{jobId}/mappings", JOB_ID)
                                 .header("X-User", "other-operator")
-                                .header("X-Authorities", "BULK_IMPORT_READ"))
+                                .header("X-Authorities", "bulkImport:status:read"))
                                 .andExpect(status().isForbidden());
         }
 
         // ─── PUT /v1/bulk-jobs/{jobId}/mappings — 200 OK ─────────────────────────
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(authorities = "bulkImport:upload:execute")
         void approveMappings_validPayload_returns200() throws Exception {
                 ColumnMappingUpdateRequest update = new ColumnMappingUpdateRequest();
                 update.setSourceColumn("name");
@@ -120,7 +120,7 @@ class ColumnMappingControllerTest {
         }
 
         @Test
-        @WithMockUser(authorities = "BULK_IMPORT_EXECUTE")
+        @WithMockUser(authorities = "bulkImport:upload:execute")
         void approveMappings_emptyMappingsList_returns400() throws Exception {
                 ColumnMappingApproveRequest request = new ColumnMappingApproveRequest();
                 request.setMappings(List.of()); // @NotEmpty should fail

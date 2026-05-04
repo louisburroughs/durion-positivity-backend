@@ -1,8 +1,10 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.ExportJobNotFoundException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.shared.error.ApiError;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -53,6 +55,42 @@ public class APPaymentExceptionHandler {
                         "IDEMPOTENCY_CONFLICT",
                         ex.getMessage(),
                         HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        null));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
+        log.warn("Illegal state conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "CONFLICT",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        null));
+    }
+
+    @ExceptionHandler(ExportJobNotFoundException.class)
+    public ResponseEntity<ApiError> handleExportJobNotFound(ExportJobNotFoundException ex) {
+        log.warn("Export job not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(
+                        "EXPORT_JOB_NOT_FOUND",
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        null));
+    }
+
+    @ExceptionHandler(UnsupportedSortPropertyException.class)
+    public ResponseEntity<ApiError> handleUnsupportedSortProperty(UnsupportedSortPropertyException ex) {
+        log.warn("Unsupported sort property: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of(
+                        "UNSUPPORTED_SORT_PROPERTY",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
                         null));
     }

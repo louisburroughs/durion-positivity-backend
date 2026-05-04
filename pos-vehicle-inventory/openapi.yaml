@@ -3,9 +3,9 @@ info:
   title: Vehicle Inventory API
   description: API for managing vehicle inventory in the POS system
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: platform@durionpos.org
-  version: "1.0"
+  version: '1.0'
 servers:
 - url: http://localhost:8086
   description: Generated server url
@@ -14,6 +14,8 @@ tags:
   description: Operations for creating and maintaining vehicle registry records
 - name: Vehicle API
   description: Endpoints for vehicle CRUD and VIN-based operations
+- name: Vehicle Bulk Ingest API
+  description: Bulk import vehicle records
 - name: Vehicle Preferences
   description: Manage vehicle care preferences with flexible schema support
 - name: Vehicle Search
@@ -24,8 +26,7 @@ paths:
       tags:
       - Vehicle Preferences
       summary: Get vehicle care preferences
-      description: Retrieves the care preferences for a vehicle. Returns 404 if no
-        preferences exist.
+      description: Retrieves the care preferences for a vehicle. Returns 404 if no preferences exist.
       operationId: getPreferences
       parameters:
       - name: vehicleId
@@ -36,24 +37,25 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Preferences found and returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+        '404':
           description: No preferences found for this vehicle
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle Preferences
       summary: Create or update vehicle care preferences
-      description: "Upserts preferences for a vehicle. If preferences exist, replaces\
-        \ them entirely. Use PATCH for partial updates."
+      description: Upserts preferences for a vehicle. If preferences exist, replaces them entirely. Use PATCH for partial updates.
       operationId: upsertPreferences
       parameters:
       - name: vehicleId
@@ -67,33 +69,35 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PreferencesUpsertDto"
+              $ref: '#/components/schemas/PreferencesUpsertDto'
         required: true
       responses:
-        "201":
-          description: Preferences created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "400":
-          description: Invalid preference data
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: Vehicle not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
+        '200':
           description: Preferences updated successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+        '201':
+          description: Preferences created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+        '404':
+          description: Vehicle not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+        '400':
+          description: Invalid preference data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle Preferences
@@ -109,16 +113,17 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found to delete
-        "204":
+        '204':
           description: Preferences deleted successfully
+        '404':
+          description: No preferences found to delete
+      security:
+      - bearerAuth: []
     patch:
       tags:
       - Vehicle Preferences
       summary: Partially update vehicle care preferences
-      description: Merges provided preference fields into existing preferences without
-        replacing the entire map
+      description: Merges provided preference fields into existing preferences without replacing the entire map
       operationId: mergePreferences
       parameters:
       - name: vehicleId
@@ -132,21 +137,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PreferencesMergeDto"
+              $ref: '#/components/schemas/PreferencesMergeDto'
         required: true
       responses:
-        "200":
+        '200':
           description: Preferences merged successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+        '404':
           description: No existing preferences to merge into
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/{id}:
     get:
       tags:
@@ -164,18 +171,20 @@ paths:
           format: uuid
         example: 1
       responses:
-        "200":
+        '200':
           description: Vehicle found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle API
@@ -195,21 +204,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleLegacyRequest"
+              $ref: '#/components/schemas/VehicleLegacyRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle API
@@ -226,10 +237,12 @@ paths:
           format: uuid
         example: 1
       responses:
-        "204":
+        '204':
           description: Vehicle deleted successfully.
-        "404":
+        '404':
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/vin/{vin}:
     get:
       tags:
@@ -246,18 +259,20 @@ paths:
           type: string
         example: 1HGCM82633A004352
       responses:
-        "200":
+        '200':
           description: Vehicle found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle API
@@ -276,21 +291,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleLegacyRequest"
+              $ref: '#/components/schemas/VehicleLegacyRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle API
@@ -306,10 +323,12 @@ paths:
           type: string
         example: 1HGCM82633A004352
       responses:
-        "204":
+        '204':
           description: Vehicle deleted successfully.
-        "404":
+        '404':
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry/{vehicleId}:
     get:
       tags:
@@ -326,18 +345,20 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Vehicle retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
+                $ref: '#/components/schemas/VehicleResponse'
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Vehicle Registry API
@@ -356,27 +377,29 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateVehicleRequest"
+              $ref: '#/components/schemas/UpdateVehicleRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Vehicle updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "400":
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
           description: Invalid vehicle request.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
+                $ref: '#/components/schemas/VehicleResponse'
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Vehicle Registry API
@@ -392,28 +415,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Vehicle deleted successfully.
-        "404":
+        '404':
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
   /v1/vehicles/search:
     get:
       tags:
       - Vehicle Search
       summary: Search vehicles (query parameter)
-      description: Alternative search endpoint using query parameters. Useful for
-        browser-based queries.
+      description: Alternative search endpoint using query parameters. Useful for browser-based queries.
       operationId: searchByQuery
       parameters:
       - name: q
         in: query
-        description: "Search query (VIN, license plate, unit number, or description)"
+        description: Search query (VIN, license plate, unit number, or description)
         required: true
         schema:
           type: string
       - name: limit
         in: query
-        description: "Result limit (default 25, max 50)"
+        description: Result limit (default 25, max 50)
         required: false
         schema:
           type: integer
@@ -427,44 +451,78 @@ paths:
           type: boolean
           default: false
       responses:
-        "200":
+        '200':
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/SearchVehiclesResponse"
-        "400":
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+        '400':
           description: Invalid search query
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/SearchVehiclesResponse"
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Vehicle Search
       summary: Search vehicles
-      description: "Search for vehicles by VIN, license plate, unit number, or description.\
-        \ Results are ranked by relevance: exact match > prefix match > contains match."
+      description: 'Search for vehicles by VIN, license plate, unit number, or description. Results are ranked by relevance: exact match > prefix match > contains match.'
       operationId: search
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SearchVehiclesRequest"
+              $ref: '#/components/schemas/SearchVehiclesRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Search results returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/SearchVehiclesResponse"
-        "400":
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+        '400':
           description: Invalid search query
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/SearchVehiclesResponse"
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+      security:
+      - bearerAuth: []
+  /v1/vehicles/bulk-ingest:
+    post:
+      tags:
+      - Vehicle Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestVehicleBulkIngestRecord'
+        required: true
+      responses:
+        '200':
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+      security:
+      - bearerAuth:
+        - vehicle-inventory:registry:create
+      x-required-permissions:
+      - vehicle-inventory:registry:create
   /v1/vehicles-legacy:
     get:
       tags:
@@ -473,14 +531,16 @@ paths:
       description: Retrieve a list of all vehicles in the inventory.
       operationId: getAllVehicles
       responses:
-        "200":
+        '200':
           description: List of vehicles returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/VehicleLegacyResponse"
+                  $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Vehicle API
@@ -491,15 +551,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleLegacyRequest"
+              $ref: '#/components/schemas/VehicleLegacyRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
   /v1/vehicles-legacy/vin:
     post:
       tags:
@@ -511,15 +573,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleLegacyRequest"
+              $ref: '#/components/schemas/VehicleLegacyRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleLegacyResponse"
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry:
     post:
       tags:
@@ -531,21 +595,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleRequest"
+              $ref: '#/components/schemas/CreateVehicleRequest'
         required: true
       responses:
-        "400":
-          description: Invalid vehicle request.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "201":
+        '201':
           description: Vehicle created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
+          description: Invalid vehicle request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+      security:
+      - bearerAuth: []
   /v1/vehicle-registry/vin/{vin}:
     get:
       tags:
@@ -563,18 +629,20 @@ paths:
           maxLength: 17
           minLength: 17
       responses:
-        "200":
+        '200':
           description: Vehicle retrieved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
+                $ref: '#/components/schemas/VehicleResponse'
+        '404':
           description: Vehicle not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
+                $ref: '#/components/schemas/VehicleResponse'
+      security:
+      - bearerAuth: []
 components:
   schemas:
     PreferencesUpsertDto:
@@ -582,7 +650,6 @@ components:
       properties:
         preferences:
           type: object
-          additionalProperties: {}
         serviceNotes:
           type: string
         createdByUserId:
@@ -602,7 +669,6 @@ components:
           format: uuid
         preferences:
           type: object
-          additionalProperties: {}
         serviceNotes:
           type: string
         createdByUserId:
@@ -674,7 +740,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2023
+          example: 2023 Chevrolet Silverado 1500
           maxLength: 4000
           minLength: 0
         licensePlate:
@@ -743,7 +809,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: 2024 Ford F-150 XL
         licensePlate:
           type: string
           description: License plate value.
@@ -777,12 +843,20 @@ components:
           type: string
           format: date-time
           description: Record creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
+          example: 2026-02-27 12:00:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Last update timestamp (UTC).
-          example: 2026-02-27T13:00:00Z
+          example: 2026-02-27 13:00:00+00:00
+        createdBy:
+          type: string
+          description: Username of the actor who created this record.
+          example: jsmith
+        updatedBy:
+          type: string
+          description: Username of the actor who last modified this record.
+          example: jsmith
         version:
           type: integer
           format: int64
@@ -806,7 +880,7 @@ components:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/VehicleSummary"
+            $ref: '#/components/schemas/VehicleSummary'
         totalCount:
           type: integer
           format: int32
@@ -835,6 +909,91 @@ components:
           type: string
         model:
           type: string
+    BulkIngestRequestVehicleBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleBulkIngestRecord'
+          minItems: 1
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    VehicleBulkIngestRecord:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+          maxLength: 17
+          minLength: 17
+        unitNumber:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        licensePlate:
+          type: string
+        licensePlateJurisdiction:
+          type: string
+        year:
+          type: integer
+          format: int32
+        make:
+          type: string
+        model:
+          type: string
+        trim:
+          type: string
+      required:
+      - accountId
+      - description
+      - unitNumber
+      - vin
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     CreateVehicleRequest:
       type: object
       description: Vehicle creation request
@@ -855,7 +1014,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: 2024 Ford F-150 XL
         licensePlate:
           type: string
           description: License plate value.
@@ -891,7 +1050,11 @@ components:
       properties:
         partialPreferences:
           type: object
-          additionalProperties: {}
         updatedByUserId:
           type: string
           format: uuid
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

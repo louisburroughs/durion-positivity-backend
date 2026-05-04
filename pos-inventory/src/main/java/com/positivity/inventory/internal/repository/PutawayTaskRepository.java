@@ -19,6 +19,8 @@ public interface PutawayTaskRepository extends JpaRepository<PutawayTask, UUID> 
 
     List<PutawayTask> findByStatusIn(List<PutawayTaskStatus> statuses);
 
+    List<PutawayTask> findByStatusInAndSourceLocationId(List<PutawayTaskStatus> statuses, UUID sourceLocationId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM PutawayTask t WHERE t.taskId = :taskId")
     Optional<PutawayTask> findByIdForUpdate(@Param("taskId") UUID taskId);

@@ -92,7 +92,7 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class OrderDocumentTemplateInitializer implements ApplicationRunner {
-    
+
     private final RestClient restClient;
     private final DocumentTemplateInitializerSupport initializerSupport;
 
@@ -108,7 +108,7 @@ public class OrderDocumentTemplateInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         initializerSupport.registerTemplates(
-            OrderDocumentTemplates.all(), 
+            OrderDocumentTemplates.all(),
             this::registerTemplate
         );
     }
@@ -126,12 +126,12 @@ public class OrderDocumentTemplateInitializer implements ApplicationRunner {
 
 ### 4. Render Documents
 
-**Option A: Using DocumentServiceClient (Recommended)**
+#### Option A: Using DocumentServiceClient (Recommended)
 
 ```java
 @Service
 public class InvoiceService {
-    
+
     private final DocumentServiceClient documentClient;
 
     public InvoiceService(
@@ -160,12 +160,12 @@ public class InvoiceService {
 }
 ```
 
-**Option B: Using RestClient Directly**
+#### Option B: Using RestClient Directly
 
 ```java
 @Service
 public class InvoiceService {
-    
+
     private final RestClient restClient;
 
     public InvoiceService(
@@ -212,7 +212,7 @@ Both exceptions include context (template ID, format) and support cause chaining
 try {
     RenderResponse response = documentClient.renderDocument(request);
 } catch (DocumentRenderException e) {
-    log.error("Failed to render template {}: {}", 
+    log.error("Failed to render template {}: {}",
         e.getTemplateId(), e.getMessage(), e);
     // Handle error (fallback, retry, alert, etc.)
 }
@@ -227,12 +227,12 @@ Use Testcontainers or mock the RestClient for integration tests:
 void testDocumentRendering() {
     RestClient mockClient = mock(RestClient.class);
     // Configure mock responses...
-    
+
     DocumentServiceClient client = new DocumentServiceClient(
-        mockClient, 
+        mockClient,
         Retry.ofDefaults("test")
     );
-    
+
     RenderResponse response = client.renderDocument(testRequest);
     assertNotNull(response.getContent());
 }

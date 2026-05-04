@@ -2,6 +2,7 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.enums.InventorySourceType;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -31,8 +32,9 @@ public interface InventoryAvailabilityService {
      * storage locations within the parent location.
      *
      * @param productSku        SKU identifier of the product
-     * @param locationId        location identifier (required)
+     * @param locationId        optional location identifier
      * @param storageLocationId optional sub-location identifier
+     * @param sourceType        optional inventory source lookup type
      * @return availability view with on-hand, allocated, and ATP quantities
      * @throws com.positivity.inventory.internal.exception.ProductNotFoundException  if
      *                                                                               productSku
@@ -49,5 +51,8 @@ public interface InventoryAvailabilityService {
      */
     @NonNull
     AvailabilityView queryAvailability(
-            @NonNull String productSku, @NonNull UUID locationId, @Nullable UUID storageLocationId);
+            @NonNull String productSku,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId,
+            @Nullable InventorySourceType sourceType);
 }

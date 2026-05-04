@@ -42,6 +42,13 @@ public final class GatewaySecurityConstants {
     public static final String HEADER_AUTHORITIES = "X-Authorities";
 
     /**
+     * Header containing comma-separated role authorities.
+     * Injected by pos-api-gateway after JWT validation.
+     * Example: "ROLE_ADMIN,ROLE_MANAGER"
+     */
+    public static final String HEADER_ROLES = "X-Roles";
+
+    /**
      * Header containing the authenticated username/subject.
      * Injected by pos-api-gateway after JWT validation.
      */

@@ -92,3 +92,4 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+  default-produces-media-type: application/json

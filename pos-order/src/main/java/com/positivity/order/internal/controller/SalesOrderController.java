@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/orders")
 @RequiredArgsConstructor
 @Slf4j
@@ -40,7 +41,8 @@ public class SalesOrderController {
 
     private final SalesOrderService salesOrderService;
 
-    @Operation(summary = "Create a sales order cart")
+    @Operation(summary = "Create a sales order cart", description = "Create a new sales order cart for a customer, terminal, and optional vehicle context.", tags = {
+            "Sales Orders" })
     @PostMapping("/carts")
     @EmitEvent(id = "ORDER_CART_CREATE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> createCart(@Valid @RequestBody CreateCartRequest request) {
@@ -49,7 +51,8 @@ public class SalesOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
-    @Operation(summary = "Add an item to a sales order cart")
+    @Operation(summary = "Add an item to a sales order cart", description = "Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context.", tags = {
+            "Sales Orders" })
     @PostMapping("/carts/{orderId}/items")
     @EmitEvent(id = "ORDER_CART_ITEM_ADD", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> addItem(
@@ -63,7 +66,8 @@ public class SalesOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toLineResponse(line));
     }
 
-    @Operation(summary = "Update a sales order cart item quantity")
+    @Operation(summary = "Update a sales order cart item quantity", description = "Update the quantity for an existing sales order line item in a cart.", tags = {
+            "Sales Orders" })
     @PutMapping("/carts/{orderId}/items/{lineId}")
     @EmitEvent(id = "ORDER_CART_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> updateItemQuantity(
@@ -72,7 +76,8 @@ public class SalesOrderController {
         return ResponseEntity.ok(toLineResponse(line));
     }
 
-    @Operation(summary = "Remove an item from a sales order cart")
+    @Operation(summary = "Remove an item from a sales order cart", description = "Remove a line item from an existing sales order cart.", tags = {
+            "Sales Orders" })
     @DeleteMapping("/carts/{orderId}/items/{lineId}")
     @EmitEvent(id = "ORDER_CART_ITEM_REMOVE", apiVersion = "1")
     public ResponseEntity<Void> removeItem(@PathVariable UUID orderId, @PathVariable UUID lineId) {
@@ -80,25 +85,26 @@ public class SalesOrderController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Get a sales order by ID")
+    @Operation(summary = "Get a sales order by ID", description = "Retrieve a sales order cart and its current line items by identifier.", tags = {
+            "Sales Orders" })
     @GetMapping("/carts/{orderId}")
     public ResponseEntity<SalesOrderResponse> getOrder(@PathVariable UUID orderId) {
         return ResponseEntity.ok(toResponse(salesOrderService.getOrder(orderId)));
     }
 
-    @Operation(summary = "Link a source to a sales order")
+    @Operation(summary = "Link a source to a sales order", description = "Associate an external source reference with an existing sales order cart.", tags = {
+            "Sales Orders" })
     @PatchMapping("/carts/{orderId}/source")
     @EmitEvent(id = "ORDER_LINK_SOURCE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> linkSource(
             @PathVariable UUID orderId, @Valid @RequestBody LinkSourceRequest request) {
-        SalesOrderSummary updated =
-                salesOrderService.linkSource(orderId, request.getSourceType(), request.getSourceId());
+        SalesOrderSummary updated = salesOrderService.linkSource(orderId, request.getSourceType(),
+                request.getSourceId());
         return ResponseEntity.ok(toResponse(updated));
     }
 
     private SalesOrderResponse toResponse(SalesOrderSummary summary) {
-        List<SalesOrderLineResponse> lines =
-                summary.lines().stream().map(this::toLineResponse).toList();
+        List<SalesOrderLineResponse> lines = summary.lines().stream().map(this::toLineResponse).toList();
         return SalesOrderResponse.builder()
                 .orderId(summary.orderId())
                 .customerId(summary.customerId())

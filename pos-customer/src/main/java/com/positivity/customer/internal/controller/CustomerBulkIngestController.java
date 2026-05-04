@@ -23,20 +23,25 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+    CrmPermissionRegistry.PARTY_CREATE })
 @RequestMapping("/v1/customer")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
 @Tag(name = "Customer Bulk Ingest API", description = "Bulk import customer records")
 public class CustomerBulkIngestController extends AbstractBulkIngestController<CustomerBulkIngestRecord> {
 
   private final PersonService personService;
 
   @Override
+  @PostMapping("/bulk-ingest")
   @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
   @EmitEvent(id = "CUSTOMER_BULK_INGEST", apiVersion = "1")
   public ResponseEntity<BulkIngestResponse> bulkIngest(

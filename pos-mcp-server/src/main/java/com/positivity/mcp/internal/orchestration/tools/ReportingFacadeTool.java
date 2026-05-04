@@ -15,7 +15,7 @@ public class ReportingFacadeTool {
     public ReportingFacadeTool(
             RestClient.Builder restClientBuilder,
             @Value("${pos.reporting.base-url:http://pos-accounting/v1/reporting}") @NonNull String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
     }
 
     @Tool("Get a sales report for a requested period")

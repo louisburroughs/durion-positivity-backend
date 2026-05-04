@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth", scopes = { "documents:render" })
 @RequestMapping("/v1/documents")
 @Tag(name = "Document Render API", description = "Render source content into PDF output")
 public class DocumentRenderController {
@@ -32,13 +34,9 @@ public class DocumentRenderController {
     @PostMapping(value = "/render", produces = MediaType.APPLICATION_PDF_VALUE)
     @EmitEvent(id = "DOCUMENT_RENDER", apiVersion = "1")
     @PreAuthorize("hasAuthority('documents:render')")
-    @Operation(
-            summary = "Render document to PDF",
-            description = "Renders input content and template context into a PDF document.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "PDF rendered successfully",
-            content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary")))
+    @Operation(summary = "Render document to PDF", description = "Renders input content and template context into a PDF document.", tags = {
+            "Document Render API" })
+    @ApiResponse(responseCode = "200", description = "PDF rendered successfully", content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary")))
     @ApiResponse(responseCode = "400", description = "Invalid render request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<byte[]> renderDocument(@RequestBody @Valid RenderRequest request) {

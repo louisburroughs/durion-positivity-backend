@@ -30,8 +30,9 @@ public class SubstituteLinkController {
 
     @PostMapping("/products/substitutes/{productId}")
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_LINK_CREATE", apiVersion = "1")
-    @PreAuthorize(
-            "hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_PRODUCT_ADMIN",
+            "ROLE_INVENTORY_ADMIN", "workorder:parts:add", "workorder:workorder:edit" })
+    @PreAuthorize("hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
     public ResponseEntity<SubstituteLinkResponse> createLink(
             @PathVariable UUID productId, @RequestBody @Valid CreateSubstituteLinkRequest request) {
         request.setProductId(productId);
@@ -39,6 +40,7 @@ public class SubstituteLinkController {
     }
 
     @GetMapping("/products/substitutes/{productId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SubstituteLinkResponse>> listLinks(@PathVariable UUID productId) {
         return ResponseEntity.ok(substituteLinkService.listLinks(productId));
@@ -46,8 +48,9 @@ public class SubstituteLinkController {
 
     @PutMapping("/products/substitutes/{productId}")
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_LINK_UPDATE", apiVersion = "1")
-    @PreAuthorize(
-            "hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_PRODUCT_ADMIN",
+            "ROLE_INVENTORY_ADMIN", "workorder:parts:add", "workorder:workorder:edit" })
+    @PreAuthorize("hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
     public ResponseEntity<SubstituteLinkResponse> updateLink(
             @PathVariable UUID productId,
             @RequestParam("linkId") UUID linkId,
@@ -57,8 +60,9 @@ public class SubstituteLinkController {
 
     @DeleteMapping("/products/substitutes/{productId}")
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_LINK_DELETE", apiVersion = "1")
-    @PreAuthorize(
-            "hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_PRODUCT_ADMIN",
+            "ROLE_INVENTORY_ADMIN", "workorder:parts:add", "workorder:workorder:edit" })
+    @PreAuthorize("hasAnyAuthority('ROLE_PRODUCT_ADMIN', 'ROLE_INVENTORY_ADMIN', 'workorder:parts:add', 'workorder:workorder:edit')")
     public ResponseEntity<SubstituteLinkResponse> deleteLink(
             @PathVariable UUID productId, @RequestParam("substitute") UUID substitutePartId) {
         return ResponseEntity.ok(substituteLinkService.deleteLink(productId, substitutePartId));
@@ -66,6 +70,7 @@ public class SubstituteLinkController {
 
     @PostMapping("/workorders/{workorderId}/suggestSubstitutes")
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_SUGGEST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SubstituteLinkResponse>> suggestSubstitutes(@PathVariable UUID workorderId) {
         return ResponseEntity.ok(substituteLinkService.suggestSubstitutes(workorderId));

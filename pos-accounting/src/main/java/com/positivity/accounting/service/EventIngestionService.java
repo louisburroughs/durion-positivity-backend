@@ -1,12 +1,16 @@
 package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventFilter;
+import com.positivity.accounting.internal.dto.EventEnvelopeContract;
+import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -100,12 +104,7 @@ public interface EventIngestionService {
      * Retrieves the processing log for an event.
      * Contains matched rules, generated journal entries, any errors.
      */
-    List<String> getEventProcessingLog(UUID eventId);
-
-    /**
-     * Retrieves the processing log for an event as a string.
-     */
-    String getProcessingLog(UUID eventId);
+    List<EventProcessingLogEntry> getEventProcessingLog(@NonNull UUID eventId);
 
     /**
      * Lists all events with filtering, returning a page of response DTOs.
@@ -115,7 +114,13 @@ public interface EventIngestionService {
      * @param pageable       pagination parameters
      * @return paginated accounting event responses
      */
-    Page<AccountingEventResponse> listEvents(UUID organizationId, String status, Pageable pageable);
+    Page<AccountingEventResponse> listEvents(@NonNull AccountingEventFilter filter, @NonNull Pageable pageable);
+
+    /**
+     * Gets the current event-envelope contract.
+     */
+    @NonNull
+    EventEnvelopeContract getEventContract();
 
     /**
      * Find all events from a specific source system.

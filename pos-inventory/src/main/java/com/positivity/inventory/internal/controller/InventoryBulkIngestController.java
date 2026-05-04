@@ -8,6 +8,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
 import com.positivity.inventory.service.StockMovementService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -24,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
+        "inventory:adjustment:create" })
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
 @Slf4j
@@ -36,6 +39,8 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     @Override
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_BULK_INGEST", apiVersion = "1")
+    @Operation(summary = "Bulk ingest inventory adjustments", description = "Processes a batch of inventory adjustment records and creates adjustment requests for each accepted row.", tags = {
+            "Inventory Bulk Ingest API" })
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {
         return super.bulkIngest(request);

@@ -11,7 +11,9 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +32,9 @@ class BulkLoadJobServiceImplTest {
 
     @Mock
     BulkLoadJobRepository jobRepository;
+
+    @Mock
+    BulkLoadBatchLauncher bulkLoadBatchLauncher;
 
     @InjectMocks
     BulkLoadJobServiceImpl service;
@@ -68,6 +73,61 @@ class BulkLoadJobServiceImplTest {
                 .hasMessageContaining("active bulk load job");
     }
 
+    @Test
+    void markUploadStored_whenJobOwned_persistsStoragePathAndTransitionsToUploading() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.markUploadStored(JOB_ID, OPERATOR_ID, "00000000-0000-0000-0000-000000000001/products.csv");
+
+        assertThat(job.getOriginalFilePath()).isEqualTo("00000000-0000-0000-0000-000000000001/products.csv");
+        assertThat(job.getStatus()).isEqualTo(JobStatus.UPLOADING);
+        verify(jobRepository).save(job);
+    }
+
+    @Test
+    void startProcessing_whenUploadedFileMissing_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("uploaded file is persisted");
+    }
+
+    @Test
+    void startProcessing_whenUploadedFilePresent_transitionsToProcessing() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123");
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.PROCESSING);
+        assertThat(job.getStartedAt()).isNotNull();
+        verify(bulkLoadBatchLauncher).launch(job, "Bearer token-123");
+        verify(jobRepository).save(job);
+    }
+
+    @Test
+    void startProcessing_whenLocationIdMissing_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(null);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("locationId");
+    }
+
     // ─── cancelJob ───────────────────────────────────────────────────────────
 
     @Test
@@ -104,6 +164,61 @@ class BulkLoadJobServiceImplTest {
                 .hasMessageContaining("terminal state");
     }
 
+    // ─── retryJob ────────────────────────────────────────────────────────────
+
+    @Test
+    void retryJob_happyPath_resetsCountersAndSetsCreated() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
+        when(jobRepository.save(any(BulkLoadJob.class))).thenReturn(saved);
+
+        BulkLoadJobResponse response = service.retryJob(JOB_ID, OPERATOR_ID);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(job.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(job.getProcessedRows()).isZero();
+        assertThat(job.getSuccessCount()).isZero();
+        assertThat(job.getFailureCount()).isZero();
+        assertThat(job.getTotalRows()).isNull();
+        verify(jobRepository).save(job);
+    }
+
+    @Test
+    void retryJob_whenJobNotOwned_throwsOwnershipViolation() {
+        BulkLoadJob job = savedJob(JOB_ID, "other-operator", JobStatus.FAILED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(JobOwnershipViolationException.class);
+    }
+
+    @Test
+    void retryJob_whenJobNotFailed_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.PROCESSING);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FAILED state");
+    }
+
+    @Test
+    void retryJob_whenOperatorHasActiveJob_throwsIllegalState() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("active bulk load job");
+    }
+
     // ─── getJob ──────────────────────────────────────────────────────────────
 
     @Test
@@ -133,6 +248,7 @@ class BulkLoadJobServiceImplTest {
         BulkLoadJob job = new BulkLoadJob();
         job.setId(id);
         job.setOperatorId(operatorId);
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         job.setFileName("products.csv");
         job.setDomainType(DomainType.CATALOG_PRODUCT);
         job.setStatus(status);

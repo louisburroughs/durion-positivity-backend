@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Story #9.
  */
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/invoices")
 @PreAuthorize("isAuthenticated()")
 @Tag(name = "Payment", description = "Card payment initiation and capture endpoints")
@@ -55,9 +56,7 @@ public class PaymentController {
     @PostMapping("/{invoiceId}/payments")
     @ResponseStatus(HttpStatus.CREATED)
     @EmitEvent(id = "INVOICE_PAYMENT_INITIATE", apiVersion = "1")
-    @Operation(
-            summary = "Initiate card payment",
-            description = "Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice")
+    @Operation(summary = "Initiate card payment", description = "Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice")
     @ApiResponse(responseCode = "201", description = "Payment intent created")
     @ApiResponse(responseCode = "400", description = "Invalid or missing required fields")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -94,5 +93,6 @@ public class PaymentController {
      * Story #9, AC3.
      */
     private record CaptureAmountRequest(
-            @NotNull @Positive BigDecimal amount, @NotBlank String captureIdempotencyKey) {}
+            @NotNull @Positive BigDecimal amount, @NotBlank String captureIdempotencyKey) {
+    }
 }

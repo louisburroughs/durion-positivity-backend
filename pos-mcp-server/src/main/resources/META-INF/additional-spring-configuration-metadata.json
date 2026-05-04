@@ -1,0 +1,302 @@
+{
+  "properties": [
+    {
+      "name": "mcp.server.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL used for MCP server endpoint discovery."
+    },
+    {
+      "name": "mcp.server.message-endpoint",
+      "type": "java.lang.String",
+      "description": "MCP message endpoint path.",
+      "defaultValue": "/mcp/message"
+    },
+    {
+      "name": "mcp.server.sse-endpoint",
+      "type": "java.lang.String",
+      "description": "MCP SSE endpoint path."
+    },
+    {
+      "name": "mcp.server.open-api-path",
+      "type": "java.lang.String",
+      "description": "OpenAPI path used for service discovery.",
+      "defaultValue": "/v3/api-docs"
+    },
+    {
+      "name": "mcp.server.discovery-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout for MCP service discovery requests.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "mcp.server.included-services",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Optional allowlist of services to include as MCP tools."
+    },
+    {
+      "name": "mcp.server.included-path-prefixes",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Optional allowlist of API path prefixes to include as MCP tools."
+    },
+    {
+      "name": "mcp.security.permit-all-transport",
+      "type": "java.lang.Boolean",
+      "description": "Allow all MCP transport requests without authentication when enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "mcp.llm.apis",
+      "type": "java.util.List<com.positivity.mcp.internal.config.LlmApiProperties$LlmApi>",
+      "description": "Configured LLM API connection profiles used by MCP orchestration."
+    },
+    {
+      "name": "mcp.rag.table-name",
+      "type": "java.lang.String",
+      "description": "PostgreSQL table name used for MCP RAG embeddings.",
+      "defaultValue": "mcp_document_embedding"
+    },
+    {
+      "name": "mcp.rag.dimension",
+      "type": "java.lang.Integer",
+      "description": "Embedding vector dimension used by MCP RAG storage.",
+      "defaultValue": 768
+    },
+    {
+      "name": "mcp.rag.create-table",
+      "type": "java.lang.Boolean",
+      "description": "Create RAG table on startup when enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "mcp.rag.chunking.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable chunking for ingested RAG documents.",
+      "defaultValue": true
+    },
+    {
+      "name": "mcp.rag.chunking.max-segment-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum RAG chunk segment size in characters.",
+      "defaultValue": 2000
+    },
+    {
+      "name": "mcp.rag.chunking.max-overlap-size",
+      "type": "java.lang.Integer",
+      "description": "Character overlap size between adjacent RAG chunks.",
+      "defaultValue": 200
+    },
+    {
+      "name": "mcp.rag.ingestion.max-concurrency",
+      "type": "java.lang.Integer",
+      "description": "Maximum concurrent background ingestion jobs for RAG embedding.",
+      "defaultValue": 2
+    },
+    {
+      "name": "mcp.agent.cache-ttl-minutes",
+      "type": "java.lang.Integer",
+      "description": "Session agent cache TTL in minutes.",
+      "defaultValue": 30
+    },
+    {
+      "name": "mcp.agent.max-cached-agents",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of cached session agents.",
+      "defaultValue": 500
+    },
+    {
+      "name": "mcp.agent.memory-max-messages",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of remembered messages per cached session.",
+      "defaultValue": 50
+    },
+    {
+      "name": "mcp.agent.candidate-tool-limit",
+      "type": "java.lang.Integer",
+      "description": "Maximum candidate tools considered per orchestration turn.",
+      "defaultValue": 2
+    },
+    {
+      "name": "mcp.tuning.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable adaptive MCP tool priority tuning.",
+      "defaultValue": true
+    },
+    {
+      "name": "mcp.tuning.cron",
+      "type": "java.lang.String",
+      "description": "Cron expression controlling MCP tuning schedule."
+    },
+    {
+      "name": "mcp.model.fallback.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable fallback model logic in MCP orchestration.",
+      "defaultValue": false
+    },
+    {
+      "name": "mcp.model.fallback.secondary-model-name",
+      "type": "java.lang.String",
+      "description": "Secondary model name used for fallback inference.",
+      "defaultValue": "mistral:7b"
+    },
+    {
+      "name": "mcp.model.fallback.timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout for fallback model responses.",
+      "defaultValue": "180s"
+    },
+    {
+      "name": "pos.nlti.session.ttl-hours",
+      "type": "java.lang.Integer",
+      "description": "Number of hours to retain NLTI sessions.",
+      "defaultValue": 24
+    },
+    {
+      "name": "pos.nlti.rate-limit.per-session",
+      "type": "java.lang.Integer",
+      "description": "Maximum NLTI requests allowed per session.",
+      "defaultValue": 100
+    },
+    {
+      "name": "pos.nlti.rate-limit.max-tracked-sessions",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of NLTI sessions tracked for rate limiting.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://pos-event-receiver:8080"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8080"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    },
+    {
+      "name": "exa.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for Exa web search API integration.",
+      "defaultValue": "https://api.exa.ai"
+    },
+    {
+      "name": "exa.api-key",
+      "type": "java.lang.String",
+      "description": "API key for Exa web search integration."
+    },
+    {
+      "name": "exa.search-type",
+      "type": "java.lang.String",
+      "description": "Search type requested from Exa.",
+      "defaultValue": "auto"
+    },
+    {
+      "name": "exa.max-results",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of Exa search results to return.",
+      "defaultValue": 5
+    },
+    {
+      "name": "pos.inventory.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for inventory tools.",
+      "defaultValue": "http://pos-inventory/v1/inventory"
+    },
+    {
+      "name": "pos.order.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for order tools.",
+      "defaultValue": "http://pos-order/v1/orders"
+    },
+    {
+      "name": "pos.customer.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for customer tools.",
+      "defaultValue": "http://pos-customer/v1/customers"
+    },
+    {
+      "name": "pos.catalog.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for catalog tools.",
+      "defaultValue": "http://pos-catalog/v1/catalog"
+    },
+    {
+      "name": "pos.workorder.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for workorder tools.",
+      "defaultValue": "http://pos-workorder/v1/workorders"
+    },
+    {
+      "name": "pos.invoice.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for invoice tools.",
+      "defaultValue": "http://pos-invoice/v1/invoices"
+    },
+    {
+      "name": "pos.accounting.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for accounting tools.",
+      "defaultValue": "http://pos-accounting/v1/accounting"
+    },
+    {
+      "name": "pos.reporting.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for reporting tools.",
+      "defaultValue": "http://pos-accounting/v1/reporting"
+    },
+    {
+      "name": "pos.location.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for location tools.",
+      "defaultValue": "http://pos-location/v1/locations"
+    },
+    {
+      "name": "pos.shopmanager.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for shop manager tools.",
+      "defaultValue": "http://pos-shop-manager/v1/shop"
+    },
+    {
+      "name": "pos.tax.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for tax tools.",
+      "defaultValue": "http://pos-tax/v1/tax"
+    },
+    {
+      "name": "pos.vehicle.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for vehicle tools.",
+      "defaultValue": "http://pos-customer/v1/vehicles"
+    },
+    {
+      "name": "pos.event-receiver.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for event receiver tools.",
+      "defaultValue": "http://pos-event-receiver/v1/events"
+    },
+    {
+      "name": "pos.hr.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for HR tools.",
+      "defaultValue": "http://pos-people/v1/hr"
+    },
+    {
+      "name": "pos.admin.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for admin tools.",
+      "defaultValue": "http://pos-security-service/v1/admin"
+    }
+  ]
+}

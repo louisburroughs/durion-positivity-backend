@@ -1,10 +1,9 @@
 openapi: 3.1.0
 info:
   title: POS Human Resources Service API
-  description: "Human Resources service for employee management, payroll, and benefits\
-    \ administration"
+  description: Human Resources service for employee management, payroll, and benefits administration
   contact:
-    name: Durion Team
+    name: Durion Support Services
     email: louis.burroughs@gmail.com
   version: v1
 servers:
@@ -21,21 +20,22 @@ tags:
   description: Operations for querying people availability
 - name: Work Sessions API
   description: Operations for managing work sessions and breaks
-- name: People API
-  description: Operations related to people records
 - name: People - TimeEntries
   description: Time entry adjustments and related APIs
+- name: User-Person Linking API
+  description: Link authentication users to person records
+- name: People - Access Control
+  description: APIs for managing person-to-role assignments for access control and permissions (CAP-120)
+- name: Employee API
+  description: Employee profile and offboarding operations
+- name: People API
+  description: Operations related to people records
 - name: People TimeEntries
   description: Time entry adjustments and related APIs
 - name: People - Exceptions
   description: Time entry exception APIs
-- name: User-Person Linking API
-  description: Link authentication users to person records
-- name: People - Access Control
-  description: APIs for managing person-to-role assignments for access control and
-    permissions (CAP-120)
-- name: Employee API
-  description: Employee profile and offboarding operations
+- name: People Bulk Ingest API
+  description: Bulk import employee records
 paths:
   /v1/people/{personId}:
     get:
@@ -54,18 +54,23 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "200":
+        '200':
           description: Person found and returned.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/Person"
-        "404":
+                $ref: '#/components/schemas/Person'
+        '404':
           description: Person not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/Person"
+                $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:view
+      x-required-permissions:
+      - people:person:view
     put:
       tags:
       - People API
@@ -85,21 +90,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Person"
+              $ref: '#/components/schemas/Person'
         required: true
       responses:
-        "404":
-          description: Person not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/Person"
-        "200":
+        '200':
           description: Person updated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/Person"
+                $ref: '#/components/schemas/Person'
+        '404':
+          description: Person not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:edit
+      x-required-permissions:
+      - people:person:edit
     delete:
       tags:
       - People API
@@ -116,10 +126,15 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "404":
-          description: Person not found.
-        "204":
+        '204':
           description: Person deleted successfully.
+        '404':
+          description: Person not found.
+      security:
+      - bearerAuth:
+        - people:person:delete
+      x-required-permissions:
+      - people:person:delete
   /v1/people/staffing/assignments/{assignmentId}:
     get:
       tags:
@@ -135,24 +150,28 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Assignment found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "404":
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '404':
           description: Assignment not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     put:
       tags:
       - People - Staffing Assignments
       summary: Update staffing assignment
-      description: "Updates an existing staffing assignment, including role, dates,\
-        \ and primary flag."
+      description: Updates an existing staffing assignment, including role, dates, and primary flag.
       operationId: updateAssignment
       parameters:
       - name: assignmentId
@@ -165,39 +184,43 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateStaffingAssignmentRequest"
+              $ref: '#/components/schemas/UpdateStaffingAssignmentRequest'
         required: true
       responses:
-        "409":
-          description: Overlapping assignment exists.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "200":
+        '200':
           description: Assignment updated.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "400":
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '400':
           description: Validation error.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "404":
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '404':
           description: Assignment not found.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '409':
+          description: Overlapping assignment exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
     delete:
       tags:
       - People - Staffing Assignments
       summary: End (soft-delete) an assignment
-      description: Ends an active staffing assignment without physically deleting
-        the record.
+      description: Ends an active staffing assignment without physically deleting the record.
       operationId: endAssignment
       parameters:
       - name: assignmentId
@@ -207,10 +230,15 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Assignment ended.
-        "404":
+        '404':
           description: Assignment not found.
+      security:
+      - bearerAuth:
+        - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/employees/{employeeId}:
     get:
       tags:
@@ -226,24 +254,28 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Employee not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "200":
+        '200':
           description: Employee found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '404':
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+      security:
+      - bearerAuth:
+        - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     put:
       tags:
       - Employee API
       summary: Update employee profile
-      description: Updates an existing employee profile using the provided employee
-        ID.
+      description: Updates an existing employee profile using the provided employee ID.
       operationId: updateEmployee
       parameters:
       - name: employeeId
@@ -256,39 +288,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateEmployeeRequest"
+              $ref: '#/components/schemas/UpdateEmployeeRequest'
         required: true
       responses:
-        "404":
-          description: Employee not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "422":
-          description: Semantic validation failure
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "409":
-          description: Duplicate employee
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "200":
+        '200':
           description: Employee updated
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "400":
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '404':
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '409':
+          description: Duplicate employee
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '422':
+          description: Semantic validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+      security:
+      - bearerAuth:
+        - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people:
     get:
       tags:
@@ -297,14 +334,19 @@ paths:
       description: Retrieve a list of all people.
       operationId: getAllPeople
       responses:
-        "200":
+        '200':
           description: List of people returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Person"
+                  $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:view
+      x-required-permissions:
+      - people:person:view
     post:
       tags:
       - People API
@@ -315,22 +357,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Person"
+              $ref: '#/components/schemas/Person'
         required: true
       responses:
-        "201":
+        '201':
           description: Person created successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/Person"
+                $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:create
+      x-required-permissions:
+      - people:person:create
   /v1/people/{personUuid}/access/assignments:
     get:
       tags:
       - People - Access Control
       summary: Get role assignments
-      description: Retrieve role assignments for a person with optional history and
-        date filtering
+      description: Retrieve role assignments for a person with optional history and date filtering
       operationId: getAssignments
       parameters:
       - name: personUuid
@@ -351,20 +397,24 @@ paths:
           type: string
           format: date-time
       responses:
-        "200":
+        '200':
           description: Assignments retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/UserRoleDto"
+                  $ref: '#/components/schemas/UserRoleDto'
+      security:
+      - bearerAuth:
+        - people:role:view
+      x-required-permissions:
+      - people:role:view
     post:
       tags:
       - People - Access Control
       summary: Assign role to person
-      description: Assign a role to a person with optional location scope and date
-        range
+      description: Assign a role to a person with optional location scope and date range
       operationId: createAssignment
       parameters:
       - name: personUuid
@@ -377,27 +427,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonRoleAssignmentRequest"
+              $ref: '#/components/schemas/PersonRoleAssignmentRequest'
         required: true
       responses:
-        "400":
+        '201':
+          description: Role assignment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleDto'
+        '400':
           description: Invalid request
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
-        "404":
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
           description: Person or role not found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people:role:assign
+      x-required-permissions:
+      - people:role:assign
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -415,18 +470,20 @@ paths:
           format: uuid
         example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
       responses:
-        "404":
-          description: Work session or break not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BreakDto"
-        "200":
+        '200':
           description: Break stopped successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BreakDto"
+                $ref: '#/components/schemas/BreakDto'
+        '404':
+          description: Work session or break not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakDto'
+      security:
+      - bearerAuth: []
   /v1/people/workSessions/{id}/breaks/start:
     post:
       tags:
@@ -444,18 +501,20 @@ paths:
           format: uuid
         example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
       responses:
-        "404":
-          description: Work session not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/BreakDto"
-        "200":
+        '200':
           description: Break started successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BreakDto"
+                $ref: '#/components/schemas/BreakDto'
+        '404':
+          description: Work session not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakDto'
+      security:
+      - bearerAuth: []
   /v1/people/workSessions/stop:
     post:
       tags:
@@ -467,15 +526,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WorkSessionRequest"
+              $ref: '#/components/schemas/WorkSessionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Work session stopped successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionDto"
+                $ref: '#/components/schemas/WorkSessionDto'
+      security:
+      - bearerAuth: []
   /v1/people/workSessions/start:
     post:
       tags:
@@ -487,15 +548,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WorkSessionRequest"
+              $ref: '#/components/schemas/WorkSessionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Work session started successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/WorkSessionDto"
+                $ref: '#/components/schemas/WorkSessionDto'
+      security:
+      - bearerAuth: []
   /v1/people/users/link:
     post:
       tags:
@@ -507,39 +570,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LinkUserToPersonRequest"
+              $ref: '#/components/schemas/LinkUserToPersonRequest'
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
+        '201':
           description: Link created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "404":
-          description: Person not found
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '200':
+          description: Link already exists and is returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "409":
-          description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "400":
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '409':
+          description: User already linked to different person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
   /v1/people/user-links:
     post:
       tags:
@@ -551,46 +619,50 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUserLinkRequest"
+              $ref: '#/components/schemas/CreateUserLinkRequest'
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
+        '201':
           description: Link created successfully
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "404":
-          description: Person not found
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '200':
+          description: Link already exists and is returned
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "409":
-          description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "400":
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '409':
+          description: User already linked to different person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
   /v1/people/timeEntries/reject:
     post:
       tags:
       - Time Entry Approval API
       summary: Batch reject time entries
-      description: Reject multiple time entries. rejectionReason is required for each
-        decision.
+      description: Reject multiple time entries. rejectionReason is required for each decision.
       operationId: rejectTimeEntries
       parameters:
       - name: X-Correlation-Id
@@ -602,26 +674,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryDecisionBatchRequest"
+              $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
         required: true
       responses:
-        "400":
-          description: Invalid request - rejectionReason required for all decisions
-          content:
-            '*/*':
-              schema: {}
-        "200":
+        '200':
           description: Time entries rejected successfully
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request - rejectionReason required for all decisions
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeEntry:reject
+      x-required-permissions:
+      - people:timeEntry:reject
   /v1/people/timeEntries/approve:
     post:
       tags:
       - Time Entry Approval API
       summary: Batch approve time entries
-      description: Approve multiple time entries. pos-people is authoritative for
-        approval execution.
+      description: Approve multiple time entries. pos-people is authoritative for approval execution.
       operationId: approveTimeEntries
       parameters:
       - name: X-Correlation-Id
@@ -633,58 +711,69 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryDecisionBatchRequest"
+              $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Time entries approved successfully
           content:
-            '*/*':
-              schema: {}
-        "400":
+            application/json:
+              schema:
+                type: object
+        '400':
           description: Invalid request - decisions required
           content:
-            '*/*':
-              schema: {}
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeEntry:approve
+      x-required-permissions:
+      - people:timeEntry:approve
   /v1/people/timeEntries/adjustments:
     post:
       tags:
       - People TimeEntries
       summary: Create a time entry adjustment
-      description: Submit a request to adjust a time entry. The adjustment will be
-        in PENDING status until approved.
+      description: Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.
       operationId: createAdjustment
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryAdjustmentRequest"
+              $ref: '#/components/schemas/TimeEntryAdjustmentRequest'
         required: true
       responses:
-        "409":
-          description: Invalid time entry state for adjustment
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
-        "201":
+        '201':
           description: Adjustment created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
-        "404":
-          description: Time entry not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
-        "400":
+                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
+                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+        '404':
+          description: Time entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+        '409':
+          description: Invalid time entry state for adjustment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+      security:
+      - bearerAuth:
+        - people:timeAdjustment:create
+      x-required-permissions:
+      - people:timeAdjustment:create
   /v1/people/timeEntries/adjustments/{adjustmentId}/approve:
     post:
       tags:
@@ -705,21 +794,29 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: Adjustment approved successfully
           content:
             application/json:
-              schema: {}
-        "404":
-          description: Adjustment not found
-          content:
-            application/json:
-              schema: {}
-        "403":
+              schema:
+                type: object
+        '403':
           description: Forbidden - insufficient permissions
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        '404':
+          description: Adjustment not found
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeAdjustment:approve
+      x-required-permissions:
+      - people:timeAdjustment:approve
   /v1/people/staffing/assignments:
     get:
       tags:
@@ -735,52 +832,61 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: List of assignments.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/StaffingAssignmentResponse"
+                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:employee:view
+      x-required-permissions:
+      - people:employee:view
     post:
       tags:
       - People - Staffing Assignments
       summary: Create staffing assignment
-      description: "Link a person to a location with role, effective dates, and primary\
-        \ flag."
+      description: Link a person to a location with role, effective dates, and primary flag.
       operationId: createAssignment_1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateStaffingAssignmentRequest"
+              $ref: '#/components/schemas/CreateStaffingAssignmentRequest'
         required: true
       responses:
-        "409":
-          description: Overlapping assignment exists.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "201":
+        '201':
           description: Assignment created.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "404":
-          description: Location or person not found.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
-        "400":
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '400':
           description: Validation error.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/StaffingAssignmentResponse"
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '404':
+          description: Location or person not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '409':
+          description: Overlapping assignment exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:employee:edit
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/resolve:
     post:
       tags:
@@ -792,20 +898,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ResolvePersonRequest"
+              $ref: '#/components/schemas/ResolvePersonRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Person resolved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ResolvePersonResponse"
+                $ref: '#/components/schemas/ResolvePersonResponse'
+      security:
+      - bearerAuth:
+        - people:person:create
+      x-required-permissions:
+      - people:person:create
   /v1/people/exceptions:
     get:
       tags:
       - People - Exceptions
-      summary: "List exceptions, optional filter by employeeId"
+      summary: List exceptions, optional filter by employeeId
       description: Retrieve all exceptions or filter by a specific employee ID.
       operationId: listByEmployee
       parameters:
@@ -815,40 +926,49 @@ paths:
         schema:
           type: string
       responses:
-        "200":
+        '200':
           description: List returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/TimeEntryException"
+                  $ref: '#/components/schemas/TimeEntryException'
+      security:
+      - bearerAuth:
+        - people:timeException:view
+      x-required-permissions:
+      - people:timeException:view
     post:
       tags:
       - People - Exceptions
       summary: Create a time entry exception
-      description: Create a new time entry exception record with validation of required
-        fields.
+      description: Create a new time entry exception record with validation of required fields.
       operationId: createException
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryExceptionRequest"
+              $ref: '#/components/schemas/TimeEntryExceptionRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Exception created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryExceptionResponse"
-        "400":
+                $ref: '#/components/schemas/TimeEntryExceptionResponse'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeEntryExceptionResponse"
+                $ref: '#/components/schemas/TimeEntryExceptionResponse'
+      security:
+      - bearerAuth:
+        - people:timeException:create
+      x-required-permissions:
+      - people:timeException:create
   /v1/people/exceptions/{exceptionId}/waive:
     post:
       tags:
@@ -872,24 +992,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryExceptionWaiveRequest"
+              $ref: '#/components/schemas/TimeEntryExceptionWaiveRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: Exception waived successfully
           content:
             application/json:
-              schema: {}
-        "400":
+              schema:
+                type: object
+        '400':
           description: Invalid request - waiveReason is required
           content:
             application/json:
-              schema: {}
-        "404":
+              schema:
+                type: object
+        '404':
           description: Exception not found
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeException:resolve
+      x-required-permissions:
+      - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/resolve:
     post:
       tags:
@@ -913,18 +1041,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimeEntryExceptionResolveRequest"
+              $ref: '#/components/schemas/TimeEntryExceptionResolveRequest'
       responses:
-        "404":
-          description: Exception not found
-          content:
-            application/json:
-              schema: {}
-        "200":
+        '200':
           description: Exception resolved successfully
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        '404':
+          description: Exception not found
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeException:resolve
+      x-required-permissions:
+      - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/acknowledge:
     post:
       tags:
@@ -945,55 +1080,66 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: Exception not found
-          content:
-            application/json:
-              schema: {}
-        "200":
+        '200':
           description: Exception acknowledged successfully
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+        '404':
+          description: Exception not found
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - bearerAuth:
+        - people:timeException:acknowledge
+      x-required-permissions:
+      - people:timeException:acknowledge
   /v1/people/employees:
     post:
       tags:
       - Employee API
       summary: Create employee profile
-      description: "Creates a new employee profile with identity, employment, and\
-        \ role-related attributes."
+      description: Creates a new employee profile with identity, employment, and role-related attributes.
       operationId: createEmployee
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateEmployeeRequest"
+              $ref: '#/components/schemas/CreateEmployeeRequest'
         required: true
       responses:
-        "201":
+        '201':
           description: Employee created
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "422":
-          description: Semantic validation failure
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "409":
-          description: Duplicate employee
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "400":
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '400':
           description: Invalid request
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '409':
+          description: Duplicate employee
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '422':
+          description: Semantic validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+      security:
+      - bearerAuth:
+        - people:employee:create
+      x-required-permissions:
+      - people:employee:create
   /v1/people/employees/{employeeId}/disable:
     post:
       tags:
@@ -1012,26 +1158,62 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DisableEmployeeRequestDto"
+              $ref: '#/components/schemas/DisableEmployeeRequestDto'
       responses:
-        "404":
-          description: Employee not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "200":
+        '200':
           description: Employee disabled
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
-        "400":
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '400':
           description: Employee cannot be disabled
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/EmployeeProfileDto"
+                $ref: '#/components/schemas/EmployeeProfileDto'
+        '404':
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+      security:
+      - bearerAuth:
+        - people:employee:deactivate
+      x-required-permissions:
+      - people:employee:deactivate
+  /v1/people/bulk-ingest:
+    post:
+      tags:
+      - People Bulk Ingest API
+      summary: Bulk ingest records
+      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      operationId: bulkIngest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestPersonBulkIngestRecord'
+        required: true
+      responses:
+        '200':
+          description: Batch processed (check per-record success/failure in response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+      security:
+      - bearerAuth:
+        - people:employee:create
+      x-required-permissions:
+      - people:employee:create
   /v1/people/{personUuid}/access/roles:
     get:
       tags:
@@ -1047,14 +1229,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Roles retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RoleDto"
+                  $ref: '#/components/schemas/RoleDto'
+      security:
+      - bearerAuth:
+        - people:role:view
+      x-required-permissions:
+      - people:role:view
   /v1/people/{personId}/users:
     get:
       tags:
@@ -1071,24 +1258,29 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: User IDs returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "404":
+        '404':
           description: Person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
+      security:
+      - bearerAuth:
+        - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/users/{userId}/person:
     get:
       tags:
@@ -1105,18 +1297,23 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Person found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PersonResponse"
-        "404":
+                $ref: '#/components/schemas/PersonResponse'
+        '404':
           description: Link or person not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PersonResponse"
+                $ref: '#/components/schemas/PersonResponse'
+      security:
+      - bearerAuth:
+        - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/user-links/{personId}:
     get:
       tags:
@@ -1133,20 +1330,25 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: Links found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "404":
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
           description: Link or person not found
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/UserPersonLinkResponse"
+                  $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
       tags:
@@ -1162,21 +1364,25 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
+        '200':
           description: List returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/TimeEntryAdjustment"
+                  $ref: '#/components/schemas/TimeEntryAdjustment'
+      security:
+      - bearerAuth:
+        - people:timeAdjustment:view
+      x-required-permissions:
+      - people:timeAdjustment:view
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     get:
       tags:
       - People Reports API
       summary: Get attendance and job time discrepancy report
-      description: "Generates a per-technician, per-location, per-day discrepancy\
-        \ report based on attendance and approved job time totals."
+      description: Generates a per-technician, per-location, per-day discrepancy report based on attendance and approved job time totals.
       operationId: getAttendanceDiscrepancyReport
       parameters:
       - name: startDate
@@ -1231,54 +1437,59 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "200":
+        '200':
           description: Report generated successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "500":
-          description: Unexpected server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "503":
-          description: Dependent service unavailable
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
-        "400":
+                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+        '400':
           description: Invalid parameters
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
+                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+        '503':
+          description: Dependent service unavailable
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+      security:
+      - bearerAuth:
+        - people:time:export:read
+        - accounting:time:export
+      x-required-permissions:
+      - people:time:export:read
+      - accounting:time:export
   /v1/people/reports/approvedTime:
     get:
       tags:
       - People Reports API
       summary: Get approved time entries for accounting export
-      description: Returns People-domain approved time rows for a date range and one
-        or more locations. This endpoint is the stable source-data read contract for
-        accounting export workflows.
+      description: Returns People-domain approved time rows for a date range and one or more locations. This endpoint is the stable source-data read contract for accounting export workflows.
       operationId: getApprovedTimeForExport
       parameters:
       - name: startDate
@@ -1312,67 +1523,78 @@ paths:
         schema:
           type: string
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "500":
-          description: Unexpected server error
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "200":
+        '200':
           description: Approved time rows retrieved successfully
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "503":
-          description: Dependent service unavailable
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
-        "400":
+                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+        '400':
           description: Invalid parameters
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
+                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+        '503':
+          description: Dependent service unavailable
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+      security:
+      - bearerAuth:
+        - people:time:export:read
+        - accounting:time:export
+      x-required-permissions:
+      - people:time:export:read
+      - accounting:time:export
   /v1/people/me/primary-location:
     get:
       tags:
       - People Availability API
       summary: Get current user's primary location
-      description: Resolve the authenticated user's primary active location from their
-        staffing assignments.
+      description: Resolve the authenticated user's primary active location from their staffing assignments.
       operationId: getCurrentUserPrimaryLocation
       responses:
-        "200":
+        '200':
           description: Primary location resolved successfully.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PrimaryLocationResponse"
-        "404":
+                $ref: '#/components/schemas/PrimaryLocationResponse'
+        '404':
           description: No active location assignment found for current user.
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PrimaryLocationResponse"
+                $ref: '#/components/schemas/PrimaryLocationResponse'
+      security:
+      - bearerAuth:
+        - people:availability:view
+      x-required-permissions:
+      - people:availability:view
   /v1/people/availability:
     get:
       tags:
@@ -1390,20 +1612,25 @@ paths:
           format: uuid
       - name: date
         in: query
-        description: "Filter by date (ISO format: yyyy-MM-dd)"
+        description: 'Filter by date (ISO format: yyyy-MM-dd)'
         required: false
         schema:
           type: string
           format: date
       responses:
-        "200":
+        '200':
           description: Availability data returned successfully.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PeopleAvailabilityResponse"
+                  $ref: '#/components/schemas/PeopleAvailabilityResponse'
+      security:
+      - bearerAuth:
+        - people:availability:view
+      x-required-permissions:
+      - people:availability:view
   /v1/people/{personUuid}/access/assignments/{roleCode}:
     delete:
       tags:
@@ -1430,20 +1657,25 @@ paths:
           type: string
           format: date-time
       responses:
-        "404":
-          description: Person or role assignment not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "204":
+        '204':
           description: Role assignment revoked successfully
-        "400":
+        '400':
           description: Invalid request for revoking role assignment
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Person or role assignment not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people:role:revoke
+      x-required-permissions:
+      - people:role:revoke
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1460,10 +1692,15 @@ paths:
           type: string
           format: uuid
       responses:
-        "204":
+        '204':
           description: Link deleted successfully
-        "404":
+        '404':
           description: Link not found
+      security:
+      - bearerAuth:
+        - people:userLink:write
+      x-required-permissions:
+      - people:userLink:write
 components:
   schemas:
     Person:
@@ -1477,9 +1714,11 @@ components:
         firstName:
           type: string
           description: First name of the person
+          minLength: 1
         lastName:
           type: string
           description: Last name of the person
+          minLength: 1
         primaryEmail:
           type: string
         secondaryEmail:
@@ -1511,6 +1750,7 @@ components:
           type: string
           description: Assignment role
           example: TECHNICIAN
+          minLength: 1
         effectiveFrom:
           type: string
           format: date
@@ -1576,12 +1816,12 @@ components:
           type: string
           format: date-time
           description: Creation timestamp in UTC
-          example: 2026-02-16T14:30:00Z
+          example: 2026-02-16 14:30:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Last update timestamp in UTC
-          example: 2026-02-18T09:15:00Z
+          example: 2026-02-18 09:15:00+00:00
         createdBy:
           type: string
           description: Username that created the assignment
@@ -1625,9 +1865,9 @@ components:
         secondaryPhone:
           type: string
         address:
-          $ref: "#/components/schemas/EmployeeAddressDto"
+          $ref: '#/components/schemas/EmployeeAddressDto'
         emergencyContact:
-          $ref: "#/components/schemas/EmployeeEmergencyContactDto"
+          $ref: '#/components/schemas/EmployeeEmergencyContactDto'
     EmployeeEmergencyContactDto:
       type: object
       properties:
@@ -1644,10 +1884,12 @@ components:
       properties:
         legalName:
           type: string
+          minLength: 1
         preferredName:
           type: string
         employeeNumber:
           type: string
+          minLength: 1
         status:
           type: string
           enum:
@@ -1663,7 +1905,7 @@ components:
           type: string
           format: date
         contactInfo:
-          $ref: "#/components/schemas/EmployeeContactInfoDto"
+          $ref: '#/components/schemas/EmployeeContactInfoDto'
         duplicatePolicy:
           type: string
           enum:
@@ -1701,7 +1943,7 @@ components:
           type: string
           format: date
         contactInfo:
-          $ref: "#/components/schemas/EmployeeContactInfoDto"
+          $ref: '#/components/schemas/EmployeeContactInfoDto'
         statusEffectiveAt:
           type: string
           format: date-time
@@ -1714,6 +1956,7 @@ components:
       properties:
         roleCode:
           type: string
+          minLength: 1
         locationId:
           type: string
           format: uuid
@@ -1725,25 +1968,6 @@ components:
           format: date-time
       required:
       - roleCode
-    ProblemDetail:
-      type: object
-      properties:
-        type:
-          type: string
-          format: uri
-        title:
-          type: string
-        status:
-          type: integer
-          format: int32
-        detail:
-          type: string
-        instance:
-          type: string
-          format: uri
-        properties:
-          type: object
-          additionalProperties: {}
     UserRoleDto:
       type: object
       properties:
@@ -1762,6 +1986,24 @@ components:
           format: date
         active:
           type: boolean
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
     BreakDto:
       type: object
       properties:
@@ -1861,23 +2103,23 @@ components:
           type: string
           description: The unique identifier of the time entry
           example: 123e4567-e89b-12d3-a456-426614174000
+          minLength: 1
         rejectionReason:
           type: string
-          description: The reason for rejection. Applicable if this is a rejection
-            request.
+          description: The reason for rejection. Applicable if this is a rejection request.
           example: Incomplete work details
       required:
       - timeEntryId
     TimeEntryDecisionBatchRequest:
       type: object
-      description: Batch request payload for making decisions (approve/reject) on
-        multiple time entries
+      description: Batch request payload for making decisions (approve/reject) on multiple time entries
       properties:
         decisions:
           type: array
           description: List of decisions for the time entries
           items:
-            $ref: "#/components/schemas/Decision"
+            $ref: '#/components/schemas/Decision'
+          minItems: 1
       required:
       - decisions
     TimeEntryAdjustmentRequest:
@@ -1893,6 +2135,7 @@ components:
           type: string
           description: Reason code for the adjustment
           example: MISSED_BREAK
+          minLength: 1
         notes:
           type: string
           description: Additional notes explaining the adjustment
@@ -1901,16 +2144,16 @@ components:
           type: string
           format: date-time
           description: Proposed new start timestamp
-          example: 2026-02-17T08:00:00-05:00
+          example: 2026-02-17 08:00:00-05:00
         proposedEndAt:
           type: string
           format: date-time
           description: Proposed new end timestamp
-          example: 2026-02-17T17:00:00-05:00
+          example: 2026-02-17 17:00:00-05:00
         minutesDelta:
           type: integer
           format: int32
-          description: "Adjustment in minutes (positive to add time, negative to subtract)"
+          description: Adjustment in minutes (positive to add time, negative to subtract)
           example: -30
         createdBy:
           type: string
@@ -1956,6 +2199,7 @@ components:
           type: string
           description: Assignment role
           example: TECHNICIAN
+          minLength: 1
         effectiveFrom:
           type: string
           format: date
@@ -2078,7 +2322,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the exception was detected
-          example: 2026-02-17T08:30:00-05:00
+          example: 2026-02-17 08:30:00-05:00
       required:
       - employeeId
       - exceptionCode
@@ -2107,6 +2351,7 @@ components:
         waiveReason:
           type: string
           description: Reason for waiving the exception
+          minLength: 1
       required:
       - waiveReason
     TimeEntryExceptionResolveRequest:
@@ -2120,10 +2365,12 @@ components:
       properties:
         legalName:
           type: string
+          minLength: 1
         preferredName:
           type: string
         employeeNumber:
           type: string
+          minLength: 1
         status:
           type: string
           enum:
@@ -2139,7 +2386,7 @@ components:
           type: string
           format: date
         contactInfo:
-          $ref: "#/components/schemas/EmployeeContactInfoDto"
+          $ref: '#/components/schemas/EmployeeContactInfoDto'
         duplicatePolicy:
           type: string
           enum:
@@ -2163,6 +2410,79 @@ components:
         assignmentEndDate:
           type: string
           format: date
+    BulkIngestRequestPersonBulkIngestRecord:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonBulkIngestRecord'
+          minItems: 1
+        operatorId:
+          type: string
+      required:
+      - jobId
+      - locationId
+      - records
+    PersonBulkIngestRecord:
+      type: object
+      properties:
+        legalName:
+          type: string
+          minLength: 1
+        preferredName:
+          type: string
+        employeeNumber:
+          type: string
+          minLength: 1
+        hireDate:
+          type: string
+          minLength: 1
+        primaryEmail:
+          type: string
+        primaryPhone:
+          type: string
+      required:
+      - employeeNumber
+      - hireDate
+      - legalName
+    BulkIngestResponse:
+      type: object
+      properties:
+        totalSubmitted:
+          type: integer
+          format: int32
+        successCount:
+          type: integer
+          format: int32
+        failureCount:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+    BulkIngestResult:
+      type: object
+      properties:
+        rowIndex:
+          type: integer
+          format: int32
+        entityId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
     RoleDto:
       type: object
       properties:
@@ -2198,8 +2518,7 @@ components:
           type: string
     TimeEntryAdjustment:
       type: object
-      description: Time entry adjustment representing a proposed or approved change
-        to a time entry
+      description: Time entry adjustment representing a proposed or approved change to a time entry
       properties:
         adjustmentId:
           type: string
@@ -2224,16 +2543,16 @@ components:
           type: string
           format: date-time
           description: Proposed new start timestamp
-          example: 2026-02-17T08:00:00Z
+          example: 2026-02-17 08:00:00+00:00
         proposedEndAt:
           type: string
           format: date-time
           description: Proposed new end timestamp
-          example: 2026-02-17T17:00:00Z
+          example: 2026-02-17 17:00:00+00:00
         minutesDelta:
           type: integer
           format: int32
-          description: "Adjustment in minutes (positive to add time, negative to subtract)"
+          description: Adjustment in minutes (positive to add time, negative to subtract)
           example: -30
         status:
           type: string
@@ -2252,7 +2571,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the adjustment was created
-          example: 2026-02-17T08:30:00Z
+          example: 2026-02-17 08:30:00+00:00
         decidedBy:
           type: string
           description: User who approved or rejected the adjustment
@@ -2261,7 +2580,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the adjustment was approved or rejected
-          example: 2026-02-17T09:15:00Z
+          example: 2026-02-17 09:15:00+00:00
       required:
       - reasonCode
       - status
@@ -2368,8 +2687,7 @@ components:
       - timeEntryId
     PrimaryLocationResponse:
       type: object
-      description: Primary location resolved from the authenticated user's active
-        staffing assignments
+      description: Primary location resolved from the authenticated user's active staffing assignments
       properties:
         locationId:
           type: string
@@ -2380,8 +2698,7 @@ components:
       - locationId
     TimeEntryException:
       type: object
-      description: Time entry exception representing a discrepancy or issue with time
-        tracking
+      description: Time entry exception representing a discrepancy or issue with time tracking
       properties:
         exceptionId:
           type: string
@@ -2430,7 +2747,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the exception was detected
-          example: 2026-02-17T08:30:00Z
+          example: 2026-02-17 08:30:00+00:00
         resolvedBy:
           type: string
           description: User who resolved the exception
@@ -2439,7 +2756,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the exception was resolved
-          example: 2026-02-17T09:15:00Z
+          example: 2026-02-17 09:15:00+00:00
       required:
       - employeeId
       - exceptionCode
@@ -2477,3 +2794,8 @@ components:
         availableOn:
           type: string
           format: date
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

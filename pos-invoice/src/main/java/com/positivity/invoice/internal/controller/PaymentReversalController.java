@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/invoices")
 @PreAuthorize("isAuthenticated()")
 @Tag(name = "PaymentReversal")
@@ -78,8 +79,10 @@ public class PaymentReversalController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private record VoidPaymentRequest(@NotNull VoidReason reason, String notes) {}
+    private record VoidPaymentRequest(@NotNull VoidReason reason, String notes) {
+    }
 
     private record RefundPaymentRequest(
-            @NotNull @Positive BigDecimal amount, @NotNull RefundReason reason, String notes) {}
+            @NotNull @Positive BigDecimal amount, @NotNull RefundReason reason, String notes) {
+    }
 }
