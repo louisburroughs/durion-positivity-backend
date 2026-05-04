@@ -85,7 +85,7 @@ Prompts are managed via the `/v1/prompts` CRUD API (requires `mcp:system_prompt:
 
 ### Semantic Per-Request Tool Selection
 
-On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the active tool set using pgvector ANN (`<=>` cosine distance) **gated by role and workflow state**:
+On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the active tool set using pgvector ANN (`<=>` cosine distance) gated by role, while workflow-state routing beyond `IDLE` is intentionally deferred (current managers evaluate with `WORKFLOW_IDLE` only):
 
 1. `ToolMetadataRepository.findTopKByEmbeddingForRole()` executes an ANN query that JOINs `mcp_tool`, `mcp_role`, `mcp_tool_role`, and `mcp_workflow_state` — only tools authorized for the user's role and the current workflow state enter the scoring window.
 2. `ToolScorer` ranks candidates using a weighted combination of semantic similarity and normalized priority (`Math.clamp(priority, 0.0, 1.0)`).

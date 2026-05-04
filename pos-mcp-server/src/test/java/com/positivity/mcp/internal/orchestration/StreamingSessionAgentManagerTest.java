@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -73,6 +75,8 @@ class StreamingSessionAgentManagerTest {
 
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
+    private InventoryFacadeTool inventoryFacadeTool;
+    private OrderFacadeTool orderFacadeTool;
 
     private StreamingSessionAgentManager manager;
 
@@ -84,12 +88,16 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
+        inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://pos-inventory/v1/inventory");
+        orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://pos-order/v1/orders");
         manager = new StreamingSessionAgentManager(
                 streamingChatModel,
                 embeddingModel,
                 embeddingStore,
                 toolRegistry,
                 exaWebSearchTool,
+            inventoryFacadeTool,
+            orderFacadeTool,
                 rolePromptResolver,
                 null, // toolRegistryService — null exercises null-safe fallback path
                 null, // toolAuditService
@@ -163,7 +171,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, rolePromptResolver,
+            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
@@ -182,7 +190,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, rolePromptResolver,
+            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
@@ -203,7 +211,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, rolePromptResolver,
+            exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
                 toolRegistryService,
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);

@@ -7,6 +7,8 @@ import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.RolePromptResolver;
@@ -21,8 +23,11 @@ import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
@@ -55,6 +60,8 @@ public class StreamingSessionAgentManager
     private final PgVectorEmbeddingStore embeddingStore;
     private final ToolRegistry toolRegistry;
     private final ExaWebSearchTool exaWebSearchTool;
+    private final InventoryFacadeTool inventoryFacadeTool;
+    private final OrderFacadeTool orderFacadeTool;
     private final RolePromptResolver rolePromptResolver;
 
     @Nullable
@@ -73,6 +80,8 @@ public class StreamingSessionAgentManager
             @NonNull PgVectorEmbeddingStore embeddingStore,
             @NonNull ToolRegistry toolRegistry,
             @NonNull ExaWebSearchTool exaWebSearchTool,
+            @NonNull InventoryFacadeTool inventoryFacadeTool,
+            @NonNull OrderFacadeTool orderFacadeTool,
             @NonNull RolePromptResolver rolePromptResolver,
             @Nullable ToolRegistryService toolRegistryService,
             @Nullable ToolAuditService toolAuditService,
@@ -86,6 +95,8 @@ public class StreamingSessionAgentManager
         this.embeddingStore = embeddingStore;
         this.toolRegistry = toolRegistry;
         this.exaWebSearchTool = exaWebSearchTool;
+        this.inventoryFacadeTool = inventoryFacadeTool;
+        this.orderFacadeTool = orderFacadeTool;
         this.rolePromptResolver = rolePromptResolver;
         this.toolRegistryService = toolRegistryService;
         this.toolAuditService = toolAuditService;
@@ -132,7 +143,9 @@ public class StreamingSessionAgentManager
         StreamingPosAssistant agent;
         if (toolRegistryService != null) {
             List<Object> roleTools = roleToolsForMessage(role, message);
-            List<Object> allTools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, exaWebSearchTool);
+            List<Object> fallbackTools = fallbackToolsForMessage(message);
+            List<Object> allTools =
+                ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray());
             String cacheKey = toolCacheKey(allTools);
             LOGGER.debug(
                     "MCP streaming tool selection userId={} role={} cacheKey={} tools={}",
@@ -188,10 +201,6 @@ public class StreamingSessionAgentManager
     @Override
     public long getCacheSize() {
         return roleAgentCache.estimatedSize();
-    }
-
-    private @NonNull StreamingPosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
-        return roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, ignored -> buildAgent(role));
     }
 
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
@@ -302,6 +311,23 @@ public class StreamingSessionAgentManager
         }
     }
 
+    private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
+        String text = message.toLowerCase(Locale.ROOT);
+        List<Object> selected = new ArrayList<>();
+        if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
+            selected.add(exaWebSearchTool);
+        }
+        if (containsAny(
+                text, Set.of("availability", "inventory", "location", "part", "product", "sku", "stock", "store"))) {
+            selected.add(inventoryFacadeTool);
+        }
+        if (containsAny(text, Set.of("order", "po", "purchase", "sale", "sales"))) {
+            selected.add(orderFacadeTool);
+        }
+        LOGGER.debug("MCP streaming fallback tool matches tools={}", toolNames(selected));
+        return selected;
+    }
+
     private static @NonNull String toolCacheKey(@NonNull List<Object> tools) {
         TreeSet<String> names = new TreeSet<>(Comparator.naturalOrder());
         tools.forEach(tool -> names.add(ClassUtils.getUserClass(tool).getSimpleName()));
@@ -312,6 +338,15 @@ public class StreamingSessionAgentManager
         return tools.stream()
                 .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
                 .toList();
+    }
+
+    private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
+        for (String token : tokens) {
+            if (text.matches(".*\\b" + token + "\\b.*")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static @NonNull String preview(@NonNull String text) {

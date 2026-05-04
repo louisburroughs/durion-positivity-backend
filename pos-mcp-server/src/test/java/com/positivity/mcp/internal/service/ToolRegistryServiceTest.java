@@ -108,8 +108,8 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    @DisplayName("resolveCandidateTools filters semantic candidates not in gated role-workflow set")
-    void resolveCandidateTools_filtersToolsNotInGatedSet() {
+        @DisplayName("resolveCandidateTools falls back to priority-ordered gated set when ANN returns empty")
+        void resolveCandidateTools_fallsBackToGatedSet_whenAnnReturnsEmpty() {
         // This test documents the Phase 2 fix: the gated ANN returns only authorized
         // tools,
         // so an unauthorized tool can never displace an authorized one.
