@@ -65,8 +65,10 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  gateway:
+    base-url: ${POS_GATEWAY_BASE_URL:http://api-gateway}
   customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8084}
+    base-url: ${POS_CUSTOMER_BASE_URL:http://api-gateway}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:

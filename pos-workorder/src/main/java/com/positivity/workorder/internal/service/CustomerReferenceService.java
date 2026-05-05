@@ -8,6 +8,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -20,8 +21,8 @@ public class CustomerReferenceService {
     private final RestClient customerRestClient;
 
     public CustomerReferenceService(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.customer.base-url:http://pos-customer:8084}") String customerBaseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.customer.base-url:http://api-gateway}") String customerBaseUrl) {
         this.customerRestClient = restClientBuilder.baseUrl(customerBaseUrl).build();
     }
 
@@ -34,7 +35,7 @@ public class CustomerReferenceService {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = customerRestClient
                     .get()
-                    .uri("/v1/customers/{customerId}", customerId)
+                    .uri("/customer/v1/customers/{customerId}", customerId)
                     .retrieve()
                     .body(Map.class);
 

@@ -26,7 +26,7 @@ public class PeopleRegistrationClient {
     public PeopleResolvePersonResponse resolvePerson(@NonNull PeopleResolvePersonRequest request) {
         PeopleResolvePersonResponse response = restClient
                 .post()
-                .uri("/v1/people/resolve")
+                .uri("/people/v1/people/resolve")
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
@@ -44,7 +44,7 @@ public class PeopleRegistrationClient {
     public List<UUID> getLinkedUserIds(@NonNull UUID personId) {
         List<UUID> response = restClient
                 .get()
-                .uri("/v1/people/{personId}/users", personId)
+                .uri("/people/v1/people/{personId}/users", personId)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404, (req, res) -> {
                     throw new IllegalStateException("Resolved person no longer exists for linking");
@@ -53,7 +53,8 @@ public class PeopleRegistrationClient {
                     throw new IllegalStateException("People linked-user lookup failed with status "
                             + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<UUID>>() {});
+                .body(new ParameterizedTypeReference<List<UUID>>() {
+                });
         return response == null ? List.of() : response;
     }
 
@@ -61,7 +62,7 @@ public class PeopleRegistrationClient {
     public PeopleUserLinkResponse linkUserToPerson(@NonNull PeopleLinkUserRequest request) {
         PeopleUserLinkResponse response = restClient
                 .post()
-                .uri("/v1/people/users/link")
+                .uri("/people/v1/people/users/link")
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
@@ -78,7 +79,7 @@ public class PeopleRegistrationClient {
     public void deletePerson(@NonNull UUID personId) {
         restClient
                 .delete()
-                .uri("/v1/people/{personId}", personId)
+                .uri("/people/v1/people/{personId}", personId)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404, (req, res) -> {
                     throw new IllegalStateException("Created person no longer exists for compensation");
