@@ -21,7 +21,7 @@ public class TaxServiceClient {
 
     public TaxServiceClient(
             RestClient.Builder restClientBuilder,
-            @Value("${invoice.tax.base-url:http://pos-tax:8090/v1/tax}") String taxServiceBaseUrl) {
+            @Value("${invoice.tax.base-url:http://pos-tax:8091/v1/tax}") String taxServiceBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(taxServiceBaseUrl).build();
     }
 

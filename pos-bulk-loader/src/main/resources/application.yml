@@ -50,7 +50,7 @@ management:
 
 pos:
   events:
-    base-url: ${POS_EVENTS_BASE_URL:http://localhost:8085}
+    base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}
   catalog:
     base-url: ${POS_CATALOG_BASE_URL:http://localhost:8082}
