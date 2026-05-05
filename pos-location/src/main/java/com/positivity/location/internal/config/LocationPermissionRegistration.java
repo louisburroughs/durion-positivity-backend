@@ -13,7 +13,7 @@ public class LocationPermissionRegistration extends PermissionRegistrationSuppor
 
     public LocationPermissionRegistration(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
+            @Value("${pos.security.base-url:http://pos-security-service:8080}") String securityServiceUrl,
             @Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
         super(restClientBuilder, securityServiceUrl, enabled, "permissions.yaml");
     }
