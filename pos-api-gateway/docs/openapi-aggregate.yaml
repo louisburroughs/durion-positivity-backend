@@ -1090,6 +1090,8 @@ paths:
 tags:
 - name: pos-accounting
   description: Operations served by pos-accounting
+- name: pos-api-gateway
+  description: Operations served by pos-api-gateway
 - name: pos-bulk-loader
   description: Operations served by pos-bulk-loader
 - name: pos-catalog
@@ -1132,6 +1134,7 @@ tags:
   description: Operations served by pos-workorder
 x-aggregated-modules:
 - pos-accounting
+- pos-api-gateway
 - pos-bulk-loader
 - pos-catalog
 - pos-customer
