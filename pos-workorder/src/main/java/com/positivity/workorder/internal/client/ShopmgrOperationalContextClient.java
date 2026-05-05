@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -22,8 +23,8 @@ public class ShopmgrOperationalContextClient {
     private final RestClient restClient;
 
     public ShopmgrOperationalContextClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.shopmgr.base-url:http://localhost:8080}") String shopmgrBaseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.shopmgr.base-url:http://api-gateway}") String shopmgrBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(shopmgrBaseUrl).build();
     }
 
@@ -37,12 +38,14 @@ public class ShopmgrOperationalContextClient {
         try {
             return restClient
                     .get()
-                    .uri("/v1/shopmgr/workorders/{workorderId}/operationalContext", workorderId)
+                    .uri("/shop-manager/v1/shopmgr/workorders/{workorderId}/operationalContext", workorderId)
                     .retrieve()
                     .body(OperationalContextResponse.class);
         } catch (RestClientResponseException e) {
             throw e;
         } catch (ResourceAccessException e) {
+            throw new IllegalStateException("Shopmgr unavailable: " + e.getMessage(), e);
+        } catch (Exception e) {
             throw new IllegalStateException("Shopmgr unavailable: " + e.getMessage(), e);
         }
     }
@@ -57,9 +60,10 @@ public class ShopmgrOperationalContextClient {
         try {
             List<BayAvailabilityDto> result = restClient
                     .get()
-                    .uri("/v1/shopmgr/locations/{locationId}/bays", locationId)
+                    .uri("/shop-manager/v1/shopmgr/locations/{locationId}/bays", locationId)
                     .retrieve()
-                    .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {});
+                    .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {
+                    });
             return result != null ? result : List.of();
         } catch (RestClientResponseException e) {
             if (e.getStatusCode().value() == 404) {
@@ -67,6 +71,9 @@ public class ShopmgrOperationalContextClient {
             }
             throw e;
         } catch (ResourceAccessException e) {
+            log.warn("Shopmgr unavailable when fetching bays for location {}: {}", locationId, e.getMessage());
+            return List.of();
+        } catch (Exception e) {
             log.warn("Shopmgr unavailable when fetching bays for location {}: {}", locationId, e.getMessage());
             return List.of();
         }
@@ -79,5 +86,6 @@ public class ShopmgrOperationalContextClient {
      * @param bayName human-readable bay name
      * @param status  bay status: OPEN, CLOSED, RESERVED, UNDER_MAINTENANCE, etc.
      */
-    public record BayAvailabilityDto(UUID bayId, String bayName, String status) {}
+    public record BayAvailabilityDto(UUID bayId, String bayName, String status) {
+    }
 }
