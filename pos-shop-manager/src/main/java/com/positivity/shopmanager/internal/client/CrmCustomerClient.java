@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.client;
 
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
+import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
@@ -16,7 +17,7 @@ public class CrmCustomerClient {
 
     private final RestClient crmRestClient;
 
-    @Value("${pos.crm.customer-base-url:http://localhost:8080/v1/customers}")
+    @Value("${pos.crm.customer-base-url:http://api-gateway}")
     private String customerBaseUrl;
 
     public CrmCustomerClient(@Qualifier("crmRestClient") RestClient crmRestClient) {
@@ -27,7 +28,7 @@ public class CrmCustomerClient {
         try {
             Map<?, ?> payload = crmRestClient
                     .get()
-                    .uri(customerBaseUrl + "/{customerId}", customerId)
+                    .uri(customerBaseUrl + "/customer/v1/customers/{customerId}", customerId)
                     .retrieve()
                     .body(Map.class);
             if (payload == null) {
@@ -36,8 +37,10 @@ public class CrmCustomerClient {
             @SuppressWarnings("unchecked")
             Map<String, Object> typedPayload = (Map<String, Object>) payload;
             return typedPayload;
-        } catch (HttpClientErrorException.NotFound exception) {
+        } catch (HttpClientErrorException.NotFound _) {
             throw new CrmCustomerNotFoundException(customerId);
+        } catch (Exception e) {
+            throw new CrmUnavailableException("CRM is unavailable: " + e.getMessage(), e);
         }
     }
 }
