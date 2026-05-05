@@ -25,7 +25,9 @@ This analysis is based on a repo-wide scan of `RestClient`, `RestClient.Builder`
 
 ### What is missing
 
-- There is no shared production `@LoadBalanced RestClient.Builder` pattern used across services.
+- A shared production `@LoadBalanced RestClient.Builder` pattern now exists in multiple modules
+  (for example: `pos-catalog` SecurityConfig, `pos-customer` SecurityConfig, `pos-people`
+  RestClientConfig, `pos-shop-manager` SecurityConfig, and `pos-mcp-server` McpServerConfiguration).
 - Most `RestClient` usage still depends on explicit base URLs such as:
   - `http://pos-security-service:8080`
   - `http://pos-people:8080`
@@ -814,18 +816,22 @@ Note that `pos-mcp-server/src/main/java/com/positivity/mcp/internal/discovery/Op
 
 ---
 
-### A3. Only the Gateway Has @LoadBalanced — and It Uses WebClient, Not RestClient
+### A3. Load-balanced builders exist in multiple modules (gateway + RestClient builders)
 
-The entire codebase has exactly one `@LoadBalanced` annotation:
+Multiple modules now declare `@LoadBalanced` load-balanced client builders. The gateway continues to provide
+a `@LoadBalanced WebClient.Builder` (GatewayWebClientConfig), and several other modules expose
+`@LoadBalanced RestClient.Builder` beans in their configuration classes (for example: `pos-catalog`
+SecurityConfig, `pos-customer` SecurityConfig, `pos-people` RestClientConfig, `pos-shop-manager`
+SecurityConfig, and `pos-mcp-server` McpServerConfiguration). Spring Cloud LoadBalancer supports both
+WebClient and RestClient use cases; the key point is that the repository now contains multiple
+load-balanced builder beans, so migration guidance should treat the gateway pattern as an example but
+acknowledge these additional RestClient builder usages.
 
-```
-pos-api-gateway/.../GatewayWebClientConfig.java
-@LoadBalanced WebClient.Builder loadBalancedWebClientBuilder()
-```
-
-Every other module uses plain `RestClient.Builder` with no `@LoadBalanced`. Spring Cloud LoadBalancer supports both, but the annotation semantics differ: `@LoadBalanced` is applied to the builder bean at construction time, and the resulting client intercepts all URIs that match a registered service ID. The gateway `WebClient.Builder` is the only proven pattern in the codebase and should be treated as the reference implementation for the migration.
-
-**Implication for shared module placement:** If the shared `@LoadBalanced RestClient.Builder` bean is placed in `pos-security-common`, that module will gain a Spring Cloud LoadBalancer dependency. Modules that import `pos-security-common` for auth purposes only will pick up this dependency whether they need it or not. Consider whether a new lightweight `pos-client-common` module is preferable to polluting the security common module with transport concerns.
+**Implication for shared module placement:** If the shared `@LoadBalanced RestClient.Builder` bean is placed
+in `pos-security-common`, that module will gain a Spring Cloud LoadBalancer dependency. Modules that import
+`pos-security-common` for auth purposes only will pick up this dependency whether they need it or not.
+Consider whether a new lightweight `pos-client-common` module is preferable to avoid coupling transport concerns
+into the security common module.
 
 ---
 
