@@ -2,7 +2,7 @@ name: Backend CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -10,7 +10,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
   pull_request:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -125,10 +125,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Install all modules (skip tests)
         run: ./mvnw install -DskipTests -DskipITs -T 1C -B -q
+
+      - name: Preload Surefire JUnit provider for offline jobs
+        run: ./mvnw org.apache.maven.plugins:maven-dependency-plugin:3.8.1:get
+          -Dartifact=org.apache.maven.surefire:surefire-junit-platform:3.5.5
+          -Dtransitive=true -B -q
 
       - name: Save reactor build to cache
         uses: actions/cache/save@v4
@@ -139,7 +145,7 @@ jobs:
   unit-tests:
     name: Unit Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: [detect-test-modules, build-reactor]
+    needs: [ detect-test-modules, build-reactor ]
     if: needs.detect-test-modules.outputs.has-changes == 'true'
 
     strategy:
@@ -163,7 +169,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Restore reactor build cache
         uses: actions/cache/restore@v4
@@ -179,7 +186,8 @@ jobs:
         run: ./scripts/check-flyway-hygiene.sh
 
       - name: Run unit tests
-        run: ./mvnw -pl ${{ matrix.module }} test org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
+        run: ./mvnw -pl ${{ matrix.module }} test
+          org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
 
       - name: Upload test results
         if: always()
@@ -203,8 +211,10 @@ jobs:
   integration-tests-modules:
     name: Integration Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: [detect-test-modules, build-reactor]
-    if: needs.detect-test-modules.outputs.has-changes == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    needs: [ detect-test-modules, build-reactor ]
+    if: needs.detect-test-modules.outputs.has-changes == 'true' &&
+      (github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
+      && github.ref == 'refs/heads/main'))
 
     strategy:
       fail-fast: false
@@ -227,7 +237,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Restore reactor build cache
         uses: actions/cache/restore@v4
@@ -251,9 +262,10 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    needs: [ unit-tests ]
     # Only run on main branch pushes or when pom.xml files change (dependency updates)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.changed_files, 'pom.xml')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      contains(github.event.pull_request.changed_files, 'pom.xml')
 
     steps:
       - name: Checkout code
@@ -270,7 +282,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Install internal snapshot artifacts
         run: ./mvnw install -DskipTests -DskipITs -B -q
@@ -312,7 +325,7 @@ jobs:
   docker-build:
     name: Detect Changed Services
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    needs: [ unit-tests ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
@@ -375,10 +388,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build service JAR
-        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T 1C -B
+        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T
+          1C -B
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -413,12 +428,13 @@ jobs:
 
       - name: Skip Docker Hub push
         if: vars.ENABLE_DOCKERHUB_PUSH != 'true'
-        run: echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to publish from this workflow."
+        run: echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to
+          publish from this workflow."
 
   code-quality:
     name: Incremental Code Quality Analysis
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    needs: [ unit-tests ]
     if: github.event_name != 'schedule'
 
     steps:
@@ -438,7 +454,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Run Checkstyle
         if: github.event_name != 'pull_request'
@@ -497,7 +514,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
@@ -530,7 +548,7 @@ jobs:
   integration-test:
     name: Integration Tests with Docker Compose
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    needs: [ unit-tests ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:
@@ -568,7 +586,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+          key: ${{ runner.os }}-maven-wrapper-${{
+            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build all modules
         run: ./mvnw clean package -DskipTests -DskipITs -B
@@ -640,7 +659,6 @@ jobs:
             exit 1
           fi
           echo "Build succeeded!"
-
       # Uncomment to enable Slack notifications
       # - name: Send Slack notification
       #   if: always()
