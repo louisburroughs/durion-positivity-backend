@@ -39,7 +39,7 @@ public class InventoryClientImpl implements InventoryClient {
                 AvailabilityServiceResponse response = restClient
                                 .get()
                                 .uri(uriBuilder -> uriBuilder
-                                                .path("/v1/inventory/availability/query")
+                                                .path("/inventory/v1/inventory/availability/query")
                                                 .queryParam("productSku", productSku)
                                                 .queryParam("locationId", locationId)
                                                 .build())
@@ -67,7 +67,7 @@ public class InventoryClientImpl implements InventoryClient {
                         LeadTimeServiceResponse response = restClient
                                         .get()
                                         .uri(uriBuilder -> uriBuilder
-                                                        .path("/v1/inventory/availability/lead-time")
+                                                        .path("/inventory/v1/inventory/availability/lead-time")
                                                         .queryParam("productId", productId)
                                                         .queryParam("locationId", locationId)
                                                         .build())

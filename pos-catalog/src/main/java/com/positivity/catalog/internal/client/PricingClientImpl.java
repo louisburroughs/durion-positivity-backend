@@ -36,7 +36,7 @@ public class PricingClientImpl implements PricingClient {
         log.debug("Fetching price quote: productId={}, locationId={}", productId, locationId);
         PriceQuoteRequest body = new PriceQuoteRequest(productId, 1, locationId, customerTierId);
 
-        PriceQuoteServiceResponse response = restClient.post().uri("/v1/price/quotes").body(body).retrieve()
+        PriceQuoteServiceResponse response = restClient.post().uri("/price/v1/price/quotes").body(body).retrieve()
                 .body(PriceQuoteServiceResponse.class);
 
         if (response == null || response.msrp() == null) {

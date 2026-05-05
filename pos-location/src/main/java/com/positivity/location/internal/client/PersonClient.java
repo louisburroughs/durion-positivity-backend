@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
@@ -22,9 +23,12 @@ public class PersonClient {
     public PersonDTO getPersonById(Long id) {
         try {
             return restClient.get().uri("/people/v1/people/{id}", id).retrieve().body(PersonDTO.class);
-        } catch (Exception e) {
-            log.error("Failed to fetch person {}", id, e);
+        } catch (HttpClientErrorException.NotFound e) {
+            log.debug("Person not found: id={}", id);
             return null;
+        } catch (Exception e) {
+            log.error("Failed to fetch person {}: {}", id, e.getMessage(), e);
+            throw new RuntimeException("Failed to fetch person from People service: " + e.getMessage(), e);
         }
     }
 }
