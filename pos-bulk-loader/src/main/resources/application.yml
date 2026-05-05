@@ -69,9 +69,9 @@ bulk-loader:
   storage:
     local-root: ${BULK_LOADER_STORAGE_ROOT:/tmp/bulk-loader}
   tus:
-    max-upload-size: ${BULK_LOADER_TUS_MAX_UPLOAD_SIZE:536870912}  # 512 MB
+    max-upload-size: ${BULK_LOADER_TUS_MAX_UPLOAD_SIZE:536870912} # 512 MB
     expiry-hours: ${BULK_LOADER_TUS_EXPIRY_HOURS:24}
-    cleanup-interval-ms: ${BULK_LOADER_TUS_CLEANUP_INTERVAL_MS:3600000}  # 1 hour
+    cleanup-interval-ms: ${BULK_LOADER_TUS_CLEANUP_INTERVAL_MS:3600000} # 1 hour
 
 springdoc:
   api-docs:

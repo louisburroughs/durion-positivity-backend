@@ -38,7 +38,7 @@ public class EventTypeInitializer implements ApplicationRunner {
             @Value("${pos.events.api-secret:}") String apiSecret,
             @Value("${pos-events.registration.enabled:true}") boolean enabled) {
         this.restClient = restClientBuilder
-            .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
+                .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
                 .build();
         this.initializerSupport = new EventTypeInitializerSupport(SERVICE_NAME);
         this.apiSecret = apiSecret;
