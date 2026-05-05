@@ -16,40 +16,40 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 class McpServerConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner =
-            new ApplicationContextRunner().withUserConfiguration(McpServerConfiguration.class, BearerTokenRelayInterceptor.class);
+  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+      .withUserConfiguration(McpServerConfiguration.class, BearerTokenRelayInterceptor.class);
 
-    @AfterEach
-    void clearRequestContext() {
-        RequestContextHolder.resetRequestAttributes();
-    }
+  @AfterEach
+  void clearRequestContext() {
+    RequestContextHolder.resetRequestAttributes();
+  }
 
-    @Test
-    void exposesPlainAndLoadBalancedBuilders_andRelaysBearerTokenOnLoadBalancedBuilder() {
-        contextRunner.run(context -> {
-            assertThat(context).hasBean("restClientBuilder");
-            assertThat(context).hasBean("loadBalancedRestClientBuilder");
+  @Test
+  void exposesPlainAndLoadBalancedBuilders_andRelaysBearerTokenOnLoadBalancedBuilder() {
+    contextRunner.run(context -> {
+      assertThat(context).hasBean("restClientBuilder");
+      assertThat(context).hasBean("loadBalancedRestClientBuilder");
 
-            RestClient.Builder primaryBuilder = context.getBean(RestClient.Builder.class);
-            RestClient.Builder plainBuilder = context.getBean("restClientBuilder", RestClient.Builder.class);
-            RestClient.Builder loadBalancedBuilder =
-                    context.getBean("loadBalancedRestClientBuilder", RestClient.Builder.class);
+      RestClient.Builder primaryBuilder = context.getBean(RestClient.Builder.class);
+      RestClient.Builder plainBuilder = context.getBean("restClientBuilder", RestClient.Builder.class);
+      RestClient.Builder loadBalancedBuilder = context.getBean("loadBalancedRestClientBuilder",
+          RestClient.Builder.class);
 
-            assertThat(primaryBuilder).isSameAs(plainBuilder);
-            assertThat(loadBalancedBuilder).isNotSameAs(plainBuilder);
+      assertThat(primaryBuilder).isSameAs(plainBuilder);
+      assertThat(loadBalancedBuilder).isNotSameAs(plainBuilder);
 
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.addHeader("Authorization", "Bearer relayed-token");
-            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      request.addHeader("Authorization", "Bearer relayed-token");
+      RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
-            MockRestServiceServer server = MockRestServiceServer.bindTo(loadBalancedBuilder).build();
-            server.expect(requestTo("http://api-gateway/test"))
-                    .andExpect(header("Authorization", "Bearer relayed-token"))
-                    .andRespond(withSuccess());
+      MockRestServiceServer server = MockRestServiceServer.bindTo(loadBalancedBuilder).build();
+      server.expect(requestTo("http://api-gateway/test"))
+          .andExpect(header("Authorization", "Bearer relayed-token"))
+          .andRespond(withSuccess());
 
-            loadBalancedBuilder.baseUrl("http://api-gateway").build().get().uri("/test").retrieve().toBodilessEntity();
+      loadBalancedBuilder.baseUrl("http://api-gateway").build().get().uri("/test").retrieve().toBodilessEntity();
 
-            server.verify();
-        });
-    }
+      server.verify();
+    });
+  }
 }

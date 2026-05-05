@@ -11,22 +11,24 @@ import org.springframework.web.client.RestClient;
 /**
  * Inventory service security configuration.
  *
- * <p>Imports shared gateway security so inventory uses the same auth model
- * as other backend services, including public OpenAPI and actuator endpoints.</p>
+ * <p>
+ * Imports shared gateway security so inventory uses the same auth model
+ * as other backend services, including public OpenAPI and actuator endpoints.
+ * </p>
  */
 @Configuration
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
 
-    @Bean
-    @Primary
-    public RestClient.Builder restClientBuilder() {
-        return RestClient.builder();
-    }
+	@Bean
+	@Primary
+	public RestClient.Builder restClientBuilder() {
+		return RestClient.builder();
+	}
 
-    @Bean
-    @LoadBalanced
-    public RestClient.Builder loadBalancedRestClientBuilder() {
-        return RestClient.builder();
-    }
+	@Bean
+	@LoadBalanced
+	public RestClient.Builder loadBalancedRestClientBuilder() {
+		return RestClient.builder();
+	}
 }

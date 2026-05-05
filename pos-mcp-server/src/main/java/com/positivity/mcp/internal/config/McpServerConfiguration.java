@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({McpServerProperties.class, LlmApiProperties.class})
+@EnableConfigurationProperties({ McpServerProperties.class, LlmApiProperties.class })
 public class McpServerConfiguration {
 
     @Bean
@@ -48,8 +48,7 @@ public class McpServerConfiguration {
         // Build server with tool capability enabled; ToolBootstrapRunner adds tools
         // after
         // discovery.
-        var capabilities =
-                McpSchema.ServerCapabilities.builder().tools(Boolean.TRUE).build();
+        var capabilities = McpSchema.ServerCapabilities.builder().tools(Boolean.TRUE).build();
 
         return McpServer.async(transportProvider)
                 .serverInfo("pos-mcp-server", "0.1.0-SNAPSHOT")
