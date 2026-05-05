@@ -10,19 +10,19 @@
       "name": "pos.inventory.base-url",
       "type": "java.lang.String",
       "description": "Base URL for the pos-inventory service.",
-      "defaultValue": "http://pos-inventory"
+      "defaultValue": "http://api-gateway"
     },
     {
       "name": "pos.price.base-url",
       "type": "java.lang.String",
       "description": "Base URL for the pos-price service.",
-      "defaultValue": "http://pos-price"
+      "defaultValue": "http://api-gateway"
     },
     {
       "name": "pos.events.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the pos-events/event-receiver API.",
-      "defaultValue": "http://localhost:8085"
+      "defaultValue": "http://pos-event-receiver:8080"
     },
     {
       "name": "pos.events.api-secret",
@@ -33,7 +33,7 @@
       "name": "pos.security.base-url",
       "type": "java.lang.String",
       "description": "Base URL for permission registration against pos-security-service.",
-      "defaultValue": "http://pos-security-service:8086"
+      "defaultValue": "http://pos-security-service:8080"
     },
     {
       "name": "pos.security.permission-registration.enabled",
