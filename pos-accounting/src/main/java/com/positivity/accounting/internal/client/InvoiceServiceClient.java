@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * REST client for Invoice service integration.
@@ -47,7 +46,7 @@ public class InvoiceServiceClient {
 
     private final CircuitBreaker invoiceServiceCircuitBreaker;
 
-    @Value("${pos.invoice.service.url:http://pos-invoice:8085}")
+    @Value("${pos.invoice.service.url:http://api-gateway}")
     private String invoiceServiceUrl;
 
     /**
@@ -65,7 +64,7 @@ public class InvoiceServiceClient {
             try {
                 InvoiceDetails details = restClient
                         .get()
-                        .uri(invoiceServiceUrl + "/v1/invoices/{id}", invoiceId)
+                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}", invoiceId)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (request, httpResponse) -> {
                             log.warn(
@@ -90,7 +89,7 @@ public class InvoiceServiceClient {
                         details.getBalanceDue());
 
                 return details;
-            } catch (RestClientException e) {
+            } catch (Exception e) {
                 log.error("Failed to fetch invoice details for {}: {}", invoiceId, e.getMessage(), e);
                 throw new InvoiceServiceException("Failed to fetch invoice details: " + e.getMessage(), e);
             }
@@ -132,7 +131,7 @@ public class InvoiceServiceClient {
             try {
                 ApplyPaymentToInvoiceResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/v1/invoices/{id}/apply-payment", invoiceId)
+                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/apply-payment", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -158,7 +157,7 @@ public class InvoiceServiceClient {
                         response.getBalanceAfter());
 
                 return response;
-            } catch (RestClientException e) {
+            } catch (Exception e) {
                 log.error("Failed to apply payment to invoice {}: {}", invoiceId, e.getMessage(), e);
                 throw new InvoiceServiceException("Failed to apply payment to invoice: " + e.getMessage(), e);
             }
@@ -200,7 +199,7 @@ public class InvoiceServiceClient {
             try {
                 ReversePaymentApplicationResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/v1/invoices/{id}/reverse-payment", invoiceId)
+                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/reverse-payment", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -226,7 +225,7 @@ public class InvoiceServiceClient {
                         response.getBalanceDue());
 
                 return response;
-            } catch (RestClientException e) {
+            } catch (Exception e) {
                 log.error("Failed to reverse payment on invoice {}: {}", invoiceId, e.getMessage(), e);
                 throw new InvoiceServiceException("Failed to reverse payment on invoice: " + e.getMessage(), e);
             }
@@ -265,7 +264,7 @@ public class InvoiceServiceClient {
             try {
                 ApplyCreditMemoResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/v1/invoices/{id}/apply-credit-memo", invoiceId)
+                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/apply-credit-memo", invoiceId)
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -291,7 +290,7 @@ public class InvoiceServiceClient {
                         response.getBalanceAfter());
 
                 return response;
-            } catch (RestClientException e) {
+            } catch (Exception e) {
                 log.error("Failed to apply credit memo to invoice {}: {}", invoiceId, e.getMessage(), e);
                 throw new InvoiceServiceException("Failed to apply credit memo to invoice: " + e.getMessage(), e);
             }
