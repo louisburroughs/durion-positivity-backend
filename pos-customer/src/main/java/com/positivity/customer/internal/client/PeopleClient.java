@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -23,8 +24,8 @@ public class PeopleClient {
     private final boolean allowLocalFallback;
 
     public PeopleClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.people.base-url:http://localhost:8084}") String peopleBaseUrl,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.people.base-url:http://api-gateway}") String peopleBaseUrl,
             @Value("${pos.people.allow-local-fallback:false}") boolean allowLocalFallback) {
         this.restClient = restClientBuilder.baseUrl(peopleBaseUrl).build();
         this.allowLocalFallback = allowLocalFallback;
@@ -42,7 +43,7 @@ public class PeopleClient {
         try {
             ResolvePersonResponse response = restClient
                     .post()
-                    .uri("/v1/people/resolve")
+                    .uri("/people/v1/people/resolve")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()

@@ -61,6 +61,6 @@ pos:
         preload-location-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_LOCATION:true}
         preload-global-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_GLOBAL:true}
   location-service:
-    base-url: ${POS_LOCATION_SERVICE_BASE_URL:http://pos-location:8084}
+    base-url: ${POS_LOCATION_SERVICE_BASE_URL:http://api-gateway}
   security-service:
-    base-url: ${POS_SECURITY_SERVICE_BASE_URL:http://pos-security-service:8086}
+    base-url: ${POS_SECURITY_SERVICE_BASE_URL:http://api-gateway}

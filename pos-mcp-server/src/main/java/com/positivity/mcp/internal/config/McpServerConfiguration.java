@@ -10,14 +10,29 @@ import io.modelcontextprotocol.spec.McpSchema;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.restclient.RestClientCustomizer;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({McpServerProperties.class, LlmApiProperties.class})
+@EnableConfigurationProperties({ McpServerProperties.class, LlmApiProperties.class })
 public class McpServerConfiguration {
+
+    @Bean
+    @Primary
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder(@NonNull BearerTokenRelayInterceptor interceptor) {
+        return RestClient.builder().requestInterceptors(list -> list.add(interceptor));
+    }
 
     @Bean
     public HttpServletSseServerTransportProvider transportProvider(@NonNull McpServerProperties properties) {
@@ -33,8 +48,7 @@ public class McpServerConfiguration {
         // Build server with tool capability enabled; ToolBootstrapRunner adds tools
         // after
         // discovery.
-        var capabilities =
-                McpSchema.ServerCapabilities.builder().tools(Boolean.TRUE).build();
+        var capabilities = McpSchema.ServerCapabilities.builder().tools(Boolean.TRUE).build();
 
         return McpServer.async(transportProvider)
                 .serverInfo("pos-mcp-server", "0.1.0-SNAPSHOT")

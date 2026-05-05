@@ -36,10 +36,10 @@ eureka:
 
 pos:
   price:
-    base-url: http://pos-price
+    base-url: http://api-gateway
     default-customer-tier-id: ${POS_PRICE_DEFAULT_CUSTOMER_TIER_ID:00000000-0000-0000-0000-000000000001}
   inventory:
-    base-url: http://pos-inventory
+    base-url: http://api-gateway
 
 logging:
   level:

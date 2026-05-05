@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class CatalogFacadeTool {
     private final String categoryUriTemplate;
 
     public CatalogFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.catalog.base-url}") @NonNull String baseUrl,
             @Value("${pos.catalog.product-uri-template}") @NonNull String productUriTemplate,
             @Value("${pos.catalog.search-uri-template}") @NonNull String catalogSearchUriTemplate,

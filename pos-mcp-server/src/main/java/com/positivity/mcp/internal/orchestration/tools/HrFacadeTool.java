@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -19,7 +20,7 @@ public class HrFacadeTool {
     private final String scheduleUriTemplate;
 
     public HrFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.hr.employee-base-url}") @NonNull String employeeBaseUrl,
             @Value("${pos.hr.people-base-url}") @NonNull String peopleBaseUrl,
             @Value("${pos.hr.availability-base-url}") @NonNull String availabilityBaseUrl,

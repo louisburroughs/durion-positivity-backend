@@ -25,7 +25,7 @@ public class CustomerRegistrationClient {
         List<CustomerPersonSearchResponse> response = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/crm/persons")
+                        .path("/customer/v1/crm/persons")
                         .queryParamIfPresent("name", java.util.Optional.ofNullable(name))
                         .queryParamIfPresent("email", java.util.Optional.ofNullable(email))
                         .queryParamIfPresent("phone", java.util.Optional.ofNullable(phone))
@@ -37,7 +37,8 @@ public class CustomerRegistrationClient {
                     throw new IllegalStateException("Customer person search failed with status "
                             + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {});
+                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {
+                });
         return response == null ? List.of() : response;
     }
 }

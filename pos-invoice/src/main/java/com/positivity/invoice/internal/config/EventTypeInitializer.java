@@ -23,7 +23,7 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     public EventTypeInitializer(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
+            @Value("${pos.events.base-url:http://pos-event-receiver:8080}") String eventServiceBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret) {
         this.restClient = restClientBuilder
                 .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")

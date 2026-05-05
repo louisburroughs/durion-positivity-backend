@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class WorkorderFacadeTool {
     private final String workorderStatusUriTemplate;
 
     public WorkorderFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.workorder.base-url}") @NonNull String baseUrl,
             @Value("${pos.workorder.workorder-uri-template}") @NonNull String workorderUriTemplate,
             @Value("${pos.workorder.search-uri-template}") @NonNull String workorderSearchUriTemplate,

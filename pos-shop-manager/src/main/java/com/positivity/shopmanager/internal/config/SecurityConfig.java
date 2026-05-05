@@ -4,9 +4,12 @@ import com.positivity.security.common.GatewaySecurityConfig;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -31,13 +34,25 @@ import org.springframework.web.client.RestClient;
 public class SecurityConfig {
 
     @Bean
+    @Primary
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
     public RestClient restClient() {
         return RestClient.create();
     }
 
     @Bean(name = "crmRestClient")
     public RestClient crmRestClient(
-            RestClient.Builder builder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
             @Value("${pos.crm.connect-timeout-ms:200}") int connectTimeoutMs,
             @Value("${pos.crm.read-timeout-ms:2000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

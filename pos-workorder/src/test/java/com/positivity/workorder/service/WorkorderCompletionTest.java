@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -103,7 +104,7 @@ class WorkorderCompletionTest {
     private ObjectMapper objectMapper;
 
     @Mock
-    private org.springframework.web.client.RestClient restClient;
+    private CustomerValidationClient customerValidationClient;
 
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
@@ -124,8 +125,8 @@ class WorkorderCompletionTest {
     void setUp() {
         // Mock authenticated user with gateway-injected details so snapshot/audit flows
         // have an actor
-        TestingAuthenticationToken authentication =
-                new TestingAuthenticationToken("test-user", "password", "ROLE_USER");
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken("test-user", "password",
+                "ROLE_USER");
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USER_ID,
                 AUTH_USER_ID,
@@ -156,7 +157,7 @@ class WorkorderCompletionTest {
                 estimateItemRepository,
                 workorderServiceRepository,
                 workorderPartRepository,
-                restClient,
+                customerValidationClient,
                 stateMachine,
                 auditEventRepository,
                 idempotencyService,
@@ -341,13 +342,13 @@ class WorkorderCompletionTest {
     }
 
     private void stubCompletionPreconditionsPass() {
-        com.positivity.workorder.internal.entity.WorkorderServiceLine billableService =
-                mock(com.positivity.workorder.internal.entity.WorkorderServiceLine.class);
+        com.positivity.workorder.internal.entity.WorkorderServiceLine billableService = mock(
+                com.positivity.workorder.internal.entity.WorkorderServiceLine.class);
         when(billableService.getStatus()).thenReturn(WorkorderItemStatus.COMPLETED);
         when(billableService.getLineTotal()).thenReturn(BigDecimal.TEN);
 
         when(changeRequestRepository.findByWorkorder_IdAndStatus(
-                        testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
+                testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
                 .thenReturn(List.of());
         when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of(billableService));
         when(workorderPartRepository.findByWorkorderId(testWorkorderId)).thenReturn(List.of());

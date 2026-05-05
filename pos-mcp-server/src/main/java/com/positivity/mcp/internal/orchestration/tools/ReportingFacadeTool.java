@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class ReportingFacadeTool {
     private final String revenueReportUriTemplate;
 
     public ReportingFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.reporting.base-url}") @NonNull String baseUrl,
             @Value("${pos.reporting.sales-report-uri-template}") @NonNull String salesReportUriTemplate,
             @Value("${pos.reporting.inventory-report-uri-template}") @NonNull String inventoryReportUriTemplate,

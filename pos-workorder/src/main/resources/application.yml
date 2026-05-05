@@ -65,12 +65,24 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  gateway:
+    base-url: ${POS_GATEWAY_BASE_URL:http://api-gateway}
   customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8084}
+    base-url: ${POS_CUSTOMER_BASE_URL:http://api-gateway}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+  invoice:
+    base-url: ${POS_INVOICE_BASE_URL:http://api-gateway}
+  inventory:
+    base-url: ${POS_INVENTORY_BASE_URL:http://api-gateway}
+  people:
+    base-url: ${POS_PEOPLE_BASE_URL:http://api-gateway}
+  shopmgr:
+    base-url: ${POS_SHOPMGR_BASE_URL:http://api-gateway}
+  documents:
+    base-url: ${POS_DOCUMENTS_BASE_URL:http://pos-documents:8080}
 
 workorder:
   kafka:

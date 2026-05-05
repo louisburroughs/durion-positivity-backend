@@ -39,16 +39,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import com.positivity.workorder.internal.client.CustomerValidationClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.client.RestClient;
 
 @Service
 @Slf4j
@@ -64,18 +63,12 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final EstimateItemRepository estimateItemRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final RestClient restClient;
+    private final CustomerValidationClient customerValidationClient;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
     private final ShopmgrOperationalContextClient shopmgrClient;
-
-    @Value("${customer.service.url:http://localhost:8080/v1/customers}")
-    private String customerServiceUrl;
-
-    @Value("${customer.approval.service.url:http://localhost:8080/v1/approvals}")
-    private String customerApprovalServiceUrl;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -347,31 +340,11 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private boolean checkCustomerRequirements(UUID customerId) {
-        try {
-            Boolean result = restClient
-                    .get()
-                    .uri(customerServiceUrl + "/" + customerId + "/requirements-met")
-                    .retrieve()
-                    .body(Boolean.class);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            log.error("Failed to check customer requirements", e);
-            return false;
-        }
+        return customerValidationClient.checkRequirementsMet(customerId);
     }
 
     private boolean checkCustomerApproval(UUID approvalId) {
-        try {
-            Boolean result = restClient
-                    .get()
-                    .uri(customerApprovalServiceUrl + "/" + approvalId + "/is-approved")
-                    .retrieve()
-                    .body(Boolean.class);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            log.error("Failed to check customer approval", e);
-            return false;
-        }
+        return customerValidationClient.checkApprovalStatus(approvalId);
     }
 
     @Override

@@ -21,7 +21,7 @@ public class TaxServiceClient {
 
     public TaxServiceClient(
             RestClient.Builder restClientBuilder,
-            @Value("${invoice.tax.base-url:http://pos-tax:8090/v1/tax}") String taxServiceBaseUrl) {
+            @Value("${invoice.tax.base-url:http://pos-tax:8091/v1/tax}") String taxServiceBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(taxServiceBaseUrl).build();
     }
 
@@ -60,8 +60,7 @@ public class TaxServiceClient {
         if (value == null) {
             return "null";
         }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

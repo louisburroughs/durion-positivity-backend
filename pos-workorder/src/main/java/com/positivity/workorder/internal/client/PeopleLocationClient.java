@@ -34,7 +34,7 @@ public class PeopleLocationClient {
         try {
             PrimaryLocationResponse response = peopleServiceRestClient
                     .get()
-                    .uri("/v1/people/me/primary-location")
+                    .uri("/people/v1/people/me/primary-location")
                     .retrieve()
                     .body(PrimaryLocationResponse.class);
 
@@ -56,5 +56,6 @@ public class PeopleLocationClient {
      * Minimal response record for the primary location endpoint.
      * Avoids cross-module dependency on pos-people DTOs.
      */
-    private record PrimaryLocationResponse(UUID locationId) {}
+    private record PrimaryLocationResponse(UUID locationId) {
+    }
 }

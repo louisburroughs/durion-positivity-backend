@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class AdminFacadeTool {
     private final String auditSearchUriTemplate;
 
     public AdminFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.security.users.base-url}") @NonNull String usersBaseUrl,
             @Value("${pos.security.audit.base-url}") @NonNull String auditBaseUrl,
             @Value("${pos.security.user-permissions-path-template}") @NonNull String userPermissionsPathTemplate,

@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * REST client for invoice regeneration through pos-workorder.
@@ -22,14 +21,14 @@ public class WorkorderInvoiceClient {
     @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
 
-    @Value("${pos.workorder.service.url:http://pos-workorder:8080}")
+    @Value("${pos.workorder.service.url:http://api-gateway}")
     private String workorderServiceUrl;
 
     public InvoiceGenerationResponse regenerateInvoiceFromWorkorder(UUID workorderId, String idempotencyKey) {
         try {
             RestClient.RequestBodySpec request = restClient
                     .post()
-                    .uri(workorderServiceUrl + "/v1/workorders/{workorderId}/generate-invoice", workorderId)
+                    .uri(workorderServiceUrl + "/workorder/v1/workorders/{workorderId}/generate-invoice", workorderId)
                     .header("X-User", "pos-accounting")
                     .header("X-Authorities", "workorder:workorder:generate_invoice");
 
@@ -55,7 +54,7 @@ public class WorkorderInvoiceClient {
             return response;
         } catch (WorkorderServiceException e) {
             throw e;
-        } catch (RestClientException e) {
+        } catch (Exception e) {
             log.error("Failed to regenerate invoice for workorder {}: {}", workorderId, e.getMessage(), e);
             throw new WorkorderServiceException(
                     "Workorder service unavailable while regenerating invoice for workorder " + workorderId, 503, e);

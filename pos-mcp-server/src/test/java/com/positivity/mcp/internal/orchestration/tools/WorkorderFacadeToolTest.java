@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class WorkorderFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-workorder/v1/workorders";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private WorkorderFacadeTool tool;
@@ -27,14 +27,17 @@ class WorkorderFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new WorkorderFacadeTool(builder, BASE_URL);
+        tool = new WorkorderFacadeTool(builder, BASE_URL,
+                "/workorder/v1/workorders/{workorderId}",
+                "/workorder/v1/workorders/search?q={query}",
+                "/workorder/v1/workorders/{workorderId}/status");
     }
 
     @Test
     @DisplayName("getWorkorder sends GET /{workorderId} and returns body")
     void getWorkorder_sendsGetToWorkorderEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/WO-001"))
+                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/WO-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"WO-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +51,7 @@ class WorkorderFacadeToolTest {
     @DisplayName("searchWorkorders sends GET /search?q={query} and returns body")
     void searchWorkorders_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=OPEN"))
+                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?q=OPEN"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +65,7 @@ class WorkorderFacadeToolTest {
     @DisplayName("getWorkorderStatus sends GET /{workorderId}/status and returns body")
     void getWorkorderStatus_sendsGetToStatusEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/WO-001/status"))
+                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/WO-001/status"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"status\":\"IN_PROGRESS\"}", MediaType.APPLICATION_JSON));
 

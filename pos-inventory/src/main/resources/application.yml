@@ -97,3 +97,6 @@ pos:
         #   ]
         # }
         path: ${POS_INVENTORY_RECEIVING_STUB_PATH:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}
+
+gateway:
+  url: ${GATEWAY_URL:http://api-gateway}

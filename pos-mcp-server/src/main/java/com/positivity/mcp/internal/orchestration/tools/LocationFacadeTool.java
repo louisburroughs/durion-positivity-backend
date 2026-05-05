@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class LocationFacadeTool {
     private final String locationInventoryUriTemplate;
 
     public LocationFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.location.base-url}") @NonNull String baseUrl,
             @Value("${pos.location.location-uri-template}") @NonNull String locationUriTemplate,
             @Value("${pos.location.search-uri-template}") @NonNull String locationSearchUriTemplate,

@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class EventsFacadeTool {
     private final String eventHistoryUriTemplate;
 
     public EventsFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.event-receiver.base-url}") @NonNull String baseUrl,
             @Value("${pos.event-receiver.event-types-uri-template}") @NonNull String eventTypesUriTemplate,
             @Value("${pos.event-receiver.search-uri-template}") @NonNull String eventSearchUriTemplate,

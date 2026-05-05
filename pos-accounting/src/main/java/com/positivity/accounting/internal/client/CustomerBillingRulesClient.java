@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * REST client for retrieving billing rules from pos-customer.
@@ -22,14 +21,14 @@ public class CustomerBillingRulesClient {
     @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
 
-    @Value("${pos.customer.service.url:http://pos-customer:8080}")
+    @Value("${pos.customer.service.url:http://api-gateway}")
     private String customerServiceUrl;
 
     public BillingRuleRefResponse getBillingRules(UUID customerId) {
         try {
             BillingRuleRefResponse response = restClient
                     .get()
-                    .uri(customerServiceUrl + "/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
+                    .uri(customerServiceUrl + "/customer/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
                     .header("X-User", "pos-accounting")
                     .header("X-Authorities", "crm:party:view")
                     .retrieve()
@@ -49,7 +48,7 @@ public class CustomerBillingRulesClient {
             return response;
         } catch (CustomerServiceException e) {
             throw e;
-        } catch (RestClientException e) {
+        } catch (Exception e) {
             log.error("Failed to load billing rules for customer {}: {}", customerId, e.getMessage(), e);
             throw new CustomerServiceException(
                     "Customer service unavailable while loading billing rules for customer " + customerId, 503, e);

@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class AccountingFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-accounting/v1/accounting";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private AccountingFacadeTool tool;
@@ -27,14 +27,17 @@ class AccountingFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new AccountingFacadeTool(builder, BASE_URL);
+        tool = new AccountingFacadeTool(builder, BASE_URL,
+                "/accounting/v1/accounting/accounts/{accountId}/balance",
+                "/accounting/v1/accounting/journal-entries/search?q={query}",
+                "/accounting/v1/accounting/summary/{period}");
     }
 
     @Test
     @DisplayName("getAccountBalance sends GET /accounts/{accountId}/balance and returns body")
     void getAccountBalance_sendsGetToBalanceEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/accounts/ACC-001/balance"))
+                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/accounts/ACC-001/balance"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"accountId\":\"ACC-001\",\"balance\":1000.00}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +51,7 @@ class AccountingFacadeToolTest {
     @DisplayName("searchJournalEntries sends GET /journal-entries/search?q={query} and returns body")
     void searchJournalEntries_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/journal-entries/search?q=revenue"))
+                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/journal-entries/search?q=revenue"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"entries\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +65,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getFinancialSummary sends GET /summary/{period} and returns body")
     void getFinancialSummary_sendsGetToSummaryEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/summary/2025-Q1"))
+                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/summary/2025-Q1"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"period\":\"2025-Q1\"}", MediaType.APPLICATION_JSON));
 

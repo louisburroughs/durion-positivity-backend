@@ -6,6 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -17,7 +18,7 @@ public class VehicleFacadeTool {
     private final String customerVehiclesUriTemplate;
 
     public VehicleFacadeTool(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.vehicle.base-url}") @NonNull String baseUrl,
             @Value("${pos.vehicle.vehicle-uri-template}") @NonNull String vehicleUriTemplate,
             @Value("${pos.vehicle.search-uri-template}") @NonNull String vehicleSearchUriTemplate,

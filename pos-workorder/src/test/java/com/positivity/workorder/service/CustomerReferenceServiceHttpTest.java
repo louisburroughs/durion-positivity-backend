@@ -23,7 +23,7 @@ class CustomerReferenceServiceHttpTest {
                 {"data":{"customerName":"Jane Doe","phoneNumber":"+1-555-0100"}}
                 """;
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/customers/" + customerId, 200, payload, callCount);
+        HttpServer server = startServer("/customer/v1/customers/" + customerId, 200, payload, callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
             CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
@@ -42,7 +42,7 @@ class CustomerReferenceServiceHttpTest {
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/customers/" + customerId, 404, "{}", callCount);
+        HttpServer server = startServer("/customer/v1/customers/" + customerId, 404, "{}", callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
             CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
@@ -62,7 +62,7 @@ class CustomerReferenceServiceHttpTest {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer(
-                "/v1/customers/" + customerId,
+                "/customer/v1/customers/" + customerId,
                 200,
                 "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}",
                 callCount);

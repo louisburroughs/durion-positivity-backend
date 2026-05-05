@@ -25,7 +25,9 @@ This analysis is based on a repo-wide scan of `RestClient`, `RestClient.Builder`
 
 ### What is missing
 
-- There is no shared production `@LoadBalanced RestClient.Builder` pattern used across services.
+- A shared production `@LoadBalanced RestClient.Builder` pattern now exists in multiple modules
+  (for example: `pos-catalog` SecurityConfig, `pos-customer` SecurityConfig, `pos-people`
+  RestClientConfig, `pos-shop-manager` SecurityConfig, and `pos-mcp-server` McpServerConfiguration).
 - Most `RestClient` usage still depends on explicit base URLs such as:
   - `http://pos-security-service:8080`
   - `http://pos-people:8080`
@@ -189,10 +191,12 @@ Relevant existing docs in this repo:
 After migration, there should be two distinct truths:
 
 1. Service listen port
+
 - owned by the called service
 - exposed as `server.port` / `SERVER_PORT`
 
 2. Host-published port
+
 - owned by deployment config only
 - used for host access, local browser access, or ops tooling
 
@@ -779,15 +783,15 @@ _Added 2026-05-04. Based on cross-referencing the original analysis against the 
 
 The `spring.application.name` values — which become the Eureka service IDs — were verified across all modules. None carry the `pos-` prefix:
 
-| Module | Eureka Service ID |
-|---|---|
-| `pos-people` | `people` |
-| `pos-security-service` | `security-service` |
-| `pos-accounting` | `accounting` |
-| `pos-shop-manager` | `shop-manager` |
-| `pos-workorder` | `workorder` |
-| `pos-inventory` | `inventory` |
-| `pos-mcp-server` | `mcp-server` |
+| Module                  | Eureka Service ID                                                              |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `pos-people`            | `people`                                                                       |
+| `pos-security-service`  | `security-service`                                                             |
+| `pos-accounting`        | `accounting`                                                                   |
+| `pos-shop-manager`      | `shop-manager`                                                                 |
+| `pos-workorder`         | `workorder`                                                                    |
+| `pos-inventory`         | `inventory`                                                                    |
+| `pos-mcp-server`        | `mcp-server`                                                                   |
 | `pos-service-discovery` | `pos-service-discovery` (Eureka server itself — does not register as a client) |
 
 This confirms the service name mismatch risk identified in the original analysis. It also surfaces a concrete defect addressed below.
@@ -814,18 +818,22 @@ Note that `pos-mcp-server/src/main/java/com/positivity/mcp/internal/discovery/Op
 
 ---
 
-### A3. Only the Gateway Has @LoadBalanced — and It Uses WebClient, Not RestClient
+### A3. Load-balanced builders exist in multiple modules (gateway + RestClient builders)
 
-The entire codebase has exactly one `@LoadBalanced` annotation:
+Multiple modules now declare `@LoadBalanced` load-balanced client builders. The gateway continues to provide
+a `@LoadBalanced WebClient.Builder` (GatewayWebClientConfig), and several other modules expose
+`@LoadBalanced RestClient.Builder` beans in their configuration classes (for example: `pos-catalog`
+SecurityConfig, `pos-customer` SecurityConfig, `pos-people` RestClientConfig, `pos-shop-manager`
+SecurityConfig, and `pos-mcp-server` McpServerConfiguration). Spring Cloud LoadBalancer supports both
+WebClient and RestClient use cases; the key point is that the repository now contains multiple
+load-balanced builder beans, so migration guidance should treat the gateway pattern as an example but
+acknowledge these additional RestClient builder usages.
 
-```
-pos-api-gateway/.../GatewayWebClientConfig.java
-@LoadBalanced WebClient.Builder loadBalancedWebClientBuilder()
-```
-
-Every other module uses plain `RestClient.Builder` with no `@LoadBalanced`. Spring Cloud LoadBalancer supports both, but the annotation semantics differ: `@LoadBalanced` is applied to the builder bean at construction time, and the resulting client intercepts all URIs that match a registered service ID. The gateway `WebClient.Builder` is the only proven pattern in the codebase and should be treated as the reference implementation for the migration.
-
-**Implication for shared module placement:** If the shared `@LoadBalanced RestClient.Builder` bean is placed in `pos-security-common`, that module will gain a Spring Cloud LoadBalancer dependency. Modules that import `pos-security-common` for auth purposes only will pick up this dependency whether they need it or not. Consider whether a new lightweight `pos-client-common` module is preferable to polluting the security common module with transport concerns.
+**Implication for shared module placement:** If the shared `@LoadBalanced RestClient.Builder` bean is placed
+in `pos-security-common`, that module will gain a Spring Cloud LoadBalancer dependency. Modules that import
+`pos-security-common` for auth purposes only will pick up this dependency whether they need it or not.
+Consider whether a new lightweight `pos-client-common` module is preferable to avoid coupling transport concerns
+into the security common module.
 
 ---
 
@@ -836,6 +844,7 @@ ADR-0014 explicitly classifies `pos-tax` as internal-only and states it should d
 The original analysis assesses `pos-invoice`'s `TaxServiceClient` as a "strong candidate" for service discovery. This conflicts with ADR-0014. `pos-invoice` calling `pos-tax` via a discovery-resolved URL would require `pos-tax` to register with Eureka, which violates the established architecture decision.
 
 The correct treatment for `TaxServiceClient` is one of:
+
 - keep it as an explicit `http://pos-tax:{port}` URL (Docker-internal only), or
 - move to in-process direct calls if `pos-tax` is used as a library, or
 - route through the API gateway if `pos-tax` ever needs external exposure (which ADR-0014 says it should not).
@@ -856,7 +865,7 @@ When services call each other directly (bypassing the gateway), only the origina
 
 **All service-to-service calls must route through the API gateway.** This is the only approach that preserves the established auth chain without duplicating gateway logic in `pos-security-common` or introducing a second trust model. It is consistent with ADR-0011 and ADR-0014, which position the gateway as the single enforcement boundary and explicitly prohibit internal services from being reached except via explicit gateway routes.
 
-The service discovery migration therefore applies to how service instances are *resolved*, not to whether calls traverse the gateway. The `@LoadBalanced` client resolves the gateway's own Eureka-registered address rather than a downstream service address directly.
+The service discovery migration therefore applies to how service instances are _resolved_, not to whether calls traverse the gateway. The `@LoadBalanced` client resolves the gateway's own Eureka-registered address rather than a downstream service address directly.
 
 In practice, internal callers that currently use `http://pos-people:8084/v1/...` adopt the pattern:
 
@@ -934,7 +943,7 @@ pos-security-service:
     timeout: 5s
     retries: 5
 
-pos-accounting:   # representative of all other services
+pos-accounting: # representative of all other services
   depends_on:
     pos-security-service:
       condition: service_healthy
@@ -1053,7 +1062,7 @@ servers:
     description: Local gateway
     variables:
       service-base-path:
-        default: v1/customers   # example for pos-customer
+        default: v1/customers # example for pos-customer
 ```
 
 For deployed environments, the SDK consumer overrides `basePath` with the tenant's gateway URL:
@@ -1067,6 +1076,7 @@ The gateway is the correct and only external entry point per ADR-0011 and ADR-00
 **3. Document the override requirement prominently in each `sdk-java-*` module README.**
 
 Until the `servers` definitions are updated, each SDK module README must state:
+
 - The default `basePath` is a local development placeholder only.
 - Non-local consumers must call `apiClient.setBasePath(gatewayUrl)` before making any requests.
 - The expected value is the API gateway base URL for the target environment, not any individual service URL.
@@ -1113,16 +1123,16 @@ The original plan specifies phases but does not define per-wave exit criteria. B
 
 ### A14. Summary: Items to Resolve Before Phase 1
 
-| # | Item | Severity | Status | Blocking? |
-|---|---|---|---|---|
-| A2 | MCP facade tools use `pos-{service}` Docker names, not Eureka IDs | High | Open | Phase 3 |
-| A4 | `pos-tax` must not use Eureka — TaxServiceClient migration plan needs rework | High | Open | Phase 4 |
-| A5 | **Resolved**: all calls route through the gateway; `@LoadBalanced` resolves `api-gateway` not individual services; direct calls only for documented circular-call and startup exceptions | Critical | Recommendation documented | Before Phase 2 |
-| A6 | **Resolved**: exempt infra registration clients from discovery; Docker health checks; Resilience4j retry | Medium | Recommendation documented | Phase 2 |
-| A7 | `workexecRestClient` has correct ID but wrong port — low-risk fix | Low | Open | Phase 4 |
-| A8 | `BearerTokenRelayInterceptor` must be preserved on `@LoadBalanced` builder | High | Open | Phase 3 |
-| A9 | `LoadBalancerClient` vs `@LoadBalanced` — inconsistency needs a style decision | Low | Open | Phase 3 |
-| A10 | `pos-shop-manager` module assessment understates gateway dependency | Medium | Open | Phase 4 |
-| A11 | **Resolved**: Java SDK is external-consumer only; fix `servers.url` in OpenAPI specs to gateway path; internal callers use `@LoadBalanced RestClient` | Medium | Recommendation documented | Pre-Phase 1 |
-| A12 | **Resolved**: Eureka is the platform standard; AWS must run Eureka within each tenant cell; HA and operational requirements documented | N/A | Position confirmed | AWS provisioning |
-| A13 | Per-wave exit criteria missing — defined above | Medium | Pre-Phase 1 |
+| #   | Item                                                                                                                                                                                     | Severity | Status                    | Blocking?        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------- | ---------------- |
+| A2  | MCP facade tools use `pos-{service}` Docker names, not Eureka IDs                                                                                                                        | High     | Open                      | Phase 3          |
+| A4  | `pos-tax` must not use Eureka — TaxServiceClient migration plan needs rework                                                                                                             | High     | Open                      | Phase 4          |
+| A5  | **Resolved**: all calls route through the gateway; `@LoadBalanced` resolves `api-gateway` not individual services; direct calls only for documented circular-call and startup exceptions | Critical | Recommendation documented | Before Phase 2   |
+| A6  | **Resolved**: exempt infra registration clients from discovery; Docker health checks; Resilience4j retry                                                                                 | Medium   | Recommendation documented | Phase 2          |
+| A7  | `workexecRestClient` has correct ID but wrong port — low-risk fix                                                                                                                        | Low      | Open                      | Phase 4          |
+| A8  | `BearerTokenRelayInterceptor` must be preserved on `@LoadBalanced` builder                                                                                                               | High     | Open                      | Phase 3          |
+| A9  | `LoadBalancerClient` vs `@LoadBalanced` — inconsistency needs a style decision                                                                                                           | Low      | Open                      | Phase 3          |
+| A10 | `pos-shop-manager` module assessment understates gateway dependency                                                                                                                      | Medium   | Open                      | Phase 4          |
+| A11 | **Resolved**: Java SDK is external-consumer only; fix `servers.url` in OpenAPI specs to gateway path; internal callers use `@LoadBalanced RestClient`                                    | Medium   | Recommendation documented | Pre-Phase 1      |
+| A12 | **Resolved**: Eureka is the platform standard; AWS must run Eureka within each tenant cell; HA and operational requirements documented                                                   | N/A      | Position confirmed        | AWS provisioning |
+| A13 | Per-wave exit criteria missing — defined above                                                                                                                                           | Medium   | Pre-Phase 1               |

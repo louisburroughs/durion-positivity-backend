@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -25,7 +26,8 @@ public class PricingClientImpl implements PricingClient {
     private final RestClient restClient;
 
     public PricingClientImpl(
-            RestClient.Builder restClientBuilder, @Value("${pos.price.base-url:http://pos-price}") String baseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.price.base-url:http://api-gateway}") String baseUrl) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
     }
 
@@ -34,8 +36,8 @@ public class PricingClientImpl implements PricingClient {
         log.debug("Fetching price quote: productId={}, locationId={}", productId, locationId);
         PriceQuoteRequest body = new PriceQuoteRequest(productId, 1, locationId, customerTierId);
 
-        PriceQuoteServiceResponse response =
-                restClient.post().uri("/v1/price/quotes").body(body).retrieve().body(PriceQuoteServiceResponse.class);
+        PriceQuoteServiceResponse response = restClient.post().uri("/price/v1/price/quotes").body(body).retrieve()
+                .body(PriceQuoteServiceResponse.class);
 
         if (response == null || response.msrp() == null) {
             log.warn("Price service returned null for productId={}", productId);
@@ -48,12 +50,10 @@ public class PricingClientImpl implements PricingClient {
         }
 
         BigDecimal msrpAmount = response.msrp().amount();
-        String msrpCurrency =
-                response.msrp().currency() != null ? response.msrp().currency() : "USD";
-        BigDecimal unitPriceAmt =
-                response.unitPrice() != null && response.unitPrice().amount() != null
-                        ? response.unitPrice().amount()
-                        : msrpAmount;
+        String msrpCurrency = response.msrp().currency() != null ? response.msrp().currency() : "USD";
+        BigDecimal unitPriceAmt = response.unitPrice() != null && response.unitPrice().amount() != null
+                ? response.unitPrice().amount()
+                : msrpAmount;
         String priceSource = response.priceSource() != null ? response.priceSource() : "UNKNOWN";
 
         return Optional.of(new PriceQuoteClientResponse(msrpAmount, msrpCurrency, unitPriceAmt, priceSource));
@@ -63,9 +63,12 @@ public class PricingClientImpl implements PricingClient {
     // Internal request/response shapes (mirrors pos-price API contract)
     // -----------------------------------------------------------------------
 
-    private record PriceQuoteRequest(UUID productId, int quantity, UUID locationId, UUID customerTierId) {}
+    private record PriceQuoteRequest(UUID productId, int quantity, UUID locationId, UUID customerTierId) {
+    }
 
-    private record MoneyValue(BigDecimal amount, String currency) {}
+    private record MoneyValue(BigDecimal amount, String currency) {
+    }
 
-    private record PriceQuoteServiceResponse(MoneyValue msrp, MoneyValue unitPrice, String priceSource) {}
+    private record PriceQuoteServiceResponse(MoneyValue msrp, MoneyValue unitPrice, String priceSource) {
+    }
 }
