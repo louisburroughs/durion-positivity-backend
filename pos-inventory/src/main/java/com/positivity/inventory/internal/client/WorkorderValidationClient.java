@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -24,7 +25,8 @@ public class WorkorderValidationClient {
     private final RestClient restClient;
 
     public WorkorderValidationClient(
-            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayUrl + "/workorder/v1/workorders")
                 .build();
@@ -102,7 +104,8 @@ public class WorkorderValidationClient {
         }
     }
 
-    public record WorkorderLineValidation(String status, String demandedProductId) {}
+    public record WorkorderLineValidation(String status, String demandedProductId) {
+    }
 
     public static class WorkorderDetailResponse {
         private String status;
