@@ -3096,11 +3096,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickedItemResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3171,11 +3168,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3491,7 +3485,6 @@ paths:
               schema:
                 type: string
                 format: byte
-                additionalProperties: {}
         '404':
           description: Estimate not found
           content:

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -25,7 +26,8 @@ public class PricingClientImpl implements PricingClient {
     private final RestClient restClient;
 
     public PricingClientImpl(
-            RestClient.Builder restClientBuilder, @Value("${pos.price.base-url:http://pos-price}") String baseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.price.base-url:http://api-gateway}") String baseUrl) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
     }
 

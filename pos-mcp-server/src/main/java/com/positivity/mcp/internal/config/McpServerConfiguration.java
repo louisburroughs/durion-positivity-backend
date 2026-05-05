@@ -30,8 +30,8 @@ public class McpServerConfiguration {
 
     @Bean
     @LoadBalanced
-    public RestClient.Builder loadBalancedRestClientBuilder() {
-        return RestClient.builder();
+    public RestClient.Builder loadBalancedRestClientBuilder(@NonNull BearerTokenRelayInterceptor interceptor) {
+        return RestClient.builder().requestInterceptors(list -> list.add(interceptor));
     }
 
     @Bean

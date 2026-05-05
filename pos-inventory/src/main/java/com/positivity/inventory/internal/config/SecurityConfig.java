@@ -18,15 +18,15 @@ import org.springframework.web.client.RestClient;
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
 
-	@Bean
-	@Primary
-	public RestClient.Builder restClientBuilder() {
-		return RestClient.builder();
-	}
+    @Bean
+    @Primary
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
 
-	@Bean
-	@LoadBalanced
-	public RestClient.Builder loadBalancedRestClientBuilder() {
-		return RestClient.builder();
-	}
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
 }
