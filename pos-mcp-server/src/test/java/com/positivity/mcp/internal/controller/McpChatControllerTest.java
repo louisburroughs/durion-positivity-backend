@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -11,9 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.AgentOrchestrationService;
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.service.CurrentUserContext;
+import java.util.Set;
+import java.util.UUID;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,18 +56,18 @@ class McpChatControllerTest {
     private AgentOrchestrationService agentOrchestrationService;
 
     @MockitoBean
-    private McpRoleResolver mcpRoleResolver;
+    private CurrentUserContextResolver currentUserContextResolver;
 
     @BeforeEach
-    void stubRoleResolver() {
-        when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_USER");
+    void stubUserContextResolver() {
+        when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(defaultUserContext());
     }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat with message returns 200 and response payload")
     void chat_withMessage_returns200() throws Exception {
-        when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
@@ -86,8 +90,14 @@ class McpChatControllerTest {
     @WithMockUser(username = "admin.alpha", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat prefers ROLE_ADMIN when present in authorities")
     void chat_withAdminRole_usesAdminRoleForOrchestration() throws Exception {
-        when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_ADMIN");
-        when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
+        CurrentUserContext adminContext = new CurrentUserContext(
+                "admin.alpha",
+                UUID.fromString("00000000-0000-7000-8000-000000000123"),
+                "ROLE_ADMIN",
+                Set.of("ROLE_ADMIN"),
+                Set.of("ROLE_ADMIN", McpPermissions.MCP_CHAT_EXECUTE));
+        when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(adminContext);
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(
                 "admin.alpha",
@@ -104,14 +114,17 @@ class McpChatControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.response").value("assistant reply"));
 
-        verify(agentOrchestrationService).chat("admin.alpha", "ROLE_ADMIN", "test");
+        verify(agentOrchestrationService)
+                .chat(argThat(context -> context.username().equals("admin.alpha")
+                        && context.userId().equals(adminContext.userId())
+                        && context.primaryRole().equals("ROLE_ADMIN")), org.mockito.ArgumentMatchers.eq("test"));
     }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat orchestration failure returns 500 ApiError envelope")
     void chat_orchestrationFailure_returns500ApiError() throws Exception {
-        when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenThrow(new RuntimeException("boom"));
 
         mockMvc.perform(post("/v1/mcp/chat")
@@ -198,5 +211,14 @@ class McpChatControllerTest {
         void handleAuthenticationException() {
             // HTTP 401 set by @ResponseStatus
         }
+    }
+
+    private static CurrentUserContext defaultUserContext() {
+        return new CurrentUserContext(
+                "test-user",
+                UUID.fromString("00000000-0000-7000-8000-000000000122"),
+                "ROLE_USER",
+                Set.of("ROLE_USER"),
+                Set.of("ROLE_USER", McpPermissions.MCP_CHAT_EXECUTE));
     }
 }

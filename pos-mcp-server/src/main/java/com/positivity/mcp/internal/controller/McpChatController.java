@@ -1,9 +1,10 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.AgentOrchestrationService;
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.service.CurrentUserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -32,13 +33,13 @@ public class McpChatController {
         private static final Logger LOGGER = LoggerFactory.getLogger(McpChatController.class);
 
         private final AgentOrchestrationService agentOrchestrationService;
-        private final McpRoleResolver mcpRoleResolver;
+        private final CurrentUserContextResolver currentUserContextResolver;
 
         public McpChatController(
                         @NonNull AgentOrchestrationService agentOrchestrationService,
-                        @NonNull McpRoleResolver mcpRoleResolver) {
+                        @NonNull CurrentUserContextResolver currentUserContextResolver) {
                 this.agentOrchestrationService = agentOrchestrationService;
-                this.mcpRoleResolver = mcpRoleResolver;
+                this.currentUserContextResolver = currentUserContextResolver;
         }
 
         @Operation(
@@ -55,13 +56,16 @@ public class McpChatController {
                         @RequestBody @Valid @NonNull ChatRequest request,
                         @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-                @NonNull
-                String userId = authentication.getName();
-                @NonNull
-                String role = mcpRoleResolver.resolvePrimaryRole(authentication);
-                LOGGER.debug("MCP chat selected role principal={} selectedRole={} fallback={}", userId, role,
-                                "ROLE_USER".equals(role));
-                String response = agentOrchestrationService.chat(userId, role, request.message());
+                CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);
+                LOGGER.debug(
+                                "MCP chat selected userContext username={} userId={} selectedRole={} roleCount={} authorityCount={} fallback={}",
+                                currentUserContext.username(),
+                                currentUserContext.userId(),
+                                currentUserContext.primaryRole(),
+                                currentUserContext.roles().size(),
+                                currentUserContext.authorities().size(),
+                                "ROLE_USER".equals(currentUserContext.primaryRole()));
+                String response = agentOrchestrationService.chat(currentUserContext, request.message());
                 return ResponseEntity.ok(new ChatResponse(response));
         }
 

@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class ToolRegistryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistryService.class);
+    private static final int MAX_QUERY_PREVIEW_LENGTH = 160;
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ADMIN_FACADE_TOOL = "AdminFacadeTool";
     private static final Set<String> ADMIN_QUERY_KEYWORDS = Set.of(
@@ -59,18 +61,46 @@ public class ToolRegistryService {
 
     public @NonNull List<ToolMetadata> resolveCandidateTools(@NonNull ToolSelectionContext context, int topK) {
         if (topK <= 0) {
+            LOGGER.debug(
+                    "MCP tool lookup skipped role={} workflow={} topK={} reason=non-positive-topk queryPreview=\"{}\"",
+                    context.role(),
+                    context.workflowState(),
+                    topK,
+                    preview(context.userInput()));
             return List.of();
         }
 
         List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(context.role(),
                 context.workflowState());
 
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP tool lookup start role={} workflow={} topK={} gatedToolCount={} gatedTools={} queryPreview=\"{}\"",
+                    context.role(),
+                    context.workflowState(),
+                    topK,
+                    gatedTools.size(),
+                    toolNames(gatedTools),
+                    preview(context.userInput()));
+        }
+
         if (gatedTools.isEmpty()) {
+            LOGGER.debug(
+                    "MCP tool lookup no gated tools role={} workflow={} queryPreview=\"{}\"",
+                    context.role(),
+                    context.workflowState(),
+                    preview(context.userInput()));
             return List.of();
         }
 
         List<ToolMetadata> adminFastPathSelection = adminFastPathSelection(context, gatedTools);
         if (!adminFastPathSelection.isEmpty()) {
+            LOGGER.debug(
+                    "MCP tool lookup fast-path result role={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                    context.role(),
+                    context.workflowState(),
+                    toolNames(adminFastPathSelection),
+                    preview(context.userInput()));
             return adminFastPathSelection;
         }
 
@@ -118,12 +148,30 @@ public class ToolRegistryService {
                     scoredCandidateSummaries(scoredCandidates));
         }
 
-        return scoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
+        List<ToolMetadata> selectedTools =
+                scoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
+        LOGGER.debug(
+                "MCP tool lookup result role={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                context.role(),
+                context.workflowState(),
+                toolNames(selectedTools),
+                preview(context.userInput()));
+        return selectedTools;
     }
 
     private @NonNull List<ToolMetadata> adminFastPathSelection(
             @NonNull ToolSelectionContext context, @NonNull List<ToolMetadata> gatedTools) {
-        if (!ROLE_ADMIN.equals(context.role()) || !containsAdminQueryKeyword(context.userInput())) {
+        if (!ROLE_ADMIN.equals(context.role())) {
+            return List.of();
+        }
+
+        Set<String> matchedTerms = matchedAdminQueryTerms(context.userInput());
+        if (matchedTerms.isEmpty()) {
+            LOGGER.debug(
+                    "MCP tool fast-path skipped role={} workflow={} reason=no-admin-keywords queryPreview=\"{}\"",
+                    context.role(),
+                    context.workflowState(),
+                    preview(context.userInput()));
             return List.of();
         }
 
@@ -132,28 +180,37 @@ public class ToolRegistryService {
                 .toList();
         if (!adminTools.isEmpty()) {
             LOGGER.debug(
-                    "MCP tool fast-path matched role={} workflow={} tool={} query=\"{}\"",
+                    "MCP tool fast-path matched role={} workflow={} tool={} matchedTerms={} queryPreview=\"{}\"",
                     context.role(),
                     context.workflowState(),
                     ADMIN_FACADE_TOOL,
-                    context.userInput());
+                    matchedTerms,
+                    preview(context.userInput()));
+        } else {
+            LOGGER.debug(
+                    "MCP tool fast-path eligible but admin tool unavailable role={} workflow={} matchedTerms={} gatedTools={}",
+                    context.role(),
+                    context.workflowState(),
+                    matchedTerms,
+                    toolNames(gatedTools));
         }
         return adminTools;
     }
 
-    private boolean containsAdminQueryKeyword(@NonNull String userInput) {
+    private @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {
         String normalized = userInput.toLowerCase(Locale.ROOT);
+        Set<String> matches = new TreeSet<>();
         for (String keyword : ADMIN_QUERY_KEYWORDS) {
             if (normalized.matches(".*\\b" + keyword + "\\b.*")) {
-                return true;
+                matches.add(keyword);
             }
         }
         for (String phrase : ADMIN_QUERY_PHRASES) {
             if (normalized.contains(phrase)) {
-                return true;
+                matches.add(phrase);
             }
         }
-        return false;
+        return matches;
     }
 
     static final class ToolScorer {
@@ -202,6 +259,14 @@ public class ToolRegistryService {
 
     private static @NonNull String format(double value) {
         return String.format(java.util.Locale.ROOT, "%.3f", value);
+    }
+
+    private static @NonNull String preview(@NonNull String userInput) {
+        String normalized = userInput.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_QUERY_PREVIEW_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_QUERY_PREVIEW_LENGTH - 3) + "...";
     }
 
     private record ToolScore(

@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.config;
 
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.DocumentIngestionJob;
 import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
@@ -26,7 +27,7 @@ public class TestProfileOrchestrationFallbackConfig {
   AgentOrchestrationService testAgentOrchestrationService() {
     return new AgentOrchestrationService() {
       @Override
-      public @NonNull String chat(@NonNull String userId, @NonNull String role, @NonNull String message) {
+      public @NonNull String chat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
         return "OpenAPI test-profile fallback response";
       }
 
@@ -42,8 +43,7 @@ public class TestProfileOrchestrationFallbackConfig {
   StreamingAgentOrchestrationService testStreamingAgentOrchestrationService() {
     return new StreamingAgentOrchestrationService() {
       @Override
-      public @NonNull Flux<String> streamChat(
-          @NonNull String userId, @NonNull String role, @NonNull String message) {
+      public @NonNull Flux<String> streamChat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
         return Flux.just("OpenAPI", "test-profile", "fallback", "stream");
       }
 

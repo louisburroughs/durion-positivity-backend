@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import com.positivity.security.common.SecurityContextHelper;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,11 @@ public class AdminFacadeTool {
                 .uri(userPermissionsPathTemplate, Map.of("userId", userId))
                 .retrieve()
                 .body(String.class);
+    }
+
+    @Tool("Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
+    public String getMyPermissions() {
+        return getUserPermissions(SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException().toString());
     }
 
     @Tool("Search the administrative audit log with a query string")

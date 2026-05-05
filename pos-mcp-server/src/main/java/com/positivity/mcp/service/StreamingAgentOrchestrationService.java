@@ -6,7 +6,7 @@ import reactor.core.publisher.Flux;
 public interface StreamingAgentOrchestrationService {
 
     @NonNull
-    Flux<String> streamChat(@NonNull String userId, @NonNull String role, @NonNull String message);
+    Flux<String> streamChat(@NonNull CurrentUserContext currentUserContext, @NonNull String message);
 
     void evict(@NonNull String userId);
 }

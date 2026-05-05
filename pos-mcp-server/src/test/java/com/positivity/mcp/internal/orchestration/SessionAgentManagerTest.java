@@ -20,6 +20,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
@@ -69,6 +70,8 @@ import org.springframework.web.client.RestClient;
  */
 @ExtendWith(MockitoExtension.class)
 class SessionAgentManagerTest {
+
+        private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
 
         @Mock
         private ChatModel chatModel;
@@ -206,7 +209,7 @@ class SessionAgentManagerTest {
                                                 .aiMessage(AiMessage.from("Hello!"))
                                                 .build());
 
-                String response = manager.chat("user-1", "ROLE_ADMIN", "hello");
+                String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
 
                 assertThat(response).isEqualTo("Hello!");
                 verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
@@ -235,7 +238,7 @@ class SessionAgentManagerTest {
                                                 .aiMessage(AiMessage.from("Stock found"))
                                                 .build());
 
-                String response = manager.chat("user-1", "ROLE_ADMIN", "check stock for sku ABC");
+                String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "check stock for sku ABC");
 
                 assertThat(response).isEqualTo("Stock found");
                 verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
@@ -254,7 +257,7 @@ class SessionAgentManagerTest {
                                                 .aiMessage(AiMessage.from("Stock found"))
                                                 .build());
 
-                String response = manager.chat("user-1", "ROLE_ADMIN", "check stock for sku ABC");
+                String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "check stock for sku ABC");
 
                 assertThat(response).isEqualTo("Stock found");
                 verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN");
@@ -287,5 +290,14 @@ class SessionAgentManagerTest {
                 expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
 
                 verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+        }
+
+        private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
+                return new CurrentUserContext(
+                                username,
+                                userId,
+                                primaryRole,
+                                Set.of(primaryRole),
+                                Set.of(primaryRole, "mcp:chat:execute"));
         }
 }

@@ -15,7 +15,7 @@ public interface StreamingPosAssistant {
       For general conversation, answer directly without using tools.
       If you cannot find the answer, say so clearly.
       Never fabricate data.
-      {{roleContext}}
+      {{userContext}}
       """)
-  TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
+  TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("userContext") String userContext);
 }

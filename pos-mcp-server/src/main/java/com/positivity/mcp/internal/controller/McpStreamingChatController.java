@@ -1,8 +1,9 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,13 +31,13 @@ public class McpStreamingChatController {
         private static final Logger LOGGER = LoggerFactory.getLogger(McpStreamingChatController.class);
 
         private final StreamingAgentOrchestrationService streamingSessionAgentManager;
-        private final McpRoleResolver mcpRoleResolver;
+        private final CurrentUserContextResolver currentUserContextResolver;
 
         public McpStreamingChatController(
                         @NonNull StreamingAgentOrchestrationService streamingSessionAgentManager,
-                        @NonNull McpRoleResolver mcpRoleResolver) {
+                        @NonNull CurrentUserContextResolver currentUserContextResolver) {
                 this.streamingSessionAgentManager = streamingSessionAgentManager;
-                this.mcpRoleResolver = mcpRoleResolver;
+                this.currentUserContextResolver = currentUserContextResolver;
         }
 
         @Operation(summary = "Execute MCP streaming chat - returns SSE token stream")
@@ -47,15 +48,18 @@ public class McpStreamingChatController {
                         @RequestBody @Valid @NonNull StreamChatRequest request,
                         @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-                @NonNull
-                String userId = authentication.getName();
-                @NonNull
-                String role = mcpRoleResolver.resolvePrimaryRole(authentication);
-                LOGGER.debug("MCP streaming selected role principal={} selectedRole={} fallback={}", userId, role,
-                                "ROLE_USER".equals(role));
+                CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);
+                LOGGER.debug(
+                                "MCP streaming selected userContext username={} userId={} selectedRole={} roleCount={} authorityCount={} fallback={}",
+                                currentUserContext.username(),
+                                currentUserContext.userId(),
+                                currentUserContext.primaryRole(),
+                                currentUserContext.roles().size(),
+                                currentUserContext.authorities().size(),
+                                "ROLE_USER".equals(currentUserContext.primaryRole()));
 
                 return streamingSessionAgentManager
-                                .streamChat(userId, role, request.message())
+                                .streamChat(currentUserContext, request.message())
                                 .map(token -> ServerSentEvent.<String>builder(token).event("chat").build());
         }
 

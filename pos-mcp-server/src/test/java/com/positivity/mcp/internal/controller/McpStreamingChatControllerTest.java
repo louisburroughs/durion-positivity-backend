@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -10,8 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,18 +40,18 @@ class McpStreamingChatControllerTest {
         private StreamingAgentOrchestrationService streamingSessionAgentManager;
 
         @MockitoBean
-        private McpRoleResolver mcpRoleResolver;
+        private CurrentUserContextResolver currentUserContextResolver;
 
         @BeforeEach
-        void stubRoleResolver() {
-                when(mcpRoleResolver.resolvePrimaryRole(any(Authentication.class))).thenReturn("ROLE_USER");
+        void stubUserContextResolver() {
+                when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(defaultUserContext());
         }
 
         @Test
         @WithMockUser(username = "stream-user", authorities = "mcp:chat:stream")
         @DisplayName("POST /v1/mcp/chat/stream returns SSE chat events")
         void streamChat_withValidRequest_returnsSse() throws Exception {
-                when(streamingSessionAgentManager.streamChat(anyString(), anyString(), anyString()))
+                when(streamingSessionAgentManager.streamChat(any(CurrentUserContext.class), org.mockito.ArgumentMatchers.anyString()))
                                 .thenReturn(Flux.just("token-1", "token-2"));
                 var authentication = new UsernamePasswordAuthenticationToken(
                                 "stream-user", "n/a", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -78,7 +80,7 @@ class McpStreamingChatControllerTest {
         @WithMockUser(username = "stream-user", authorities = "mcp:chat:stream")
         @DisplayName("POST /v1/mcp/chat/stream when rate-limited returns 429 ApiError")
         void streamChat_whenRateLimited_returns429ApiError() throws Exception {
-                when(streamingSessionAgentManager.streamChat(anyString(), anyString(), anyString()))
+                when(streamingSessionAgentManager.streamChat(any(CurrentUserContext.class), org.mockito.ArgumentMatchers.anyString()))
                                 .thenThrow(new RateLimitExceededException("Rate limit exceeded"));
                 var authentication = new UsernamePasswordAuthenticationToken(
                                 "stream-user", "n/a", java.util.List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -92,5 +94,14 @@ class McpStreamingChatControllerTest {
                                 .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
                                 .andExpect(jsonPath("$.message").value("Rate limit exceeded"))
                                 .andExpect(jsonPath("$.status").value(429));
+        }
+
+        private static CurrentUserContext defaultUserContext() {
+                return new CurrentUserContext(
+                                "stream-user",
+                                UUID.fromString("00000000-0000-7000-8000-000000000124"),
+                                "ROLE_USER",
+                                Set.of("ROLE_USER"),
+                                Set.of("ROLE_USER", "mcp:chat:stream"));
         }
 }

@@ -11,12 +11,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
 
 @Component
 public class ToolRegistry {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistry.class);
     private final Map<String, List<Object>> roleToolMap;
 
     /**
@@ -33,6 +36,14 @@ public class ToolRegistry {
      */
     public @NonNull List<Object> resolveToolsForRole(@NonNull String role) {
         List<Object> tools = roleToolMap.getOrDefault(role, List.of());
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP tool registry resolve-all role={} resolvedTools={}",
+                    role,
+                    tools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList());
+        }
         return new ArrayList<>(tools);
     }
 
@@ -42,11 +53,26 @@ public class ToolRegistry {
             selectedNames.add(toolName.toLowerCase(Locale.ROOT));
         }
         if (selectedNames.isEmpty()) {
+            LOGGER.debug("MCP tool registry resolve-selected role={} selectedNames=[] resolvedTools=[]", role);
             return new ArrayList<>();
         }
-        return roleToolMap.getOrDefault(role, List.of()).stream()
+        List<Object> availableTools = roleToolMap.getOrDefault(role, List.of());
+        List<Object> resolvedTools = availableTools.stream()
                 .filter(tool -> matchesSelectedTool(tool, selectedNames))
                 .toList();
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP tool registry resolve-selected role={} selectedNames={} availableTools={} resolvedTools={}",
+                    role,
+                    new TreeSet<>(selectedNames),
+                    availableTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList(),
+                    resolvedTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList());
+        }
+        return resolvedTools;
     }
 
     private static boolean matchesSelectedTool(@NonNull Object tool, @NonNull Set<String> selectedNames) {

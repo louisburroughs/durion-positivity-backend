@@ -28,6 +28,14 @@ mcp:
           source-path: "classpath:rag/de-bookkeeping-rag.md"
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
+        - id: "people.human-resources"
+          source-path: "classpath:rag/hr-functions-guide.md"
+        - id: "shop.management"
+          source-path: "classpath:pos-shop-manager/docs/shop-management-rag.md"
+        - id: "shop.management.guidelines"
+          source-path: "classpath:pos-shop-manager/docs/shop-management-guidelines.md"
+        - id: "security.guide"
+          source-path: "classpath:rag/security-service-guide.md"
     chunking:
       enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
       max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}

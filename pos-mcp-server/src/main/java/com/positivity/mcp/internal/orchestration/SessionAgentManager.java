@@ -12,6 +12,7 @@ import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import dev.langchain4j.data.message.SystemMessage;
@@ -132,11 +133,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     @Override
-    public @NonNull String chat(@NonNull String userId, @NonNull String role, @NonNull String message) {
-        AtomicInteger requestCount = requestCountCache.get(userId, key -> new AtomicInteger(0));
+    public @NonNull String chat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+        String username = currentUserContext.username();
+        String role = currentUserContext.primaryRole();
+        AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
         if (requestCount.incrementAndGet() > rateLimitPerSession) {
             requestCount.decrementAndGet();
-            LOGGER.warn("Rate limit exceeded for userId: {}", userId);
+            LOGGER.warn("Rate limit exceeded for username={} userId={}", username, currentUserContext.userId());
             throw new RateLimitExceededException("Rate limit exceeded");
         }
 
@@ -146,29 +149,33 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         try {
             boolean simpleChat = simpleChatClassifier.isSimpleChat(message);
             LOGGER.debug(
-                    "MCP chat request received userId={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
-                    userId,
+                    "MCP chat request received username={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
+                    username,
                     role,
                     simpleChat,
                     message.length(),
                     tokenCount,
                     messagePreview);
             if (simpleChat) {
-                LOGGER.debug("MCP simple chat dispatch userId={} role={} preview=\"{}\"", userId, role, messagePreview);
-                return simpleChat(userId, role, message, startMs);
+                LOGGER.debug(
+                        "MCP simple chat dispatch username={} role={} preview=\"{}\"",
+                        username,
+                        role,
+                        messagePreview);
+                return simpleChat(currentUserContext, message, startMs);
             }
 
             ToolSelection selection = selectTools(role, message);
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool selection for userId={} role={} selectedTools={} preview=\"{}\"",
-                        userId,
+                        "MCP tool selection for username={} role={} selectedTools={} preview=\"{}\"",
+                        username,
                         role,
                         selection.toolCount(),
                         messagePreview);
                 LOGGER.debug(
-                        "MCP agent chat dispatch userId={} role={} cacheKey={} roleTools={} fallbackTools={} preview=\"{}\"",
-                        userId,
+                        "MCP agent chat dispatch username={} role={} cacheKey={} roleTools={} fallbackTools={} preview=\"{}\"",
+                        username,
                         role,
                         selection.cacheKey(),
                         selection.roleToolNames(),
@@ -177,9 +184,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             }
             PosAssistant agent = getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(),
                     selection.fallbackTools());
-            String roleContext = "Current user role: " + role;
             long agentStartNanos = System.nanoTime();
-            String response = agent.chat(memoryKey(userId, role), message, roleContext);
+            String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
             LOGGER.info(
                     "MCP agent chat completed role={} selectedTools={} modelElapsedMs={} totalElapsedMs={}",
@@ -188,7 +194,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     elapsedMs(agentStartNanos),
                     elapsedMs);
             if (toolAuditService != null) {
-                toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
+                toolAuditService.logToolExecution(null, username, true, false, elapsedMs, null);
             }
             return response;
         } catch (RuntimeException exception) {
@@ -202,7 +208,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             if (toolAuditService != null) {
                 toolAuditService.logToolExecution(
                         null,
-                        userId,
+                        username,
                         false,
                         false,
                         elapsedMs,
@@ -295,9 +301,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private @NonNull String simpleChat(
-            @NonNull String userId, @NonNull String role, @NonNull String message, long requestStartMs) {
+            @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
-        String prompt = rolePromptResolver.resolvePrompt(role);
+        String prompt = rolePromptResolver.resolvePrompt(currentUserContext.primaryRole()) + System.lineSeparator()
+                + formatUserContext(currentUserContext);
         String response = chatModel
                 .chat(List.of(SystemMessage.from(prompt), UserMessage.from(message)))
                 .aiMessage()
@@ -305,11 +312,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
         LOGGER.info(
                 "MCP simple chat completed role={} modelElapsedMs={} totalElapsedMs={}",
-                role,
+                currentUserContext.primaryRole(),
                 elapsedMs(simpleStartNanos),
                 elapsedMs);
         if (toolAuditService != null) {
-            toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
+            toolAuditService.logToolExecution(null, currentUserContext.username(), true, false, elapsedMs, null);
         }
         return response;
     }
@@ -317,6 +324,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private @NonNull ToolSelection selectTools(@NonNull String role, @NonNull String message) {
         List<Object> roleTools = roleToolsForMessage(role, message);
         List<Object> fallbackTools = fallbackToolsForMessage(message);
+        LOGGER.debug(
+                "MCP combined tool selection role={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
+                role,
+                toolNames(roleTools),
+                toolNames(fallbackTools),
+                preview(message));
         return new ToolSelection(roleTools, fallbackTools);
     }
 
@@ -334,30 +347,34 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     .toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
-                        "MCP tool selector returned no candidates role={} fullRoleTools={}; using full role tool set",
+                        "MCP tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
                         role,
+                        preview(message),
                         toolNames(fullRoleTools));
                 return fullRoleTools;
             }
             List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 LOGGER.debug(
-                        "MCP tool candidates resolved to zero role tools role={} candidateNames={} fullRoleTools={}; using full role tool set",
+                        "MCP tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",
                         role,
+                        preview(message),
                         selectedNames,
                         toolNames(fullRoleTools));
                 return fullRoleTools;
             }
             LOGGER.debug(
-                    "MCP tool candidates role={} candidateNames={} resolvedRoleTools={}",
+                    "MCP tool candidates role={} queryPreview=\"{}\" candidateNames={} resolvedRoleTools={}",
                     role,
+                    preview(message),
                     selectedNames,
                     toolNames(resolvedTools));
             return resolvedTools;
         } catch (RuntimeException exception) {
             LOGGER.warn(
-                    "MCP tool selection failed role={} error={}; using full role tool set",
+                    "MCP tool selection failed role={} queryPreview=\"{}\" error={}; using full role tool set",
                     role,
+                    preview(message),
                     exception.getClass().getSimpleName(),
                     exception);
             return fullRoleTools;
@@ -387,6 +404,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             return normalized;
         }
         return normalized.substring(0, MAX_LOG_PREVIEW_LENGTH - 3) + "...";
+    }
+
+    private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
+        return "Authenticated user context: username=" + currentUserContext.username()
+                + ", userId=" + currentUserContext.userId()
+                + ", primaryRole=" + currentUserContext.primaryRole()
+                + ", roles=" + currentUserContext.roles()
+                + ", authorityCount=" + currentUserContext.authorities().size()
+                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
+                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }
 
     private static int tokenCount(@NonNull String text) {

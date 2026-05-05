@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
@@ -121,21 +122,23 @@ public class StreamingSessionAgentManager
     }
 
     @Override
-    public @NonNull Flux<String> streamChat(@NonNull String userId, @NonNull String role, @NonNull String message) {
-        AtomicInteger requestCount = requestCountCache.get(userId, key -> new AtomicInteger(0));
+    public @NonNull Flux<String> streamChat(
+            @NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+        String username = currentUserContext.username();
+        String role = currentUserContext.primaryRole();
+        AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
         if (requestCount.incrementAndGet() > rateLimitPerSession) {
             requestCount.decrementAndGet();
-            LOGGER.warn("Rate limit exceeded for userId: {}", userId);
+            LOGGER.warn("Rate limit exceeded for username={} userId={}", username, currentUserContext.userId());
             throw new RateLimitExceededException("Rate limit exceeded");
         }
 
-        String roleContext = "Current user role: " + role;
         long startMs = System.currentTimeMillis();
-        String memoryId = memoryKey(userId, role);
+        String memoryId = memoryKey(username, role);
         String messagePreview = preview(message);
         LOGGER.debug(
-                "MCP streaming chat dispatch userId={} role={} chars={} tokens={} preview=\"{}\"",
-                userId,
+                "MCP streaming chat dispatch username={} role={} chars={} tokens={} preview=\"{}\"",
+                username,
                 role,
                 message.length(),
                 tokenCount(message),
@@ -149,8 +152,8 @@ public class StreamingSessionAgentManager
                     fallbackTools.toArray());
             String cacheKey = toolCacheKey(allTools);
             LOGGER.debug(
-                    "MCP streaming tool selection userId={} role={} cacheKey={} tools={}",
-                    userId,
+                    "MCP streaming tool selection username={} role={} cacheKey={} tools={}",
+                    username,
                     role,
                     cacheKey,
                     toolNames(allTools));
@@ -161,30 +164,31 @@ public class StreamingSessionAgentManager
                     role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, ignored -> buildAgent(role));
         }
 
-        return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, roleContext, emitter))
+        String userContext = formatUserContext(currentUserContext);
+        return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
-                            "MCP streaming chat completed userId={} role={} totalElapsedMs={} preview=\"{}\"",
-                            userId,
+                            "MCP streaming chat completed username={} role={} totalElapsedMs={} preview=\"{}\"",
+                            username,
                             role,
                             elapsedMs,
                             messagePreview);
                     if (toolAuditService != null) {
-                        toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
+                        toolAuditService.logToolExecution(null, username, true, false, elapsedMs, null);
                     }
                 })
                 .doOnError(exception -> {
                     LOGGER.warn(
-                            "MCP streaming chat failed userId={} role={} preview=\"{}\" error={}",
-                            userId,
+                            "MCP streaming chat failed username={} role={} preview=\"{}\" error={}",
+                            username,
                             role,
                             messagePreview,
                             exception.getClass().getSimpleName());
                     if (toolAuditService != null) {
                         toolAuditService.logToolExecution(
                                 null,
-                                userId,
+                                username,
                                 false,
                                 false,
                                 0,
@@ -239,9 +243,9 @@ public class StreamingSessionAgentManager
             @NonNull StreamingPosAssistant agent,
             @NonNull String memoryId,
             @NonNull String message,
-            @NonNull String roleContext,
+            @NonNull String userContext,
             @NonNull FluxSink<String> emitter) {
-        agent.chat(memoryId, message, roleContext)
+        agent.chat(memoryId, message, userContext)
                 .onPartialResponse(token -> {
                     if (!emitter.isCancelled()) {
                         emitter.next(token);
@@ -278,6 +282,11 @@ public class StreamingSessionAgentManager
     private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
         List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
         if (toolRegistryService == null) {
+            LOGGER.debug(
+                    "MCP streaming tool selector unavailable role={} resolvedRoleTools={} queryPreview=\"{}\"",
+                    role,
+                    toolNames(fullRoleTools),
+                    preview(message));
             return fullRoleTools;
         }
         try {
@@ -288,24 +297,34 @@ public class StreamingSessionAgentManager
                     .toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
-                        "MCP streaming tool selector returned no candidates role={} fullRoleTools={}; using full role tool set",
+                        "MCP streaming tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
                         role,
+                        preview(message),
                         toolNames(fullRoleTools));
                 return fullRoleTools;
             }
             List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 LOGGER.debug(
-                        "MCP streaming tool candidates resolved to zero role tools role={} candidateNames={}; using full role tool set",
+                        "MCP streaming tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",
                         role,
-                        selectedNames);
+                        preview(message),
+                        selectedNames,
+                        toolNames(fullRoleTools));
                 return fullRoleTools;
             }
+            LOGGER.debug(
+                    "MCP streaming tool candidates role={} queryPreview=\"{}\" candidateNames={} resolvedRoleTools={}",
+                    role,
+                    preview(message),
+                    selectedNames,
+                    toolNames(resolvedTools));
             return resolvedTools;
         } catch (RuntimeException exception) {
             LOGGER.warn(
-                    "MCP streaming tool selection failed role={} error={}; using full role tool set",
+                    "MCP streaming tool selection failed role={} queryPreview=\"{}\" error={}; using full role tool set",
                     role,
+                    preview(message),
                     exception.getClass().getSimpleName(),
                     exception);
             return fullRoleTools;
@@ -356,6 +375,16 @@ public class StreamingSessionAgentManager
             return normalized;
         }
         return normalized.substring(0, MAX_LOG_PREVIEW_LENGTH - 3) + "...";
+    }
+
+    private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
+        return "Authenticated user context: username=" + currentUserContext.username()
+                + ", userId=" + currentUserContext.userId()
+                + ", primaryRole=" + currentUserContext.primaryRole()
+                + ", roles=" + currentUserContext.roles()
+                + ", authorityCount=" + currentUserContext.authorities().size()
+                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
+                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }
 
     private static int tokenCount(@NonNull String text) {

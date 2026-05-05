@@ -16,6 +16,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -57,6 +58,8 @@ import reactor.core.publisher.Flux;
  */
 @ExtendWith(MockitoExtension.class)
 class StreamingSessionAgentManagerTest {
+
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");
 
     @Mock
     private StreamingChatModel streamingChatModel;
@@ -120,7 +123,7 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat returns a non-null Flux")
     void streamChat_returnsNonNullFlux() {
-        Flux<String> result = manager.streamChat("user-1", "ROLE_CASHIER", "hello");
+        Flux<String> result = manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello");
 
         assertThat(result).isNotNull();
     }
@@ -128,8 +131,8 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat reuses cached agent for same userId+role")
     void streamChat_cachesAgentForSameUser() {
-        manager.streamChat("user-1", "ROLE_CASHIER", "first message");
-        manager.streamChat("user-1", "ROLE_CASHIER", "second message");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second message");
 
         verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
     }
@@ -137,9 +140,9 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("evict removes cached agent so next streamChat rebuilds it")
     void evict_removesFromCache() {
-        manager.streamChat("user-1", "ROLE_CASHIER", "first message");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
         manager.evict("user-1");
-        manager.streamChat("user-1", "ROLE_CASHIER", "after evict");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "after evict");
 
         verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
     }
@@ -147,8 +150,8 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat rebuilds agent when role changes for same userId")
     void streamChat_roleChange_rebuildsAgent() {
-        manager.streamChat("user-1", "ROLE_CASHIER", "first");
-        manager.streamChat("user-1", "ROLE_MANAGER", "second");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_MANAGER"), "second");
 
         verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
         verify(toolRegistry, never()).resolveToolsForRole("ROLE_MANAGER");
@@ -160,7 +163,9 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(exaWebSearchTool)));
 
-        Flux<String> result = manager.streamChat("user-with-role-tool", "ROLE_DUPLICATE", "hello");
+        Flux<String> result = manager.streamChat(
+                userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"),
+                "hello");
 
         assertThat(result).isNotNull();
     }
@@ -185,7 +190,9 @@ class StreamingSessionAgentManagerTest {
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat("user-1", "ROLE_CASHIER", "show me inventory levels");
+        Flux<String> result = selectorManager.streamChat(
+                userContext("user-1", USER_ID, "ROLE_CASHIER"),
+                "show me inventory levels");
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
@@ -206,7 +213,9 @@ class StreamingSessionAgentManagerTest {
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat("user-2", "ROLE_CASHIER", "anything");
+        Flux<String> result = selectorManager.streamChat(
+                userContext("user-2", USER_ID, "ROLE_CASHIER"),
+                "anything");
 
         assertThat(result).isNotNull();
         // resolveToolsForRole(role) is called for the fallback path
@@ -227,7 +236,9 @@ class StreamingSessionAgentManagerTest {
                 null, 30, 500, 50, 2, 100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat("user-3", "ROLE_CASHIER", "anything");
+        Flux<String> result = selectorManager.streamChat(
+                userContext("user-3", USER_ID, "ROLE_CASHIER"),
+                "anything");
 
         assertThat(result).isNotNull();
         // fallback resolves from role tool set
@@ -256,7 +267,7 @@ class StreamingSessionAgentManagerTest {
                 2,
                 100);
 
-        selectorManager.streamChat("user-1", "ROLE_CASHIER", "stock part 1234");
+        selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "stock part 1234");
 
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::InventoryFacadeTool")
@@ -285,7 +296,7 @@ class StreamingSessionAgentManagerTest {
                 2,
                 100);
 
-        selectorManager.streamChat("user-1", "ROLE_CASHIER", "latest internet news");
+        selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "latest internet news");
 
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool")
@@ -313,8 +324,8 @@ class StreamingSessionAgentManagerTest {
                 100);
         clearInvocations(toolRegistry);
 
-        expiringManager.streamChat("user-1", "ROLE_CASHIER", "first");
-        expiringManager.streamChat("user-1", "ROLE_CASHIER", "second");
+        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
+        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
         verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
     }
@@ -325,5 +336,14 @@ class StreamingSessionAgentManagerTest {
         assertThat(cache).isNotNull();
         cache.cleanUp();
         return cache.asMap().keySet();
+    }
+
+    private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
+        return new CurrentUserContext(
+                username,
+                userId,
+                primaryRole,
+                Set.of(primaryRole),
+                Set.of(primaryRole, "mcp:chat:stream"));
     }
 }

@@ -13,7 +13,7 @@ public interface AgentOrchestrationService {
      * Multiple chat turns for the same user reuse the same agent instance.
      */
     @NonNull
-    String chat(@NonNull String userId, @NonNull String role, @NonNull String message);
+    String chat(@NonNull CurrentUserContext currentUserContext, @NonNull String message);
 
     /**
      * Evicts the cached agent for the given user.
