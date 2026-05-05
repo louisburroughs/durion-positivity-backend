@@ -131,10 +131,11 @@ jobs:
       - name: Install all modules (skip tests)
         run: ./mvnw install -DskipTests -DskipITs -T 1C -B -q
 
-      - name: Preload Surefire JUnit provider for offline jobs
-        run: ./mvnw org.apache.maven.plugins:maven-dependency-plugin:3.8.1:get
-          -Dartifact=org.apache.maven.surefire:surefire-junit-platform:3.5.5
-          -Dtransitive=true -B -q
+      - name: Warm up test-execution infrastructure for offline jobs
+        # Run a real test on the smallest module so Maven downloads all Surefire /
+        # JUnit Platform runtime artifacts (surefire-junit-platform, junit-platform-launcher,
+        # etc.) before they are needed by the offline matrix jobs.
+        run: ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
 
       - name: Save reactor build to cache
         uses: actions/cache/save@v4
