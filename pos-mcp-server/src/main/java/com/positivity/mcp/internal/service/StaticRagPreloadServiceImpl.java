@@ -57,8 +57,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
     Timer.Sample sample = Timer.start(meterRegistry);
     try {
       reconcileQueuedRecords();
-      List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs() == null ? List.of()
-          : preloadProperties.docs();
+      List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
       for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
         try {
           preloadDocument(entry.id(), entry.sourcePath());
