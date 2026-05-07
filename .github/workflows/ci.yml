@@ -114,6 +114,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
@@ -159,6 +162,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Full history for better change detection
+
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -228,6 +234,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
@@ -271,6 +280,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -444,6 +456,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
@@ -503,6 +518,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -575,6 +593,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4

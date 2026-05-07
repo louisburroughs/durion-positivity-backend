@@ -38,6 +38,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set Maven revision
+        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
