@@ -28,47 +28,83 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Inventory Reference Data", description = "Inventory reference-data read endpoints")
 public class InventoryReferenceDataController {
 
-  private final InventoryReferenceDataService inventoryReferenceDataService;
+    private final InventoryReferenceDataService inventoryReferenceDataService;
 
-  @GetMapping("/locations")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "inventory:location:view" })
-  @PreAuthorize("hasAuthority('inventory:location:view')")
-  @Operation(operationId = "listInventoryLocations", summary = "List inventory locations", description = "Returns paged inventory locations.", tags = {
-      "Inventory Reference Data" })
-    @ApiResponse(responseCode = "200", description = "Locations returned (paged)", content = @Content(mediaType = "application/json", schema = @Schema(description = "Page of inventory locations")))
-  @ApiResponse(responseCode = "403", description = "User lacks required location view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  public ResponseEntity<Page<LocationDto>> listLocations(
-      @RequestParam(required = false) UUID siteId,
-      @PageableDefault(size = 20) Pageable pageable) {
-    return ResponseEntity.ok(inventoryReferenceDataService.listLocations(siteId, pageable));
-  }
+    @GetMapping("/locations")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:view"})
+    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @Operation(
+            operationId = "listInventoryLocations",
+            summary = "List inventory locations",
+            description = "Returns paged inventory locations.",
+            tags = {"Inventory Reference Data"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Locations returned (paged)",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(description = "Page of inventory locations")))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required location view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Page<LocationDto>> listLocations(
+            @RequestParam(required = false) UUID siteId, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(inventoryReferenceDataService.listLocations(siteId, pageable));
+    }
 
-  @GetMapping("/storage-locations")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "inventory:location:view" })
-  @PreAuthorize("hasAuthority('inventory:location:view')")
-  @Operation(operationId = "listInventoryStorageLocations", summary = "List inventory storage locations", description = "Returns paged inventory storage locations.", tags = {
-      "Inventory Reference Data" })
-    @ApiResponse(responseCode = "200", description = "Storage locations returned (paged)", content = @Content(mediaType = "application/json", schema = @Schema(description = "Page of inventory storage locations")))
-  @ApiResponse(responseCode = "403", description = "User lacks required location view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  public ResponseEntity<Page<StorageLocationDto>> listStorageLocations(
-      @RequestParam(required = false) UUID locationId,
-      @PageableDefault(size = 20) Pageable pageable) {
-    return ResponseEntity.ok(inventoryReferenceDataService.listStorageLocations(locationId, pageable));
-  }
+    @GetMapping("/storage-locations")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:view"})
+    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @Operation(
+            operationId = "listInventoryStorageLocations",
+            summary = "List inventory storage locations",
+            description = "Returns paged inventory storage locations.",
+            tags = {"Inventory Reference Data"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Storage locations returned (paged)",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(description = "Page of inventory storage locations")))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required location view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Page<StorageLocationDto>> listStorageLocations(
+            @RequestParam(required = false) UUID locationId, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(inventoryReferenceDataService.listStorageLocations(locationId, pageable));
+    }
 
-  @GetMapping("/location-zones")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "inventory:location:view" })
-  @PreAuthorize("hasAuthority('inventory:location:view')")
-  @Operation(operationId = "listInventoryLocationZones", summary = "List inventory location zones", description = "Returns paged inventory location zones.", tags = {
-      "Inventory Reference Data" })
-    @ApiResponse(responseCode = "200", description = "Location zones returned (paged)", content = @Content(mediaType = "application/json", schema = @Schema(description = "Page of inventory location zones")))
-  @ApiResponse(responseCode = "403", description = "User lacks required location view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  public ResponseEntity<Page<LocationZoneDto>> listLocationZones(
-      @RequestParam(required = false) UUID locationId,
-      @PageableDefault(size = 20) Pageable pageable) {
-    return ResponseEntity.ok(inventoryReferenceDataService.listLocationZones(locationId, pageable));
-  }
+    @GetMapping("/location-zones")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:view"})
+    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @Operation(
+            operationId = "listInventoryLocationZones",
+            summary = "List inventory location zones",
+            description = "Returns paged inventory location zones.",
+            tags = {"Inventory Reference Data"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Location zones returned (paged)",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(description = "Page of inventory location zones")))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required location view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Page<LocationZoneDto>> listLocationZones(
+            @RequestParam(required = false) UUID locationId, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(inventoryReferenceDataService.listLocationZones(locationId, pageable));
+    }
 }

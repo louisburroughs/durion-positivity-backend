@@ -126,8 +126,7 @@ public class StreamingSessionAgentManager
     }
 
     @Override
-    public @NonNull Flux<String> streamChat(
-            @NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+    public @NonNull Flux<String> streamChat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
         AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
@@ -152,8 +151,8 @@ public class StreamingSessionAgentManager
         if (toolRegistryService != null) {
             List<Object> roleTools = roleToolsForMessage(role, message);
             List<Object> fallbackTools = fallbackToolsForMessage(message);
-            List<Object> allTools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
-                    fallbackTools.toArray());
+            List<Object> allTools =
+                    ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray());
             String cacheKey = toolCacheKey(allTools);
             LOGGER.debug(
                     "MCP streaming tool selection username={} role={} cacheKey={} tools={}",
@@ -161,11 +160,9 @@ public class StreamingSessionAgentManager
                     role,
                     cacheKey,
                     toolNames(allTools));
-            agent = roleAgentCache.get(
-                    role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
+            agent = roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
         } else {
-            agent = roleAgentCache.get(
-                    role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, ignored -> buildAgent(role));
+            agent = roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, ignored -> buildAgent(role));
         }
 
         String userContext = formatUserContext(currentUserContext);
@@ -218,8 +215,7 @@ public class StreamingSessionAgentManager
         return buildAgent(role, tools);
     }
 
-    private @NonNull StreamingPosAssistant buildAgent(
-            @NonNull String role, @NonNull List<Object> tools) {
+    private @NonNull StreamingPosAssistant buildAgent(@NonNull String role, @NonNull List<Object> tools) {
         long startNanos = System.nanoTime();
         ContentRetriever semanticRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
@@ -235,11 +231,11 @@ public class StreamingSessionAgentManager
                 .build();
         ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever hybridRetriever = new HybridContentRetriever(
-                List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever =
+                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
         ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
-                "tier2-hybrid-reranked-retriever");
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
         StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
@@ -305,8 +301,8 @@ public class StreamingSessionAgentManager
             return fullRoleTools;
         }
         try {
-            List<ToolMetadata> candidates = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit);
+            List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
+                    new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit);
             if (LOGGER.isDebugEnabled()) {
                 for (int i = 0; i < candidates.size(); i++) {
                     ToolMetadata candidate = candidates.get(i);
@@ -320,7 +316,8 @@ public class StreamingSessionAgentManager
                             String.format(Locale.ROOT, "%.3f", candidate.priority()));
                 }
             }
-            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
+            List<String> selectedNames =
+                    candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
                         "MCP streaming tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
@@ -414,7 +411,8 @@ public class StreamingSessionAgentManager
     }
 
     private static int tokenCount(@NonNull String text) {
-        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text)).size();
+        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text))
+                .size();
     }
 
     private static long elapsedMs(long startNanos) {

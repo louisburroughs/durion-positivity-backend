@@ -199,7 +199,8 @@ class WorkorderServiceImplCrmPropagationTest {
     }
 
     @Test
-    @DisplayName("createWorkorder(estimateId, customerId) — empty crmContactIds on estimate yields empty list in workorder")
+    @DisplayName(
+            "createWorkorder(estimateId, customerId) — empty crmContactIds on estimate yields empty list in workorder")
     void createWorkorder_withEstimateId_emptyCrmContactIds_workorderHasEmptyList() {
         Estimate estimate = buildEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
         when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));

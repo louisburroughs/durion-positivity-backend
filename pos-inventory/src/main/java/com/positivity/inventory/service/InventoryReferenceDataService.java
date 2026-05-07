@@ -11,12 +11,12 @@ import org.springframework.data.domain.Pageable;
 
 public interface InventoryReferenceDataService {
 
-  @NonNull
-  Page<LocationDto> listLocations(@Nullable UUID siteId, @NonNull Pageable pageable);
+    @NonNull
+    Page<LocationDto> listLocations(@Nullable UUID siteId, @NonNull Pageable pageable);
 
-  @NonNull
-  Page<StorageLocationDto> listStorageLocations(@Nullable UUID locationId, @NonNull Pageable pageable);
+    @NonNull
+    Page<StorageLocationDto> listStorageLocations(@Nullable UUID locationId, @NonNull Pageable pageable);
 
-  @NonNull
-  Page<LocationZoneDto> listLocationZones(@Nullable UUID locationId, @NonNull Pageable pageable);
+    @NonNull
+    Page<LocationZoneDto> listLocationZones(@Nullable UUID locationId, @NonNull Pageable pageable);
 }

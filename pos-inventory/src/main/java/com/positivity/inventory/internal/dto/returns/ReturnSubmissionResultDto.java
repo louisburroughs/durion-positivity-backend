@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReturnSubmissionResultDto {
-  private UUID returnId;
-  private UUID workorderId;
-  private int processedLines;
-  private String status;
-  private Instant processedAt;
+    private UUID returnId;
+    private UUID workorderId;
+    private int processedLines;
+    private String status;
+    private Instant processedAt;
 }

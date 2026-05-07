@@ -27,7 +27,9 @@ class ReportingFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new ReportingFacadeTool(builder, BASE_URL,
+        tool = new ReportingFacadeTool(
+                builder,
+                BASE_URL,
                 "/accounting/v1/reporting/sales/{period}",
                 "/accounting/v1/reporting/inventory/{locationId}",
                 "/accounting/v1/reporting/revenue/{period}");

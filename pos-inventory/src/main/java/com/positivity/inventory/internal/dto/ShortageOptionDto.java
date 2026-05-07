@@ -12,12 +12,16 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ShortageOptionDto {
-  private UUID allocationId;
-  @Nullable
-  private UUID allocationLineId;
-  private String resolution;
-  private String description;
-  @Nullable
-  private String substituteSku;
-  private int estimatedDays;
+    private UUID allocationId;
+
+    @Nullable
+    private UUID allocationLineId;
+
+    private String resolution;
+    private String description;
+
+    @Nullable
+    private String substituteSku;
+
+    private int estimatedDays;
 }

@@ -29,56 +29,85 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Inventory Ledger", description = "Inventory ledger read endpoints")
 public class InventoryLedgerController {
 
-  private final InventoryLedgerService inventoryLedgerService;
+    private final InventoryLedgerService inventoryLedgerService;
 
-  @GetMapping
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "inventory:ledger:view" })
-  @PreAuthorize("hasAuthority('inventory:ledger:view')")
-  @Operation(operationId = "listInventoryLedger", summary = "List inventory ledger entries", description = "Returns inventory ledger entries using optional filters.", tags = {
-      "Inventory Ledger" })
-  @ApiResponse(responseCode = "200", description = "Ledger entries returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LedgerPage.class)))
-  @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  @ApiResponse(responseCode = "403", description = "User lacks required ledger view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  public ResponseEntity<LedgerPage<InventoryLedgerEntryDto>> listLedgerEntries(
-      @RequestParam(required = false) String productSku,
-      @RequestParam(required = false) UUID locationId,
-      @RequestParam(required = false) UUID storageLocationId,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateFrom,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateTo,
-      @RequestParam(required = false) UUID sourceTransactionId,
-      @RequestParam(required = false) UUID workorderId,
-      @RequestParam(required = false) UUID workorderLineId,
-      @RequestParam(required = false) List<String> movementTypes,
-      @RequestParam(required = false) String pageToken,
-      @RequestParam(required = false, defaultValue = "50") int pageSize) {
-    InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-        .productSku(productSku)
-        .locationId(locationId)
-        .storageLocationId(storageLocationId)
-        .dateFrom(dateFrom)
-        .dateTo(dateTo)
-        .sourceTransactionId(sourceTransactionId)
-        .workorderId(workorderId)
-        .workorderLineId(workorderLineId)
-        .movementTypes(movementTypes)
-        .pageToken(pageToken)
-        .pageSize(pageSize)
-        .build();
+    @GetMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:ledger:view"})
+    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @Operation(
+            operationId = "listInventoryLedger",
+            summary = "List inventory ledger entries",
+            description = "Returns inventory ledger entries using optional filters.",
+            tags = {"Inventory Ledger"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Ledger entries returned",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LedgerPage.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required ledger view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<LedgerPage<InventoryLedgerEntryDto>> listLedgerEntries(
+            @RequestParam(required = false) String productSku,
+            @RequestParam(required = false) UUID locationId,
+            @RequestParam(required = false) UUID storageLocationId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateTo,
+            @RequestParam(required = false) UUID sourceTransactionId,
+            @RequestParam(required = false) UUID workorderId,
+            @RequestParam(required = false) UUID workorderLineId,
+            @RequestParam(required = false) List<String> movementTypes,
+            @RequestParam(required = false) String pageToken,
+            @RequestParam(required = false, defaultValue = "50") int pageSize) {
+        InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
+                .productSku(productSku)
+                .locationId(locationId)
+                .storageLocationId(storageLocationId)
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .sourceTransactionId(sourceTransactionId)
+                .workorderId(workorderId)
+                .workorderLineId(workorderLineId)
+                .movementTypes(movementTypes)
+                .pageToken(pageToken)
+                .pageSize(pageSize)
+                .build();
 
-    return ResponseEntity.ok(inventoryLedgerService.listLedgerEntries(params));
-  }
+        return ResponseEntity.ok(inventoryLedgerService.listLedgerEntries(params));
+    }
 
-  @GetMapping("/{entryId}")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "inventory:ledger:view" })
-  @PreAuthorize("hasAuthority('inventory:ledger:view')")
-  @Operation(operationId = "getInventoryLedgerEntry", summary = "Get inventory ledger entry", description = "Returns a single inventory ledger entry by ID.", tags = {
-      "Inventory Ledger" })
-  @ApiResponse(responseCode = "200", description = "Ledger entry returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryLedgerEntryDto.class)))
-  @ApiResponse(responseCode = "403", description = "User lacks required ledger view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  @ApiResponse(responseCode = "404", description = "Ledger entry not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-  public ResponseEntity<InventoryLedgerEntryDto> getLedgerEntry(@PathVariable UUID entryId) {
-    return ResponseEntity.ok(inventoryLedgerService.getLedgerEntry(entryId));
-  }
+    @GetMapping("/{entryId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:ledger:view"})
+    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @Operation(
+            operationId = "getInventoryLedgerEntry",
+            summary = "Get inventory ledger entry",
+            description = "Returns a single inventory ledger entry by ID.",
+            tags = {"Inventory Ledger"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Ledger entry returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = InventoryLedgerEntryDto.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required ledger view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Ledger entry not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<InventoryLedgerEntryDto> getLedgerEntry(@PathVariable UUID entryId) {
+        return ResponseEntity.ok(inventoryLedgerService.getLedgerEntry(entryId));
+    }
 }

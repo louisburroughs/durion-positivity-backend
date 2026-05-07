@@ -25,8 +25,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-        "inventory:adjustment:create" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"inventory:adjustment:create"})
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
 @Slf4j
@@ -39,8 +40,11 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     @Override
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_BULK_INGEST", apiVersion = "1")
-    @Operation(summary = "Bulk ingest inventory adjustments", description = "Processes a batch of inventory adjustment records and creates adjustment requests for each accepted row.", tags = {
-            "Inventory Bulk Ingest API" })
+    @Operation(
+            summary = "Bulk ingest inventory adjustments",
+            description =
+                    "Processes a batch of inventory adjustment records and creates adjustment requests for each accepted row.",
+            tags = {"Inventory Bulk Ingest API"})
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @Valid @RequestBody @NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {
         return super.bulkIngest(request);
@@ -56,9 +60,8 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
         for (int i = 0; i < request.getRecords().size(); i++) {
             InventoryBulkIngestRecord ingestRecord = request.getRecords().get(i);
             try {
-                UUID locationId = ingestRecord.getLocationId() == null
-                        ? request.getLocationId()
-                        : ingestRecord.getLocationId();
+                UUID locationId =
+                        ingestRecord.getLocationId() == null ? request.getLocationId() : ingestRecord.getLocationId();
                 CreateAdjustmentRequestDto adjustmentRequest = CreateAdjustmentRequestDto.builder()
                         .productSku(ingestRecord.getSku())
                         .locationId(locationId)

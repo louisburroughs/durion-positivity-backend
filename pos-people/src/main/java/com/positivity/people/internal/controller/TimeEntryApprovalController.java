@@ -24,56 +24,61 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Time Entry Approval API", description = "Approve/reject time entries (batch)")
 public class TimeEntryApprovalController {
 
-        private final com.positivity.people.service.TimeEntryService timeEntryService;
+    private final com.positivity.people.service.TimeEntryService timeEntryService;
 
-        @Operation(summary = "Batch approve time entries", description = "Approve multiple time entries. pos-people is authoritative for approval execution.")
-        @ApiResponse(responseCode = "200", description = "Time entries approved successfully")
-        @ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
-        @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
-        @PostMapping("/approve")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "people:timeEntry:approve" })
-        @PreAuthorize("hasAuthority('people:timeEntry:approve')")
-        public ResponseEntity<Object> approveTimeEntries(
-                        @RequestBody @Valid TimeEntryDecisionBatchRequest request,
-                        @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+    @Operation(
+            summary = "Batch approve time entries",
+            description = "Approve multiple time entries. pos-people is authoritative for approval execution.")
+    @ApiResponse(responseCode = "200", description = "Time entries approved successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
+    @PostMapping("/approve")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timeEntry:approve"})
+    @PreAuthorize("hasAuthority('people:timeEntry:approve')")
+    public ResponseEntity<Object> approveTimeEntries(
+            @RequestBody @Valid TimeEntryDecisionBatchRequest request,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
 
-                List<String> ids = request.getDecisions().stream()
-                                .map(TimeEntryDecisionBatchRequest.Decision::getTimeEntryId)
-                                .toList();
+        List<String> ids = request.getDecisions().stream()
+                .map(TimeEntryDecisionBatchRequest.Decision::getTimeEntryId)
+                .toList();
 
-                List<TimeEntryDecisionResult> results = timeEntryService.approveEntries(ids, correlationId);
+        List<TimeEntryDecisionResult> results = timeEntryService.approveEntries(ids, correlationId);
 
-                TimeEntryDecisionResponse resp = new TimeEntryDecisionResponse(results);
-                return ResponseEntity.ok(resp);
+        TimeEntryDecisionResponse resp = new TimeEntryDecisionResponse(results);
+        return ResponseEntity.ok(resp);
+    }
+
+    @Operation(
+            summary = "Batch reject time entries",
+            description = "Reject multiple time entries. rejectionReason is required for each decision.")
+    @ApiResponse(responseCode = "200", description = "Time entries rejected successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
+    @PostMapping("/reject")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timeEntry:reject"})
+    @PreAuthorize("hasAuthority('people:timeEntry:reject')")
+    public ResponseEntity<Object> rejectTimeEntries(
+            @RequestBody @Valid TimeEntryDecisionBatchRequest request,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+
+        // Extract rejection reasons map and pass to service
+        java.util.Map<String, String> rejectionReasons = new java.util.HashMap<>();
+        for (TimeEntryDecisionBatchRequest.Decision d : request.getDecisions()) {
+            rejectionReasons.put(d.getTimeEntryId(), d.getRejectionReason());
         }
 
-        @Operation(summary = "Batch reject time entries", description = "Reject multiple time entries. rejectionReason is required for each decision.")
-        @ApiResponse(responseCode = "200", description = "Time entries rejected successfully")
-        @ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
-        @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
-        @PostMapping("/reject")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "people:timeEntry:reject" })
-        @PreAuthorize("hasAuthority('people:timeEntry:reject')")
-        public ResponseEntity<Object> rejectTimeEntries(
-                        @RequestBody @Valid TimeEntryDecisionBatchRequest request,
-                        @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+        List<String> ids = request.getDecisions().stream()
+                .map(TimeEntryDecisionBatchRequest.Decision::getTimeEntryId)
+                .toList();
 
-                // Extract rejection reasons map and pass to service
-                java.util.Map<String, String> rejectionReasons = new java.util.HashMap<>();
-                for (TimeEntryDecisionBatchRequest.Decision d : request.getDecisions()) {
-                        rejectionReasons.put(d.getTimeEntryId(), d.getRejectionReason());
-                }
+        List<TimeEntryDecisionResult> results = timeEntryService.rejectEntries(ids, rejectionReasons, correlationId);
 
-                List<String> ids = request.getDecisions().stream()
-                                .map(TimeEntryDecisionBatchRequest.Decision::getTimeEntryId)
-                                .toList();
-
-                List<TimeEntryDecisionResult> results = timeEntryService.rejectEntries(ids, rejectionReasons,
-                                correlationId);
-
-                TimeEntryDecisionResponse resp = new TimeEntryDecisionResponse(results);
-                return ResponseEntity.ok(resp);
-        }
+        TimeEntryDecisionResponse resp = new TimeEntryDecisionResponse(results);
+        return ResponseEntity.ok(resp);
+    }
 }

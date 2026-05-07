@@ -15,29 +15,29 @@ import org.jspecify.annotations.NonNull;
  */
 final class HybridContentRetriever implements ContentRetriever {
 
-  private final List<ContentRetriever> retrievers;
-  private final int maxMergedResults;
+    private final List<ContentRetriever> retrievers;
+    private final int maxMergedResults;
 
-  HybridContentRetriever(@NonNull List<ContentRetriever> retrievers, int maxMergedResults) {
-    this.retrievers = List.copyOf(retrievers);
-    this.maxMergedResults = Math.max(1, maxMergedResults);
-  }
-
-  @Override
-  public @NonNull List<Content> retrieve(@NonNull Query query) {
-    Map<String, Content> merged = new LinkedHashMap<>();
-    for (ContentRetriever retriever : retrievers) {
-      for (Content content : retriever.retrieve(query)) {
-        merged.putIfAbsent(contentKey(content), content);
-      }
+    HybridContentRetriever(@NonNull List<ContentRetriever> retrievers, int maxMergedResults) {
+        this.retrievers = List.copyOf(retrievers);
+        this.maxMergedResults = Math.max(1, maxMergedResults);
     }
-    return new ArrayList<>(merged.values()).stream().limit(maxMergedResults).toList();
-  }
 
-  private static @NonNull String contentKey(@NonNull Content content) {
-    if (content.textSegment() == null || content.textSegment().text() == null) {
-      return String.valueOf(content.hashCode());
+    @Override
+    public @NonNull List<Content> retrieve(@NonNull Query query) {
+        Map<String, Content> merged = new LinkedHashMap<>();
+        for (ContentRetriever retriever : retrievers) {
+            for (Content content : retriever.retrieve(query)) {
+                merged.putIfAbsent(contentKey(content), content);
+            }
+        }
+        return new ArrayList<>(merged.values()).stream().limit(maxMergedResults).toList();
     }
-    return content.textSegment().text().replaceAll("\\s+", " ").trim();
-  }
+
+    private static @NonNull String contentKey(@NonNull Content content) {
+        if (content.textSegment() == null || content.textSegment().text() == null) {
+            return String.valueOf(content.hashCode());
+        }
+        return content.textSegment().text().replaceAll("\\s+", " ").trim();
+    }
 }

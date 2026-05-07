@@ -27,7 +27,9 @@ class VehicleFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new VehicleFacadeTool(builder, BASE_URL,
+        tool = new VehicleFacadeTool(
+                builder,
+                BASE_URL,
                 "/customer/v1/vehicles/{vehicleId}",
                 "/customer/v1/vehicles/search?q={query}",
                 "/customer/v1/vehicles/customer/{customerId}");

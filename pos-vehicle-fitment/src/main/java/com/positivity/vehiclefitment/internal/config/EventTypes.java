@@ -35,9 +35,7 @@ public final class EventTypes {
                                 "FITMENT_PRODUCTS_FILTER",
                                 "Filter products by vehicle attributes to find matching products")
                         .build(),
-                EventTypeRegistration.write(
-                                "VEHICLE_FITMENT_BULK_INGEST",
-                                "Bulk ingest vehicle fitment records")
+                EventTypeRegistration.write("VEHICLE_FITMENT_BULK_INGEST", "Bulk ingest vehicle fitment records")
                         .build());
     }
 }

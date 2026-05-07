@@ -102,8 +102,10 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         try {
             return manufacturerRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
-            return manufacturerRepository.findAllByNameIgnoreCase(normalized).stream().findFirst().orElseThrow(
-                    () -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + normalized));
+            return manufacturerRepository.findAllByNameIgnoreCase(normalized).stream()
+                    .findFirst()
+                    .orElseThrow(
+                            () -> new VehicleFitmentException("Concurrent insert race on manufacturer: " + normalized));
         }
     }
 
@@ -125,8 +127,8 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return makeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (manufacturer != null
-                    ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
-                    : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized))
+                            ? makeRepository.findByManufacturerIdAndNameIgnoreCase(manufacturer.getId(), normalized)
+                            : makeRepository.findByManufacturerIsNullAndNameIgnoreCase(normalized))
                     .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on make: " + normalized));
         }
     }
@@ -149,8 +151,8 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return modelRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
-                    ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), normalized)
-                    : modelRepository.findByMakeIsNullAndNameIgnoreCase(normalized))
+                            ? modelRepository.findByMakeIdAndNameIgnoreCase(make.getId(), normalized)
+                            : modelRepository.findByMakeIsNullAndNameIgnoreCase(normalized))
                     .orElseThrow(() -> new VehicleFitmentException("Concurrent insert race on model: " + normalized));
         }
     }
@@ -173,8 +175,8 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             return vehicleTypeRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException _) {
             return (make != null
-                    ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), normalized)
-                    : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(normalized))
+                            ? vehicleTypeRepository.findByMakeIdAndVehicleTypeNameIgnoreCase(make.getId(), normalized)
+                            : vehicleTypeRepository.findByMakeIsNullAndVehicleTypeNameIgnoreCase(normalized))
                     .orElseThrow(
                             () -> new VehicleFitmentException("Concurrent insert race on vehicleType: " + normalized));
         }

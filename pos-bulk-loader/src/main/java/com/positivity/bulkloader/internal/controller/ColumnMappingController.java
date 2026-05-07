@@ -25,8 +25,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "bulkImport:upload:execute",
-        "bulkImport:status:read" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"bulkImport:upload:execute", "bulkImport:status:read"})
 @RequestMapping("/v1/bulk-jobs")
 @RequiredArgsConstructor
 @Slf4j
@@ -37,7 +38,10 @@ public class ColumnMappingController {
 
     @GetMapping("/{jobId}/mappings")
     @PreAuthorize("hasAuthority('bulkImport:status:read')")
-    @Operation(summary = "Get proposed column mappings for a job", description = "Retrieves the proposed column mappings for the specified bulk load job. The operator can only access mappings for their own jobs. This endpoint is typically used to review the detected column mappings before approving them for processing.")
+    @Operation(
+            summary = "Get proposed column mappings for a job",
+            description =
+                    "Retrieves the proposed column mappings for the specified bulk load job. The operator can only access mappings for their own jobs. This endpoint is typically used to review the detected column mappings before approving them for processing.")
     @ApiResponse(responseCode = "200", description = "Mappings returned")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
@@ -48,7 +52,10 @@ public class ColumnMappingController {
     @PutMapping("/{jobId}/mappings")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_MAPPING_APPROVE", apiVersion = "1")
-    @Operation(summary = "Approve and finalize column mappings for a job", description = "Approves and finalizes the proposed column mappings for the specified bulk load job. The operator can only approve mappings for their own jobs. Once approved, the mappings are locked and used for processing the bulk load job.")
+    @Operation(
+            summary = "Approve and finalize column mappings for a job",
+            description =
+                    "Approves and finalizes the proposed column mappings for the specified bulk load job. The operator can only approve mappings for their own jobs. Once approved, the mappings are locked and used for processing the bulk load job.")
     @ApiResponse(responseCode = "200", description = "Mappings approved")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(

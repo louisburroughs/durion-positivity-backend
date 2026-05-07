@@ -181,13 +181,13 @@ public class PartyServiceImpl implements PartyService {
 
         // Fall back to business name if no contact first name provided
         if (!StringUtils.hasText(firstName)) {
-            firstName = StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName()
-                    : request.getLegalName();
+            firstName =
+                    StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName() : request.getLegalName();
         }
 
         Contact contact = new Contact();
-        UUID personId = peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName,
-                firstName);
+        UUID personId =
+                peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName, firstName);
         contact.setCommercialParty(party);
         contact.setPersonId(personId);
         contact.setFirstName(firstName);
@@ -220,7 +220,8 @@ public class PartyServiceImpl implements PartyService {
                 .filter(p -> matchesSearchCriteria(p, searchRequest))
                 .toList();
 
-        List<SearchPartiesResponse.PartySummary> summaries = filtered.stream().map(this::mapToPartySummary).toList();
+        List<SearchPartiesResponse.PartySummary> summaries =
+                filtered.stream().map(this::mapToPartySummary).toList();
 
         log.debug("Found {} parties matching search criteria", summaries.size());
 
@@ -752,7 +753,8 @@ public class PartyServiceImpl implements PartyService {
 
     private CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
         try {
-            VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
+            VehicleResponse vehicleData =
+                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
             if (vehicleData == null) {
                 log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
                 return null;

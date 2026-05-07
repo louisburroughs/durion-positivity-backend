@@ -24,91 +24,88 @@ import org.springframework.web.client.RestClient;
 @Component
 public class InventoryClientImpl implements InventoryClient {
 
-        private final RestClient restClient;
+    private final RestClient restClient;
 
-        public InventoryClientImpl(
-                        @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-                        @Value("${pos.inventory.base-url:http://api-gateway}") String baseUrl) {
-                this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+    public InventoryClientImpl(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.inventory.base-url:http://api-gateway}") String baseUrl) {
+        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+    }
+
+    @Override
+    public Optional<AvailabilityClientResponse> fetchAvailability(String productSku, UUID locationId) {
+        log.debug("Fetching availability: productSku={}, locationId={}", productSku, locationId);
+
+        AvailabilityServiceResponse response = restClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/inventory/v1/inventory/availability/query")
+                        .queryParam("productSku", productSku)
+                        .queryParam("locationId", locationId)
+                        .build())
+                .header("X-User", "pos-catalog-service")
+                .header("X-Authorities", "inventory:availability:read")
+                .retrieve()
+                .body(AvailabilityServiceResponse.class);
+
+        if (response == null) {
+            log.warn("Inventory service returned null for productSku={}", productSku);
+            return Optional.empty();
         }
 
-        @Override
-        public Optional<AvailabilityClientResponse> fetchAvailability(String productSku, UUID locationId) {
-                log.debug("Fetching availability: productSku={}, locationId={}", productSku, locationId);
+        return Optional.of(new AvailabilityClientResponse(
+                response.onHandQuantity(),
+                response.allocatedQuantity(),
+                response.availableToPromiseQuantity(),
+                response.unitOfMeasure()));
+    }
 
-                AvailabilityServiceResponse response = restClient
-                                .get()
-                                .uri(uriBuilder -> uriBuilder
-                                                .path("/inventory/v1/inventory/availability/query")
-                                                .queryParam("productSku", productSku)
-                                                .queryParam("locationId", locationId)
-                                                .build())
-                                .header("X-User", "pos-catalog-service")
-                                .header("X-Authorities", "inventory:availability:read")
-                                .retrieve()
-                                .body(AvailabilityServiceResponse.class);
+    @Override
+    public Optional<LeadTimeClientResponse> fetchLeadTime(UUID productId, UUID locationId) {
+        log.debug("Fetching lead time: productId={}, locationId={}", productId, locationId);
+        try {
+            LeadTimeServiceResponse response = restClient
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/inventory/v1/inventory/availability/lead-time")
+                            .queryParam("productId", productId)
+                            .queryParam("locationId", locationId)
+                            .build())
+                    .header("X-User", "pos-catalog-service")
+                    .header("X-Authorities", "inventory:availability:read")
+                    .retrieve()
+                    .body(LeadTimeServiceResponse.class);
 
-                if (response == null) {
-                        log.warn("Inventory service returned null for productSku={}", productSku);
-                        return Optional.empty();
-                }
+            if (response == null) {
+                log.warn("Inventory lead-time service returned null for productId={}", productId);
+                return Optional.empty();
+            }
 
-                return Optional.of(new AvailabilityClientResponse(
-                                response.onHandQuantity(),
-                                response.allocatedQuantity(),
-                                response.availableToPromiseQuantity(),
-                                response.unitOfMeasure()));
+            return Optional.of(new LeadTimeClientResponse(
+                    response.minDays(),
+                    response.maxDays(),
+                    response.displayText(),
+                    response.source(),
+                    response.confidence(),
+                    response.asOf()));
+        } catch (Exception ex) {
+            log.debug("Lead-time lookup unavailable for productId={}: {}", productId, ex.getMessage());
+            return Optional.empty();
         }
+    }
 
-        @Override
-        public Optional<LeadTimeClientResponse> fetchLeadTime(UUID productId, UUID locationId) {
-                log.debug("Fetching lead time: productId={}, locationId={}", productId, locationId);
-                try {
-                        LeadTimeServiceResponse response = restClient
-                                        .get()
-                                        .uri(uriBuilder -> uriBuilder
-                                                        .path("/inventory/v1/inventory/availability/lead-time")
-                                                        .queryParam("productId", productId)
-                                                        .queryParam("locationId", locationId)
-                                                        .build())
-                                        .header("X-User", "pos-catalog-service")
-                                        .header("X-Authorities", "inventory:availability:read")
-                                        .retrieve()
-                                        .body(LeadTimeServiceResponse.class);
+    // -----------------------------------------------------------------------
+    // Internal response shape (mirrors pos-inventory API contract)
+    // -----------------------------------------------------------------------
 
-                        if (response == null) {
-                                log.warn("Inventory lead-time service returned null for productId={}", productId);
-                                return Optional.empty();
-                        }
+    private record AvailabilityServiceResponse(
+            int onHandQuantity, int allocatedQuantity, int availableToPromiseQuantity, String unitOfMeasure) {}
 
-                        return Optional.of(new LeadTimeClientResponse(
-                                        response.minDays(),
-                                        response.maxDays(),
-                                        response.displayText(),
-                                        response.source(),
-                                        response.confidence(),
-                                        response.asOf()));
-                } catch (Exception ex) {
-                        log.debug("Lead-time lookup unavailable for productId={}: {}", productId, ex.getMessage());
-                        return Optional.empty();
-                }
-        }
-
-        // -----------------------------------------------------------------------
-        // Internal response shape (mirrors pos-inventory API contract)
-        // -----------------------------------------------------------------------
-
-        private record AvailabilityServiceResponse(
-                        int onHandQuantity, int allocatedQuantity, int availableToPromiseQuantity,
-                        String unitOfMeasure) {
-        }
-
-        private record LeadTimeServiceResponse(
-                        Integer minDays,
-                        Integer maxDays,
-                        String displayText,
-                        String source,
-                        String confidence,
-                        java.time.Instant asOf) {
-        }
+    private record LeadTimeServiceResponse(
+            Integer minDays,
+            Integer maxDays,
+            String displayText,
+            String source,
+            String confidence,
+            java.time.Instant asOf) {}
 }

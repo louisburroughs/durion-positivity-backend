@@ -16,8 +16,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request to submit corrected data records for a failed bulk load job")
 public class BulkCorrectionRequest {
 
-  @Valid
-  @NotEmpty
-  @Schema(description = "List of correction items, one per audit record to correct", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
-  private List<BulkCorrectionItem> corrections;
+    @Valid
+    @NotEmpty
+    @Schema(
+            description = "List of correction items, one per audit record to correct",
+            requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
+    private List<BulkCorrectionItem> corrections;
 }

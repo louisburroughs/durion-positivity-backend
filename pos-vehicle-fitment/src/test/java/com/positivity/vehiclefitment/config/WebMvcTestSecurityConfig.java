@@ -34,56 +34,56 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Profile("test")
 public class WebMvcTestSecurityConfig {
 
-  private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-      new SimpleGrantedAuthority("ROLE_ADMIN"),
-      new SimpleGrantedAuthority("vehicle-fitment:hint:create"));
+    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
+            new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("vehicle-fitment:hint:create"));
 
-  @Bean(name = "gatewaySecurityFilterChain")
-  @Primary
-  public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
-    http.csrf(AbstractHttpConfigurer::disable)
-        .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
-        .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
-        .exceptionHandling(ex -> ex.authenticationEntryPoint(
-            (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED,
-                "Unauthorized")));
-    return http.build();
-  }
-
-  @Bean
-  @Primary
-  @SuppressWarnings("java:S1874")
-  public UserDetailsService testUserDetailsService() {
-    var user = User.withUsername("testuser")
-        .password("{noop}test")
-        .authorities(TEST_AUTHORITIES)
-        .build();
-    return new InMemoryUserDetailsManager(user);
-  }
-
-  private static class TestAutoAuthFilter extends OncePerRequestFilter {
-    @Override
-    protected void doFilterInternal(
-        HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-        throws ServletException, IOException {
-      String authHeader = request.getHeader("Authorization");
-      if (authHeader != null) {
-        String headerAuthorities = request.getHeader("X-Authorities");
-        List<SimpleGrantedAuthority> authorities = (headerAuthorities == null || headerAuthorities.isBlank())
-            ? TEST_AUTHORITIES
-            : Arrays.stream(headerAuthorities.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(SimpleGrantedAuthority::new)
-                .toList();
-
-        var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
-        authentication.setDetails(Map.of(
-            GatewaySecurityConstants.DETAIL_USER_ID, UUID.fromString("00000000-0000-0000-0000-000000000001"),
-            GatewaySecurityConstants.DETAIL_USERNAME, "testuser"));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-      }
-      filterChain.doFilter(request, response);
+    @Bean(name = "gatewaySecurityFilterChain")
+    @Primary
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
+        http.csrf(AbstractHttpConfigurer::disable)
+                .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) ->
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")));
+        return http.build();
     }
-  }
+
+    @Bean
+    @Primary
+    @SuppressWarnings("java:S1874")
+    public UserDetailsService testUserDetailsService() {
+        var user = User.withUsername("testuser")
+                .password("{noop}test")
+                .authorities(TEST_AUTHORITIES)
+                .build();
+        return new InMemoryUserDetailsManager(user);
+    }
+
+    private static class TestAutoAuthFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null) {
+                String headerAuthorities = request.getHeader("X-Authorities");
+                List<SimpleGrantedAuthority> authorities = (headerAuthorities == null || headerAuthorities.isBlank())
+                        ? TEST_AUTHORITIES
+                        : Arrays.stream(headerAuthorities.split(","))
+                                .map(String::trim)
+                                .filter(value -> !value.isBlank())
+                                .map(SimpleGrantedAuthority::new)
+                                .toList();
+
+                var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
+                authentication.setDetails(Map.of(
+                        GatewaySecurityConstants.DETAIL_USER_ID,
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        GatewaySecurityConstants.DETAIL_USERNAME,
+                        "testuser"));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+            filterChain.doFilter(request, response);
+        }
+    }
 }

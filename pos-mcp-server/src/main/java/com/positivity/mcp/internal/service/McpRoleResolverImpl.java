@@ -13,22 +13,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class McpRoleResolverImpl implements McpRoleResolver {
 
-  static final String FALLBACK_ROLE = "ROLE_USER";
+    static final String FALLBACK_ROLE = "ROLE_USER";
 
-  private static final List<String> ROLE_PRIORITY = List.of(
-      "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_SERVICE_WRITER",
-      "ROLE_CASHIER", "ROLE_SUPPLIER", "ROLE_TECHNICIAN");
+    private static final List<String> ROLE_PRIORITY = List.of(
+            "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_SERVICE_WRITER", "ROLE_CASHIER", "ROLE_SUPPLIER", "ROLE_TECHNICIAN");
 
-  @Override
-  public @NonNull String resolvePrimaryRole(@NonNull Authentication authentication) {
-    Set<String> userRoles = authentication.getAuthorities().stream()
-        .map(GrantedAuthority::getAuthority)
-        .filter(Objects::nonNull)
-        .filter(a -> a.startsWith("ROLE_"))
-        .collect(Collectors.toSet());
-    return ROLE_PRIORITY.stream()
-        .filter(userRoles::contains)
-        .findFirst()
-        .orElse(FALLBACK_ROLE);
-  }
+    @Override
+    public @NonNull String resolvePrimaryRole(@NonNull Authentication authentication) {
+        Set<String> userRoles = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .filter(a -> a.startsWith("ROLE_"))
+                .collect(Collectors.toSet());
+        return ROLE_PRIORITY.stream().filter(userRoles::contains).findFirst().orElse(FALLBACK_ROLE);
+    }
 }

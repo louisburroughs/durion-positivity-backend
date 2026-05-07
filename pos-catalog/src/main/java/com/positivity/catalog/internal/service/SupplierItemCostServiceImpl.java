@@ -1,6 +1,5 @@
 package com.positivity.catalog.internal.service;
 
-import jakarta.persistence.criteria.Predicate;
 import com.positivity.catalog.internal.dto.CostTierDto;
 import com.positivity.catalog.internal.dto.SupplierItemCostCreateRequestDto;
 import com.positivity.catalog.internal.dto.SupplierItemCostDto;
@@ -12,6 +11,7 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.SupplierItemCostRepository;
 import com.positivity.catalog.service.SupplierItemCostService;
+import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,7 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SupplierItemCostServiceImpl implements SupplierItemCostService {
 
     private static final String NOT_FOUND_BY_ID = "Supplier item cost not found for id=";
-    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE = "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
+    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE =
+            "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
 
     private final SupplierItemCostRepository supplierItemCostRepository;
 

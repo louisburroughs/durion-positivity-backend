@@ -46,170 +46,192 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Cycle Count Adjustments", description = "Manage inventory adjustments from cycle counts")
 public class CycleCountAdjustmentController {
 
-        private final CycleCountAdjustmentService adjustmentService;
+    private final CycleCountAdjustmentService adjustmentService;
 
-        /**
-         * Creates a new cycle count adjustment.
-         *
-         * <p>
-         * The adjustment will be evaluated against approval thresholds:
-         * <ul>
-         * <li>If below all thresholds: auto-approved and posted immediately</li>
-         * <li>If exceeds any threshold: enters PENDING_APPROVAL status</li>
-         * </ul>
-         *
-         * @param request the adjustment creation request
-         * @return the created adjustment with its assigned status
-         */
-        @PostMapping
-        @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_CREATE", apiVersion = "1")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:create" })
-        @PreAuthorize("hasAuthority('inventory:adjustment:create')")
-        @Operation(summary = "Create cycle count adjustment", description = "Creates a new adjustment from a cycle count. Automatically evaluates against approval thresholds.", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "201", description = "Adjustment created successfully")
-        @ApiResponse(responseCode = "400", description = "Invalid request or no variance detected")
-        public ResponseEntity<AdjustmentResponse> createAdjustment(
-                        @Valid @RequestBody CreateAdjustmentRequest request) {
-                log.info("Received request to create adjustment for SKU {}", request.getStockItemId());
-                AdjustmentResponse response = adjustmentService.createAdjustment(request);
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        }
+    /**
+     * Creates a new cycle count adjustment.
+     *
+     * <p>
+     * The adjustment will be evaluated against approval thresholds:
+     * <ul>
+     * <li>If below all thresholds: auto-approved and posted immediately</li>
+     * <li>If exceeds any threshold: enters PENDING_APPROVAL status</li>
+     * </ul>
+     *
+     * @param request the adjustment creation request
+     * @return the created adjustment with its assigned status
+     */
+    @PostMapping
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_CREATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:create"})
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @Operation(
+            summary = "Create cycle count adjustment",
+            description =
+                    "Creates a new adjustment from a cycle count. Automatically evaluates against approval thresholds.",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "201", description = "Adjustment created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or no variance detected")
+    public ResponseEntity<AdjustmentResponse> createAdjustment(@Valid @RequestBody CreateAdjustmentRequest request) {
+        log.info("Received request to create adjustment for SKU {}", request.getStockItemId());
+        AdjustmentResponse response = adjustmentService.createAdjustment(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 
-        /**
-         * Approves a pending adjustment.
-         *
-         * <p>
-         * Requires the user to have INVENTORY_ADJUSTMENT_APPROVE permission.
-         * Upon approval, the adjustment is posted to the inventory ledger.
-         *
-         * @param adjustmentId the adjustment ID
-         * @param request      the approval request with approver details
-         * @return the approved and posted adjustment
-         */
-        @PostMapping("/{adjustmentId}/approve")
-        @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE", apiVersion = "1")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:approve" })
-        @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
-        @Operation(summary = "Approve adjustment", description = "Approves a pending adjustment and posts it to the inventory ledger", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
-        @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
-        @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
-        public ResponseEntity<AdjustmentResponse> approveAdjustment(
-                        @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
-                        @Valid @RequestBody ApproveAdjustmentRequest request,
-                        @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
-                log.info("Received request to approve adjustment {}", adjustmentId);
-                AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, correlationId);
-                return ResponseEntity.ok(response);
-        }
+    /**
+     * Approves a pending adjustment.
+     *
+     * <p>
+     * Requires the user to have INVENTORY_ADJUSTMENT_APPROVE permission.
+     * Upon approval, the adjustment is posted to the inventory ledger.
+     *
+     * @param adjustmentId the adjustment ID
+     * @param request      the approval request with approver details
+     * @return the approved and posted adjustment
+     */
+    @PostMapping("/{adjustmentId}/approve")
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:approve"})
+    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
+    @Operation(
+            summary = "Approve adjustment",
+            description = "Approves a pending adjustment and posts it to the inventory ledger",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
+    @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
+    @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    public ResponseEntity<AdjustmentResponse> approveAdjustment(
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
+            @Valid @RequestBody ApproveAdjustmentRequest request,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+        log.info("Received request to approve adjustment {}", adjustmentId);
+        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, correlationId);
+        return ResponseEntity.ok(response);
+    }
 
-        /**
-         * Rejects a pending adjustment.
-         *
-         * <p>
-         * Requires the user to have INVENTORY_ADJUSTMENT_APPROVE permission.
-         * Rejection is final - no changes are made to inventory.
-         *
-         *
-         * @param adjustmentId the adjustment ID
-         * @param request      the rejection request with reason
-         * @return the rejected adjustment
-         */
-        @PostMapping("/{adjustmentId}/reject")
-        @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT", apiVersion = "1")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:approve" })
-        @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
-        @Operation(summary = "Reject adjustment", description = "Rejects a pending adjustment with a reason. No inventory changes are made.", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Adjustment rejected")
-        @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
-        @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
-        public ResponseEntity<AdjustmentResponse> rejectAdjustment(
-                        @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
-                        @Valid @RequestBody RejectAdjustmentRequest request) {
-                log.info("Received request to reject adjustment {}", adjustmentId);
-                AdjustmentResponse response = adjustmentService.rejectAdjustment(adjustmentId, request);
-                return ResponseEntity.ok(response);
-        }
+    /**
+     * Rejects a pending adjustment.
+     *
+     * <p>
+     * Requires the user to have INVENTORY_ADJUSTMENT_APPROVE permission.
+     * Rejection is final - no changes are made to inventory.
+     *
+     *
+     * @param adjustmentId the adjustment ID
+     * @param request      the rejection request with reason
+     * @return the rejected adjustment
+     */
+    @PostMapping("/{adjustmentId}/reject")
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:approve"})
+    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
+    @Operation(
+            summary = "Reject adjustment",
+            description = "Rejects a pending adjustment with a reason. No inventory changes are made.",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Adjustment rejected")
+    @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
+    @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    public ResponseEntity<AdjustmentResponse> rejectAdjustment(
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
+            @Valid @RequestBody RejectAdjustmentRequest request) {
+        log.info("Received request to reject adjustment {}", adjustmentId);
+        AdjustmentResponse response = adjustmentService.rejectAdjustment(adjustmentId, request);
+        return ResponseEntity.ok(response);
+    }
 
-        /**
-         * Retrieves a specific adjustment by ID.
-         *
-         * @param adjustmentId the adjustment ID
-         * @return the adjustment details
-         */
-        @GetMapping("/{adjustmentId}")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:view", "inventory:adjustment:approve" })
-        @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
-        @Operation(summary = "Get adjustment details", description = "Retrieves details of a specific cycle count adjustment", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Adjustment found")
-        @ApiResponse(responseCode = "404", description = "Adjustment not found")
-        public ResponseEntity<AdjustmentResponse> getAdjustment(
-                        @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId) {
-                AdjustmentResponse response = adjustmentService.getAdjustment(adjustmentId);
-                return ResponseEntity.ok(response);
-        }
+    /**
+     * Retrieves a specific adjustment by ID.
+     *
+     * @param adjustmentId the adjustment ID
+     * @return the adjustment details
+     */
+    @GetMapping("/{adjustmentId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @Operation(
+            summary = "Get adjustment details",
+            description = "Retrieves details of a specific cycle count adjustment",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Adjustment found")
+    @ApiResponse(responseCode = "404", description = "Adjustment not found")
+    public ResponseEntity<AdjustmentResponse> getAdjustment(
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId) {
+        AdjustmentResponse response = adjustmentService.getAdjustment(adjustmentId);
+        return ResponseEntity.ok(response);
+    }
 
-        /**
-         * Lists all adjustments with a specific status.
-         *
-         * @param status the adjustment status filter
-         * @return list of matching adjustments
-         */
-        @GetMapping
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:view", "inventory:adjustment:approve" })
-        @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
-        @Operation(summary = "List adjustments by status", description = "Lists all adjustments matching the specified status", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Adjustments retrieved")
-        public ResponseEntity<List<AdjustmentResponse>> listAdjustments(
-                        @Parameter(description = "Filter by adjustment status") @RequestParam(required = false) AdjustmentStatus status) {
-                List<AdjustmentResponse> response = status != null
-                                ? adjustmentService.listAdjustmentsByStatus(status)
-                                : adjustmentService.listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
-                return ResponseEntity.ok(response);
-        }
+    /**
+     * Lists all adjustments with a specific status.
+     *
+     * @param status the adjustment status filter
+     * @return list of matching adjustments
+     */
+    @GetMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @Operation(
+            summary = "List adjustments by status",
+            description = "Lists all adjustments matching the specified status",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Adjustments retrieved")
+    public ResponseEntity<List<AdjustmentResponse>> listAdjustments(
+            @Parameter(description = "Filter by adjustment status") @RequestParam(required = false)
+                    AdjustmentStatus status) {
+        List<AdjustmentResponse> response = status != null
+                ? adjustmentService.listAdjustmentsByStatus(status)
+                : adjustmentService.listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
+        return ResponseEntity.ok(response);
+    }
 
-        /**
-         * Lists all pending approvals.
-         *
-         * @return list of adjustments awaiting approval
-         */
-        @GetMapping("/pending")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:view", "inventory:adjustment:approve" })
-        @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
-        @Operation(summary = "List pending approvals", description = "Lists all adjustments awaiting approval", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
-        public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
-                List<AdjustmentResponse> response = adjustmentService
-                                .listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
-                return ResponseEntity.ok(response);
-        }
+    /**
+     * Lists all pending approvals.
+     *
+     * @return list of adjustments awaiting approval
+     */
+    @GetMapping("/pending")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @Operation(
+            summary = "List pending approvals",
+            description = "Lists all adjustments awaiting approval",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
+    public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
+        List<AdjustmentResponse> response =
+                adjustmentService.listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
+        return ResponseEntity.ok(response);
+    }
 
-        /**
-         * Gets the count of pending approvals.
-         *
-         * @return count of adjustments awaiting approval
-         */
-        @GetMapping("/pending/count")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:adjustment:view", "inventory:adjustment:approve" })
-        @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
-        @Operation(summary = "Count pending approvals", description = "Returns the count of adjustments awaiting approval", tags = {
-                        "Cycle Count Adjustments" })
-        @ApiResponse(responseCode = "200", description = "Count retrieved")
-        public ResponseEntity<Long> countPendingApprovals() {
-                long count = adjustmentService.countAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
-                return ResponseEntity.ok(count);
-        }
+    /**
+     * Gets the count of pending approvals.
+     *
+     * @return count of adjustments awaiting approval
+     */
+    @GetMapping("/pending/count")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @Operation(
+            summary = "Count pending approvals",
+            description = "Returns the count of adjustments awaiting approval",
+            tags = {"Cycle Count Adjustments"})
+    @ApiResponse(responseCode = "200", description = "Count retrieved")
+    public ResponseEntity<Long> countPendingApprovals() {
+        long count = adjustmentService.countAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
+        return ResponseEntity.ok(count);
+    }
 }

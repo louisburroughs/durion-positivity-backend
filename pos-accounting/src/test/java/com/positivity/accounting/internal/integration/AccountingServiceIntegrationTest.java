@@ -32,39 +32,39 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("Phase 3 Integration Tests - Accounting Service Wrappers")
 class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
-  private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
+    private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
 
-  private static UUID nextUuid() {
-    return UUID.fromString(String.format("00000000-0000-0000-0000-%012x", UUID_COUNTER.getAndIncrement()));
-  }
+    private static UUID nextUuid() {
+        return UUID.fromString(String.format("00000000-0000-0000-0000-%012x", UUID_COUNTER.getAndIncrement()));
+    }
 
-  private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-  @Autowired
-  private GLAccountRepository glAccountRepository;
+    @Autowired
+    private GLAccountRepository glAccountRepository;
 
-  private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
-  private static final String BASE_URL = "/v1/accounting";
+    private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
+    private static final String BASE_URL = "/v1/accounting";
 
-  // UUID constants for entity IDs used in test payloads
-  private static final UUID GL_AR_ID = UUID.fromString("00000000-0000-4000-a000-000000000001");
-  private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-4000-a000-000000000002");
-  private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-4000-a000-000000000003");
-  private static final UUID VENDOR_ID = UUID.fromString("00000000-0000-4000-a000-000000000005");
+    // UUID constants for entity IDs used in test payloads
+    private static final UUID GL_AR_ID = UUID.fromString("00000000-0000-4000-a000-000000000001");
+    private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-4000-a000-000000000002");
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-4000-a000-000000000003");
+    private static final UUID VENDOR_ID = UUID.fromString("00000000-0000-4000-a000-000000000005");
 
-  @BeforeEach
-  void setUp() {
-    glAccountRepository.deleteAll();
-  }
+    @BeforeEach
+    void setUp() {
+        glAccountRepository.deleteAll();
+    }
 
-  // ============================================
-  // GL ACCOUNT SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // GL ACCOUNT SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should create GL account via REST wrapper")
-  void testCreateGLAccount() throws Exception {
-    String payload = """
+    @Test
+    @DisplayName("Should create GL account via REST wrapper")
+    void testCreateGLAccount() throws Exception {
+        String payload = """
         {
           "organizationId": "%s",
           "accountCode": "1000",
@@ -75,78 +75,78 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.glAccountId", notNullValue()))
-        .andExpect(jsonPath("$.accountCode").value("1000"));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.glAccountId", notNullValue()))
+                .andExpect(jsonPath("$.accountCode").value("1000"));
+    }
 
-  @Test
-  @DisplayName("Should list GL accounts with pagination")
-  void testListGLAccounts() throws Exception {
-    mockMvc.perform(withAuth(get(BASE_URL + "/gl-accounts"))
-        .param("organizationId", ORG_ID.toString())
-        .param("page", "0")
-        .param("pageSize", "20"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.glAccounts", isA(java.util.List.class)))
-        .andExpect(jsonPath("$.totalElements", isA(Number.class)))
-        .andExpect(jsonPath("$.totalPages", isA(Number.class)));
-  }
+    @Test
+    @DisplayName("Should list GL accounts with pagination")
+    void testListGLAccounts() throws Exception {
+        mockMvc.perform(withAuth(get(BASE_URL + "/gl-accounts"))
+                        .param("organizationId", ORG_ID.toString())
+                        .param("page", "0")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.glAccounts", isA(java.util.List.class)))
+                .andExpect(jsonPath("$.totalElements", isA(Number.class)))
+                .andExpect(jsonPath("$.totalPages", isA(Number.class)));
+    }
 
-  @Test
-  @DisplayName("Should activate GL account (inactive → active)")
-  void testActivateGLAccount() throws Exception {
-    // Create account first with activation date in future
-    GLAccount account = new GLAccount();
-    account.setGlAccountId(nextUuid());
-    account.setAccountCode("2000");
-    account.setAccountName("Test Liability");
-    account.setAccountType(AccountType.LIABILITY);
-    account.setDescription("Test Liability Account");
-    account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1)); // Not yet active
-    account = glAccountRepository.save(account);
+    @Test
+    @DisplayName("Should activate GL account (inactive → active)")
+    void testActivateGLAccount() throws Exception {
+        // Create account first with activation date in future
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(nextUuid());
+        account.setAccountCode("2000");
+        account.setAccountName("Test Liability");
+        account.setAccountType(AccountType.LIABILITY);
+        account.setDescription("Test Liability Account");
+        account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1)); // Not yet active
+        account = glAccountRepository.save(account);
 
-    String payload = """
+        String payload = """
         {
           "effectiveDate": "2025-01-01"
         }
         """;
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath("$.glAccountId").value(account.getGlAccountId().toString()));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.glAccountId").value(account.getGlAccountId().toString()));
+    }
 
-  @Test
-  @DisplayName("Should return 400 when activating without effective date")
-  void testActivateGLAccountMissingDate() throws Exception {
-    GLAccount account = new GLAccount();
-    account.setGlAccountId(nextUuid());
-    account.setAccountCode("3000");
-    account.setAccountName("Test Account");
-    account.setAccountType(AccountType.ASSET);
-    account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1));
-    account = glAccountRepository.save(account);
+    @Test
+    @DisplayName("Should return 400 when activating without effective date")
+    void testActivateGLAccountMissingDate() throws Exception {
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(nextUuid());
+        account.setAccountCode("3000");
+        account.setAccountName("Test Account");
+        account.setAccountType(AccountType.ASSET);
+        account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1));
+        account = glAccountRepository.save(account);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{}"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
+    }
 
-  @Test
-  @DisplayName("Should return 403 when user lacks accounting:coa:create permission")
-  void testCreateGLAccountUnauthorized() throws Exception {
-    // Send X-Authorities WITHOUT accounting:coa:create so @PreAuthorize rejects
-    String insufficientAuthorities = "accounting:je:view";
-    String payload = """
+    @Test
+    @DisplayName("Should return 403 when user lacks accounting:coa:create permission")
+    void testCreateGLAccountUnauthorized() throws Exception {
+        // Send X-Authorities WITHOUT accounting:coa:create so @PreAuthorize rejects
+        String insufficientAuthorities = "accounting:je:view";
+        String payload = """
         {
           "organizationId": "%s",
           "accountCode": "4000",
@@ -156,39 +156,39 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID);
 
-    mockMvc.perform(post(BASE_URL + "/gl-accounts")
-        .header("X-Authorities", insufficientAuthorities)
-        .header("X-User", "unauthorized-user")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isForbidden());
-  }
+        mockMvc.perform(post(BASE_URL + "/gl-accounts")
+                        .header("X-Authorities", insufficientAuthorities)
+                        .header("X-User", "unauthorized-user")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+    }
 
-  // ============================================
-  // JOURNAL ENTRY SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // JOURNAL ENTRY SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should create journal entry with balanced lines")
-  void testCreateBalancedJournalEntry() throws Exception {
-    // Setup GL accounts
-    GLAccount cashAccount = new GLAccount();
-    cashAccount.setGlAccountId(nextUuid());
-    cashAccount.setAccountCode("1000");
-    cashAccount.setAccountName("Cash");
-    cashAccount.setAccountType(AccountType.ASSET);
-    cashAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    cashAccount = glAccountRepository.save(cashAccount);
+    @Test
+    @DisplayName("Should create journal entry with balanced lines")
+    void testCreateBalancedJournalEntry() throws Exception {
+        // Setup GL accounts
+        GLAccount cashAccount = new GLAccount();
+        cashAccount.setGlAccountId(nextUuid());
+        cashAccount.setAccountCode("1000");
+        cashAccount.setAccountName("Cash");
+        cashAccount.setAccountType(AccountType.ASSET);
+        cashAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        cashAccount = glAccountRepository.save(cashAccount);
 
-    GLAccount revenueAccount = new GLAccount();
-    revenueAccount.setGlAccountId(nextUuid());
-    revenueAccount.setAccountCode("4000");
-    revenueAccount.setAccountName("Revenue");
-    revenueAccount.setAccountType(AccountType.REVENUE);
-    revenueAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    revenueAccount = glAccountRepository.save(revenueAccount);
+        GLAccount revenueAccount = new GLAccount();
+        revenueAccount.setGlAccountId(nextUuid());
+        revenueAccount.setAccountCode("4000");
+        revenueAccount.setAccountName("Revenue");
+        revenueAccount.setAccountType(AccountType.REVENUE);
+        revenueAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        revenueAccount = glAccountRepository.save(revenueAccount);
 
-    String payload = """
+        String payload = """
         {
           "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
@@ -206,27 +206,27 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, cashAccount.getGlAccountId(), revenueAccount.getGlAccountId());
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.status").value("DRAFT"))
-        .andExpect(jsonPath("$.totalDebits").value(1000.00))
-        .andExpect(jsonPath("$.totalCredits").value(1000.00));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.totalDebits").value(1000.00))
+                .andExpect(jsonPath("$.totalCredits").value(1000.00));
+    }
 
-  @Test
-  @DisplayName("Should return 422 when journal entry is unbalanced")
-  void testCreateUnbalancedJournalEntry() throws Exception {
-    GLAccount account1 = new GLAccount();
-    account1.setGlAccountId(nextUuid());
-    account1.setAccountCode("1000");
-    account1.setAccountName("Test Account");
-    account1.setAccountType(AccountType.ASSET);
-    account1.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account1 = glAccountRepository.save(account1);
+    @Test
+    @DisplayName("Should return 422 when journal entry is unbalanced")
+    void testCreateUnbalancedJournalEntry() throws Exception {
+        GLAccount account1 = new GLAccount();
+        account1.setGlAccountId(nextUuid());
+        account1.setAccountCode("1000");
+        account1.setAccountName("Test Account");
+        account1.setAccountType(AccountType.ASSET);
+        account1.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account1 = glAccountRepository.save(account1);
 
-    String payload = """
+        String payload = """
         {
           "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
@@ -243,35 +243,35 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, account1.getGlAccountId(), account1.getGlAccountId());
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isUnprocessableContent())
-        .andExpect(jsonPath("$.code").value("UNBALANCED_ENTRY"));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("UNBALANCED_ENTRY"));
+    }
 
-  @Test
-  @DisplayName("Should post journal entry (DRAFT → POSTED)")
-  void testPostJournalEntry() throws Exception {
-    // Create GL accounts
-    GLAccount account1 = new GLAccount();
-    account1.setGlAccountId(nextUuid());
-    account1.setAccountCode("1000");
-    account1.setAccountName("Account 1");
-    account1.setAccountType(AccountType.ASSET);
-    account1.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account1 = glAccountRepository.save(account1);
+    @Test
+    @DisplayName("Should post journal entry (DRAFT → POSTED)")
+    void testPostJournalEntry() throws Exception {
+        // Create GL accounts
+        GLAccount account1 = new GLAccount();
+        account1.setGlAccountId(nextUuid());
+        account1.setAccountCode("1000");
+        account1.setAccountName("Account 1");
+        account1.setAccountType(AccountType.ASSET);
+        account1.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account1 = glAccountRepository.save(account1);
 
-    GLAccount account2 = new GLAccount();
-    account2.setGlAccountId(nextUuid());
-    account2.setAccountCode("2000");
-    account2.setAccountName("Account 2");
-    account2.setAccountType(AccountType.LIABILITY);
-    account2.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account2 = glAccountRepository.save(account2);
+        GLAccount account2 = new GLAccount();
+        account2.setGlAccountId(nextUuid());
+        account2.setAccountCode("2000");
+        account2.setAccountName("Account 2");
+        account2.setAccountType(AccountType.LIABILITY);
+        account2.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account2 = glAccountRepository.save(account2);
 
-    // Create entry
-    String createPayload = """
+        // Create entry
+        String createPayload = """
         {
           "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
@@ -282,36 +282,36 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, account1.getGlAccountId(), account2.getGlAccountId());
 
-    MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(createPayload))
-        .andExpect(status().isCreated())
-        .andReturn();
+        MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated())
+                .andReturn();
 
-    UUID entryId = UUID.fromString(objectMapper
-        .readTree(createResult.getResponse().getContentAsString())
-        .get("journalEntryId")
-        .asString());
+        UUID entryId = UUID.fromString(objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("journalEntryId")
+                .asString());
 
-    // Post entry
-    mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("POSTED"));
-  }
+        // Post entry
+        mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("POSTED"));
+    }
 
-  @Test
-  @DisplayName("Should return 409 when posting already-posted entry")
-  void testPostAlreadyPostedEntry() throws Exception {
-    // Create and post entry
-    GLAccount account = new GLAccount();
-    account.setGlAccountId(nextUuid());
-    account.setAccountCode("1000");
-    account.setAccountName("Test Account");
-    account.setAccountType(AccountType.ASSET);
-    account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account = glAccountRepository.save(account);
+    @Test
+    @DisplayName("Should return 409 when posting already-posted entry")
+    void testPostAlreadyPostedEntry() throws Exception {
+        // Create and post entry
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(nextUuid());
+        account.setAccountCode("1000");
+        account.setAccountName("Test Account");
+        account.setAccountType(AccountType.ASSET);
+        account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account = glAccountRepository.save(account);
 
-    String payload = """
+        String payload = """
         {
           "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
@@ -322,45 +322,45 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, account.getGlAccountId(), account.getGlAccountId());
 
-    MvcResult result = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andReturn();
+        MvcResult result = mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andReturn();
 
-    UUID entryId = UUID.fromString(objectMapper
-        .readTree(result.getResponse().getContentAsString())
-        .get("journalEntryId")
-        .asString());
+        UUID entryId = UUID.fromString(objectMapper
+                .readTree(result.getResponse().getContentAsString())
+                .get("journalEntryId")
+                .asString());
 
-    // Post it
-    mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
-        .andExpect(status().isOk());
+        // Post it
+        mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
+                .andExpect(status().isOk());
 
-    // Try to post again
-    mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("ENTRY_ALREADY_POSTED"));
-  }
+        // Try to post again
+        mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ENTRY_ALREADY_POSTED"));
+    }
 
-  // ============================================
-  // POSTING RULE SET SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // POSTING RULE SET SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should create and publish posting rule set")
-  void testCreateAndPublishRuleSet() throws Exception {
-    // Create GL account for rule
-    GLAccount arAccount = new GLAccount();
-    arAccount.setGlAccountId(GL_AR_ID);
-    arAccount.setAccountCode("1200");
-    arAccount.setAccountName("Accounts Receivable");
-    arAccount.setAccountType(AccountType.ASSET);
-    arAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    arAccount.setCreatedBy("testuser");
-    arAccount.setModifiedBy("testuser");
-    glAccountRepository.save(arAccount);
+    @Test
+    @DisplayName("Should create and publish posting rule set")
+    void testCreateAndPublishRuleSet() throws Exception {
+        // Create GL account for rule
+        GLAccount arAccount = new GLAccount();
+        arAccount.setGlAccountId(GL_AR_ID);
+        arAccount.setAccountCode("1200");
+        arAccount.setAccountName("Accounts Receivable");
+        arAccount.setAccountType(AccountType.ASSET);
+        arAccount.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        arAccount.setCreatedBy("testuser");
+        arAccount.setModifiedBy("testuser");
+        glAccountRepository.save(arAccount);
 
-    String createPayload = """
+        String createPayload = """
         {
           "name": "AR Auto-Post v1",
           "eventType": "billing.invoicePosted",
@@ -370,45 +370,45 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """;
 
-    MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(createPayload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.postingRuleSetId", notNullValue()))
-        .andExpect(jsonPath("$.name").value("AR Auto-Post v1"))
-        .andReturn();
+        MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.postingRuleSetId", notNullValue()))
+                .andExpect(jsonPath("$.name").value("AR Auto-Post v1"))
+                .andReturn();
 
-    // Verify response body contains expected fields
-    String responseBody = createResult.getResponse().getContentAsString();
-    var responseJson = objectMapper.readTree(responseBody);
+        // Verify response body contains expected fields
+        String responseBody = createResult.getResponse().getContentAsString();
+        var responseJson = objectMapper.readTree(responseBody);
 
-    // Assert response contains required fields
-    assertTrue(responseJson.has("postingRuleSetId"), "Response missing postingRuleSetId field");
-    assertTrue(responseJson.has("name"), "Response missing name field");
-    assertEquals("AR Auto-Post v1", responseJson.get("name").asString(), "Unexpected name in response");
+        // Assert response contains required fields
+        assertTrue(responseJson.has("postingRuleSetId"), "Response missing postingRuleSetId field");
+        assertTrue(responseJson.has("name"), "Response missing name field");
+        assertEquals("AR Auto-Post v1", responseJson.get("name").asString(), "Unexpected name in response");
 
-    // Now check versions
-    mockMvc.perform(withAuth(get(BASE_URL + "/posting-rules/"
-        + objectMapper
-            .readTree(responseBody)
-            .get("postingRuleSetId")
-            .asString())))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.versions[0].state").value("DRAFT"));
+        // Now check versions
+        mockMvc.perform(withAuth(get(BASE_URL + "/posting-rules/"
+                        + objectMapper
+                                .readTree(responseBody)
+                                .get("postingRuleSetId")
+                                .asString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versions[0].state").value("DRAFT"));
 
-    UUID ruleSetId = UUID.fromString(objectMapper
-        .readTree(createResult.getResponse().getContentAsString())
-        .get("postingRuleSetId")
-        .asString());
-    mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.state").value("PUBLISHED"));
-  }
+        UUID ruleSetId = UUID.fromString(objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("postingRuleSetId")
+                .asString());
+        mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("PUBLISHED"));
+    }
 
-  @Test
-  @DisplayName("Should return 409 when modifying published rule set")
-  void testModifyPublishedRuleSetFails() throws Exception {
-    String createPayload = """
+    @Test
+    @DisplayName("Should return 409 when modifying published rule set")
+    void testModifyPublishedRuleSetFails() throws Exception {
+        String createPayload = """
         {
           "name": "Test Rules",
           "eventType": "test.event",
@@ -417,23 +417,23 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """;
 
-    MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(createPayload))
-        .andExpect(status().isCreated())
-        .andReturn();
+        MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated())
+                .andReturn();
 
-    UUID ruleSetId = UUID.fromString(objectMapper
-        .readTree(createResult.getResponse().getContentAsString())
-        .get("postingRuleSetId")
-        .asString());
+        UUID ruleSetId = UUID.fromString(objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("postingRuleSetId")
+                .asString());
 
-    // Publish
-    mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")))
-        .andExpect(status().isOk());
+        // Publish
+        mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")))
+                .andExpect(status().isOk());
 
-    // Try to update published set - should return 409
-    String updatePayload = """
+        // Try to update published set - should return 409
+        String updatePayload = """
         {
           "name": "Updated Rules",
           "eventType": "test.event.updated",
@@ -442,32 +442,32 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """;
 
-    mockMvc.perform(withAuth(put(BASE_URL + "/posting-rules/" + ruleSetId.toString()))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(updatePayload))
-        .andExpect(status().isConflict());
-  }
+        mockMvc.perform(withAuth(put(BASE_URL + "/posting-rules/" + ruleSetId.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updatePayload))
+                .andExpect(status().isConflict());
+    }
 
-  // ============================================
-  // GL MAPPING SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // GL MAPPING SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should create GL mapping with dimension matching")
-  void testCreateGLMappingWithDimensions() throws Exception {
-    GLAccount account = new GLAccount();
-    account.setGlAccountId(nextUuid());
-    account.setAccountCode("1000");
-    account.setAccountName("Test Account");
-    account.setAccountType(AccountType.ASSET);
-    account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account.setCreatedBy("testuser");
-    account.setCreatedAt(Instant.now(TEST_CLOCK));
-    account.setModifiedBy("testuser");
-    account.setUpdatedAt(Instant.now(TEST_CLOCK));
-    account = glAccountRepository.save(account);
+    @Test
+    @DisplayName("Should create GL mapping with dimension matching")
+    void testCreateGLMappingWithDimensions() throws Exception {
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(nextUuid());
+        account.setAccountCode("1000");
+        account.setAccountName("Test Account");
+        account.setAccountType(AccountType.ASSET);
+        account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account.setCreatedBy("testuser");
+        account.setCreatedAt(Instant.now(TEST_CLOCK));
+        account.setModifiedBy("testuser");
+        account.setUpdatedAt(Instant.now(TEST_CLOCK));
+        account = glAccountRepository.save(account);
 
-    String payload = """
+        String payload = """
         {
           "organizationId": "%s",
           "sourceSystem": "ERP_LEGACY",
@@ -482,32 +482,32 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, account.getGlAccountId());
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(payload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.mapping.sourceSystem").value("ERP_LEGACY"))
-        .andExpect(jsonPath("$.mapping.priority").value(0));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mapping.sourceSystem").value("ERP_LEGACY"))
+                .andExpect(jsonPath("$.mapping.priority").value(0));
+    }
 
-  @Test
-  @DisplayName("Should resolve GL mapping by external code with temporal awareness")
-  void testResolveGLMapping() throws Exception {
-    // Create GL account with audit fields
-    GLAccount account = new GLAccount();
-    account.setGlAccountId(nextUuid());
-    account.setAccountCode("1000");
-    account.setAccountName("Test Account");
-    account.setAccountType(AccountType.ASSET);
-    account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
-    account.setCreatedBy("testuser");
-    account.setCreatedAt(Instant.now(TEST_CLOCK));
-    account.setModifiedBy("testuser");
-    account.setUpdatedAt(Instant.now(TEST_CLOCK));
-    account = glAccountRepository.save(account);
+    @Test
+    @DisplayName("Should resolve GL mapping by external code with temporal awareness")
+    void testResolveGLMapping() throws Exception {
+        // Create GL account with audit fields
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(nextUuid());
+        account.setAccountCode("1000");
+        account.setAccountName("Test Account");
+        account.setAccountType(AccountType.ASSET);
+        account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account.setCreatedBy("testuser");
+        account.setCreatedAt(Instant.now(TEST_CLOCK));
+        account.setModifiedBy("testuser");
+        account.setUpdatedAt(Instant.now(TEST_CLOCK));
+        account = glAccountRepository.save(account);
 
-    // Create the mapping first
-    String createPayload = """
+        // Create the mapping first
+        String createPayload = """
         {
           "organizationId": "%s",
           "sourceSystem": "ERP_LEGACY",
@@ -518,13 +518,13 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, account.getGlAccountId());
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(createPayload))
-        .andExpect(status().isCreated());
+        mockMvc.perform(withAuth(post(BASE_URL + "/mappings"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload))
+                .andExpect(status().isCreated());
 
-    // Now resolve the mapping
-    String resolvePayload = """
+        // Now resolve the mapping
+        String resolvePayload = """
         {
           "organizationId": "%s",
           "sourceSystem": "ERP_LEGACY",
@@ -533,21 +533,21 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/mappings/resolve"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(resolvePayload))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.glAccountId", notNullValue()));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/mappings/resolve"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(resolvePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.glAccountId", notNullValue()));
+    }
 
-  // ============================================
-  // EVENT INGESTION SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // EVENT INGESTION SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should submit accounting event successfully")
-  void testSubmitAccountingEvent() throws Exception {
-    String eventPayload = """
+    @Test
+    @DisplayName("Should submit accounting event successfully")
+    void testSubmitAccountingEvent() throws Exception {
+        String eventPayload = """
         {
           "organizationId": "%s",
           "sourceSystem": "billing-service",
@@ -561,18 +561,18 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, INVOICE_ID, CUSTOMER_ID);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/events"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(eventPayload))
-        .andExpect(status().isAccepted())
-        .andExpect(jsonPath("$.eventId", notNullValue()))
-        .andExpect(jsonPath("$.status").value("RECEIVED"));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/events"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventPayload))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.eventId", notNullValue()))
+                .andExpect(jsonPath("$.status").value("RECEIVED"));
+    }
 
-  @Test
-  @DisplayName("Should detect and reject duplicate events (idempotency)")
-  void testDuplicateEventRejection() throws Exception {
-    String eventPayload = """
+    @Test
+    @DisplayName("Should detect and reject duplicate events (idempotency)")
+    void testDuplicateEventRejection() throws Exception {
+        String eventPayload = """
         {
           "organizationId": "%s",
           "sourceSystem": "billing-service",
@@ -582,35 +582,35 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(ORG_ID, INVOICE_ID);
 
-    // Submit first
-    mockMvc.perform(withAuth(post(BASE_URL + "/events"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(eventPayload))
-        .andExpect(status().isAccepted())
-        .andReturn();
+        // Submit first
+        mockMvc.perform(withAuth(post(BASE_URL + "/events"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventPayload))
+                .andExpect(status().isAccepted())
+                .andReturn();
 
-    // Submit duplicate
-    mockMvc.perform(withAuth(post(BASE_URL + "/events"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(eventPayload))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("DUPLICATE_EVENT"));
-  }
+        // Submit duplicate
+        mockMvc.perform(withAuth(post(BASE_URL + "/events"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventPayload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_EVENT"));
+    }
 
-  // ============================================
-  // VENDOR BILL (AP) SERVICE WRAPPER TESTS
-  // ============================================
+    // ============================================
+    // VENDOR BILL (AP) SERVICE WRAPPER TESTS
+    // ============================================
 
-  @Test
-  @DisplayName("Should create vendor bill from goods received event and complete three-way match workflow")
-  void testVendorBillWorkflow() throws Exception {
-    UUID eventId = nextUuid();
-    UUID vendorId = VENDOR_ID;
-    UUID purchaseOrderId = nextUuid();
-    UUID productId = nextUuid();
+    @Test
+    @DisplayName("Should create vendor bill from goods received event and complete three-way match workflow")
+    void testVendorBillWorkflow() throws Exception {
+        UUID eventId = nextUuid();
+        UUID vendorId = VENDOR_ID;
+        UUID purchaseOrderId = nextUuid();
+        UUID productId = nextUuid();
 
-    // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
-    String goodsReceivedPayload = """
+        // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
+        String goodsReceivedPayload = """
         {
           "eventId": "%s",
           "organizationId": "%s",
@@ -630,31 +630,31 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(eventId, ORG_ID, purchaseOrderId, vendorId, productId);
 
-    MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(goodsReceivedPayload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.vendorBillId", notNullValue()))
-        .andExpect(jsonPath("$.vendorId").value(vendorId.toString()))
-        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
-        .andExpect(jsonPath("$.totalAmount").value(1000.00))
-        .andExpect(jsonPath("$.originEventId").value(eventId.toString()))
-        .andReturn();
+        MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(goodsReceivedPayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.vendorBillId", notNullValue()))
+                .andExpect(jsonPath("$.vendorId").value(vendorId.toString()))
+                .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
+                .andExpect(jsonPath("$.totalAmount").value(1000.00))
+                .andExpect(jsonPath("$.originEventId").value(eventId.toString()))
+                .andReturn();
 
-    UUID vendorBillId = UUID.fromString(objectMapper
-        .readTree(createResult.getResponse().getContentAsString())
-        .get("vendorBillId")
-        .asString());
+        UUID vendorBillId = UUID.fromString(objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("vendorBillId")
+                .asString());
 
-    // Step 2: GET bill by eventId → verify persisted correctly
-    mockMvc.perform(withAuth(get(BASE_URL + "/vendor-bills/event/" + eventId)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
-        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"));
+        // Step 2: GET bill by eventId → verify persisted correctly
+        mockMvc.perform(withAuth(get(BASE_URL + "/vendor-bills/event/" + eventId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
+                .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"));
 
-    // Step 3: POST VendorInvoiceReceivedEvent with matching quantities/prices →
-    // three-way match
-    String invoiceReceivedPayload = """
+        // Step 3: POST VendorInvoiceReceivedEvent with matching quantities/prices →
+        // three-way match
+        String invoiceReceivedPayload = """
         {
           "eventId": "%s",
           "organizationId": "%s",
@@ -673,19 +673,19 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(nextUuid(), ORG_ID, vendorId, productId);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(invoiceReceivedPayload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
-        .andExpect(jsonPath("$.status").value("APPROVED"))
-        .andExpect(jsonPath("$.billNumber").value("INV-98765"));
+        mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invoiceReceivedPayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.billNumber").value("INV-98765"));
 
-    // Step 4: Create a second bill for the discrepancy scenario
-    UUID eventId2 = nextUuid();
-    UUID purchaseOrderId2 = nextUuid();
+        // Step 4: Create a second bill for the discrepancy scenario
+        UUID eventId2 = nextUuid();
+        UUID purchaseOrderId2 = nextUuid();
 
-    String goodsReceivedPayload2 = """
+        String goodsReceivedPayload2 = """
         {
           "eventId": "%s",
           "organizationId": "%s",
@@ -705,20 +705,20 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(eventId2, ORG_ID, purchaseOrderId2, vendorId, productId);
 
-    MvcResult createResult2 = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(goodsReceivedPayload2))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
-        .andReturn();
+        MvcResult createResult2 = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(goodsReceivedPayload2))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
+                .andReturn();
 
-    UUID vendorBillId2 = UUID.fromString(objectMapper
-        .readTree(createResult2.getResponse().getContentAsString())
-        .get("vendorBillId")
-        .asString());
+        UUID vendorBillId2 = UUID.fromString(objectMapper
+                .readTree(createResult2.getResponse().getContentAsString())
+                .get("vendorBillId")
+                .asString());
 
-    // Step 5: POST invoice with price variance > 5% → MATCH_EXCEPTION
-    String discrepancyInvoicePayload = """
+        // Step 5: POST invoice with price variance > 5% → MATCH_EXCEPTION
+        String discrepancyInvoicePayload = """
         {
           "eventId": "%s",
           "organizationId": "%s",
@@ -737,15 +737,15 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(nextUuid(), ORG_ID, vendorId, productId);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(discrepancyInvoicePayload))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
-        .andExpect(jsonPath("$.status").value("MATCH_EXCEPTION"));
+        mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(discrepancyInvoicePayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
+                .andExpect(jsonPath("$.status").value("MATCH_EXCEPTION"));
 
-    // Step 6: Resolve the match exception → ACCEPT → APPROVED
-    String resolvePayload = """
+        // Step 6: Resolve the match exception → ACCEPT → APPROVED
+        String resolvePayload = """
         {
           "resolutionAction": "ACCEPT",
           "reason": "Price increase approved by AP manager",
@@ -753,21 +753,21 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         }
         """.formatted(TEST_USER);
 
-    mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/" + vendorBillId2 + "/resolve-exception"))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(resolvePayload))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
-        .andExpect(jsonPath("$.status").value("APPROVED"));
-  }
+        mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/" + vendorBillId2 + "/resolve-exception"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(resolvePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+    }
 
-  @Test
-  @DisplayName("Should list eligible vendor bills for payment")
-  void testListEligibleVendorBills() throws Exception {
-    // Endpoint now returns a paginated response envelope.
-    mockMvc.perform(withAuth(get(BASE_URL + "/ap/bills")).param("vendorId", VENDOR_ID.toString()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content", isA(java.util.List.class)))
-        .andExpect(jsonPath("$.totalElements", isA(Number.class)));
-  }
+    @Test
+    @DisplayName("Should list eligible vendor bills for payment")
+    void testListEligibleVendorBills() throws Exception {
+        // Endpoint now returns a paginated response envelope.
+        mockMvc.perform(withAuth(get(BASE_URL + "/ap/bills")).param("vendorId", VENDOR_ID.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", isA(java.util.List.class)))
+                .andExpect(jsonPath("$.totalElements", isA(Number.class)));
+    }
 }

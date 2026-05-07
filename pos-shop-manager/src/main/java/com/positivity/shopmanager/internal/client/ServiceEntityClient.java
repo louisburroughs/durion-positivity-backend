@@ -18,7 +18,10 @@ public class ServiceEntityClient {
     }
 
     public ServiceEntityDTO getServiceById(Long id) {
-        return restClient.get().uri(catalogServiceUrl + "/catalog/v1/services/{id}", id).retrieve()
+        return restClient
+                .get()
+                .uri(catalogServiceUrl + "/catalog/v1/services/{id}", id)
+                .retrieve()
                 .body(ServiceEntityDTO.class);
     }
 }

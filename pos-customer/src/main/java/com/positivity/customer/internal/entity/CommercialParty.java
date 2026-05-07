@@ -44,7 +44,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "commercial_party")
 @EntityListeners(AuditingEntityListener.class)
-@Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
+@Schema(
+        description =
+                "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class CommercialParty extends AbstractParty {
 
     @Column(unique = true, nullable = false)
@@ -88,7 +90,9 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "External identifiers keyed by source system")
     private Map<String, String> externalIdentifiers = new HashMap<>();
 
-    @Schema(description = "Primary address label or identifier for the organization", example = "123 Main St, Springfield")
+    @Schema(
+            description = "Primary address label or identifier for the organization",
+            example = "123 Main St, Springfield")
     private String primaryAddress;
 
     @Embedded

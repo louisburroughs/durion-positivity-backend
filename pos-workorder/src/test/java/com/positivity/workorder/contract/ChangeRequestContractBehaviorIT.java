@@ -94,7 +94,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """, testTechnicianId, testServiceEntityId, testProductEntityId);
 
-        MockMvcResponse response =givenWithGatewayAuth()
+        MockMvcResponse response = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -148,7 +148,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 """, testTechnicianId, testServiceEntityId);
 
         // First request - creates change request
-        MockMvcResponse firstResponse =givenWithGatewayAuth()
+        MockMvcResponse firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -168,7 +168,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
         // NOTE: This test will currently FAIL because idempotency is not yet
         // implemented
         // Once idempotency is implemented, this test should pass
-        MockMvcResponse secondResponse =givenWithGatewayAuth()
+        MockMvcResponse secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", idempotencyKey)
                 .body(requestBody)
@@ -366,7 +366,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """, testTechnicianId, testServiceEntityId);
 
-        MockMvcResponse createResponse =givenWithGatewayAuth()
+        MockMvcResponse createResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(requestBody)
                 .when()

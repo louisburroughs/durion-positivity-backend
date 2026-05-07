@@ -39,91 +39,90 @@ import org.slf4j.LoggerFactory;
  */
 public class RoleAwareMetadataFilter implements ContentRetriever {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(RoleAwareMetadataFilter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RoleAwareMetadataFilter.class);
 
-  private final @NonNull ContentRetriever delegate;
-  private final @NonNull Set<String> userRoles;
+    private final @NonNull ContentRetriever delegate;
+    private final @NonNull Set<String> userRoles;
 
-  /**
-   * Creates a role-aware filter.
-   *
-   * @param delegate  Underlying retriever to wrap
-   * @param userRoles User's assigned roles (e.g., ["ROLE_CASHIER",
-   *                  "ROLE_POS_MANAGER"])
-   */
-  public RoleAwareMetadataFilter(@NonNull ContentRetriever delegate, @NonNull Set<String> userRoles) {
-    this.delegate = delegate;
-    this.userRoles = userRoles;
-  }
-
-  /**
-   * Retrieves content from delegate and filters by role metadata.
-   *
-   * <p>
-   * Tier 3: RBAC-aware content filtering.
-   *
-   * @param query User query
-   * @return Filtered list of Content matching user's roles
-   */
-  @Override
-  public @NonNull List<Content> retrieve(@NonNull Query query) {
-    List<Content> candidates = delegate.retrieve(query);
-    if (candidates.isEmpty()) {
-      LOGGER.debug("No candidates from delegate for query; returning empty");
-      return candidates;
+    /**
+     * Creates a role-aware filter.
+     *
+     * @param delegate  Underlying retriever to wrap
+     * @param userRoles User's assigned roles (e.g., ["ROLE_CASHIER",
+     *                  "ROLE_POS_MANAGER"])
+     */
+    public RoleAwareMetadataFilter(@NonNull ContentRetriever delegate, @NonNull Set<String> userRoles) {
+        this.delegate = delegate;
+        this.userRoles = userRoles;
     }
 
-    List<Content> filtered = candidates.stream()
-        .filter(this::isAccessibleByUserRoles)
-        .toList();
+    /**
+     * Retrieves content from delegate and filters by role metadata.
+     *
+     * <p>
+     * Tier 3: RBAC-aware content filtering.
+     *
+     * @param query User query
+     * @return Filtered list of Content matching user's roles
+     */
+    @Override
+    public @NonNull List<Content> retrieve(@NonNull Query query) {
+        List<Content> candidates = delegate.retrieve(query);
+        if (candidates.isEmpty()) {
+            LOGGER.debug("No candidates from delegate for query; returning empty");
+            return candidates;
+        }
 
-    int filteredOut = candidates.size() - filtered.size();
-    if (filteredOut > 0) {
-      LOGGER.debug(
-          "Role-aware metadata filter userId_roles={} candidates={} kept={} filtered_out={}",
-          userRoles,
-          candidates.size(),
-          filtered.size(),
-          filteredOut);
+        List<Content> filtered =
+                candidates.stream().filter(this::isAccessibleByUserRoles).toList();
+
+        int filteredOut = candidates.size() - filtered.size();
+        if (filteredOut > 0) {
+            LOGGER.debug(
+                    "Role-aware metadata filter userId_roles={} candidates={} kept={} filtered_out={}",
+                    userRoles,
+                    candidates.size(),
+                    filtered.size(),
+                    filteredOut);
+        }
+        return filtered;
     }
-    return filtered;
-  }
 
-  /**
-   * Checks if content is accessible by user roles.
-   *
-   * <p>
-   * Rules:
-   * <ul>
-   * <li>If metadata has no role restriction, content is public -> accessible
-   * <li>If metadata specifies allowed_roles, check if any user role matches
-   * <li>Default: accessible (fail-open for missing metadata)
-   * </ul>
-   *
-   * @param content Retrieved content
-   * @return true if user can access, false if restricted
-   */
-  private boolean isAccessibleByUserRoles(@NonNull Content ignored) {
-    // Tier 3 MVP: Pass-through filtering
-    // Future: Extract role metadata and filter accordingly
-    LOGGER.trace("RoleAwareMetadataFilter pass-through enabled (metadata filtering deferred)");
-    return true;
-  }
+    /**
+     * Checks if content is accessible by user roles.
+     *
+     * <p>
+     * Rules:
+     * <ul>
+     * <li>If metadata has no role restriction, content is public -> accessible
+     * <li>If metadata specifies allowed_roles, check if any user role matches
+     * <li>Default: accessible (fail-open for missing metadata)
+     * </ul>
+     *
+     * @param content Retrieved content
+     * @return true if user can access, false if restricted
+     */
+    private boolean isAccessibleByUserRoles(@NonNull Content ignored) {
+        // Tier 3 MVP: Pass-through filtering
+        // Future: Extract role metadata and filter accordingly
+        LOGGER.trace("RoleAwareMetadataFilter pass-through enabled (metadata filtering deferred)");
+        return true;
+    }
 
-  /**
-   * Creates a preview of content for logging.
-   *
-   * @param content Content to preview
-   * @return Short text representation
-   */
-  @NonNull
-  private static String preview(@NonNull Content content) {
-    // Tier 3 MVP: Simplified preview (avoid calling text() which may not exist)
-    return content.toString().substring(0, Math.min(50, content.toString().length()));
-  }
+    /**
+     * Creates a preview of content for logging.
+     *
+     * @param content Content to preview
+     * @return Short text representation
+     */
+    @NonNull
+    private static String preview(@NonNull Content content) {
+        // Tier 3 MVP: Simplified preview (avoid calling text() which may not exist)
+        return content.toString().substring(0, Math.min(50, content.toString().length()));
+    }
 
-  @Override
-  public String toString() {
-    return "RoleAwareMetadataFilter{" + "delegate=" + delegate + ", userRoles=" + userRoles + '}';
-  }
+    @Override
+    public String toString() {
+        return "RoleAwareMetadataFilter{" + "delegate=" + delegate + ", userRoles=" + userRoles + '}';
+    }
 }

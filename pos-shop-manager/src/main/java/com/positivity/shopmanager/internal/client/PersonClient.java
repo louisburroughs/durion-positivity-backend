@@ -18,6 +18,10 @@ public class PersonClient {
     }
 
     public PersonDTO getPersonById(Long id) {
-        return restClient.get().uri(peopleServiceUrl + "/people/v1/people/{id}", id).retrieve().body(PersonDTO.class);
+        return restClient
+                .get()
+                .uri(peopleServiceUrl + "/people/v1/people/{id}", id)
+                .retrieve()
+                .body(PersonDTO.class);
     }
 }

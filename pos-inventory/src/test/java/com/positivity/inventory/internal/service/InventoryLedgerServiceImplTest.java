@@ -67,8 +67,7 @@ class InventoryLedgerServiceImplTest {
 
     @SuppressWarnings("unchecked")
     private void stubFindAll(List<InventoryLedgerEntry> entries) {
-        when(inventoryLedgerEntryRepository.findAll(
-                any(Specification.class), any(Pageable.class)))
+        when(inventoryLedgerEntryRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(entries));
     }
 
@@ -142,7 +141,8 @@ class InventoryLedgerServiceImplTest {
         @DisplayName("T-002: throws IllegalArgumentException for base64 pageToken that is not a valid UUID")
         void throwsIllegalArgumentExceptionForNonUuidPageToken() {
             // Encode a non-UUID string as a valid base64 token
-            String badToken = Base64.getUrlEncoder().withoutPadding()
+            String badToken = Base64.getUrlEncoder()
+                    .withoutPadding()
                     .encodeToString("not-a-uuid".getBytes(StandardCharsets.UTF_8));
             InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
                     .pageToken(badToken)
@@ -170,9 +170,8 @@ class InventoryLedgerServiceImplTest {
             List<InventoryLedgerEntry> entries = buildEntries(pageSize); // exactly 5, repo asked for 6
             stubFindAll(entries);
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(pageSize)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(pageSize).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 
@@ -187,9 +186,8 @@ class InventoryLedgerServiceImplTest {
             List<InventoryLedgerEntry> entries = buildEntries(pageSize + 1); // 6 returned from repo
             stubFindAll(entries);
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(pageSize)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(pageSize).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 
@@ -204,9 +202,8 @@ class InventoryLedgerServiceImplTest {
             List<InventoryLedgerEntry> entries = buildEntries(3);
             stubFindAll(entries);
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(pageSize)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(pageSize).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 
@@ -220,9 +217,8 @@ class InventoryLedgerServiceImplTest {
             int pageSize = 5;
             stubFindAll(List.of());
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(pageSize)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(pageSize).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 
@@ -246,9 +242,8 @@ class InventoryLedgerServiceImplTest {
             InventoryLedgerEntry entry = buildEntry(entryId);
             stubFindAll(List.of(entry));
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(5)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(5).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 
@@ -264,9 +259,8 @@ class InventoryLedgerServiceImplTest {
         void usesDefaultPageSizeWhenParamIsZero() {
             stubFindAll(List.of());
 
-            InventoryLedgerFilterParams params = InventoryLedgerFilterParams.builder()
-                    .pageSize(0)
-                    .build();
+            InventoryLedgerFilterParams params =
+                    InventoryLedgerFilterParams.builder().pageSize(0).build();
 
             LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(params);
 

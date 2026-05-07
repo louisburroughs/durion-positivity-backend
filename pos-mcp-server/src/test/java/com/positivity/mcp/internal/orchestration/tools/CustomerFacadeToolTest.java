@@ -27,7 +27,9 @@ class CustomerFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new CustomerFacadeTool(builder, BASE_URL,
+        tool = new CustomerFacadeTool(
+                builder,
+                BASE_URL,
                 "/customer/v1/customers/{customerId}",
                 "/customer/v1/customers/search?q={query}",
                 "/customer/v1/customers/{customerId}/history");

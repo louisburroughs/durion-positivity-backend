@@ -41,7 +41,8 @@ public class PermissionServiceImpl implements PermissionService {
                 throw new IllegalArgumentException("Permission key must match domain:resource:action");
             }
 
-            Permission permission = permissionRepository.findByName(permissionKey).orElseGet(Permission::new);
+            Permission permission =
+                    permissionRepository.findByName(permissionKey).orElseGet(Permission::new);
             permission.setName(permissionKey);
             permission.setDescription(definition.getDescription());
             permission.setRegisteredByService(

@@ -45,8 +45,8 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
-        UUID suggestedDestination = enabledRules.isEmpty() ? DEFAULT_LOCATION
-                : enabledRules.get(0).getDestinationLocationId();
+        UUID suggestedDestination =
+                enabledRules.isEmpty() ? DEFAULT_LOCATION : enabledRules.get(0).getDestinationLocationId();
 
         List<ParsedPutawayLineItem> lineItems = resolveLineItems(request);
 
@@ -78,17 +78,14 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<PutawayTaskResponse> getAvailableTasks(
-            @Nullable UUID locationId,
-            @Nullable UUID storageLocationId) {
+            @Nullable UUID locationId, @Nullable UUID storageLocationId) {
         UUID scopedLocationId = storageLocationId != null ? storageLocationId : locationId;
         List<PutawayTask> tasks = scopedLocationId == null
                 ? putawayTaskRepository.findByStatusIn(List.of(PutawayTaskStatus.UNASSIGNED))
                 : putawayTaskRepository.findByStatusInAndSourceLocationId(
                         List.of(PutawayTaskStatus.UNASSIGNED), scopedLocationId);
 
-        return tasks.stream()
-                .map(this::toResponse)
-                .toList();
+        return tasks.stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -119,8 +116,10 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     }
 
     private List<ParsedPutawayLineItem> resolveLineItems(GeneratePutawayTasksRequest request) {
-        boolean hasLineItems = request.getLineItems() != null && !request.getLineItems().isEmpty();
-        boolean hasLegacyProductId = request.getProductId() != null && !request.getProductId().isBlank();
+        boolean hasLineItems =
+                request.getLineItems() != null && !request.getLineItems().isEmpty();
+        boolean hasLegacyProductId =
+                request.getProductId() != null && !request.getProductId().isBlank();
         boolean hasLegacyQuantity = request.getQuantity() != null;
 
         if (hasLineItems && (hasLegacyProductId || hasLegacyQuantity)) {
@@ -165,17 +164,16 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         return value;
     }
 
-    private record ParsedPutawayLineItem(UUID productId, Integer quantity) {
-    }
+    private record ParsedPutawayLineItem(UUID productId, Integer quantity) {}
 
     private PutawayTaskResponse toResponse(PutawayTask task) {
         return PutawayTaskResponse.builder()
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
                 .sourceReceiptId(
                         task.getSourceReceipt() != null
-                                && task.getSourceReceipt().getReceiptId() != null
-                                        ? task.getSourceReceipt().getReceiptId().toString()
-                                        : null)
+                                        && task.getSourceReceipt().getReceiptId() != null
+                                ? task.getSourceReceipt().getReceiptId().toString()
+                                : null)
                 .productId(task.getProductId() != null ? task.getProductId().toString() : null)
                 .quantity(task.getQuantity())
                 .sourceLocationId(task.getSourceLocationId())

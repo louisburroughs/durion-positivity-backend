@@ -37,8 +37,7 @@ public class CustomerRegistrationClient {
                     throw new IllegalStateException("Customer person search failed with status "
                             + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {
-                });
+                .body(new ParameterizedTypeReference<List<CustomerPersonSearchResponse>>() {});
         return response == null ? List.of() : response;
     }
 }

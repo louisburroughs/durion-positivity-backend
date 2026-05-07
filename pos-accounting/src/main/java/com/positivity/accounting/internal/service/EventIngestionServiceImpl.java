@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
@@ -79,9 +79,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private static final String DATE_TYPE = "date";
     private static final String OBJECT_TYPE = "object";
     private final AccountingEventRepository accountingEventRepository;
-    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository
+            reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
-    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
+    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository
+            auditTrailEntryRepository;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
 
     /**
@@ -302,14 +304,15 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
             PostingResult postingResult = postingEngineOrchestrator.processEvent(
                     event, mappingVersion, request.getTriggeredByUserId(), true // autoPost=true for reprocessing flow
-            );
+                    );
 
             boolean reprocessingSucceeded = postingResult.isSuccess();
 
             if (reprocessingSucceeded) {
                 // Orchestrator already updated event status to PROCESSED,
                 // set finalPostingReferenceId, processedAt, and resolvedByUserId.
-                String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
+                String finalPostingRef =
+                        (String) postingResult.getEvaluationDetails().get("postingReference");
                 log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
             } else {
                 // Orchestrator already updated event status to SUSPENDED/FAILED
@@ -352,8 +355,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public List<ReprocessingAttemptHistoryResponse> getReprocessingHistory(@NonNull UUID eventId) {
         log.debug("Retrieving reprocessing history for event {}", eventId);
 
-        List<ReprocessingAttemptHistory> history = reprocessingAttemptHistoryRepository
-                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
+        List<ReprocessingAttemptHistory> history =
+                reprocessingAttemptHistoryRepository.findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
 
         return history.stream()
                 .map(ReprocessingAttemptHistoryMapper::toResponse)
@@ -368,8 +371,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     @Transactional(readOnly = true)
     public List<EventProcessingLogEntry> getEventProcessingLog(@NonNull UUID eventId) {
         // Query audit trail entries linked to this accounting event
-        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries = auditTrailEntryRepository
-                .findBySourceEventId(eventId);
+        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries =
+                auditTrailEntryRepository.findBySourceEventId(eventId);
 
         if (auditEntries.isEmpty()) {
             log.debug("No audit trail entries found for event {}", eventId);
@@ -422,16 +425,16 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             specs = specs.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
         }
         if (filter.getIdempotencyOutcome() != null) {
-            specs = specs
-                    .and((root, query, cb) -> cb.equal(root.get("idempotencyOutcome"), filter.getIdempotencyOutcome()));
+            specs = specs.and(
+                    (root, query, cb) -> cb.equal(root.get("idempotencyOutcome"), filter.getIdempotencyOutcome()));
         }
         if (filter.getReceivedAtFrom() != null) {
             specs = specs.and(
                     (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("receivedAt"), filter.getReceivedAtFrom()));
         }
         if (filter.getReceivedAtTo() != null) {
-            specs = specs
-                    .and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("receivedAt"), filter.getReceivedAtTo()));
+            specs = specs.and(
+                    (root, query, cb) -> cb.lessThanOrEqualTo(root.get("receivedAt"), filter.getReceivedAtTo()));
         }
         if (filter.getEventId() != null) {
             specs = specs.and((root, query, cb) -> cb.equal(root.get("eventId"), filter.getEventId()));
@@ -535,7 +538,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // Query all FAILED and SUSPENDED events that haven't exceeded max retries
         List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
-                        || event.getStatus() == AccountingEventStatus.SUSPENDED)
+                                || event.getStatus() == AccountingEventStatus.SUSPENDED)
                         && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries))
                 .toList();
 

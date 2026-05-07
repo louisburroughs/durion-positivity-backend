@@ -32,8 +32,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "bulkImport:upload:execute",
-        "permitAll" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"bulkImport:upload:execute", "permitAll"})
 @RequestMapping("/v1")
 @Slf4j
 @Tag(name = "TUS Resumable Upload API", description = "Resumable file uploads following the tus.io 1.0.0 protocol")
@@ -56,7 +57,9 @@ public class TusUploadController {
 
     @RequestMapping(value = "/tus", method = RequestMethod.OPTIONS)
     @PreAuthorize("permitAll()")
-    @Operation(summary = "TUS server capabilities", description = "Returns supported TUS version, extensions, and max upload size. No authentication required.")
+    @Operation(
+            summary = "TUS server capabilities",
+            description = "Returns supported TUS version, extensions, and max upload size. No authentication required.")
     @ApiResponse(responseCode = "204", description = "Server capabilities")
     public ResponseEntity<Void> options() {
         return ResponseEntity.noContent()
@@ -69,8 +72,10 @@ public class TusUploadController {
 
     @PostMapping("/bulk-jobs/{jobId}/tus")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
-    @Operation(summary = "Create a resumable upload", description = "Creates a new TUS upload scoped to a bulk load job. "
-            + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.")
+    @Operation(
+            summary = "Create a resumable upload",
+            description = "Creates a new TUS upload scoped to a bulk load job. "
+                    + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.")
     @ApiResponse(responseCode = "201", description = "Upload created")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
     @ApiResponse(responseCode = "413", description = "Upload-Length exceeds server maximum")
@@ -82,8 +87,7 @@ public class TusUploadController {
             HttpServletRequest request) {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
-        if (versionError != null)
-            return versionError;
+        if (versionError != null) return versionError;
 
         if (uploadLength > maxUploadSize) {
             return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
@@ -92,8 +96,8 @@ public class TusUploadController {
         }
 
         String fileName = parseFilename(uploadMetadata);
-        TusUploadService.Created created = tusUploadService.createUpload(jobId, fileName, uploadLength,
-                resolveOperatorId());
+        TusUploadService.Created created =
+                tusUploadService.createUpload(jobId, fileName, uploadLength, resolveOperatorId());
 
         String location = resolveBaseUrl(request) + "/v1/tus/" + created.id();
         return ResponseEntity.created(URI.create(location))
@@ -105,7 +109,9 @@ public class TusUploadController {
 
     @RequestMapping(value = "/tus/{uploadId}", method = RequestMethod.HEAD)
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
-    @Operation(summary = "Get upload offset", description = "Returns the current byte offset of a TUS upload for resumption.")
+    @Operation(
+            summary = "Get upload offset",
+            description = "Returns the current byte offset of a TUS upload for resumption.")
     @ApiResponse(responseCode = "200", description = "Current upload offset")
     @ApiResponse(responseCode = "404", description = "Upload not found")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
@@ -114,8 +120,7 @@ public class TusUploadController {
             @RequestHeader(value = TUS_RESUMABLE, required = false) @Nullable String tusResumable) {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
-        if (versionError != null)
-            return versionError;
+        if (versionError != null) return versionError;
 
         TusUploadService.Info info = tusUploadService.getInfo(uploadId);
         return ResponseEntity.ok()
@@ -129,9 +134,11 @@ public class TusUploadController {
 
     @PatchMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
-    @Operation(summary = "Upload a chunk", description = "Appends a byte range to an in-progress TUS upload. "
-            + "Content-Type must be application/offset+octet-stream. "
-            + "Upload-Offset must equal the current server-side offset.")
+    @Operation(
+            summary = "Upload a chunk",
+            description = "Appends a byte range to an in-progress TUS upload. "
+                    + "Content-Type must be application/offset+octet-stream. "
+                    + "Upload-Offset must equal the current server-side offset.")
     @ApiResponse(responseCode = "204", description = "Chunk accepted, new offset returned")
     @ApiResponse(responseCode = "409", description = "Upload-Offset conflict")
     @ApiResponse(responseCode = "410", description = "Upload has expired")
@@ -143,11 +150,11 @@ public class TusUploadController {
             @RequestHeader(UPLOAD_OFFSET) long uploadOffset,
             @RequestHeader("Content-Length") long contentLength,
             @RequestHeader(value = "Content-Type", required = false) @Nullable String contentType,
-            HttpServletRequest request) throws IOException {
+            HttpServletRequest request)
+            throws IOException {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
-        if (versionError != null)
-            return versionError;
+        if (versionError != null) return versionError;
 
         if (!"application/offset+octet-stream".equals(contentType)) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
@@ -173,13 +180,10 @@ public class TusUploadController {
             @RequestHeader(value = TUS_RESUMABLE, required = false) @Nullable String tusResumable) {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
-        if (versionError != null)
-            return versionError;
+        if (versionError != null) return versionError;
 
         tusUploadService.deleteUpload(uploadId);
-        return ResponseEntity.noContent()
-                .header(TUS_RESUMABLE, TUS_VERSION)
-                .build();
+        return ResponseEntity.noContent().header(TUS_RESUMABLE, TUS_VERSION).build();
     }
 
     private @Nullable ResponseEntity<Void> rejectIfUnsupportedVersion(@Nullable String tusResumable) {
@@ -193,8 +197,7 @@ public class TusUploadController {
     }
 
     private String parseFilename(@Nullable String metadata) {
-        if (metadata == null || metadata.isBlank())
-            return "upload.bin";
+        if (metadata == null || metadata.isBlank()) return "upload.bin";
         for (String entry : metadata.split(",")) {
             String[] kv = entry.trim().split(" ", 2);
             if (kv.length == 2 && "filename".equalsIgnoreCase(kv[0])) {

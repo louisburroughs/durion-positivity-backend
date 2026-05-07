@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ShortageResolutionResultDto {
-  private UUID allocationId;
-  private String resolution;
-  private Instant resolvedAt;
-  private String status;
+    private UUID allocationId;
+    private String resolution;
+    private Instant resolvedAt;
+    private String status;
 }

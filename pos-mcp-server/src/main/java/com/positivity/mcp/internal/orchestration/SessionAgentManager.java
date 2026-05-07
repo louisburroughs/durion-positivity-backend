@@ -8,10 +8,6 @@ import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
-import com.positivity.mcp.internal.orchestration.retrieval.RoleAwareMetadataFilter;
-import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
-import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
-import com.positivity.mcp.internal.orchestration.retrieval.RoleAwareMetadataFilter;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -24,7 +20,6 @@ import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
@@ -81,6 +76,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     @Nullable
     private final SessionSummaryService sessionSummaryService;
+
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
 
@@ -171,10 +167,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     messagePreview);
             if (simpleChat) {
                 LOGGER.debug(
-                        "MCP simple chat dispatch username={} role={} preview=\"{}\"",
-                        username,
-                        role,
-                        messagePreview);
+                        "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
                 return simpleChat(currentUserContext, message, startMs);
             }
 
@@ -195,8 +188,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         selection.fallbackToolNames(),
                         messagePreview);
             }
-            PosAssistant agent = getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(),
-                    selection.fallbackTools());
+            PosAssistant agent =
+                    getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(), selection.fallbackTools());
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -248,8 +241,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         long startNanos = System.nanoTime();
         // 1. Resolve role-specific tools and append fallback tools without
         // registering duplicate @Tool method names.
-        List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
-                fallbackTools.toArray(Object[]::new));
+        List<Object> tools =
+                ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray(Object[]::new));
 
         // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
         ContentRetriever semanticRetriever = EmbeddingStoreContentRetriever.builder()
@@ -266,11 +259,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .build();
         ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever hybridRetriever = new HybridContentRetriever(
-                List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever =
+                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
         ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
-                "tier2-hybrid-reranked-retriever");
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
         // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution
         // at runtime)
@@ -329,14 +322,15 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // for persistent semantic memory and session summarization
         return chatMemoryCache.get(
                 String.valueOf(memoryId),
-                ignored -> new SemanticChatMemoryStore(memoryMaxMessages, chatModel, embeddingModel,
-                        embeddingStore, sessionSummaryService));
+                ignored -> new SemanticChatMemoryStore(
+                        memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummaryService));
     }
 
     private @NonNull String simpleChat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
-        String prompt = rolePromptResolver.resolvePrompt(currentUserContext.primaryRole()) + System.lineSeparator()
+        String prompt = rolePromptResolver.resolvePrompt(currentUserContext.primaryRole())
+                + System.lineSeparator()
                 + formatUserContext(currentUserContext);
         String response = chatModel
                 .chat(List.of(SystemMessage.from(prompt), UserMessage.from(message)))
@@ -380,8 +374,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     "MCP workflow state derived message preview=\"{}\" workflowState={}",
                     preview(message),
                     workflowState);
-            List<ToolMetadata> candidates = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
+            List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
+                    new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
             if (LOGGER.isDebugEnabled()) {
                 for (int i = 0; i < candidates.size(); i++) {
                     ToolMetadata candidate = candidates.get(i);
@@ -395,7 +389,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                             String.format(Locale.ROOT, "%.3f", candidate.priority()));
                 }
             }
-            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
+            List<String> selectedNames =
+                    candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
                         "MCP tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
@@ -491,7 +486,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private static int tokenCount(@NonNull String text) {
-        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text)).size();
+        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text))
+                .size();
     }
 
     private static @NonNull List<String> toolNames(@NonNull Collection<Object> tools) {

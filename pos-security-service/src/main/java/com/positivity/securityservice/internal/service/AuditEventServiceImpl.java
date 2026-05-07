@@ -8,11 +8,11 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import com.positivity.securityservice.service.AuditEventService;
+import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -98,7 +98,8 @@ public class AuditEventServiceImpl implements AuditEventService {
     @Transactional(readOnly = true)
     public Page<AuditLogEventDto> searchEventsFiltered(
             @NonNull AuditEventSearchFilter filter, @NonNull Pageable pageable) {
-        if (filter.getFromDate() != null && filter.getToDate() != null
+        if (filter.getFromDate() != null
+                && filter.getToDate() != null
                 && !filter.getFromDate().isBefore(filter.getToDate())) {
             throw new IllegalArgumentException("fromDate must be before toDate");
         }

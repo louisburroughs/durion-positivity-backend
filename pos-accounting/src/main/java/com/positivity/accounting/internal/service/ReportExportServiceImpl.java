@@ -32,79 +32,81 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ReportExportServiceImpl implements ReportExportService {
 
-  private static final Logger log = LoggerFactory.getLogger(ReportExportServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(ReportExportServiceImpl.class);
 
-  private final Clock clock;
+    private final Clock clock;
 
-  /**
-   * In-memory store for export jobs (replaced by JPA entity in a future sprint).
-   */
-  private final ConcurrentHashMap<UUID, ReportExportResponse> exportStore = new ConcurrentHashMap<>();
+    /**
+     * In-memory store for export jobs (replaced by JPA entity in a future sprint).
+     */
+    private final ConcurrentHashMap<UUID, ReportExportResponse> exportStore = new ConcurrentHashMap<>();
 
-  public ReportExportServiceImpl(Clock clock) {
-    this.clock = clock;
-  }
-
-  @Override
-  @NonNull
-  public ReportExportResponse requestExport(@NonNull ReportExportRequest request, @NonNull String operatorId) {
-    UUID exportId = UUID.randomUUID();
-    Instant now = Instant.now(clock);
-
-    ReportExportResponse response = ReportExportResponse.builder()
-        .exportId(exportId)
-        .status(ExportStatus.PENDING)
-        .requestedAt(now)
-        .format(request.getFormat())
-        .reportType(request.getReportType())
-        .build();
-
-    exportStore.put(exportId, response);
-    log.info("Report export requested: exportId={} reportType={} operator={}",
-        exportId, request.getReportType(), operatorId);
-    return response;
-  }
-
-  @Override
-  @NonNull
-  public ReportExportResponse getExportStatus(@NonNull UUID exportId) {
-    ReportExportResponse response = exportStore.get(exportId);
-    if (response == null) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No export found with ID: " + exportId);
-    }
-    return response;
-  }
-
-  @Override
-  @NonNull
-  public Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable) {
-    Sort sort = pageable.getSort();
-    Comparator<ReportExportResponse> comparator;
-    if (sort.isSorted()) {
-      Sort.Order order = sort.iterator().next();
-      if (!"requestedAt".equals(order.getProperty())) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
-      }
-      comparator = order.isAscending()
-          ? Comparator.comparing(ReportExportResponse::getRequestedAt)
-          : (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
-    } else {
-      comparator = (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+    public ReportExportServiceImpl(Clock clock) {
+        this.clock = clock;
     }
 
-    var all = exportStore.values().stream()
-        .sorted(comparator)
-        .toList();
+    @Override
+    @NonNull
+    public ReportExportResponse requestExport(@NonNull ReportExportRequest request, @NonNull String operatorId) {
+        UUID exportId = UUID.randomUUID();
+        Instant now = Instant.now(clock);
 
-    int total = all.size();
-    long offset = pageable.getOffset();
-    if (offset >= total) {
-      return new PageImpl<>(List.of(), pageable, total);
+        ReportExportResponse response = ReportExportResponse.builder()
+                .exportId(exportId)
+                .status(ExportStatus.PENDING)
+                .requestedAt(now)
+                .format(request.getFormat())
+                .reportType(request.getReportType())
+                .build();
+
+        exportStore.put(exportId, response);
+        log.info(
+                "Report export requested: exportId={} reportType={} operator={}",
+                exportId,
+                request.getReportType(),
+                operatorId);
+        return response;
     }
-    int start = Math.toIntExact(offset);
-    int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
-    var page = all.subList(start, end);
-    return new PageImpl<>(page, pageable, total);
-  }
+
+    @Override
+    @NonNull
+    public ReportExportResponse getExportStatus(@NonNull UUID exportId) {
+        ReportExportResponse response = exportStore.get(exportId);
+        if (response == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No export found with ID: " + exportId);
+        }
+        return response;
+    }
+
+    @Override
+    @NonNull
+    public Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable) {
+        Sort sort = pageable.getSort();
+        Comparator<ReportExportResponse> comparator;
+        if (sort.isSorted()) {
+            Sort.Order order = sort.iterator().next();
+            if (!"requestedAt".equals(order.getProperty())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
+            }
+            comparator = order.isAscending()
+                    ? Comparator.comparing(ReportExportResponse::getRequestedAt)
+                    : (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+        } else {
+            comparator = (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+        }
+
+        var all = exportStore.values().stream().sorted(comparator).toList();
+
+        int total = all.size();
+        long offset = pageable.getOffset();
+        if (offset >= total) {
+            return new PageImpl<>(List.of(), pageable, total);
+        }
+        int start = Math.toIntExact(offset);
+        int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
+        var page = all.subList(start, end);
+        return new PageImpl<>(page, pageable, total);
+    }
 }

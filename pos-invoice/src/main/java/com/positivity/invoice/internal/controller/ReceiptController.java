@@ -91,16 +91,12 @@ public class ReceiptController {
             @NotNull UUID paymentIntentId,
             @NotBlank String terminalId,
             @NotBlank String templateId,
-            @NotBlank String templateVersion) {
-    }
+            @NotBlank String templateVersion) {}
 
-    private record PrintDeliveryRequest(@NotNull ReceiptDeliveryStatus status) {
-    }
+    private record PrintDeliveryRequest(@NotNull ReceiptDeliveryStatus status) {}
 
     private record EmailDeliveryRequest(
-            @NotBlank String emailAddress, @NotNull ReceiptDeliveryStatus status) {
-    }
+            @NotBlank String emailAddress, @NotNull ReceiptDeliveryStatus status) {}
 
-    private record ReprintReceiptRequest(@NotBlank String reason) {
-    }
+    private record ReprintReceiptRequest(@NotBlank String reason) {}
 }

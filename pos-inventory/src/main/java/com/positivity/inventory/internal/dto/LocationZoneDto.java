@@ -11,8 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LocationZoneDto {
-  private UUID zoneId;
-  private UUID locationId;
-  private String zoneName;
-  private String description;
+    private UUID zoneId;
+    private UUID locationId;
+    private String zoneName;
+    private String description;
 }

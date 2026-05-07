@@ -67,8 +67,6 @@ class CustomUserDetailsServiceIT {
 
         UserDetails principal = customUserDetailsService.loadUserByUsername(username);
 
-        assertThat(principal.getAuthorities())
-                .extracting("authority")
-                .contains("ROLE_" + savedRole.getName());
+        assertThat(principal.getAuthorities()).extracting("authority").contains("ROLE_" + savedRole.getName());
     }
 }

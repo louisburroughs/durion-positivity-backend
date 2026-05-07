@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(LocationBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
-@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class LocationBulkIngestControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000040");
@@ -62,8 +62,8 @@ class LocationBulkIngestControllerTest {
         when(locationService.createLocation(any())).thenReturn(locationResponse);
 
         mockMvc.perform(post("/v1/locations/bulk-ingest")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(1))
@@ -84,8 +84,8 @@ class LocationBulkIngestControllerTest {
         when(locationService.createLocation(any())).thenThrow(new IllegalArgumentException("Duplicate code"));
 
         mockMvc.perform(post("/v1/locations/bulk-ingest")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
@@ -100,8 +100,8 @@ class LocationBulkIngestControllerTest {
         request.setRecords(List.of()); // @NotEmpty constraint
 
         mockMvc.perform(post("/v1/locations/bulk-ingest")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -117,8 +117,8 @@ class LocationBulkIngestControllerTest {
         request.setRecords(List.of(locRecord));
 
         mockMvc.perform(post("/v1/locations/bulk-ingest")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 }

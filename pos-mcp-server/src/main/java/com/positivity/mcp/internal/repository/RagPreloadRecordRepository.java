@@ -12,10 +12,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RagPreloadRecordRepository extends JpaRepository<RagPreloadRecord, UUID> {
 
-  @NonNull
-  Optional<RagPreloadRecord> findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
-      @NonNull String documentId, @NonNull RagPreloadStatus status);
+    @NonNull
+    Optional<RagPreloadRecord> findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
+            @NonNull String documentId, @NonNull RagPreloadStatus status);
 
-  @NonNull
-  List<RagPreloadRecord> findAllByStatus(@NonNull RagPreloadStatus status);
+    @NonNull
+    List<RagPreloadRecord> findAllByStatus(@NonNull RagPreloadStatus status);
 }

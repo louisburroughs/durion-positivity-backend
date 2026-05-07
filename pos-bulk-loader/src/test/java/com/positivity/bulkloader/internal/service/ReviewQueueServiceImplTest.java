@@ -32,7 +32,7 @@ import org.springframework.core.io.Resource;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({ "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S100", "java:S1192"})
 class ReviewQueueServiceImplTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
@@ -122,9 +122,8 @@ class ReviewQueueServiceImplTest {
                 .auditRecordId(AUDIT_ID)
                 .correctedData(Map.of("sku", "PROD-001"))
                 .build();
-        BulkCorrectionRequest request = BulkCorrectionRequest.builder()
-                .corrections(List.of(item))
-                .build();
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of(item)).build();
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
         when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.of(audit));
@@ -150,9 +149,8 @@ class ReviewQueueServiceImplTest {
                 .auditRecordId(AUDIT_ID)
                 .correctedData(Map.of("sku", "PROD-001"))
                 .build();
-        BulkCorrectionRequest request = BulkCorrectionRequest.builder()
-                .corrections(List.of(item))
-                .build();
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of(item)).build();
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
         when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.of(audit));
@@ -171,9 +169,8 @@ class ReviewQueueServiceImplTest {
                 .auditRecordId(AUDIT_ID)
                 .correctedData(Map.of("sku", "PROD-001"))
                 .build();
-        BulkCorrectionRequest request = BulkCorrectionRequest.builder()
-                .corrections(List.of(item))
-                .build();
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of(item)).build();
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
         when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.empty());
@@ -187,9 +184,8 @@ class ReviewQueueServiceImplTest {
     @Test
     void submitCorrections_whenJobNotInFailedState_throwsIllegalState() {
         BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.PROCESSING);
-        BulkCorrectionRequest request = BulkCorrectionRequest.builder()
-                .corrections(List.of())
-                .build();
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of()).build();
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
 
@@ -201,9 +197,8 @@ class ReviewQueueServiceImplTest {
     @Test
     void submitCorrections_whenNotOwner_throwsOwnershipViolation() {
         BulkLoadJob job = bulkLoadJob(JOB_ID, "other-operator", JobStatus.FAILED);
-        BulkCorrectionRequest request = BulkCorrectionRequest.builder()
-                .corrections(List.of())
-                .build();
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of()).build();
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
 

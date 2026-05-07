@@ -47,8 +47,7 @@ public class InvoiceClient {
                 .get()
                 .uri("/invoice/v1/invoices/{invoiceId}", invoiceId)
                 .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {
-                });
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
 
         if (invoiceData == null) {
             throw new IllegalStateException("Invoice service returned an empty response for invoice " + invoiceId);

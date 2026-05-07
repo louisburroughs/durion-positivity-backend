@@ -24,58 +24,59 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TimekeepingExportServiceImpl implements TimekeepingExportService {
 
-  private final Clock clock;
-  private final ConcurrentHashMap<UUID, ExportJobResponse> jobStore = new ConcurrentHashMap<>();
+    private final Clock clock;
+    private final ConcurrentHashMap<UUID, ExportJobResponse> jobStore = new ConcurrentHashMap<>();
 
-  @Override
-  public @NonNull ExportJobResponse requestExport(@NonNull ExportJobRequest request) {
-    UUID jobId = UUIDv7Generator.generate();
-    ExportJobResponse job = ExportJobResponse.builder()
-        .jobId(jobId)
-        .status("PENDING")
-        .requestedAt(Instant.now(clock))
-        .build();
-    jobStore.put(jobId, job);
-    return job;
-  }
-
-  @Override
-  public @NonNull ExportJobResponse getExportStatus(@NonNull UUID jobId) {
-    ExportJobResponse job = jobStore.get(jobId);
-    if (job == null) {
-      throw new ExportJobNotFoundException("Export job not found: " + jobId);
-    }
-    return job;
-  }
-
-  @Override
-  public @NonNull Page<ExportJobResponse> listExportHistory(@NonNull Pageable pageable) {
-    Sort sort = pageable.getSort();
-    Comparator<ExportJobResponse> comparator;
-    if (sort.isSorted()) {
-      Sort.Order order = sort.iterator().next();
-      if (!"requestedAt".equals(order.getProperty())) {
-        throw new UnsupportedSortPropertyException(
-            "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
-      }
-      comparator = order.isAscending()
-          ? Comparator.comparing(ExportJobResponse::getRequestedAt)
-          : (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
-    } else {
-      comparator = (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+    @Override
+    public @NonNull ExportJobResponse requestExport(@NonNull ExportJobRequest request) {
+        UUID jobId = UUIDv7Generator.generate();
+        ExportJobResponse job = ExportJobResponse.builder()
+                .jobId(jobId)
+                .status("PENDING")
+                .requestedAt(Instant.now(clock))
+                .build();
+        jobStore.put(jobId, job);
+        return job;
     }
 
-    List<ExportJobResponse> all = jobStore.values().stream().sorted(comparator).toList();
-
-    int total = all.size();
-    long offset = pageable.getOffset();
-    if (offset >= total) {
-      return new PageImpl<>(List.of(), pageable, total);
+    @Override
+    public @NonNull ExportJobResponse getExportStatus(@NonNull UUID jobId) {
+        ExportJobResponse job = jobStore.get(jobId);
+        if (job == null) {
+            throw new ExportJobNotFoundException("Export job not found: " + jobId);
+        }
+        return job;
     }
 
-    int start = Math.toIntExact(offset);
-    int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
-    List<ExportJobResponse> page = all.subList(start, end);
-    return new PageImpl<>(page, pageable, total);
-  }
+    @Override
+    public @NonNull Page<ExportJobResponse> listExportHistory(@NonNull Pageable pageable) {
+        Sort sort = pageable.getSort();
+        Comparator<ExportJobResponse> comparator;
+        if (sort.isSorted()) {
+            Sort.Order order = sort.iterator().next();
+            if (!"requestedAt".equals(order.getProperty())) {
+                throw new UnsupportedSortPropertyException(
+                        "Unsupported sort property: '" + order.getProperty() + "'. Only 'requestedAt' is supported.");
+            }
+            comparator = order.isAscending()
+                    ? Comparator.comparing(ExportJobResponse::getRequestedAt)
+                    : (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+        } else {
+            comparator = (a, b) -> b.getRequestedAt().compareTo(a.getRequestedAt());
+        }
+
+        List<ExportJobResponse> all =
+                jobStore.values().stream().sorted(comparator).toList();
+
+        int total = all.size();
+        long offset = pageable.getOffset();
+        if (offset >= total) {
+            return new PageImpl<>(List.of(), pageable, total);
+        }
+
+        int start = Math.toIntExact(offset);
+        int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
+        List<ExportJobResponse> page = all.subList(start, end);
+        return new PageImpl<>(page, pageable, total);
+    }
 }

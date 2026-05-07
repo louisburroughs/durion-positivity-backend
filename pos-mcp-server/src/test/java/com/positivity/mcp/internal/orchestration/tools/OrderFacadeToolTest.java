@@ -27,9 +27,8 @@ class OrderFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new OrderFacadeTool(builder, BASE_URL,
-                "/order/v1/orders/{orderId}",
-                "/order/v1/orders/search?q={query}");
+        tool = new OrderFacadeTool(
+                builder, BASE_URL, "/order/v1/orders/{orderId}", "/order/v1/orders/search?q={query}");
     }
 
     @Test

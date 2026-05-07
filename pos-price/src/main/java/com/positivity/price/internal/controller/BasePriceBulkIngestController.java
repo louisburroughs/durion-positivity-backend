@@ -25,8 +25,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-    "pricing:base_price:create" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"pricing:base_price:create"})
 @RequestMapping("/v1/price")
 @RequiredArgsConstructor
 @Slf4j
@@ -34,59 +35,59 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Price Bulk Ingest API", description = "Bulk import base price records")
 public class BasePriceBulkIngestController extends AbstractBulkIngestController<BasePriceBulkIngestRecord> {
 
-  private final BasePriceService basePriceService;
+    private final BasePriceService basePriceService;
 
-  @Override
-  @PostMapping("/bulk-ingest")
-  @PreAuthorize("hasAuthority('pricing:base_price:create')")
-  @EmitEvent(id = "PRICE_BULK_INGEST", apiVersion = "1")
-  public ResponseEntity<BulkIngestResponse> bulkIngest(
-      @Valid @RequestBody @NonNull BulkIngestRequest<BasePriceBulkIngestRecord> request) {
-    return super.bulkIngest(request);
-  }
-
-  @Override
-  protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<BasePriceBulkIngestRecord> request) {
-    List<BulkIngestResult> results = new ArrayList<>();
-    int successCount = 0;
-    int failureCount = 0;
-
-    for (int i = 0; i < request.getRecords().size(); i++) {
-      BasePriceBulkIngestRecord ingestRecord = request.getRecords().get(i);
-      try {
-        UUID productId = UUID.fromString(ingestRecord.getProductId());
-        BigDecimal msrp = new BigDecimal(ingestRecord.getMsrp());
-        Instant effectiveFrom = Instant.parse(ingestRecord.getEffectiveFrom());
-        UUID savedProductId = basePriceService.saveBasePrice(productId, msrp, ingestRecord.getCurrency(),
-            effectiveFrom);
-        results.add(BulkIngestResult.builder()
-            .rowIndex(i)
-            .entityId(savedProductId)
-            .success(true)
-            .build());
-        successCount++;
-      } catch (Exception exception) {
-        log.warn("Failed to ingest price record at row {}: {}", i, exception.getMessage(), exception);
-        results.add(BulkIngestResult.builder()
-            .rowIndex(i)
-            .success(false)
-            .errorCode("PRICE_INGEST_FAILED")
-            .errorMessage(errorMessage(exception))
-            .build());
-        failureCount++;
-      }
+    @Override
+    @PostMapping("/bulk-ingest")
+    @PreAuthorize("hasAuthority('pricing:base_price:create')")
+    @EmitEvent(id = "PRICE_BULK_INGEST", apiVersion = "1")
+    public ResponseEntity<BulkIngestResponse> bulkIngest(
+            @Valid @RequestBody @NonNull BulkIngestRequest<BasePriceBulkIngestRecord> request) {
+        return super.bulkIngest(request);
     }
 
-    return BulkIngestResponse.builder()
-        .totalSubmitted(request.getRecords().size())
-        .successCount(successCount)
-        .failureCount(failureCount)
-        .results(results)
-        .build();
-  }
+    @Override
+    protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<BasePriceBulkIngestRecord> request) {
+        List<BulkIngestResult> results = new ArrayList<>();
+        int successCount = 0;
+        int failureCount = 0;
 
-  private String errorMessage(@NonNull Exception exception) {
-    String message = exception.getMessage();
-    return message == null || message.isBlank() ? "Price ingest failed" : message;
-  }
+        for (int i = 0; i < request.getRecords().size(); i++) {
+            BasePriceBulkIngestRecord ingestRecord = request.getRecords().get(i);
+            try {
+                UUID productId = UUID.fromString(ingestRecord.getProductId());
+                BigDecimal msrp = new BigDecimal(ingestRecord.getMsrp());
+                Instant effectiveFrom = Instant.parse(ingestRecord.getEffectiveFrom());
+                UUID savedProductId =
+                        basePriceService.saveBasePrice(productId, msrp, ingestRecord.getCurrency(), effectiveFrom);
+                results.add(BulkIngestResult.builder()
+                        .rowIndex(i)
+                        .entityId(savedProductId)
+                        .success(true)
+                        .build());
+                successCount++;
+            } catch (Exception exception) {
+                log.warn("Failed to ingest price record at row {}: {}", i, exception.getMessage(), exception);
+                results.add(BulkIngestResult.builder()
+                        .rowIndex(i)
+                        .success(false)
+                        .errorCode("PRICE_INGEST_FAILED")
+                        .errorMessage(errorMessage(exception))
+                        .build());
+                failureCount++;
+            }
+        }
+
+        return BulkIngestResponse.builder()
+                .totalSubmitted(request.getRecords().size())
+                .successCount(successCount)
+                .failureCount(failureCount)
+                .results(results)
+                .build();
+    }
+
+    private String errorMessage(@NonNull Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? "Price ingest failed" : message;
+    }
 }

@@ -21,77 +21,79 @@ import org.springframework.util.StringUtils;
 @Slf4j
 public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
 
-  private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
-  private final JobOperator jobOperator;
-  private final Job catalogBulkLoadJob;
-  private final Job customerBulkLoadJob;
-  private final Job peopleBulkLoadJob;
-  private final Job priceBulkLoadJob;
-  private final Job vehicleBulkLoadJob;
-  private final Job vehicleFitmentBulkLoadJob;
+    private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
+    private final JobOperator jobOperator;
+    private final Job catalogBulkLoadJob;
+    private final Job customerBulkLoadJob;
+    private final Job peopleBulkLoadJob;
+    private final Job priceBulkLoadJob;
+    private final Job vehicleBulkLoadJob;
+    private final Job vehicleFitmentBulkLoadJob;
 
-  public SpringBatchBulkLoadLauncher(
-      BulkLoadAuthorizationContext bulkLoadAuthorizationContext,
-      JobOperator jobOperator,
-      @Qualifier("catalogBulkLoadJob") Job catalogBulkLoadJob,
-      @Qualifier("customerBulkLoadJob") Job customerBulkLoadJob,
-      @Qualifier("peopleBulkLoadJob") Job peopleBulkLoadJob,
-      @Qualifier("priceBulkLoadJob") Job priceBulkLoadJob,
-      @Qualifier("vehicleBulkLoadJob") Job vehicleBulkLoadJob,
-      @Qualifier("vehicleFitmentBulkLoadJob") Job vehicleFitmentBulkLoadJob) {
-    this.bulkLoadAuthorizationContext = bulkLoadAuthorizationContext;
-    this.jobOperator = jobOperator;
-    this.catalogBulkLoadJob = catalogBulkLoadJob;
-    this.customerBulkLoadJob = customerBulkLoadJob;
-    this.peopleBulkLoadJob = peopleBulkLoadJob;
-    this.priceBulkLoadJob = priceBulkLoadJob;
-    this.vehicleBulkLoadJob = vehicleBulkLoadJob;
-    this.vehicleFitmentBulkLoadJob = vehicleFitmentBulkLoadJob;
-  }
-
-  @Override
-  public void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader) {
-    if (!StringUtils.hasText(job.getOriginalFilePath())) {
-      throw new IllegalArgumentException("Bulk load job must include a persisted storage path before launch");
-    }
-    if (job.getLocationId() == null) {
-      throw new IllegalArgumentException("Bulk load job must include a locationId before launch");
-    }
-    if (!StringUtils.hasText(job.getOperatorId())) {
-      throw new IllegalArgumentException("Bulk load job must include an operatorId before launch");
+    public SpringBatchBulkLoadLauncher(
+            BulkLoadAuthorizationContext bulkLoadAuthorizationContext,
+            JobOperator jobOperator,
+            @Qualifier("catalogBulkLoadJob") Job catalogBulkLoadJob,
+            @Qualifier("customerBulkLoadJob") Job customerBulkLoadJob,
+            @Qualifier("peopleBulkLoadJob") Job peopleBulkLoadJob,
+            @Qualifier("priceBulkLoadJob") Job priceBulkLoadJob,
+            @Qualifier("vehicleBulkLoadJob") Job vehicleBulkLoadJob,
+            @Qualifier("vehicleFitmentBulkLoadJob") Job vehicleFitmentBulkLoadJob) {
+        this.bulkLoadAuthorizationContext = bulkLoadAuthorizationContext;
+        this.jobOperator = jobOperator;
+        this.catalogBulkLoadJob = catalogBulkLoadJob;
+        this.customerBulkLoadJob = customerBulkLoadJob;
+        this.peopleBulkLoadJob = peopleBulkLoadJob;
+        this.priceBulkLoadJob = priceBulkLoadJob;
+        this.vehicleBulkLoadJob = vehicleBulkLoadJob;
+        this.vehicleFitmentBulkLoadJob = vehicleFitmentBulkLoadJob;
     }
 
-    try {
-      bulkLoadAuthorizationContext.setAuthorizationHeader(authorizationHeader);
-      jobOperator.start(
-          resolveJob(job.getDomainType()),
-          new JobParametersBuilder()
-              .addString("jobId", job.getId().toString())
-              .addString("storagePath", job.getOriginalFilePath())
-              .addString("locationId", job.getLocationId().toString())
-              .addString("operatorId", job.getOperatorId())
-              .addLong("launchEpochMillis", System.currentTimeMillis())
-              .toJobParameters());
-      log.info("Launched batch job for bulk load job {} domain {}", job.getId(), job.getDomainType());
-    } catch (JobExecutionAlreadyRunningException | JobRestartException | JobInstanceAlreadyCompleteException
-        | InvalidJobParametersException ex) {
-      throw new IllegalStateException(
-          "Failed to launch Spring Batch job for bulk load job %s".formatted(job.getId()), ex);
-    } finally {
-      bulkLoadAuthorizationContext.clear();
-    }
-  }
+    @Override
+    public void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader) {
+        if (!StringUtils.hasText(job.getOriginalFilePath())) {
+            throw new IllegalArgumentException("Bulk load job must include a persisted storage path before launch");
+        }
+        if (job.getLocationId() == null) {
+            throw new IllegalArgumentException("Bulk load job must include a locationId before launch");
+        }
+        if (!StringUtils.hasText(job.getOperatorId())) {
+            throw new IllegalArgumentException("Bulk load job must include an operatorId before launch");
+        }
 
-  private Job resolveJob(DomainType domainType) {
-    return switch (domainType) {
-      case CATALOG_PRODUCT -> catalogBulkLoadJob;
-      case CUSTOMER -> customerBulkLoadJob;
-      case PERSON -> peopleBulkLoadJob;
-      case BASE_PRICE -> priceBulkLoadJob;
-      case VEHICLE -> vehicleBulkLoadJob;
-      case VEHICLE_FITMENT -> vehicleFitmentBulkLoadJob;
-      case INVENTORY_STOCK_COUNT, LOCATION -> throw new IllegalStateException(
-          "No Spring Batch job is configured for domain type: " + domainType);
-    };
-  }
+        try {
+            bulkLoadAuthorizationContext.setAuthorizationHeader(authorizationHeader);
+            jobOperator.start(
+                    resolveJob(job.getDomainType()),
+                    new JobParametersBuilder()
+                            .addString("jobId", job.getId().toString())
+                            .addString("storagePath", job.getOriginalFilePath())
+                            .addString("locationId", job.getLocationId().toString())
+                            .addString("operatorId", job.getOperatorId())
+                            .addLong("launchEpochMillis", System.currentTimeMillis())
+                            .toJobParameters());
+            log.info("Launched batch job for bulk load job {} domain {}", job.getId(), job.getDomainType());
+        } catch (JobExecutionAlreadyRunningException
+                | JobRestartException
+                | JobInstanceAlreadyCompleteException
+                | InvalidJobParametersException ex) {
+            throw new IllegalStateException(
+                    "Failed to launch Spring Batch job for bulk load job %s".formatted(job.getId()), ex);
+        } finally {
+            bulkLoadAuthorizationContext.clear();
+        }
+    }
+
+    private Job resolveJob(DomainType domainType) {
+        return switch (domainType) {
+            case CATALOG_PRODUCT -> catalogBulkLoadJob;
+            case CUSTOMER -> customerBulkLoadJob;
+            case PERSON -> peopleBulkLoadJob;
+            case BASE_PRICE -> priceBulkLoadJob;
+            case VEHICLE -> vehicleBulkLoadJob;
+            case VEHICLE_FITMENT -> vehicleFitmentBulkLoadJob;
+            case INVENTORY_STOCK_COUNT, LOCATION ->
+                throw new IllegalStateException("No Spring Batch job is configured for domain type: " + domainType);
+        };
+    }
 }

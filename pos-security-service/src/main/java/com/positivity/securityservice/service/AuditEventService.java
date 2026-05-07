@@ -1,8 +1,8 @@
 package com.positivity.securityservice.service;
 
+import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

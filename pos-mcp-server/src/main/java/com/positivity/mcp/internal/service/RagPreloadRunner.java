@@ -15,22 +15,22 @@ import org.springframework.stereotype.Component;
 @Order(2)
 public class RagPreloadRunner implements ApplicationRunner {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(RagPreloadRunner.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RagPreloadRunner.class);
 
-  private final StaticRagPreloadService staticRagPreloadService;
+    private final StaticRagPreloadService staticRagPreloadService;
 
-  public RagPreloadRunner(@NonNull StaticRagPreloadService staticRagPreloadService) {
-    this.staticRagPreloadService = staticRagPreloadService;
-  }
-
-  @Override
-  public void run(@NonNull ApplicationArguments args) {
-    try {
-      LOGGER.info("Starting static RAG preload");
-      staticRagPreloadService.preloadAll();
-      LOGGER.info("Static RAG preload complete");
-    } catch (Exception exception) {
-      LOGGER.warn("Static RAG preload failed (best-effort, service will continue)", exception);
+    public RagPreloadRunner(@NonNull StaticRagPreloadService staticRagPreloadService) {
+        this.staticRagPreloadService = staticRagPreloadService;
     }
-  }
+
+    @Override
+    public void run(@NonNull ApplicationArguments args) {
+        try {
+            LOGGER.info("Starting static RAG preload");
+            staticRagPreloadService.preloadAll();
+            LOGGER.info("Static RAG preload complete");
+        } catch (Exception exception) {
+            LOGGER.warn("Static RAG preload failed (best-effort, service will continue)", exception);
+        }
+    }
 }

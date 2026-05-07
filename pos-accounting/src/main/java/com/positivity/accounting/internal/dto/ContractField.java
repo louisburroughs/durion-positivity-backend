@@ -15,22 +15,22 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "A single field definition in an event envelope contract")
 public class ContractField {
 
-  @Schema
-  private String name;
+    @Schema
+    private String name;
 
-  @Schema
-  private String jsonPath;
+    @Schema
+    private String jsonPath;
 
-  @Schema
-  private String type;
+    @Schema
+    private String type;
 
-  @Schema
-  private boolean required;
+    @Schema
+    private boolean required;
 
-  @Schema
-  private String description;
+    @Schema
+    private String description;
 
-  @Nullable
-  @Schema(nullable = true)
-  private List<String> enumValues;
+    @Nullable
+    @Schema(nullable = true)
+    private List<String> enumValues;
 }

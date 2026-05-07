@@ -27,7 +27,9 @@ class CatalogFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new CatalogFacadeTool(builder, BASE_URL,
+        tool = new CatalogFacadeTool(
+                builder,
+                BASE_URL,
                 "/catalog/v1/catalog/products/{productId}",
                 "/catalog/v1/catalog/search?q={query}",
                 "/catalog/v1/catalog/categories/{category}");

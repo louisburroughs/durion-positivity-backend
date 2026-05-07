@@ -4,9 +4,9 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -29,8 +29,7 @@ public class HrFacadeTool {
             @Value("${pos.hr.schedule-uri-template}") @NonNull String scheduleUriTemplate) {
         this.employeeRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, employeeBaseUrl);
         this.peopleRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, peopleBaseUrl);
-        this.availabilityRestClient =
-                ToolRestClientSupport.instrumentedClient(restClientBuilder, availabilityBaseUrl);
+        this.availabilityRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, availabilityBaseUrl);
         this.employeeUriTemplate = employeeUriTemplate;
         this.searchUriTemplate = searchUriTemplate;
         this.scheduleUriTemplate = scheduleUriTemplate;

@@ -53,8 +53,7 @@ public class PeopleRegistrationClient {
                     throw new IllegalStateException("People linked-user lookup failed with status "
                             + res.getStatusCode().value());
                 })
-                .body(new ParameterizedTypeReference<List<UUID>>() {
-                });
+                .body(new ParameterizedTypeReference<List<UUID>>() {});
         return response == null ? List.of() : response;
     }
 

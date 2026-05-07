@@ -4,9 +4,9 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -21,7 +21,8 @@ public class AccountingFacadeTool {
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.accounting.base-url}") @NonNull String baseUrl,
             @Value("${pos.accounting.account-balance-uri-template}") @NonNull String accountBalanceUriTemplate,
-            @Value("${pos.accounting.journal-entries-search-uri-template}") @NonNull String journalEntriesSearchUriTemplate,
+            @Value("${pos.accounting.journal-entries-search-uri-template}") @NonNull
+                    String journalEntriesSearchUriTemplate,
             @Value("${pos.accounting.financial-summary-uri-template}") @NonNull String financialSummaryUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.accountBalanceUriTemplate = accountBalanceUriTemplate;

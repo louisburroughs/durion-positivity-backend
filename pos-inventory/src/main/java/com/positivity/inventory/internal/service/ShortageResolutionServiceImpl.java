@@ -3,8 +3,8 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.client.ExternalAvailabilityClient;
 import com.positivity.inventory.internal.client.ProductSubstituteClient;
 import com.positivity.inventory.internal.dto.ShortageOptionDto;
-import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
+import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.service.ShortageResolutionService;
 import java.time.Clock;
 import java.time.Instant;
@@ -20,10 +20,13 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
 
     @SuppressWarnings("unused")
     private final ProductSubstituteClient productSubstituteClient;
+
     @SuppressWarnings("unused")
     private final ExternalAvailabilityClient externalAvailabilityClient;
+
     @SuppressWarnings("unused")
     private final Executor shortageResolutionExecutor;
+
     private final Clock clock;
 
     public ShortageResolutionServiceImpl(

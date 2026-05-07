@@ -10,11 +10,11 @@ import org.springframework.security.core.Authentication;
  */
 public interface McpRoleResolver {
 
-  /**
-   * Returns the single highest-priority role for the given authentication.
-   * The role is selected by a deterministic priority list. Falls back to
-   * "ROLE_USER" if none of the known roles are present.
-   */
-  @NonNull
-  String resolvePrimaryRole(@NonNull Authentication authentication);
+    /**
+     * Returns the single highest-priority role for the given authentication.
+     * The role is selected by a deterministic priority list. Falls back to
+     * "ROLE_USER" if none of the known roles are present.
+     */
+    @NonNull
+    String resolvePrimaryRole(@NonNull Authentication authentication);
 }

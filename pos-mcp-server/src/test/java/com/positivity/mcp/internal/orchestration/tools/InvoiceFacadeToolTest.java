@@ -27,7 +27,9 @@ class InvoiceFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new InvoiceFacadeTool(builder, BASE_URL,
+        tool = new InvoiceFacadeTool(
+                builder,
+                BASE_URL,
                 "/invoice/v1/invoices/{invoiceId}",
                 "/invoice/v1/invoices/search?q={query}",
                 "/invoice/v1/invoices/customer/{customerId}");

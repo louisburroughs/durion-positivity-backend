@@ -201,20 +201,18 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Deactivate GL account - non-zero balance rejected")
     void testDeactivateGLAccount_NonZeroBalance() {
         // Given — create the account under test
-        GLAccountResponse created = glAccountService.createGLAccount(
-                GLAccountCreateRequest.builder()
-                        .accountCode("7000")
-                        .accountName("Account with Balance")
-                        .accountType(AccountType.ASSET)
-                        .build());
+        GLAccountResponse created = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
+                .accountCode("7000")
+                .accountName("Account with Balance")
+                .accountType(AccountType.ASSET)
+                .build());
 
         // A second active account to hold the offsetting credit (entry must be balanced)
-        GLAccountResponse counterpart = glAccountService.createGLAccount(
-                GLAccountCreateRequest.builder()
-                        .accountCode("7001")
-                        .accountName("Counterpart Account")
-                        .accountType(AccountType.LIABILITY)
-                        .build());
+        GLAccountResponse counterpart = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
+                .accountCode("7001")
+                .accountName("Counterpart Account")
+                .accountType(AccountType.LIABILITY)
+                .build());
 
         // Build a balanced journal entry: debit 500.00 to account 7000
         JournalEntryLine debitLine = new JournalEntryLine();

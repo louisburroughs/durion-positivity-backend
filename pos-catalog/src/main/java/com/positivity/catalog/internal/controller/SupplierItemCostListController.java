@@ -24,27 +24,34 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Supplier Item Cost List API", description = "Query supplier item cost structures")
 public class SupplierItemCostListController {
 
-  private final SupplierItemCostService supplierItemCostService;
+    private final SupplierItemCostService supplierItemCostService;
 
-  public SupplierItemCostListController(SupplierItemCostService supplierItemCostService) {
-    this.supplierItemCostService = supplierItemCostService;
-  }
+    public SupplierItemCostListController(SupplierItemCostService supplierItemCostService) {
+        this.supplierItemCostService = supplierItemCostService;
+    }
 
-  @GetMapping
-  @PreAuthorize("hasAuthority('catalog:supplier_cost:read')")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      "catalog:supplier_cost:read" })
-  @EmitEvent(id = "CATALOG_SUPPLIER_COST_LIST", apiVersion = "1")
-  @Operation(summary = "List supplier cost structures", description = "Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.")
-  @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class)))
-  @ApiResponse(responseCode = "400", description = "At least one filter is required")
-  @ApiResponse(responseCode = "401", description = "Unauthorized")
-  @ApiResponse(responseCode = "403", description = "Forbidden")
-  @ApiResponse(responseCode = "500", description = "Internal server error")
-  public ResponseEntity<Page<SupplierItemCostDto>> listCostStructures(
-      @Parameter(description = "Filter by catalog item ID") @RequestParam(required = false) UUID itemId,
-      @Parameter(description = "Filter by supplier ID") @RequestParam(required = false) UUID supplierId,
-      Pageable pageable) {
-    return ResponseEntity.ok(supplierItemCostService.listCostStructures(itemId, supplierId, pageable));
-  }
+    @GetMapping
+    @PreAuthorize("hasAuthority('catalog:supplier_cost:read')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"catalog:supplier_cost:read"})
+    @EmitEvent(id = "CATALOG_SUPPLIER_COST_LIST", apiVersion = "1")
+    @Operation(
+            summary = "List supplier cost structures",
+            description =
+                    "Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "OK",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class)))
+    @ApiResponse(responseCode = "400", description = "At least one filter is required")
+    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(responseCode = "500", description = "Internal server error")
+    public ResponseEntity<Page<SupplierItemCostDto>> listCostStructures(
+            @Parameter(description = "Filter by catalog item ID") @RequestParam(required = false) UUID itemId,
+            @Parameter(description = "Filter by supplier ID") @RequestParam(required = false) UUID supplierId,
+            Pageable pageable) {
+        return ResponseEntity.ok(supplierItemCostService.listCostStructures(itemId, supplierId, pageable));
+    }
 }

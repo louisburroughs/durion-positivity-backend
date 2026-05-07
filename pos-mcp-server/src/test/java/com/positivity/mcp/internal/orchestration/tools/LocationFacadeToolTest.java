@@ -27,7 +27,9 @@ class LocationFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new LocationFacadeTool(builder, BASE_URL,
+        tool = new LocationFacadeTool(
+                builder,
+                BASE_URL,
                 "/location/v1/locations/{locationId}",
                 "/location/v1/locations/search?q={query}",
                 "/location/v1/locations/{locationId}/inventory");

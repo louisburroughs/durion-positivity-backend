@@ -16,38 +16,40 @@ import org.springframework.web.client.RestClient;
 
 class PersonClientTest {
 
-  private static final String BASE_URL = "http://api-gateway";
+    private static final String BASE_URL = "http://api-gateway";
 
-  private MockRestServiceServer mockServer;
-  private PersonClient personClient;
+    private MockRestServiceServer mockServer;
+    private PersonClient personClient;
 
-  @BeforeEach
-  void setUp() {
-    RestClient.Builder builder = RestClient.builder();
-    mockServer = MockRestServiceServer.bindTo(builder).build();
-    personClient = new PersonClient(builder, BASE_URL);
-  }
+    @BeforeEach
+    void setUp() {
+        RestClient.Builder builder = RestClient.builder();
+        mockServer = MockRestServiceServer.bindTo(builder).build();
+        personClient = new PersonClient(builder, BASE_URL);
+    }
 
-  @Test
-  void getPersonByIdReturnsNullWhenPeopleServiceReturnsNotFound() {
-    mockServer.expect(requestTo(BASE_URL + "/people/v1/people/42"))
-        .andExpect(method(HttpMethod.GET))
-        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+    @Test
+    void getPersonByIdReturnsNullWhenPeopleServiceReturnsNotFound() {
+        mockServer
+                .expect(requestTo(BASE_URL + "/people/v1/people/42"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
-    assertThat(personClient.getPersonById(42L)).isNull();
-    mockServer.verify();
-  }
+        assertThat(personClient.getPersonById(42L)).isNull();
+        mockServer.verify();
+    }
 
-  @Test
-  void getPersonByIdThrowsRuntimeExceptionWhenPeopleServiceFails() {
-    mockServer.expect(requestTo(BASE_URL + "/people/v1/people/42"))
-        .andExpect(method(HttpMethod.GET))
-        .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+    @Test
+    void getPersonByIdThrowsRuntimeExceptionWhenPeopleServiceFails() {
+        mockServer
+                .expect(requestTo(BASE_URL + "/people/v1/people/42"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
-    assertThatThrownBy(() -> personClient.getPersonById(42L))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Failed to fetch person from People service")
-        .hasCauseInstanceOf(HttpServerErrorException.InternalServerError.class);
-    mockServer.verify();
-  }
+        assertThatThrownBy(() -> personClient.getPersonById(42L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to fetch person from People service")
+                .hasCauseInstanceOf(HttpServerErrorException.InternalServerError.class);
+        mockServer.verify();
+    }
 }

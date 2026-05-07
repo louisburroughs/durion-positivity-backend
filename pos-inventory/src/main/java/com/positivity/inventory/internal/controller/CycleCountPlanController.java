@@ -29,35 +29,53 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Cycle Count Plans", description = "Cycle count plan management endpoints")
 public class CycleCountPlanController {
 
-        private final CycleCountPlanService cycleCountPlanService;
+    private final CycleCountPlanService cycleCountPlanService;
 
-        @PostMapping
-        @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_CREATE", apiVersion = "1")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:cycle_count:initiate" })
-        @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
-        @Operation(summary = "Create cycle count plan", description = "Creates a cycle count plan and returns its configuration details.", tags = {
-                        "Cycle Count Plans" })
-        @ApiResponse(responseCode = "201", description = "Cycle count plan created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
-        @ApiResponse(responseCode = "400", description = "Validation failure")
-        @ApiResponse(responseCode = "403", description = "User lacks required permission")
-        public ResponseEntity<CycleCountPlanResponse> createPlan(@RequestBody CreateCycleCountPlanRequest request) {
-                String createdBy = SecurityContextHelper.getCurrentUsername()
-                                .orElseThrow(() -> new IllegalStateException("No current user"));
-                CycleCountPlanResponse response = cycleCountPlanService.createPlan(request, createdBy);
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        }
+    @PostMapping
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_CREATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:initiate"})
+    @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
+    @Operation(
+            summary = "Create cycle count plan",
+            description = "Creates a cycle count plan and returns its configuration details.",
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "201",
+            description = "Cycle count plan created",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CycleCountPlanResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    public ResponseEntity<CycleCountPlanResponse> createPlan(@RequestBody CreateCycleCountPlanRequest request) {
+        String createdBy = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
+        CycleCountPlanResponse response = cycleCountPlanService.createPlan(request, createdBy);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 
-        @GetMapping("/{planId}")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:cycle_count:view" })
-        @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
-        @Operation(summary = "Get cycle count plan", description = "Returns a cycle count plan by identifier.", tags = {
-                        "Cycle Count Plans" })
-        @ApiResponse(responseCode = "200", description = "Cycle count plan returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
-        @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
-        public ResponseEntity<CycleCountPlanResponse> getPlan(
-                        @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
-                return ResponseEntity.ok(cycleCountPlanService.getPlan(planId));
-        }
+    @GetMapping("/{planId}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:view"})
+    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @Operation(
+            summary = "Get cycle count plan",
+            description = "Returns a cycle count plan by identifier.",
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Cycle count plan returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CycleCountPlanResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    public ResponseEntity<CycleCountPlanResponse> getPlan(
+            @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
+        return ResponseEntity.ok(cycleCountPlanService.getPlan(planId));
+    }
 }

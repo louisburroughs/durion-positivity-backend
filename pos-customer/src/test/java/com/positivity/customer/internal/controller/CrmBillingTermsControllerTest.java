@@ -18,53 +18,50 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(CrmBillingTermsController.class)
-@Import({ WebMvcTestSecurityConfig.class, CrmExceptionHandler.class })
+@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class})
 @ActiveProfiles("test")
-@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class CrmBillingTermsControllerTest {
 
-  @Autowired
-  MockMvc mockMvc;
+    @Autowired
+    MockMvc mockMvc;
 
-  @MockitoBean
-  java.time.Clock clock;
+    @MockitoBean
+    java.time.Clock clock;
 
-  @BeforeEach
-  void setUpClock() {
-    lenient().when(clock.instant()).thenReturn(Instant.EPOCH);
-    lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
-  }
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.EPOCH);
+        lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
+    }
 
-  // ─── GET /v1/crm/billing-terms — 200 OK ──────────────────────────────────
+    // ─── GET /v1/crm/billing-terms — 200 OK ──────────────────────────────────
 
-  @Test
-  void listBillingTerms_withPartyViewAuthority_returns200WithAllTerms() throws Exception {
-    mockMvc.perform(get("/v1/crm/billing-terms")
-        .header("X-Authorities", "crm:party:view"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(5))
-        .andExpect(jsonPath("$[0].code").value("NET_30"))
-        .andExpect(jsonPath("$[0].label").value("Net 30"))
-        .andExpect(jsonPath("$[0].netDays").value(30));
-  }
+    @Test
+    void listBillingTerms_withPartyViewAuthority_returns200WithAllTerms() throws Exception {
+        mockMvc.perform(get("/v1/crm/billing-terms").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$[0].code").value("NET_30"))
+                .andExpect(jsonPath("$[0].label").value("Net 30"))
+                .andExpect(jsonPath("$[0].netDays").value(30));
+    }
 
-  @Test
-  void listBillingTerms_includesCodAndPrepaidTerms() throws Exception {
-    mockMvc.perform(get("/v1/crm/billing-terms")
-        .header("X-Authorities", "crm:party:view"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[3].code").value("COD"))
-        .andExpect(jsonPath("$[3].netDays").value(0))
-        .andExpect(jsonPath("$[4].code").value("PREPAID"))
-        .andExpect(jsonPath("$[4].netDays").value(-1));
-  }
+    @Test
+    void listBillingTerms_includesCodAndPrepaidTerms() throws Exception {
+        mockMvc.perform(get("/v1/crm/billing-terms").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[3].code").value("COD"))
+                .andExpect(jsonPath("$[3].netDays").value(0))
+                .andExpect(jsonPath("$[4].code").value("PREPAID"))
+                .andExpect(jsonPath("$[4].netDays").value(-1));
+    }
 
-  // ─── GET /v1/crm/billing-terms — 403 Forbidden ───────────────────────────
+    // ─── GET /v1/crm/billing-terms — 403 Forbidden ───────────────────────────
 
-  @Test
-  void listBillingTerms_withoutPartyViewAuthority_returns403() throws Exception {
-    mockMvc.perform(get("/v1/crm/billing-terms")
-        .header("X-Authorities", "crm:party:create"))
-        .andExpect(status().isForbidden());
-  }
+    @Test
+    void listBillingTerms_withoutPartyViewAuthority_returns403() throws Exception {
+        mockMvc.perform(get("/v1/crm/billing-terms").header("X-Authorities", "crm:party:create"))
+                .andExpect(status().isForbidden());
+    }
 }

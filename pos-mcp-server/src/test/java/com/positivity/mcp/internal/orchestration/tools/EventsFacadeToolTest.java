@@ -27,7 +27,9 @@ class EventsFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new EventsFacadeTool(builder, BASE_URL,
+        tool = new EventsFacadeTool(
+                builder,
+                BASE_URL,
                 "/event-receiver/v1/events/eventTypes",
                 "/event-receiver/v1/events/events/summary?q={query}",
                 "/event-receiver/v1/events/events/summary?entityId={entityId}");

@@ -104,8 +104,7 @@ public class WorkorderValidationClient {
         }
     }
 
-    public record WorkorderLineValidation(String status, String demandedProductId) {
-    }
+    public record WorkorderLineValidation(String status, String demandedProductId) {}
 
     public static class WorkorderDetailResponse {
         private String status;

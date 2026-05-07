@@ -17,8 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-        "workorder:dashboard:view" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"workorder:dashboard:view"})
 @RequestMapping("/v1/workexec/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Daily Dispatch Board Dashboard", description = "Dispatch board aggregation and conflict detection")
@@ -30,7 +31,9 @@ public class DashboardController {
     @GetMapping("/today")
     @PreAuthorize("hasAuthority('workorder:dashboard:view')")
     @EmitEvent(id = "WORKEXEC_DASHBOARD_TODAY_GET", apiVersion = "1")
-    @Operation(summary = "Get daily dispatch dashboard", description = "Returns workorder, mechanic, bay, and conflict data for the given location and date")
+    @Operation(
+            summary = "Get daily dispatch dashboard",
+            description = "Returns workorder, mechanic, bay, and conflict data for the given location and date")
     public ResponseEntity<DashboardResponse> getDashboard(
             @RequestParam String locationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {

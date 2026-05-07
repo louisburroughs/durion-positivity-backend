@@ -70,8 +70,8 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(context.role(),
-                context.workflowState());
+        List<ToolMetadata> gatedTools =
+                repository.findEnabledByRoleAndWorkflow(context.role(), context.workflowState());
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
@@ -131,7 +131,8 @@ public class ToolRegistryService {
         List<ScoredTool> scoredCandidates = IntStream.range(0, semanticCandidates.size())
                 .mapToObj(index -> new ScoredTool(
                         semanticCandidates.get(index), scorer.score(semanticCandidates.get(index), index), index))
-                .sorted(Comparator.comparingDouble((ScoredTool scored) -> scored.score().total())
+                .sorted(Comparator.comparingDouble(
+                                (ScoredTool scored) -> scored.score().total())
                         .reversed()
                         .thenComparingInt(ScoredTool::rankPosition)
                         .thenComparing(st -> st.tool().name()))
@@ -220,11 +221,12 @@ public class ToolRegistryService {
             double semanticScore = 1.0 / (rankPosition + 1);
             double priorityBoost = Math.clamp(tool.priority(), 0.0, 1.0);
             double latencyPenalty = Math.min(tool.avgLatencyMs() / 1000.0, 1.0) * 0.2;
-            double costPenalty = switch (tool.costLevel().toLowerCase()) {
-                case "high" -> 0.2;
-                case "medium" -> 0.1;
-                default -> 0.0;
-            };
+            double costPenalty =
+                    switch (tool.costLevel().toLowerCase()) {
+                        case "high" -> 0.2;
+                        case "medium" -> 0.1;
+                        default -> 0.0;
+                    };
             return new ToolScore(
                     semanticScore + priorityBoost - latencyPenalty - costPenalty,
                     semanticScore,
@@ -270,9 +272,8 @@ public class ToolRegistryService {
     }
 
     private record ToolScore(
-            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {
-    }
+            double total, double semanticScore, double priorityBoost, double latencyPenalty, double costPenalty) {}
 
-    private record ScoredTool(@NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {
-    }
+    private record ScoredTool(
+            @NonNull ToolMetadata tool, @NonNull ToolScore score, int rankPosition) {}
 }

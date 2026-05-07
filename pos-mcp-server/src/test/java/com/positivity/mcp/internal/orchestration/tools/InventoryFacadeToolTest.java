@@ -27,7 +27,9 @@ class InventoryFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new InventoryFacadeTool(builder, BASE_URL,
+        tool = new InventoryFacadeTool(
+                builder,
+                BASE_URL,
                 "/inventory/v1/inventory/stock/{sku}",
                 "/inventory/v1/inventory/search?q={query}",
                 "/inventory/v1/inventory/locations/{locationId}/stock");

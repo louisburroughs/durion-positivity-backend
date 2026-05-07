@@ -28,14 +28,13 @@ class GatewayAuthoritiesFilterTest {
     void permPrefixedAuthorityAlsoAddsPlainPermissionAuthority() throws ServletException, IOException {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/mcp/chat");
         request.addHeader(GatewaySecurityConstants.HEADER_USER, "alice");
-        request.addHeader(
-                GatewaySecurityConstants.HEADER_AUTHORITIES,
-                "ROLE_USER,PERM_mcp:chat:execute");
+        request.addHeader(GatewaySecurityConstants.HEADER_AUTHORITIES, "ROLE_USER,PERM_mcp:chat:execute");
 
         filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-        assertThat(SecurityContextHolder.getContext().getAuthentication().getName()).isEqualTo("alice");
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getName())
+                .isEqualTo("alice");
 
         Set<String> authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
                 .map(grantedAuthority -> grantedAuthority.getAuthority())

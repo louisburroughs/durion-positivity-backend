@@ -40,21 +40,30 @@ public class ReportExportRequest {
      * Period start date (inclusive).
      */
     @NotNull(message = "startDate is required")
-    @Schema(description = "Period start date (inclusive, YYYY-MM-DD)", example = "2026-01-01", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Period start date (inclusive, YYYY-MM-DD)",
+            example = "2026-01-01",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate startDate;
 
     /**
      * Period end date (inclusive).
      */
     @NotNull(message = "endDate is required")
-    @Schema(description = "Period end date (inclusive, YYYY-MM-DD)", example = "2026-03-31", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Period end date (inclusive, YYYY-MM-DD)",
+            example = "2026-03-31",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate endDate;
 
     /**
      * Organization (tenant) scope for the export.
      */
     @NotNull(message = "organizationId is required")
-    @Schema(description = "Organization UUID to scope the export", example = "d10217f9-3ec6-46b9-9c87-e7066c100c24", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Organization UUID to scope the export",
+            example = "d10217f9-3ec6-46b9-9c87-e7066c100c24",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID organizationId;
 
     /**

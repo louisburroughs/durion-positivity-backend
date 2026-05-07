@@ -74,8 +74,8 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             @Nullable UUID locationId,
             @Nullable UUID storageLocationId,
             @Nullable InventorySourceType sourceType) {
-        List<InventoryLedgerEntry> allProductEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdOrderByTimestampAsc(productSku);
+        List<InventoryLedgerEntry> allProductEntries =
+                inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku);
         if (allProductEntries.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
@@ -138,11 +138,12 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         int onHandQuantity = entries.stream()
                 .filter(ledgerEntry -> ledgerEntry.getEventType() != null
                         && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity()
-                        : 0)
+                .mapToInt(ledgerEntry ->
+                        ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
                 .sum();
 
-        int activeReservations = entries.stream().mapToInt(this::reservationDelta).sum();
+        int activeReservations =
+                entries.stream().mapToInt(this::reservationDelta).sum();
 
         int atpQuantity = onHandQuantity - activeReservations;
 

@@ -41,73 +41,99 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/crm/parties")
 public class CrmCommunicationPreferencesController {
 
-        private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
+    private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
 
-        private final CommunicationPreferenceService preferenceService;
+    private final CommunicationPreferenceService preferenceService;
 
-        public CrmCommunicationPreferencesController(CommunicationPreferenceService preferenceService) {
-                this.preferenceService = preferenceService;
+    public CrmCommunicationPreferencesController(CommunicationPreferenceService preferenceService) {
+        this.preferenceService = preferenceService;
+    }
+
+    /**
+     * Get communication preferences for a party.
+     *
+     * GET /v1/crm/parties/{partyId}/communicationPreferences
+     * Requires: CONTACT_PREFERENCE_VIEW permission
+     */
+    @Operation(
+            summary = "Get communication preferences",
+            description = "Retrieve communication preferences and consent flags for a party")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Preferences retrieved successfully",
+                        content =
+                                @Content(schema = @Schema(implementation = GetCommunicationPreferencesResponse.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content),
+                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+            })
+    @GetMapping("/{partyId}/communicationPreferences")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
+    @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
+    public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
+
+        try {
+            GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to get communication preferences: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
         }
+    }
 
-        /**
-         * Get communication preferences for a party.
-         *
-         * GET /v1/crm/parties/{partyId}/communicationPreferences
-         * Requires: CONTACT_PREFERENCE_VIEW permission
-         */
-        @Operation(summary = "Get communication preferences", description = "Retrieve communication preferences and consent flags for a party")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Preferences retrieved successfully", content = @Content(schema = @Schema(implementation = GetCommunicationPreferencesResponse.class))),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
-                        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
-        })
-        @GetMapping("/{partyId}/communicationPreferences")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW })
-        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
-        @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
-        public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
-                        @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
+    /**
+     * Create or update communication preferences for a party.
+     *
+     * POST /v1/crm/parties/{partyId}/communicationPreferences
+     * Requires: CONTACT_PREFERENCE_EDIT permission
+     */
+    @Operation(
+            summary = "Create or update communication preferences",
+            description = "Set or update communication preferences and consent flags for a party")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Preferences updated successfully",
+                        content =
+                                @Content(
+                                        schema =
+                                                @Schema(
+                                                        implementation =
+                                                                UpsertCommunicationPreferencesResponse.class))),
+                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content),
+                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+            })
+    @PostMapping("/{partyId}/communicationPreferences")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
+    @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
+    public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
+            @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull
+                    UpsertCommunicationPreferencesRequest request) {
 
-                try {
-                        GetCommunicationPreferencesResponse response = preferenceService
-                                        .getCommunicationPreferences(partyId);
-                        return ResponseEntity.ok(response);
-                } catch (IllegalArgumentException e) {
-                        log.warn("Failed to get communication preferences: {}", e.getMessage());
-                        return ResponseEntity.notFound().build();
-                }
+        try {
+            UpsertCommunicationPreferencesResponse response =
+                    preferenceService.upsertCommunicationPreferences(partyId, request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to upsert communication preferences: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
         }
-
-        /**
-         * Create or update communication preferences for a party.
-         *
-         * POST /v1/crm/parties/{partyId}/communicationPreferences
-         * Requires: CONTACT_PREFERENCE_EDIT permission
-         */
-        @Operation(summary = "Create or update communication preferences", description = "Set or update communication preferences and consent flags for a party")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = UpsertCommunicationPreferencesResponse.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
-                        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
-        })
-        @PostMapping("/{partyId}/communicationPreferences")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT })
-        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
-        @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
-        public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
-                        @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
-                        @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull UpsertCommunicationPreferencesRequest request) {
-
-                try {
-                        UpsertCommunicationPreferencesResponse response = preferenceService
-                                        .upsertCommunicationPreferences(partyId, request);
-                        return ResponseEntity.ok(response);
-                } catch (IllegalArgumentException e) {
-                        log.warn("Failed to upsert communication preferences: {}", e.getMessage());
-                        return ResponseEntity.notFound().build();
-                }
-        }
+    }
 }

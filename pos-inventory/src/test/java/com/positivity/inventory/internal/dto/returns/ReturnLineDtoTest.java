@@ -42,9 +42,7 @@ class ReturnLineDtoTest {
 
         Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
 
-        assertThat(violations)
-                .extracting(v -> v.getPropertyPath().toString())
-                .contains("itemId");
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("itemId");
     }
 
     @Test
@@ -59,9 +57,7 @@ class ReturnLineDtoTest {
 
         Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
 
-        assertThat(violations)
-                .extracting(v -> v.getPropertyPath().toString())
-                .contains("quantity");
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("quantity");
     }
 
     @Test
@@ -76,9 +72,7 @@ class ReturnLineDtoTest {
 
         Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
 
-        assertThat(violations)
-                .extracting(v -> v.getPropertyPath().toString())
-                .contains("quantity");
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("quantity");
     }
 
     @Test
@@ -93,8 +87,6 @@ class ReturnLineDtoTest {
 
         Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
 
-        assertThat(violations)
-                .extracting(v -> v.getPropertyPath().toString())
-                .doesNotContain("itemId", "quantity");
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).doesNotContain("itemId", "quantity");
     }
 }

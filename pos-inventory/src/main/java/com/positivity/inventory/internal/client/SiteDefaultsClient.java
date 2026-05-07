@@ -26,7 +26,8 @@ public class SiteDefaultsClient {
     public SiteDefaultsClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
-        this.restClient = restClientBuilder.baseUrl(gatewayUrl + "/location/v1/locations").build();
+        this.restClient =
+                restClientBuilder.baseUrl(gatewayUrl + "/location/v1/locations").build();
     }
 
     @NonNull

@@ -80,7 +80,8 @@ public final class SimpleChatRuleCatalog {
 
     public static @NonNull String normalize(@NonNull String text) {
         String lowerCased = text.trim().toLowerCase(java.util.Locale.ROOT);
-        String deAccented = Normalizer.normalize(lowerCased, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
+        String deAccented =
+                Normalizer.normalize(lowerCased, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
         return deAccented.replaceAll("\\s+", " ");
     }
 

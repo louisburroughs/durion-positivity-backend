@@ -218,8 +218,8 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                     pageable);
         } else {
             keyPage = mappingKeyRepository.findAll(
-                    (root, query, cb) -> cb.equal(root.get("postingCategory").get("postingCategoryId"),
-                            postingCategoryId),
+                    (root, query, cb) ->
+                            cb.equal(root.get("postingCategory").get("postingCategoryId"), postingCategoryId),
                     pageable);
         }
 

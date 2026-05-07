@@ -79,10 +79,8 @@ public class PaymentReversalController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private record VoidPaymentRequest(@NotNull VoidReason reason, String notes) {
-    }
+    private record VoidPaymentRequest(@NotNull VoidReason reason, String notes) {}
 
     private record RefundPaymentRequest(
-            @NotNull @Positive BigDecimal amount, @NotNull RefundReason reason, String notes) {
-    }
+            @NotNull @Positive BigDecimal amount, @NotNull RefundReason reason, String notes) {}
 }

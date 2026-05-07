@@ -120,8 +120,8 @@ class SecurityEventTypeInitializerTest {
         @DisplayName("T_SETI3 — run() calls header(SECRET_HEADER, secret) for every event type when secret is set")
         void run_withSecret_setsSecretHeader() {
             String secret = "test-api-secret-value";
-            EventTypeInitializer sutWithSecret = new EventTypeInitializer(restClientBuilder, "http://localhost:8085",
-                    secret);
+            EventTypeInitializer sutWithSecret =
+                    new EventTypeInitializer(restClientBuilder, "http://localhost:8085", secret);
 
             sutWithSecret.run(null);
 

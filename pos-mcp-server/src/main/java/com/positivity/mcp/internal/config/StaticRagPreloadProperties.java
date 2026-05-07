@@ -11,5 +11,6 @@ public record StaticRagPreloadProperties(List<StaticDocEntry> docs) {
         docs = docs == null ? List.of() : docs;
     }
 
-    public record StaticDocEntry(@NonNull String id, @NonNull String sourcePath) {}
+    public record StaticDocEntry(
+            @NonNull String id, @NonNull String sourcePath) {}
 }

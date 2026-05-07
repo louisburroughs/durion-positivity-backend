@@ -31,13 +31,26 @@ public class LocationInventoryInquiryController {
 
     @GetMapping("/{locationId}/inventory-inquiry")
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "inventory:on_hand:view" })
-    @Operation(operationId = "getLocationInventory", summary = "Get location inventory summary", description = "Returns on-hand quantity aggregated for a storage location.", tags = {
-            "Inventory Locations" })
-    @ApiResponse(responseCode = "200", description = "Location inventory returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:on_hand:view"})
+    @Operation(
+            operationId = "getLocationInventory",
+            summary = "Get location inventory summary",
+            description = "Returns on-hand quantity aggregated for a storage location.",
+            tags = {"Inventory Locations"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Location inventory returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid location identifier")
-    @ApiResponse(responseCode = "403", description = "User lacks required on-hand view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required on-hand view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryInquiryResponse> getLocationInventory(
             @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
             @Parameter(description = "Product SKU filter") @RequestParam(required = false) String sku) {

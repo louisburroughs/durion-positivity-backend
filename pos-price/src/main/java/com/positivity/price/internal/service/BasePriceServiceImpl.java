@@ -14,20 +14,19 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class BasePriceServiceImpl implements BasePriceService {
 
-  private final ProductBasePriceRepository repository;
+    private final ProductBasePriceRepository repository;
 
-  @Override
-  public @NonNull UUID saveBasePrice(
-      @NonNull UUID productId,
-      @NonNull BigDecimal msrp,
-      @NonNull String currency,
-      @NonNull Instant effectiveFrom) {
-    ProductBasePrice basePrice = repository.findById(productId)
-        .orElse(new ProductBasePrice());
-    basePrice.setProductId(productId);
-    basePrice.setMsrp(msrp);
-    basePrice.setCurrency(currency);
-    basePrice.setEffectiveFrom(effectiveFrom);
-    return repository.save(basePrice).getProductId();
-  }
+    @Override
+    public @NonNull UUID saveBasePrice(
+            @NonNull UUID productId,
+            @NonNull BigDecimal msrp,
+            @NonNull String currency,
+            @NonNull Instant effectiveFrom) {
+        ProductBasePrice basePrice = repository.findById(productId).orElse(new ProductBasePrice());
+        basePrice.setProductId(productId);
+        basePrice.setMsrp(msrp);
+        basePrice.setCurrency(currency);
+        basePrice.setEffectiveFrom(effectiveFrom);
+        return repository.save(basePrice).getProductId();
+    }
 }

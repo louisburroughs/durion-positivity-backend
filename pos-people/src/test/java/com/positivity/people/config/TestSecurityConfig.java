@@ -31,49 +31,49 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Profile("test")
 public class TestSecurityConfig {
 
-  private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-      new SimpleGrantedAuthority("ROLE_ADMIN"),
-      new SimpleGrantedAuthority("ROLE_PEOPLE_VIEW"),
-      new SimpleGrantedAuthority("ROLE_PEOPLE_EDIT"),
-      new SimpleGrantedAuthority("people:employee:create"));
+    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
+            new SimpleGrantedAuthority("ROLE_ADMIN"),
+            new SimpleGrantedAuthority("ROLE_PEOPLE_VIEW"),
+            new SimpleGrantedAuthority("ROLE_PEOPLE_EDIT"),
+            new SimpleGrantedAuthority("people:employee:create"));
 
-  @Bean(name = "gatewaySecurityFilterChain")
-  @Primary
-  public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
-    http.csrf(AbstractHttpConfigurer::disable)
-        .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
-        .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
-    return http.build();
-  }
-
-  @Bean
-  @Primary
-  @SuppressWarnings("java:S1874")
-  public UserDetailsService testUserDetailsService() {
-    var user = User.withUsername("testuser")
-        .password("{noop}test")
-        .authorities(TEST_AUTHORITIES)
-        .build();
-    return new InMemoryUserDetailsManager(user);
-  }
-
-  private static class TestAutoAuthFilter extends OncePerRequestFilter {
-    @Override
-    protected void doFilterInternal(
-        HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-        throws ServletException, IOException {
-      String headerAuthorities = request.getHeader("X-Authorities");
-      List<SimpleGrantedAuthority> authorities = headerAuthorities == null || headerAuthorities.isBlank()
-          ? TEST_AUTHORITIES
-          : Arrays.stream(headerAuthorities.split(","))
-              .map(String::trim)
-              .filter(value -> !value.isBlank())
-              .map(SimpleGrantedAuthority::new)
-              .toList();
-
-      var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
-      SecurityContextHolder.getContext().setAuthentication(authentication);
-      filterChain.doFilter(request, response);
+    @Bean(name = "gatewaySecurityFilterChain")
+    @Primary
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf(AbstractHttpConfigurer::disable)
+                .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
     }
-  }
+
+    @Bean
+    @Primary
+    @SuppressWarnings("java:S1874")
+    public UserDetailsService testUserDetailsService() {
+        var user = User.withUsername("testuser")
+                .password("{noop}test")
+                .authorities(TEST_AUTHORITIES)
+                .build();
+        return new InMemoryUserDetailsManager(user);
+    }
+
+    private static class TestAutoAuthFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+            String headerAuthorities = request.getHeader("X-Authorities");
+            List<SimpleGrantedAuthority> authorities = headerAuthorities == null || headerAuthorities.isBlank()
+                    ? TEST_AUTHORITIES
+                    : Arrays.stream(headerAuthorities.split(","))
+                            .map(String::trim)
+                            .filter(value -> !value.isBlank())
+                            .map(SimpleGrantedAuthority::new)
+                            .toList();
+
+            var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            filterChain.doFilter(request, response);
+        }
+    }
 }

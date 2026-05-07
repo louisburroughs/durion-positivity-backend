@@ -27,7 +27,11 @@ class HrFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new HrFacadeTool(builder, BASE_URL, BASE_URL, BASE_URL,
+        tool = new HrFacadeTool(
+                builder,
+                BASE_URL,
+                BASE_URL,
+                BASE_URL,
                 "/people/v1/people/employees/{employeeId}",
                 "/people/v1/people?q={query}",
                 "/people/v1/people/availability?employeeId={employeeId}");

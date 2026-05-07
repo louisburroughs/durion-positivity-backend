@@ -15,33 +15,33 @@ import org.jspecify.annotations.Nullable;
 @AllArgsConstructor
 public class AccountingEventFilter {
 
-  @Nullable
-  private UUID organizationId;
+    @Nullable
+    private UUID organizationId;
 
-  @Nullable
-  private String eventType;
+    @Nullable
+    private String eventType;
 
-  @Nullable
-  private AccountingEventStatus status;
+    @Nullable
+    private AccountingEventStatus status;
 
-  @Nullable
-  private String idempotencyOutcome;
+    @Nullable
+    private String idempotencyOutcome;
 
-  @Nullable
-  private Instant receivedAtFrom;
+    @Nullable
+    private Instant receivedAtFrom;
 
-  @Nullable
-  private Instant receivedAtTo;
+    @Nullable
+    private Instant receivedAtTo;
 
-  @Nullable
-  private UUID eventId;
+    @Nullable
+    private UUID eventId;
 
-  @Nullable
-  private UUID ingestionId;
+    @Nullable
+    private UUID ingestionId;
 
-  @Nullable
-  private String domainKeyId;
+    @Nullable
+    private String domainKeyId;
 
-  @Nullable
-  private UUID invoiceId;
+    @Nullable
+    private UUID invoiceId;
 }

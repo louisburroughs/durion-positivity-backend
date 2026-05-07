@@ -193,7 +193,9 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         // The most recent transition should be to WORK_IN_PROGRESS
         Map<String, Object> newestTransition = transitions.get(0);
-        assertThat(newestTransition).containsEntry("toStatus", "WORK_IN_PROGRESS").containsEntry("fromStatus", "APPROVED");
+        assertThat(newestTransition)
+                .containsEntry("toStatus", "WORK_IN_PROGRESS")
+                .containsEntry("fromStatus", "APPROVED");
 
         // Verify each transition has required fields
         for (Map<String, Object> transition : transitions) {

@@ -31,12 +31,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     @Override
     public Set<String> expandRolesToAuthorities(Set<String> roles) {
         Set<String> authorities = new HashSet<>();
-        if (roles == null || roles.isEmpty())
-            return authorities;
+        if (roles == null || roles.isEmpty()) return authorities;
 
         for (String role : roles) {
-            if (role == null || role.isBlank())
-                continue;
+            if (role == null || role.isBlank()) continue;
             String normalized = normalizeRole(role);
             // Always include the ROLE_* itself
             authorities.add(ROLE_PREFIX + normalized);
@@ -246,9 +244,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> controllerAuthorities() {
         Set<String> set = new HashSet<>(accountantAuthorities());
         // Additional Controller permissions (includes ACCOUNTANT)
-        set.addAll(List.of(
-                "accounting:posting_rules:archive",
-                "accounting:export:request"));
+        set.addAll(List.of("accounting:posting_rules:archive", "accounting:export:request"));
         return set;
     }
 
@@ -270,9 +266,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
 
     private Set<String> accountManagerAuthorities() {
         Set<String> authorities = new HashSet<>(accountantAuthorities());
-        authorities.addAll(List.of(
-                "invoice:manage",
-                "invoice:billing-rules"));
+        authorities.addAll(List.of("invoice:manage", "invoice:billing-rules"));
         return authorities;
     }
 
@@ -391,9 +385,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> bulkImportAuthorities() {
-        return new HashSet<>(List.of(
-                "bulkImport:status:read",
-                "bulkImport:upload:execute"));
+        return new HashSet<>(List.of("bulkImport:status:read", "bulkImport:upload:execute"));
     }
 
     private Set<String> catalogAuthorities() {
@@ -587,31 +579,20 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> appointmentAuthorities() {
-        return new HashSet<>(List.of(
-                "appointments:view",
-                "appointments:create",
-                "appointments:reschedule",
-                "appointments:cancel"));
+        return new HashSet<>(
+                List.of("appointments:view", "appointments:create", "appointments:reschedule", "appointments:cancel"));
     }
 
     private Set<String> invoiceAuthorities() {
-        return new HashSet<>(List.of(
-                "invoice:manage",
-                "invoice:finalize",
-                "invoice:billing-rules"));
+        return new HashSet<>(List.of("invoice:manage", "invoice:finalize", "invoice:billing-rules"));
     }
 
     private Set<String> nltiAuthorities() {
-        return new HashSet<>(List.of(
-                "nlti:request:read",
-                "nlti:request:submit",
-                "nlti:audit:read"));
+        return new HashSet<>(List.of("nlti:request:read", "nlti:request:submit", "nlti:audit:read"));
     }
 
     private Set<String> productLifecycleAuthorities() {
-        return new HashSet<>(List.of(
-                "product:lifecycle:update",
-                "product:lifecycle:override_discontinued"));
+        return new HashSet<>(List.of("product:lifecycle:update", "product:lifecycle:override_discontinued"));
     }
 
     private Set<String> mcpAuthorities() {
@@ -630,9 +611,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private Set<String> taxAuthorities() {
-        return new HashSet<>(List.of(
-                "tax:calculate",
-                "tax:mode:view"));
+        return new HashSet<>(List.of("tax:calculate", "tax:mode:view"));
     }
 
     private Set<String> vehicleFitmentAuthorities() {

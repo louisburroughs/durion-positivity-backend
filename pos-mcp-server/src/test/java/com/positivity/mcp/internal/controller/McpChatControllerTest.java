@@ -12,13 +12,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,10 +77,10 @@ class McpChatControllerTest {
                         new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
 
         mockMvc.perform(post("/v1/mcp/chat")
-                .principal(authentication)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"test\"}"))
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.response").value("assistant reply"));
@@ -107,17 +107,19 @@ class McpChatControllerTest {
                         new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
 
         mockMvc.perform(post("/v1/mcp/chat")
-                .principal(authentication)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"test\"}"))
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.response").value("assistant reply"));
 
         verify(agentOrchestrationService)
-                .chat(argThat(context -> context.username().equals("admin.alpha")
-                        && context.userId().equals(adminContext.userId())
-                        && context.primaryRole().equals("ROLE_ADMIN")), org.mockito.ArgumentMatchers.eq("test"));
+                .chat(
+                        argThat(context -> context.username().equals("admin.alpha")
+                                && context.userId().equals(adminContext.userId())
+                                && context.primaryRole().equals("ROLE_ADMIN")),
+                        org.mockito.ArgumentMatchers.eq("test"));
     }
 
     @Test
@@ -128,9 +130,9 @@ class McpChatControllerTest {
                 .thenThrow(new RuntimeException("boom"));
 
         mockMvc.perform(post("/v1/mcp/chat")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"test\"}"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -145,9 +147,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat unauthenticated returns 401 ApiError envelope")
     void chat_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"test\"}"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -163,8 +165,8 @@ class McpChatControllerTest {
     @WithMockUser(authorities = "ROLE_USER")
     void postChat_withoutChatExecuteAuthority_returns403() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"test\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -173,9 +175,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat with blank message returns 400 ApiError envelope")
     void chat_withBlankMessage_returns400() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"message\":\"\"}"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))

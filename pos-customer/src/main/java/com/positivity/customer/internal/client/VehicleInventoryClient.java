@@ -135,11 +135,7 @@ public class VehicleInventoryClient {
         log.debug("Deleting vehicle with ID: {}", vehicleId);
 
         try {
-            restClient
-                    .delete()
-                    .uri(VEHICLE_BY_ID_PATH, vehicleId)
-                    .retrieve()
-                    .toBodilessEntity();
+            restClient.delete().uri(VEHICLE_BY_ID_PATH, vehicleId).retrieve().toBodilessEntity();
 
             log.info("Successfully deleted vehicle: {}", vehicleId);
         } catch (Exception e) {

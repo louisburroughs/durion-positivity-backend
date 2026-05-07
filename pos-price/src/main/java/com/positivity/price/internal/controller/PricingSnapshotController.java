@@ -38,7 +38,9 @@ public class PricingSnapshotController {
      */
     @GetMapping("/{snapshotId}")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get pricing snapshot by ID", description = "Retrieves an immutable pricing snapshot using its snapshot identifier.")
+    @Operation(
+            summary = "Get pricing snapshot by ID",
+            description = "Retrieves an immutable pricing snapshot using its snapshot identifier.")
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned.")
     @ApiResponse(responseCode = "404", description = "Pricing snapshot not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")

@@ -6,9 +6,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,10 @@ class AdminFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new AdminFacadeTool(builder, BASE_URL, BASE_URL,
+        tool = new AdminFacadeTool(
+                builder,
+                BASE_URL,
+                BASE_URL,
                 "/security-service/v1/users/{userId}/permissions",
                 "/security-service/v1/audit/events?eventType={query}");
     }
@@ -80,17 +83,18 @@ class AdminFacadeToolTest {
     @DisplayName("getMyPermissions resolves authenticated UUID and calls user permissions endpoint")
     void getMyPermissions_usesAuthenticatedUserId() {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                "admin.alpha",
-                "n/a",
-                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+                "admin.alpha", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USERNAME, "admin.alpha",
-                GatewaySecurityConstants.DETAIL_USER_ID, CURRENT_USER_ID));
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "admin.alpha",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                CURRENT_USER_ID));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         mockServer
                 .expect(requestTo(BASE_URL + "/security-service/v1/users/" + CURRENT_USER_ID + "/permissions"))
                 .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"userId\":\"" + CURRENT_USER_ID + "\",\"roles\":[]}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess(
+                        "{\"userId\":\"" + CURRENT_USER_ID + "\",\"roles\":[]}", MediaType.APPLICATION_JSON));
 
         String result = tool.getMyPermissions();
 

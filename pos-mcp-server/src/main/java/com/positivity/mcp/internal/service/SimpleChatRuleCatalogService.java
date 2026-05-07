@@ -60,5 +60,6 @@ public class SimpleChatRuleCatalogService {
         return new CatalogSnapshot(SimpleChatRuleCatalog.from(effectiveRules), now.plus(cacheTtl));
     }
 
-    private record CatalogSnapshot(@NonNull SimpleChatRuleCatalog catalog, @NonNull Instant expiresAt) {}
+    private record CatalogSnapshot(
+            @NonNull SimpleChatRuleCatalog catalog, @NonNull Instant expiresAt) {}
 }

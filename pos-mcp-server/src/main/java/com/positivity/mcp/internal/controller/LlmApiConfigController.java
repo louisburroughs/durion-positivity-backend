@@ -35,50 +35,70 @@ class LlmApiConfigController {
     }
 
     @GetMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:llm_api:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:llm_api:view"})
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_VIEW + "')")
-    @Operation(summary = "List LLM API configurations", description = "Retrieve all configured LLM API provider definitions that are available to the MCP server.", tags = {
-            "LLM API Configuration" })
+    @Operation(
+            summary = "List LLM API configurations",
+            description = "Retrieve all configured LLM API provider definitions that are available to the MCP server.",
+            tags = {"LLM API Configuration"})
     ResponseEntity<List<LlmApiConfigResponse>> list() {
         return ResponseEntity.ok(service.list());
     }
 
     @GetMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:llm_api:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:llm_api:view"})
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_VIEW + "')")
-    @Operation(summary = "Get an LLM API configuration", description = "Retrieve a single LLM API provider configuration by its identifier.", tags = {
-            "LLM API Configuration" })
+    @Operation(
+            summary = "Get an LLM API configuration",
+            description = "Retrieve a single LLM API provider configuration by its identifier.",
+            tags = {"LLM API Configuration"})
     ResponseEntity<LlmApiConfigResponse> get(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(service.get(id));
     }
 
     @PostMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:llm_api:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:llm_api:create"})
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_CREATE + "')")
     @EmitEvent(id = "MCP_LLM_API_CREATE", apiVersion = "1")
-    @Operation(summary = "Create an LLM API configuration", description = "Create a new LLM API provider configuration for use by the MCP server.", tags = {
-            "LLM API Configuration" })
+    @Operation(
+            summary = "Create an LLM API configuration",
+            description = "Create a new LLM API provider configuration for use by the MCP server.",
+            tags = {"LLM API Configuration"})
     ResponseEntity<LlmApiConfigResponse> create(@RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
     }
 
     @PutMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:llm_api:update" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:llm_api:update"})
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_UPDATE + "')")
     @EmitEvent(id = "MCP_LLM_API_UPDATE", apiVersion = "1")
-    @Operation(summary = "Update an LLM API configuration", description = "Update an existing LLM API provider configuration by its identifier.", tags = {
-            "LLM API Configuration" })
+    @Operation(
+            summary = "Update an LLM API configuration",
+            description = "Update an existing LLM API provider configuration by its identifier.",
+            tags = {"LLM API Configuration"})
     ResponseEntity<LlmApiConfigResponse> update(
             @PathVariable @NonNull UUID id, @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.ok(service.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:llm_api:delete" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:llm_api:delete"})
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_DELETE + "')")
     @EmitEvent(id = "MCP_LLM_API_DELETE", apiVersion = "1")
-    @Operation(summary = "Delete an LLM API configuration", description = "Delete an existing LLM API provider configuration by its identifier.", tags = {
-            "LLM API Configuration" })
+    @Operation(
+            summary = "Delete an LLM API configuration",
+            description = "Delete an existing LLM API provider configuration by its identifier.",
+            tags = {"LLM API Configuration"})
     ResponseEntity<Void> delete(@PathVariable @NonNull UUID id) {
         service.delete(id);
         return ResponseEntity.noContent().build();

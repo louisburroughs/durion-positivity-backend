@@ -12,7 +12,8 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LedgerPage<T> {
-  private List<T> entries;
-  @Nullable
-  private String nextPageToken;
+    private List<T> entries;
+
+    @Nullable
+    private String nextPageToken;
 }

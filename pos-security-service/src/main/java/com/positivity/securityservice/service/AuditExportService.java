@@ -10,22 +10,22 @@ import org.jspecify.annotations.NonNull;
  */
 public interface AuditExportService {
 
-  /**
-   * Submits an audit export request and returns the created job response.
-   *
-   * @param request export parameters including filters, format, and delivery mode
-   * @return the created job reference with PENDING status
-   */
-  @NonNull
-  AuditExportJobResponse requestExport(@NonNull AuditExportRequest request);
+    /**
+     * Submits an audit export request and returns the created job response.
+     *
+     * @param request export parameters including filters, format, and delivery mode
+     * @return the created job reference with PENDING status
+     */
+    @NonNull
+    AuditExportJobResponse requestExport(@NonNull AuditExportRequest request);
 
-  /**
-   * Returns the current status of a previously submitted export job.
-   *
-   * @param jobId the export job UUID
-   * @return job status response
-   * @throws jakarta.persistence.EntityNotFoundException if jobId is not found
-   */
-  @NonNull
-  AuditExportJobResponse getExportJob(@NonNull UUID jobId);
+    /**
+     * Returns the current status of a previously submitted export job.
+     *
+     * @param jobId the export job UUID
+     * @return job status response
+     * @throws jakarta.persistence.EntityNotFoundException if jobId is not found
+     */
+    @NonNull
+    AuditExportJobResponse getExportJob(@NonNull UUID jobId);
 }

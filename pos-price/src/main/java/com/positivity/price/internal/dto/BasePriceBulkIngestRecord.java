@@ -7,16 +7,16 @@ import lombok.Data;
 @Data
 public class BasePriceBulkIngestRecord {
 
-  @NotBlank
-  private String productId;
+    @NotBlank
+    private String productId;
 
-  @NotBlank
-  private String msrp;
+    @NotBlank
+    private String msrp;
 
-  @NotBlank
-  @Size(min = 3, max = 3, message = "currency must be an ISO-4217 3-character code")
-  private String currency;
+    @NotBlank
+    @Size(min = 3, max = 3, message = "currency must be an ISO-4217 3-character code")
+    private String currency;
 
-  @NotBlank
-  private String effectiveFrom;
+    @NotBlank
+    private String effectiveFrom;
 }

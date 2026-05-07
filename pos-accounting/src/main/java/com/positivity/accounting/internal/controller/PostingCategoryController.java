@@ -37,8 +37,8 @@ public class PostingCategoryController {
     private static final Logger log = LoggerFactory.getLogger(PostingCategoryController.class);
 
     // Allowed sort fields for listPostingCategories to prevent injection attacks
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("categoryName", "categoryCode", "description",
-            "isActive", "createdAt", "updatedAt");
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("categoryName", "categoryCode", "description", "isActive", "createdAt", "updatedAt");
 
     private final PostingCategoryService postingCategoryService;
 
@@ -47,10 +47,14 @@ public class PostingCategoryController {
     }
 
     @PostMapping
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting-category:create" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:posting-category:create"})
     @PreAuthorize("hasAuthority('accounting:posting-category:create')")
-    @Operation(summary = "Create posting category", description = "Create a new posting category.", tags = {
-            "Posting Categories" })
+    @Operation(
+            summary = "Create posting category",
+            description = "Create a new posting category.",
+            tags = {"Posting Categories"})
     @ApiResponse(responseCode = "201", description = "Posting category created")
     @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_CREATE", apiVersion = "1")
@@ -62,10 +66,14 @@ public class PostingCategoryController {
     }
 
     @GetMapping("/{postingCategoryId}")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting-category:view" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:posting-category:view"})
     @PreAuthorize("hasAuthority('accounting:posting-category:view')")
-    @Operation(summary = "Get posting category", description = "Retrieve a posting category by identifier.", tags = {
-            "Posting Categories" })
+    @Operation(
+            summary = "Get posting category",
+            description = "Retrieve a posting category by identifier.",
+            tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting category returned")
     @ApiResponse(responseCode = "404", description = "Posting category not found")
     public ResponseEntity<PostingCategoryResponse> getPostingCategory(
@@ -76,10 +84,14 @@ public class PostingCategoryController {
     }
 
     @PutMapping("/{postingCategoryId}")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting-category:edit" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:posting-category:edit"})
     @PreAuthorize("hasAuthority('accounting:posting-category:edit')")
-    @Operation(summary = "Update posting category", description = "Update an existing posting category.", tags = {
-            "Posting Categories" })
+    @Operation(
+            summary = "Update posting category",
+            description = "Update an existing posting category.",
+            tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting category updated")
     @ApiResponse(responseCode = "404", description = "Posting category not found")
     @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
@@ -93,10 +105,14 @@ public class PostingCategoryController {
     }
 
     @GetMapping
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting-category:view" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:posting-category:view"})
     @PreAuthorize("hasAuthority('accounting:posting-category:view')")
-    @Operation(summary = "List posting categories", description = "Retrieve paginated posting categories.", tags = {
-            "Posting Categories" })
+    @Operation(
+            summary = "List posting categories",
+            description = "Retrieve paginated posting categories.",
+            tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting categories listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_LIST", apiVersion = "1")
@@ -113,16 +129,20 @@ public class PostingCategoryController {
             log.warn("Invalid sort field '{}' requested, defaulting to '{}'", sort, sanitizedSort);
         }
 
-        PostingCategoryListResponse response = postingCategoryService.listPostingCategories(page, size, sanitizedSort,
-                isActive);
+        PostingCategoryListResponse response =
+                postingCategoryService.listPostingCategories(page, size, sanitizedSort, isActive);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{postingCategoryId}/deactivate")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:posting-category:deactivate" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:posting-category:deactivate"})
     @PreAuthorize("hasAuthority('accounting:posting-category:deactivate')")
-    @Operation(summary = "Deactivate posting category", description = "Deactivate a posting category.", tags = {
-            "Posting Categories" })
+    @Operation(
+            summary = "Deactivate posting category",
+            description = "Deactivate a posting category.",
+            tags = {"Posting Categories"})
     @ApiResponse(responseCode = "204", description = "Posting category deactivated")
     @ApiResponse(responseCode = "404", description = "Posting category not found")
     @ApiResponse(responseCode = "409", description = "Cannot deactivate - active mappings exist")

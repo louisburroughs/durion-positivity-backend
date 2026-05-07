@@ -34,191 +34,191 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(CrmAccountsController.class)
-@Import({ WebMvcTestSecurityConfig.class, CrmExceptionHandler.class })
+@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class})
 @ActiveProfiles("test")
-@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class CrmAccountsControllerTest {
 
-  private static final UUID PARTY_ID = UUID.fromString("f47ac10b-58cc-4372-a567-0e02b2c3d479");
+    private static final UUID PARTY_ID = UUID.fromString("f47ac10b-58cc-4372-a567-0e02b2c3d479");
 
-  @Autowired
-  MockMvc mockMvc;
+    @Autowired
+    MockMvc mockMvc;
 
-  @Autowired
-  ObjectMapper objectMapper;
+    @Autowired
+    ObjectMapper objectMapper;
 
-  @MockitoBean
-  PartyService partyService;
+    @MockitoBean
+    PartyService partyService;
 
-  @MockitoBean
-  AccountTierService accountTierService;
+    @MockitoBean
+    AccountTierService accountTierService;
 
-  @MockitoBean
-  java.time.Clock clock;
+    @MockitoBean
+    java.time.Clock clock;
 
-  @BeforeEach
-  void setUpClock() {
-    lenient().when(clock.instant()).thenReturn(Instant.EPOCH);
-    lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
-  }
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.EPOCH);
+        lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
+    }
 
-  // ─── B-21: GET /v1/crm/accounts/parties/duplicate-check ─────────────────
+    // ─── B-21: GET /v1/crm/accounts/parties/duplicate-check ─────────────────
 
-  @Test
-  @DisplayName("B-21: GET duplicate-check with valid legalName and crm:party:search authority → 200 with duplicatesFound and potentialDuplicates")
-  void checkPartyDuplicates_returnsMatches_when200() throws Exception {
-    DuplicateCheckResponse response = DuplicateCheckResponse.builder()
-        .duplicatesFound(true)
-        .exactMatchPartyId(PARTY_ID.toString())
-        .potentialDuplicates(List.of(
-            DuplicateCheckResponse.PartyMatch.builder()
-                .partyId(PARTY_ID.toString())
-                .legalName("Acme Corp")
-                .matchType("EXACT")
-                .score(1.0)
-                .build()))
-        .build();
+    @Test
+    @DisplayName(
+            "B-21: GET duplicate-check with valid legalName and crm:party:search authority → 200 with duplicatesFound and potentialDuplicates")
+    void checkPartyDuplicates_returnsMatches_when200() throws Exception {
+        DuplicateCheckResponse response = DuplicateCheckResponse.builder()
+                .duplicatesFound(true)
+                .exactMatchPartyId(PARTY_ID.toString())
+                .potentialDuplicates(List.of(DuplicateCheckResponse.PartyMatch.builder()
+                        .partyId(PARTY_ID.toString())
+                        .legalName("Acme Corp")
+                        .matchType("EXACT")
+                        .score(1.0)
+                        .build()))
+                .build();
 
-    when(partyService.checkPartyDuplicates("Acme")).thenReturn(response);
+        when(partyService.checkPartyDuplicates("Acme")).thenReturn(response);
 
-    mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
-        .param("legalName", "Acme")
-        .header("X-Authorities", "crm:party:search"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.duplicatesFound").value(true))
-        .andExpect(jsonPath("$.potentialDuplicates").isArray())
-        .andExpect(jsonPath("$.potentialDuplicates[0].partyId").value(PARTY_ID.toString()));
-  }
+        mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
+                        .param("legalName", "Acme")
+                        .header("X-Authorities", "crm:party:search"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicatesFound").value(true))
+                .andExpect(jsonPath("$.potentialDuplicates").isArray())
+                .andExpect(jsonPath("$.potentialDuplicates[0].partyId").value(PARTY_ID.toString()));
+    }
 
-  @Test
-  @DisplayName("B-21: GET duplicate-check with blank legalName → 400")
-  void checkPartyDuplicates_returns400_whenLegalNameBlank() throws Exception {
-    mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
-        .param("legalName", "")
-        .header("X-Authorities", "crm:party:search"))
-        .andExpect(status().isBadRequest());
-  }
+    @Test
+    @DisplayName("B-21: GET duplicate-check with blank legalName → 400")
+    void checkPartyDuplicates_returns400_whenLegalNameBlank() throws Exception {
+        mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
+                        .param("legalName", "")
+                        .header("X-Authorities", "crm:party:search"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("checkPartyDuplicates returns 400 when legalName trims to fewer than 2 characters")
-  void checkPartyDuplicates_returns400_whenLegalNameTrimsToBelowMinLength() throws Exception {
-    when(partyService.checkPartyDuplicates(eq(" A ")))
-        .thenThrow(new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters"));
+    @Test
+    @DisplayName("checkPartyDuplicates returns 400 when legalName trims to fewer than 2 characters")
+    void checkPartyDuplicates_returns400_whenLegalNameTrimsToBelowMinLength() throws Exception {
+        when(partyService.checkPartyDuplicates(eq(" A ")))
+                .thenThrow(new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters"));
 
-    mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
-            .param("legalName", " A ")
-            .header("X-Authorities", "crm:party:search"))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
+                        .param("legalName", " A ")
+                        .header("X-Authorities", "crm:party:search"))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  @DisplayName("B-21: GET duplicate-check without crm:party:search authority → 403")
-  void checkPartyDuplicates_returns403_whenUnauthorized() throws Exception {
-    mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
-        .param("legalName", "Acme"))
-        .andExpect(status().isForbidden());
-  }
+    @Test
+    @DisplayName("B-21: GET duplicate-check without crm:party:search authority → 403")
+    void checkPartyDuplicates_returns403_whenUnauthorized() throws Exception {
+        mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check").param("legalName", "Acme"))
+                .andExpect(status().isForbidden());
+    }
 
-  // ─── B-22: PUT /v1/crm/accounts/parties/{partyId}/billing-rules ─────────
+    // ─── B-22: PUT /v1/crm/accounts/parties/{partyId}/billing-rules ─────────
 
-  @Test
-  @DisplayName("B-22: PUT billing-rules with valid body and crm:billing_rules:edit authority → 200 with BillingRuleRef")
-  void upsertBillingRules_returns200_whenValid() throws Exception {
-    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
-        .paymentTerms("Net 30")
-        .taxExempt(false)
-        .poRequired(false)
-        .creditHold(false)
-        .autoPayEnabled(true)
-        .build();
+    @Test
+    @DisplayName(
+            "B-22: PUT billing-rules with valid body and crm:billing_rules:edit authority → 200 with BillingRuleRef")
+    void upsertBillingRules_returns200_whenValid() throws Exception {
+        UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+                .paymentTerms("Net 30")
+                .taxExempt(false)
+                .poRequired(false)
+                .creditHold(false)
+                .autoPayEnabled(true)
+                .build();
 
-    BillingRuleRef ref = new BillingRuleRef();
-    ref.setPaymentTerms("Net 30");
-    ref.setAutoPayEnabled(true);
-
-    when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
-        .thenReturn(ref);
-
-    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request))
-        .header("X-Authorities", "crm:billing_rules:edit"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.paymentTerms").value("Net 30"))
-        .andExpect(jsonPath("$.autoPayEnabled").value(true));
-  }
-
-  @Test
-  @DisplayName("upsertBillingRules returns 404 via ResponseStatusException when party not found")
-  void upsertBillingRules_returns404_whenPartyNotFound() throws Exception {
-    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
-        .taxExempt(false)
-        .poRequired(false)
-        .creditHold(false)
-        .autoPayEnabled(false)
-        .build();
+        BillingRuleRef ref = new BillingRuleRef();
+        ref.setPaymentTerms("Net 30");
+        ref.setAutoPayEnabled(true);
 
         when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
-            .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + PARTY_ID));
+                .thenReturn(ref);
 
-    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request))
-        .header("X-Authorities", "crm:billing_rules:edit"))
-            .andExpect(status().isNotFound());
-  }
+        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("X-Authorities", "crm:billing_rules:edit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentTerms").value("Net 30"))
+                .andExpect(jsonPath("$.autoPayEnabled").value(true));
+    }
 
-  @Test
-  @DisplayName("PUT billing-rules returns 400 when request has invalid fields")
-  void upsertBillingRules_returns400_whenRequestInvalid() throws Exception {
-    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
-        .creditLimit(new java.math.BigDecimal("-1.00"))
-        .taxExempt(false)
-        .poRequired(false)
-        .creditHold(false)
-        .autoPayEnabled(false)
-        .build();
+    @Test
+    @DisplayName("upsertBillingRules returns 404 via ResponseStatusException when party not found")
+    void upsertBillingRules_returns404_whenPartyNotFound() throws Exception {
+        UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+                .taxExempt(false)
+                .poRequired(false)
+                .creditHold(false)
+                .autoPayEnabled(false)
+                .build();
 
-    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request))
-        .header("X-Authorities", "crm:billing_rules:edit"))
-        .andExpect(status().isBadRequest());
-  }
+        when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + PARTY_ID));
 
-  @Test
-  @DisplayName("B-22: PUT billing-rules without crm:billing_rules:edit authority → 403")
-  void upsertBillingRules_returns403_whenUnauthorized() throws Exception {
-    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
-        .taxExempt(false)
-        .poRequired(false)
-        .creditHold(false)
-        .autoPayEnabled(false)
-        .build();
+        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("X-Authorities", "crm:billing_rules:edit"))
+                .andExpect(status().isNotFound());
+    }
 
-    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isForbidden());
-  }
+    @Test
+    @DisplayName("PUT billing-rules returns 400 when request has invalid fields")
+    void upsertBillingRules_returns400_whenRequestInvalid() throws Exception {
+        UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+                .creditLimit(new java.math.BigDecimal("-1.00"))
+                .taxExempt(false)
+                .poRequired(false)
+                .creditHold(false)
+                .autoPayEnabled(false)
+                .build();
 
-  @Test
-  @DisplayName("upsertBillingRules returns 400 when service throws IllegalArgumentException for invalid input")
-  void upsertBillingRules_returns400_whenServiceThrowsIllegalArgumentException() throws Exception {
-    UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
-        .taxExempt(false)
-        .poRequired(false)
-        .creditHold(false)
-        .autoPayEnabled(false)
-        .build();
+        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("X-Authorities", "crm:billing_rules:edit"))
+                .andExpect(status().isBadRequest());
+    }
 
-    when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
-        .thenThrow(new IllegalArgumentException("Invalid billing rule: currency code required"));
+    @Test
+    @DisplayName("B-22: PUT billing-rules without crm:billing_rules:edit authority → 403")
+    void upsertBillingRules_returns403_whenUnauthorized() throws Exception {
+        UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+                .taxExempt(false)
+                .poRequired(false)
+                .creditHold(false)
+                .autoPayEnabled(false)
+                .build();
 
-    mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request))
-            .header("X-Authorities", "crm:billing_rules:edit"))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("upsertBillingRules returns 400 when service throws IllegalArgumentException for invalid input")
+    void upsertBillingRules_returns400_whenServiceThrowsIllegalArgumentException() throws Exception {
+        UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
+                .taxExempt(false)
+                .poRequired(false)
+                .creditHold(false)
+                .autoPayEnabled(false)
+                .build();
+
+        when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
+                .thenThrow(new IllegalArgumentException("Invalid billing rule: currency code required"));
+
+        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("X-Authorities", "crm:billing_rules:edit"))
+                .andExpect(status().isBadRequest());
+    }
 }

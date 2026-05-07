@@ -94,7 +94,8 @@ public class OperationProxyFactory {
             @NonNull Map<String, Object> pathParams,
             @NonNull Map<String, Object> queryParams) {
         String resolvedPath = resolvePath(pathTemplate, pathParams);
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(instance.getUri()).path(resolvedPath);
+        UriComponentsBuilder builder =
+                UriComponentsBuilder.fromUri(instance.getUri()).path(resolvedPath);
         queryParams.forEach((key, value) -> {
             if (value instanceof List<?> list) {
                 list.forEach(item -> builder.queryParam(key, item));

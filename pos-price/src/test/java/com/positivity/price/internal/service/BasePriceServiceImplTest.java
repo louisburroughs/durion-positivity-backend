@@ -19,7 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({ "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S100", "java:S1192"})
 class BasePriceServiceImplTest {
 
     @Mock

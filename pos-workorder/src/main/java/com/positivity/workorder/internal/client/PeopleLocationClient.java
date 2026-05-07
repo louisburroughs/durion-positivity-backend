@@ -56,6 +56,5 @@ public class PeopleLocationClient {
      * Minimal response record for the primary location endpoint.
      * Avoids cross-module dependency on pos-people DTOs.
      */
-    private record PrimaryLocationResponse(UUID locationId) {
-    }
+    private record PrimaryLocationResponse(UUID locationId) {}
 }

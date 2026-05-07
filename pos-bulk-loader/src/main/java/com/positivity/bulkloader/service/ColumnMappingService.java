@@ -12,5 +12,6 @@ public interface ColumnMappingService {
     List<ColumnMappingResponse> getMappingsForJob(@NonNull UUID jobId, @NonNull String operatorId);
 
     @NonNull
-    List<ColumnMappingResponse> approveMappings(@NonNull UUID jobId, @NonNull String operatorId, @NonNull ColumnMappingApproveRequest request);
+    List<ColumnMappingResponse> approveMappings(
+            @NonNull UUID jobId, @NonNull String operatorId, @NonNull ColumnMappingApproveRequest request);
 }

@@ -39,12 +39,14 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "vehicle_records", indexes = {
-        @Index(name = "idx_vr_account_id", columnList = "account_id"),
-        @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
-        @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
-        @Index(name = "idx_vr_license_plate", columnList = "license_plate")
-})
+@Table(
+        name = "vehicle_records",
+        indexes = {
+            @Index(name = "idx_vr_account_id", columnList = "account_id"),
+            @Index(name = "idx_vr_vin_normalized", columnList = "vin_normalized"),
+            @Index(name = "idx_vr_unit_number", columnList = "unit_number"),
+            @Index(name = "idx_vr_license_plate", columnList = "license_plate")
+        })
 @EntityListeners(AuditingEntityListener.class)
 public class VehicleRecord {
 

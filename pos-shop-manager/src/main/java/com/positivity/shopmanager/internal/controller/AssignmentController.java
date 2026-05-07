@@ -27,7 +27,9 @@ public class AssignmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:assign" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"shop:bay:assign"})
     @PreAuthorize("hasAuthority('shop:bay:assign')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_CREATED", apiVersion = "1")
     public @NonNull AssignmentResponse createAssignment(
@@ -44,8 +46,9 @@ public class AssignmentController {
     }
 
     @GetMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "appointments:view",
-            "shop:schedule:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"appointments:view", "shop:schedule:view"})
     @PreAuthorize("hasAnyAuthority('appointments:view', 'shop:schedule:view')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
     public @NonNull List<AssignmentResponse> listAssignments(@PathVariable UUID appointmentId) {

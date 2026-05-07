@@ -49,7 +49,6 @@ final class SimpleChatClassifier {
         }
 
         return !hasStrongTaskSignal(text, features, catalog);
-
     }
 
     private static boolean hasStrongTaskSignal(
@@ -68,8 +67,8 @@ final class SimpleChatClassifier {
                 || catalog.containsTaskCueKeyword(features.tokenSet());
     }
 
-    private record MessageFeatures(@NonNull List<String> tokens, @NonNull Set<String> tokenSet,
-            boolean hasQuestionMark) {
+    private record MessageFeatures(
+            @NonNull List<String> tokens, @NonNull Set<String> tokenSet, boolean hasQuestionMark) {
 
         static @NonNull MessageFeatures from(@NonNull String text) {
             List<String> tokens = SimpleChatRuleCatalog.tokenize(text);

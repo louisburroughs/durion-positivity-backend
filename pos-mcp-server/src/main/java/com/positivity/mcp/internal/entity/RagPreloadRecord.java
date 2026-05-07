@@ -25,35 +25,35 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "mcp_rag_preload_record")
 public class RagPreloadRecord {
 
-  @Id
-  @GeneratedValue
-  @UUIDv7Id
-  @Column(nullable = false, updatable = false)
-  private UUID id;
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(nullable = false, updatable = false)
+    private UUID id;
 
-  @Column(name = "document_id", nullable = false, length = 120)
-  private String documentId;
+    @Column(name = "document_id", nullable = false, length = 120)
+    private String documentId;
 
-  @Column(name = "content_hash", nullable = false, length = 64)
-  private String contentHash;
+    @Column(name = "content_hash", nullable = false, length = 64)
+    private String contentHash;
 
-  @Column(name = "source_path", nullable = false, length = 255)
-  private String sourcePath;
+    @Column(name = "source_path", nullable = false, length = 255)
+    private String sourcePath;
 
-  @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 20)
-  private RagPreloadStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private RagPreloadStatus status;
 
-  @Nullable
-  @Column(name = "job_id", nullable = true, updatable = false)
-  private UUID jobId;
+    @Nullable
+    @Column(name = "job_id", nullable = true, updatable = false)
+    private UUID jobId;
 
-  @Column(name = "loaded_at", nullable = false)
-  @CreatedDate
-  private OffsetDateTime loadedAt;
+    @Column(name = "loaded_at", nullable = false)
+    @CreatedDate
+    private OffsetDateTime loadedAt;
 
-  // This is an immutable audit record — one row is written per preload event and
-  // never updated.
-  // updatedAt is intentionally absent: status transitions create new rows rather
-  // than patching existing ones.
+    // This is an immutable audit record — one row is written per preload event and
+    // never updated.
+    // updatedAt is intentionally absent: status transitions create new rows rather
+    // than patching existing ones.
 }

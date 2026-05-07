@@ -36,7 +36,11 @@ public class PricingClientImpl implements PricingClient {
         log.debug("Fetching price quote: productId={}, locationId={}", productId, locationId);
         PriceQuoteRequest body = new PriceQuoteRequest(productId, 1, locationId, customerTierId);
 
-        PriceQuoteServiceResponse response = restClient.post().uri("/price/v1/price/quotes").body(body).retrieve()
+        PriceQuoteServiceResponse response = restClient
+                .post()
+                .uri("/price/v1/price/quotes")
+                .body(body)
+                .retrieve()
                 .body(PriceQuoteServiceResponse.class);
 
         if (response == null || response.msrp() == null) {
@@ -50,10 +54,12 @@ public class PricingClientImpl implements PricingClient {
         }
 
         BigDecimal msrpAmount = response.msrp().amount();
-        String msrpCurrency = response.msrp().currency() != null ? response.msrp().currency() : "USD";
-        BigDecimal unitPriceAmt = response.unitPrice() != null && response.unitPrice().amount() != null
-                ? response.unitPrice().amount()
-                : msrpAmount;
+        String msrpCurrency =
+                response.msrp().currency() != null ? response.msrp().currency() : "USD";
+        BigDecimal unitPriceAmt =
+                response.unitPrice() != null && response.unitPrice().amount() != null
+                        ? response.unitPrice().amount()
+                        : msrpAmount;
         String priceSource = response.priceSource() != null ? response.priceSource() : "UNKNOWN";
 
         return Optional.of(new PriceQuoteClientResponse(msrpAmount, msrpCurrency, unitPriceAmt, priceSource));
@@ -63,12 +69,9 @@ public class PricingClientImpl implements PricingClient {
     // Internal request/response shapes (mirrors pos-price API contract)
     // -----------------------------------------------------------------------
 
-    private record PriceQuoteRequest(UUID productId, int quantity, UUID locationId, UUID customerTierId) {
-    }
+    private record PriceQuoteRequest(UUID productId, int quantity, UUID locationId, UUID customerTierId) {}
 
-    private record MoneyValue(BigDecimal amount, String currency) {
-    }
+    private record MoneyValue(BigDecimal amount, String currency) {}
 
-    private record PriceQuoteServiceResponse(MoneyValue msrp, MoneyValue unitPrice, String priceSource) {
-    }
+    private record PriceQuoteServiceResponse(MoneyValue msrp, MoneyValue unitPrice, String priceSource) {}
 }

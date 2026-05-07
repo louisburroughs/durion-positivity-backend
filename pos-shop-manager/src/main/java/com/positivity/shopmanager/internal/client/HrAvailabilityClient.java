@@ -24,7 +24,8 @@ public class HrAvailabilityClient {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(200));
         requestFactory.setReadTimeout(Duration.ofMillis(200));
-        this.hrRestClient = builder.baseUrl(hrBaseUrl).requestFactory(requestFactory).build();
+        this.hrRestClient =
+                builder.baseUrl(hrBaseUrl).requestFactory(requestFactory).build();
     }
 
     public Object getAvailabilityOverlay(String locationId, LocalDate date) {
@@ -57,8 +58,7 @@ public class HrAvailabilityClient {
                             .queryParam("endTime", windowEnd.toString())
                             .build())
                     .retrieve()
-                    .body(new ParameterizedTypeReference<List<HrScheduleBlock>>() {
-                    });
+                    .body(new ParameterizedTypeReference<List<HrScheduleBlock>>() {});
             return result != null ? result : List.of();
         } catch (Exception e) {
             throw new HrUnavailableException("HR system is unavailable: " + e.getMessage(), e);

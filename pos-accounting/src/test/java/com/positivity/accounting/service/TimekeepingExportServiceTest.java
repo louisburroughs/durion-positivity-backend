@@ -131,20 +131,20 @@ class TimekeepingExportServiceTest {
             ExportJobResponse job1 = service.requestExport(request);
             ExportJobResponse job2 = service.requestExport(request);
 
-            Page<ExportJobResponse> page = service.listExportHistory(
-                    PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "requestedAt")));
+            Page<ExportJobResponse> page =
+                    service.listExportHistory(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "requestedAt")));
 
             // All jobs should appear; ordering is by requestedAt DESC
             // Since clock is fixed, requestedAt is identical for both — just verify both present
-            assertThat(page.getContent()).extracting(ExportJobResponse::getJobId)
+            assertThat(page.getContent())
+                    .extracting(ExportJobResponse::getJobId)
                     .containsExactlyInAnyOrder(job1.getJobId(), job2.getJobId());
         }
 
         @Test
         @DisplayName("should throw UnsupportedSortPropertyException for invalid sort property")
         void listExportHistory_throwsUnsupportedSortPropertyException_forInvalidSortProperty() {
-            assertThatThrownBy(() -> service.listExportHistory(
-                    PageRequest.of(0, 20, Sort.by("invalidField"))))
+            assertThatThrownBy(() -> service.listExportHistory(PageRequest.of(0, 20, Sort.by("invalidField"))))
                     .isInstanceOf(UnsupportedSortPropertyException.class)
                     .hasMessageContaining("invalidField");
         }

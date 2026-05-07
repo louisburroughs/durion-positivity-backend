@@ -94,11 +94,15 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
-        inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://api-gateway",
+        inventoryFacadeTool = new InventoryFacadeTool(
+                RestClient.builder(),
+                "http://api-gateway",
                 "/inventory/v1/inventory/stock/{sku}",
                 "/inventory/v1/inventory/search?q={query}",
                 "/inventory/v1/inventory/locations/{locationId}/stock");
-        orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://api-gateway",
+        orderFacadeTool = new OrderFacadeTool(
+                RestClient.builder(),
+                "http://api-gateway",
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         manager = new StreamingSessionAgentManager(
@@ -163,9 +167,8 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(exaWebSearchTool)));
 
-        Flux<String> result = manager.streamChat(
-                userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"),
-                "hello");
+        Flux<String> result =
+                manager.streamChat(userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"), "hello");
 
         assertThat(result).isNotNull();
     }
@@ -176,23 +179,41 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("streamChat uses semantically narrowed tools when selector returns candidates")
     void streamChat_semanticSelection_narrowsToolsWhenCandidatesReturned() {
         ToolMetadata candidate = new ToolMetadata(
-                UUID.randomUUID(), "InventoryFacadeTool", "Inventory", "Manage inventory", "inventory",
-                0.8, "LOW", 50, true, "inventoryFacadeTool");
+                UUID.randomUUID(),
+                "InventoryFacadeTool",
+                "Inventory",
+                "Manage inventory",
+                "inventory",
+                0.8,
+                "LOW",
+                50,
+                true,
+                "inventoryFacadeTool");
         when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of(candidate));
         when(toolRegistry.resolveToolsForRole(any())).thenReturn(List.of(exaWebSearchTool));
         when(toolRegistry.resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool")))
                 .thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
                 toolRegistryService,
-                null, 30, 500, 50, 2, 100);
+                null,
+                30,
+                500,
+                50,
+                2,
+                100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat(
-                userContext("user-1", USER_ID, "ROLE_CASHIER"),
-                "show me inventory levels");
+        Flux<String> result =
+                selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show me inventory levels");
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
@@ -207,15 +228,24 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
                 toolRegistryService,
-                null, 30, 500, 50, 2, 100);
+                null,
+                30,
+                500,
+                50,
+                2,
+                100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat(
-                userContext("user-2", USER_ID, "ROLE_CASHIER"),
-                "anything");
+        Flux<String> result = selectorManager.streamChat(userContext("user-2", USER_ID, "ROLE_CASHIER"), "anything");
 
         assertThat(result).isNotNull();
         // resolveToolsForRole(role) is called for the fallback path
@@ -230,15 +260,24 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel, embeddingModel, embeddingStore, toolRegistry,
-                exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, rolePromptResolver,
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                rolePromptResolver,
                 toolRegistryService,
-                null, 30, 500, 50, 2, 100);
+                null,
+                30,
+                500,
+                50,
+                2,
+                100);
         clearInvocations(toolRegistry);
 
-        Flux<String> result = selectorManager.streamChat(
-                userContext("user-3", USER_ID, "ROLE_CASHIER"),
-                "anything");
+        Flux<String> result = selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "anything");
 
         assertThat(result).isNotNull();
         // fallback resolves from role tool set
@@ -340,10 +379,6 @@ class StreamingSessionAgentManagerTest {
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
         return new CurrentUserContext(
-                username,
-                userId,
-                primaryRole,
-                Set.of(primaryRole),
-                Set.of(primaryRole, "mcp:chat:stream"));
+                username, userId, primaryRole, Set.of(primaryRole), Set.of(primaryRole, "mcp:chat:stream"));
     }
 }

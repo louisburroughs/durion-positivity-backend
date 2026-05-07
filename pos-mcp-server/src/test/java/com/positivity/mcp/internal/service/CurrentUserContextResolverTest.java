@@ -68,12 +68,12 @@ class CurrentUserContextResolverTest {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 "admin.alpha",
                 "n/a",
-                List.of(
-                        new SimpleGrantedAuthority("ROLE_ADMIN"),
-                        new SimpleGrantedAuthority("mcp:chat:execute")));
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("mcp:chat:execute")));
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USERNAME, "admin.alpha",
-                GatewaySecurityConstants.DETAIL_USER_ID, userId));
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "admin.alpha",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                userId));
         return authentication;
     }
 

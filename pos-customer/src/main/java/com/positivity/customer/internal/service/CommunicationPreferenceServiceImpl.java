@@ -40,184 +40,178 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class CommunicationPreferenceServiceImpl implements CommunicationPreferenceService {
-        private final Clock clock;
+    private final Clock clock;
 
-        private static final Logger log = LoggerFactory.getLogger(CommunicationPreferenceServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(CommunicationPreferenceServiceImpl.class);
 
-        private static final String DEFAULT_PREFERENCE = "OPT_OUT";
-        private static final String DEFAULT_SOURCE = "APP";
+    private static final String DEFAULT_PREFERENCE = "OPT_OUT";
+    private static final String DEFAULT_SOURCE = "APP";
 
-        private final CommunicationPreferenceRepository preferenceRepository;
-        private final CommercialPartyRepository partyRepository;
+    private final CommunicationPreferenceRepository preferenceRepository;
+    private final CommercialPartyRepository partyRepository;
 
-        public CommunicationPreferenceServiceImpl(
-                        CommunicationPreferenceRepository preferenceRepository,
-                        CommercialPartyRepository partyRepository,
-                        Clock clock) {
-                this.clock = clock;
-                this.preferenceRepository = preferenceRepository;
-                this.partyRepository = partyRepository;
+    public CommunicationPreferenceServiceImpl(
+            CommunicationPreferenceRepository preferenceRepository,
+            CommercialPartyRepository partyRepository,
+            Clock clock) {
+        this.clock = clock;
+        this.preferenceRepository = preferenceRepository;
+        this.partyRepository = partyRepository;
+    }
+
+    /**
+     * Get communication preferences for a party.
+     *
+     * <p>
+     * If no preferences exist, returns defaults with all channels set to OPT_OUT.
+     * </p>
+     *
+     * @param partyId the party ID
+     * @return response containing preferences
+     * @throws IllegalArgumentException if party not found or invalid ID
+     */
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
+        // Verify party exists
+        partyRepository
+                .findById(partyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId));
+
+        // Get preferences or return defaults
+        return preferenceRepository
+                .findByPartyId(partyId)
+                .map(this::mapToResponse)
+                .orElseGet(() -> createDefaultResponse(partyId));
+    }
+
+    /**
+     * Create or update communication preferences for a party.
+     *
+     * <p>
+     * Null preference values are interpreted as OPT_OUT.
+     * </p>
+     *
+     * @param partyId the party ID
+     * @param request the preferences to set
+     * @return response with update status
+     * @throws IllegalArgumentException if party not found or invalid data
+     */
+    @Override
+    @NonNull
+    @Transactional
+    public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
+            @NonNull UUID partyId, @NonNull UpsertCommunicationPreferencesRequest request) {
+
+        // Verify party exists
+        partyRepository
+                .findById(partyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId));
+
+        // Find existing preferences or create new
+        CommunicationPreference preference = preferenceRepository
+                .findByPartyId(partyId)
+                .orElseGet(() -> {
+                    CommunicationPreference newPref = new CommunicationPreference();
+                    newPref.setPartyId(partyId);
+                    return newPref;
+                });
+
+        // Update fields from request, applying defaults for nulls
+        preference.setEmailPreference(
+                request.getEmailPreference() != null ? request.getEmailPreference() : DEFAULT_PREFERENCE);
+        preference.setSmsPreference(
+                request.getSmsPreference() != null ? request.getSmsPreference() : DEFAULT_PREFERENCE);
+        preference.setPhonePreference(
+                request.getPhonePreference() != null ? request.getPhonePreference() : DEFAULT_PREFERENCE);
+        preference.setMarketingPreference(
+                request.getMarketingPreference() != null ? request.getMarketingPreference() : DEFAULT_PREFERENCE);
+
+        // Update consent flags
+        if (request.getConsentFlags() != null) {
+            Map<String, Boolean> flags = new HashMap<>(request.getConsentFlags());
+            preference.setConsentFlags(flags);
         }
 
-        /**
-         * Get communication preferences for a party.
-         *
-         * <p>
-         * If no preferences exist, returns defaults with all channels set to OPT_OUT.
-         * </p>
-         *
-         * @param partyId the party ID
-         * @return response containing preferences
-         * @throws IllegalArgumentException if party not found or invalid ID
-         */
-        @Override
-        @NonNull
-        @Transactional(readOnly = true)
-        public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
-                // Verify party exists
-                partyRepository
-                                .findById(partyId)
-                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Party not found: " + partyId));
-
-                // Get preferences or return defaults
-                return preferenceRepository
-                                .findByPartyId(partyId)
-                                .map(this::mapToResponse)
-                                .orElseGet(() -> createDefaultResponse(partyId));
+        if (request.getPreferencesNote() != null) {
+            preference.setPreferencesNote(request.getPreferencesNote());
         }
 
-        /**
-         * Create or update communication preferences for a party.
-         *
-         * <p>
-         * Null preference values are interpreted as OPT_OUT.
-         * </p>
-         *
-         * @param partyId the party ID
-         * @param request the preferences to set
-         * @return response with update status
-         * @throws IllegalArgumentException if party not found or invalid data
-         */
-        @Override
-        @NonNull
-        @Transactional
-        public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
-                        @NonNull UUID partyId, @NonNull UpsertCommunicationPreferencesRequest request) {
+        // Set update source (default to APP if not provided)
+        String updateSource = request.getUpdateSource() != null ? request.getUpdateSource() : DEFAULT_SOURCE;
+        preference.setUpdateSource(updateSource);
 
-                // Verify party exists
-                partyRepository
-                                .findById(partyId)
-                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Party not found: " + partyId));
-
-                // Find existing preferences or create new
-                CommunicationPreference preference = preferenceRepository
-                                .findByPartyId(partyId)
-                                .orElseGet(() -> {
-                                        CommunicationPreference newPref = new CommunicationPreference();
-                                        newPref.setPartyId(partyId);
-                                        return newPref;
-                                });
-
-                // Update fields from request, applying defaults for nulls
-                preference.setEmailPreference(
-                                request.getEmailPreference() != null ? request.getEmailPreference()
-                                                : DEFAULT_PREFERENCE);
-                preference.setSmsPreference(
-                                request.getSmsPreference() != null ? request.getSmsPreference() : DEFAULT_PREFERENCE);
-                preference.setPhonePreference(
-                                request.getPhonePreference() != null ? request.getPhonePreference()
-                                                : DEFAULT_PREFERENCE);
-                preference.setMarketingPreference(
-                                request.getMarketingPreference() != null ? request.getMarketingPreference()
-                                                : DEFAULT_PREFERENCE);
-
-                // Update consent flags
-                if (request.getConsentFlags() != null) {
-                        Map<String, Boolean> flags = new HashMap<>(request.getConsentFlags());
-                        preference.setConsentFlags(flags);
-                }
-
-                if (request.getPreferencesNote() != null) {
-                        preference.setPreferencesNote(request.getPreferencesNote());
-                }
-
-                // Set update source (default to APP if not provided)
-                String updateSource = request.getUpdateSource() != null ? request.getUpdateSource() : DEFAULT_SOURCE;
-                preference.setUpdateSource(updateSource);
-
-                // Save and return response
-                boolean isCreate = preference.getPreferenceId() == null;
-                CommunicationPreference saved = preferenceRepository.save(preference);
-                if (log.isInfoEnabled()) {
-                        log.info(
-                                        "Upserted communication preferences: partyId={}, operation={}, source={}",
-                                        maskPartyId(partyId),
-                                        isCreate ? "CREATE" : "UPDATE",
-                                        updateSource.substring(0, Math.min(updateSource.length(), 5))); // Limit source
-
-                }
-                return UpsertCommunicationPreferencesResponse.builder()
-                                .partyId(partyId.toString())
-                                .version(String.valueOf(saved.getVersion()))
-                                .operationType(isCreate ? "CREATED" : "UPDATED")
-                                .status("SUCCESS")
-                                .updatedAt(saved.getUpdatedAt().toString())
-                                .build();
+        // Save and return response
+        boolean isCreate = preference.getPreferenceId() == null;
+        CommunicationPreference saved = preferenceRepository.save(preference);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Upserted communication preferences: partyId={}, operation={}, source={}",
+                    maskPartyId(partyId),
+                    isCreate ? "CREATE" : "UPDATE",
+                    updateSource.substring(0, Math.min(updateSource.length(), 5))); // Limit source
         }
+        return UpsertCommunicationPreferencesResponse.builder()
+                .partyId(partyId.toString())
+                .version(String.valueOf(saved.getVersion()))
+                .operationType(isCreate ? "CREATED" : "UPDATED")
+                .status("SUCCESS")
+                .updatedAt(saved.getUpdatedAt().toString())
+                .build();
+    }
 
-        /**
-         * Map CommunicationPreference entity to response DTO.
-         *
-         * @param preference the preference entity
-         * @return response DTO
-         */
-        @NonNull
-        private GetCommunicationPreferencesResponse mapToResponse(@NonNull CommunicationPreference preference) {
-                return GetCommunicationPreferencesResponse.builder()
-                                .partyId(preference.getPartyId().toString())
-                                .version(String.valueOf(preference.getVersion()))
-                                .emailPreference(preference.getEmailPreference())
-                                .smsPreference(preference.getSmsPreference())
-                                .phonePreference(preference.getPhonePreference())
-                                .marketingPreference(preference.getMarketingPreference())
-                                .consentFlags(
-                                                preference.getConsentFlags() != null
-                                                                ? new HashMap<>(preference.getConsentFlags())
-                                                                : new HashMap<>())
-                                .preferencesNote(preference.getPreferencesNote())
-                                .updatedAt(
-                                                preference.getUpdatedAt() != null
-                                                                ? preference.getUpdatedAt().toString()
-                                                                : null)
-                                .updateSource(preference.getUpdateSource())
-                                .build();
-        }
+    /**
+     * Map CommunicationPreference entity to response DTO.
+     *
+     * @param preference the preference entity
+     * @return response DTO
+     */
+    @NonNull
+    private GetCommunicationPreferencesResponse mapToResponse(@NonNull CommunicationPreference preference) {
+        return GetCommunicationPreferencesResponse.builder()
+                .partyId(preference.getPartyId().toString())
+                .version(String.valueOf(preference.getVersion()))
+                .emailPreference(preference.getEmailPreference())
+                .smsPreference(preference.getSmsPreference())
+                .phonePreference(preference.getPhonePreference())
+                .marketingPreference(preference.getMarketingPreference())
+                .consentFlags(
+                        preference.getConsentFlags() != null
+                                ? new HashMap<>(preference.getConsentFlags())
+                                : new HashMap<>())
+                .preferencesNote(preference.getPreferencesNote())
+                .updatedAt(
+                        preference.getUpdatedAt() != null
+                                ? preference.getUpdatedAt().toString()
+                                : null)
+                .updateSource(preference.getUpdateSource())
+                .build();
+    }
 
-        /**
-         * Create a default response when no preferences exist.
-         *
-         * @param partyId the party ID
-         * @return default response with OPT_OUT for all channels
-         */
-        @NonNull
-        private GetCommunicationPreferencesResponse createDefaultResponse(@NonNull UUID partyId) {
-                return GetCommunicationPreferencesResponse.builder()
-                                .partyId(partyId.toString())
-                                .version("0")
-                                .emailPreference(DEFAULT_PREFERENCE)
-                                .smsPreference(DEFAULT_PREFERENCE)
-                                .phonePreference(DEFAULT_PREFERENCE)
-                                .marketingPreference(DEFAULT_PREFERENCE)
-                                .consentFlags(new HashMap<>())
-                                .updatedAt(Instant.now(clock).toString())
-                                .updateSource("DEFAULT")
-                                .build();
-        }
+    /**
+     * Create a default response when no preferences exist.
+     *
+     * @param partyId the party ID
+     * @return default response with OPT_OUT for all channels
+     */
+    @NonNull
+    private GetCommunicationPreferencesResponse createDefaultResponse(@NonNull UUID partyId) {
+        return GetCommunicationPreferencesResponse.builder()
+                .partyId(partyId.toString())
+                .version("0")
+                .emailPreference(DEFAULT_PREFERENCE)
+                .smsPreference(DEFAULT_PREFERENCE)
+                .phonePreference(DEFAULT_PREFERENCE)
+                .marketingPreference(DEFAULT_PREFERENCE)
+                .consentFlags(new HashMap<>())
+                .updatedAt(Instant.now(clock).toString())
+                .updateSource("DEFAULT")
+                .build();
+    }
 
-        private String maskPartyId(@NonNull UUID partyId) {
-                String value = partyId.toString();
-                return value.substring(0, 8) + "...";
-        }
+    private String maskPartyId(@NonNull UUID partyId) {
+        String value = partyId.toString();
+        return value.substring(0, 8) + "...";
+    }
 }

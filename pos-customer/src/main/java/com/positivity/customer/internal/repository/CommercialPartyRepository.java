@@ -18,6 +18,7 @@ public interface CommercialPartyRepository extends JpaRepository<CommercialParty
 
     CommercialParty findByPartyId(UUID partyId);
 
-    @Query("SELECT p FROM CommercialParty p WHERE LOWER(p.legalName) LIKE LOWER(CONCAT('%', :legalName, '%')) ORDER BY p.legalName")
+    @Query(
+            "SELECT p FROM CommercialParty p WHERE LOWER(p.legalName) LIKE LOWER(CONCAT('%', :legalName, '%')) ORDER BY p.legalName")
     List<CommercialParty> findByLegalNameContaining(@Param("legalName") String legalName);
 }
