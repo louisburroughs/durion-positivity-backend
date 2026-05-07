@@ -91,8 +91,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
-            @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
-            @Value("${mcp.agent.candidate-tool-limit:2}") int candidateToolLimit,
+            @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
+            @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
@@ -238,12 +238,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
                 fallbackTools.toArray(Object[]::new));
 
-        // 2. Build RAG content retriever
+        // 2. Build RAG content retriever with optimized parameters for higher recall
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(5)
-                .minScore(0.7)
+                .maxResults(10)      // Tier 1: increased from 5 for better coverage
+                .minScore(0.6)       // Tier 1: lowered from 0.7 to capture borderline-relevant docs
                 .build();
         ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
                 "embedding-store-content-retriever");
@@ -340,8 +340,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             return fullRoleTools;
         }
         try {
+            // Tier 1: derive dynamic workflow state from message intent instead of hardcoded WORKFLOW_IDLE
+            String workflowState = deriveWorkflowState(message);
+            LOGGER.debug(
+                    "MCP workflow state derived message preview=\"{}\" workflowState={}",
+                    preview(message),
+                    workflowState);
             List<String> selectedNames = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit)
+                    .resolveCandidateTools(new ToolSelectionContext(message, role, workflowState), candidateToolLimit)
                     .stream()
                     .map(ToolMetadata::name)
                     .toList();
@@ -379,6 +385,27 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     exception);
             return fullRoleTools;
         }
+    }
+
+    /**
+     * Derives the workflow state (CREATE, READ, UPDATE, DELETE, EXPORT, IDLE) from the
+     * user's message intent. Used by tool selector to filter by allowed operations per workflow.
+     * Tier 1 optimization: replace hardcoded WORKFLOW_IDLE with dynamic state.
+     */
+    private @NonNull String deriveWorkflowState(@NonNull String message) {
+        String lower = message.toLowerCase(Locale.ROOT);
+        if (containsAny(lower, Set.of("save", "create", "add", "new", "submit", "approve", "post"))) {
+            return "CREATE";
+        } else if (containsAny(lower, Set.of("delete", "remove", "cancel", "void", "purge"))) {
+            return "DELETE";
+        } else if (containsAny(lower, Set.of("update", "edit", "modify", "change", "put", "patch"))) {
+            return "UPDATE";
+        } else if (containsAny(lower, Set.of("list", "find", "search", "show", "get", "view", "retrieve", "fetch"))) {
+            return "READ";
+        } else if (containsAny(lower, Set.of("export", "report", "download", "extract", "backup"))) {
+            return "EXPORT";
+        }
+        return "IDLE";
     }
 
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {

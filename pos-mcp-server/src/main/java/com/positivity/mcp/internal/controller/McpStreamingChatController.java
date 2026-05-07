@@ -40,7 +40,7 @@ public class McpStreamingChatController {
                 this.currentUserContextResolver = currentUserContextResolver;
         }
 
-        @Operation(summary = "Execute MCP streaming chat - returns SSE token stream")
+        @Operation(summary = "Execute MCP streaming chat - returns SSE token stream",description = "Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.")
         @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
         @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
         @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")

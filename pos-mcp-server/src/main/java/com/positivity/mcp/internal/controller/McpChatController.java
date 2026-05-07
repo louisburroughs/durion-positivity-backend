@@ -44,6 +44,7 @@ public class McpChatController {
 
         @Operation(
                         summary = "Execute MCP chat message",
+                        description = "Executes a chat message and returns the full response once complete. For streaming responses, use the /chat/stream endpoint which returns tokens as they are generated.")
                         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                                         required = true,
                                         content = @io.swagger.v3.oas.annotations.media.Content(
