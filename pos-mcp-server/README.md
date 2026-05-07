@@ -43,11 +43,20 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion Positivi
 | `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`      | Ollama chat model                                 |
 | `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text` | Embedding model for RAG                           |
 | `mcp.agent.cache-ttl-minutes`                   | `30`               | Agent cache TTL (role agents + sessions)          |
-| `mcp.agent.candidate-tool-limit`                | `2`                | Max tools from semantic selector per chat request |
+| `mcp.agent.candidate-tool-limit`                | `8`                | Max tools from semantic selector per chat request |
 | `mcp.rag.chunking.enabled`                      | `true`             | Enable document chunking before embedding         |
 | `mcp.rag.preload.docs`                          | `[]`               | Static classpath documents to preload             |
 | `mcp.tuning.enabled`                            | `true`             | Enable adaptive tool priority tuning              |
 | `mcp.tuning.cron`                               | `0 0 2 * * ?`      | Tuning schedule (daily at 02:00)                  |
+
+### Tier 2 RAG Retrieval Pipeline
+
+Both session managers use a Tier 2 retrieval chain to improve recall and precision:
+
+1. Baseline semantic retriever (`maxResults=10`, `minScore=0.6`)
+2. Query-expanded retriever (`maxResults=20`, `minScore=0.55`) using deterministic paraphrases
+3. Hybrid merge and de-duplication across both retrievers
+4. Final lexical-aware re-ranking to top-5 contexts before prompt injection
 
 ## Dependencies
 

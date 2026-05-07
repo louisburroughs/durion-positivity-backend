@@ -50,9 +50,13 @@ public class StreamingSessionAgentManager
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
     private static final String FULL_TOOL_CACHE_KEY = "full";
-    // TODO(AC8): derive workflow state from session context instead of hardcoding IDLE
+    // TODO(AC8): derive workflow state from session context instead of hardcoding
+    // IDLE
     private static final String WORKFLOW_IDLE = "IDLE";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
+    private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
+    private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
+    private static final int TIER2_FINAL_TOP_K = 5;
 
     private final Cache<String, StreamingPosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -89,8 +93,8 @@ public class StreamingSessionAgentManager
             @Nullable ToolAuditService toolAuditService,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
-            @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
-            @Value("${mcp.agent.candidate-tool-limit:2}") int candidateToolLimit,
+            @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
+            @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.streamingChatModel = streamingChatModel;
         this.embeddingModel = embeddingModel;
@@ -217,14 +221,25 @@ public class StreamingSessionAgentManager
     private @NonNull StreamingPosAssistant buildAgent(
             @NonNull String role, @NonNull List<Object> tools) {
         long startNanos = System.nanoTime();
-        ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
+        ContentRetriever semanticRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(5)
-                .minScore(0.7)
+                .maxResults(10)
+                .minScore(0.6)
                 .build();
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
-                "embedding-store-content-retriever");
+        ContentRetriever broadSemanticRetriever = EmbeddingStoreContentRetriever.builder()
+                .embeddingStore(embeddingStore)
+                .embeddingModel(embeddingModel)
+                .maxResults(TIER2_RETRIEVAL_CANDIDATES)
+                .minScore(0.55)
+                .build();
+        ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
+                broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever = new HybridContentRetriever(
+                List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
+                "tier2-hybrid-reranked-retriever");
 
         StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
@@ -290,11 +305,22 @@ public class StreamingSessionAgentManager
             return fullRoleTools;
         }
         try {
-            List<String> selectedNames = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit)
-                    .stream()
-                    .map(ToolMetadata::name)
-                    .toList();
+            List<ToolMetadata> candidates = toolRegistryService
+                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit);
+            if (LOGGER.isDebugEnabled()) {
+                for (int i = 0; i < candidates.size(); i++) {
+                    ToolMetadata candidate = candidates.get(i);
+                    double confidence = confidenceScore(i, candidate.priority());
+                    LOGGER.debug(
+                            "MCP streaming tool candidate role={} workflowState={} toolName={} score={} priority={}",
+                            role,
+                            WORKFLOW_IDLE,
+                            candidate.name(),
+                            String.format(Locale.ROOT, "%.3f", confidence),
+                            String.format(Locale.ROOT, "%.3f", candidate.priority()));
+                }
+            }
+            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
                         "MCP streaming tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
@@ -393,5 +419,10 @@ public class StreamingSessionAgentManager
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
+
+    private static double confidenceScore(int rankIndex, double priority) {
+        double rankScore = 1.0 / (rankIndex + 1);
+        return Math.clamp((rankScore * 0.7) + (Math.clamp(priority, 0.0, 1.0) * 0.3), 0.0, 1.0);
     }
 }

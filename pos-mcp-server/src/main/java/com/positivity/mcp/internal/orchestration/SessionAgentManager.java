@@ -49,10 +49,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
-    // TODO(AC8): derive workflow state from session context instead of hardcoding IDLE
-    private static final String WORKFLOW_IDLE = "IDLE";
     private static final String FULL_TOOL_CACHE_KEY = "full";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
+    private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
+    private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
+    private static final int TIER2_FINAL_TOP_K = 5;
 
     private final Cache<String, PosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -238,15 +239,26 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
                 fallbackTools.toArray(Object[]::new));
 
-        // 2. Build RAG content retriever with optimized parameters for higher recall
-        ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
+        // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
+        ContentRetriever semanticRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(10)      // Tier 1: increased from 5 for better coverage
-                .minScore(0.6)       // Tier 1: lowered from 0.7 to capture borderline-relevant docs
+                .maxResults(10)
+                .minScore(0.6)
                 .build();
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
-                "embedding-store-content-retriever");
+        ContentRetriever broadSemanticRetriever = EmbeddingStoreContentRetriever.builder()
+                .embeddingStore(embeddingStore)
+                .embeddingModel(embeddingModel)
+                .maxResults(TIER2_RETRIEVAL_CANDIDATES)
+                .minScore(0.55)
+                .build();
+        ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
+                broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever = new HybridContentRetriever(
+                List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
+                "tier2-hybrid-reranked-retriever");
 
         // 3. Assemble AiServices proxy. Chat memory remains per user+role through
         // the provider, so role-level agent prebuilds do not share conversations.
@@ -340,17 +352,29 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             return fullRoleTools;
         }
         try {
-            // Tier 1: derive dynamic workflow state from message intent instead of hardcoded WORKFLOW_IDLE
+            // Tier 1: derive dynamic workflow state from message intent instead of
+            // hardcoded WORKFLOW_IDLE
             String workflowState = deriveWorkflowState(message);
             LOGGER.debug(
                     "MCP workflow state derived message preview=\"{}\" workflowState={}",
                     preview(message),
                     workflowState);
-            List<String> selectedNames = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, workflowState), candidateToolLimit)
-                    .stream()
-                    .map(ToolMetadata::name)
-                    .toList();
+            List<ToolMetadata> candidates = toolRegistryService
+                    .resolveCandidateTools(new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
+            if (LOGGER.isDebugEnabled()) {
+                for (int i = 0; i < candidates.size(); i++) {
+                    ToolMetadata candidate = candidates.get(i);
+                    double confidence = confidenceScore(i, candidate.priority());
+                    LOGGER.debug(
+                            "MCP tool candidate role={} workflowState={} toolName={} score={} priority={}",
+                            role,
+                            workflowState,
+                            candidate.name(),
+                            String.format(Locale.ROOT, "%.3f", confidence),
+                            String.format(Locale.ROOT, "%.3f", candidate.priority()));
+                }
+            }
+            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
                         "MCP tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
@@ -388,8 +412,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Derives the workflow state (CREATE, READ, UPDATE, DELETE, EXPORT, IDLE) from the
-     * user's message intent. Used by tool selector to filter by allowed operations per workflow.
+     * Derives the workflow state (CREATE, READ, UPDATE, DELETE, EXPORT, IDLE) from
+     * the
+     * user's message intent. Used by tool selector to filter by allowed operations
+     * per workflow.
      * Tier 1 optimization: replace hardcoded WORKFLOW_IDLE with dynamic state.
      */
     private @NonNull String deriveWorkflowState(@NonNull String message) {
@@ -470,6 +496,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
+
+    private static double confidenceScore(int rankIndex, double priority) {
+        double rankScore = 1.0 / (rankIndex + 1);
+        return Math.clamp((rankScore * 0.7) + (Math.clamp(priority, 0.0, 1.0) * 0.3), 0.0, 1.0);
     }
 
     private record ToolSelection(
