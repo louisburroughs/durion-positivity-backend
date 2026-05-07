@@ -27,16 +27,22 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- Internal Positivity BOM (for internal com.positivity:* artifacts) -->
+			<!-- Internal Positivity artifacts -->
 			<dependency>
 				<groupId>com.positivity</groupId>
-				<artifactId>pos-dependencies</artifactId>
+				<artifactId>pos-security-common</artifactId>
 				<version>${project.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
 			</dependency>
-
-			<!-- Shared DTOs -->
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-events</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-document-helper</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>com.positivity</groupId>
 				<artifactId>pos-shared-dtos</artifactId>
@@ -46,6 +52,13 @@
 				<groupId>com.positivity</groupId>
 				<artifactId>pos-tax-common</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-archunit</artifactId>
+				<version>${project.version}</version>
+				<scope>test</scope>
 			</dependency>
 
 			<!-- TEST DEPENDENCIES - JUnit managed by Spring Boot -->
