@@ -31,9 +31,9 @@ mcp:
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
         - id: "shop.management"
-          source-path: "classpath:pos-shop-manager/docs/shop-management-rag.md"
+          source-path: "classpath:rag/shop-management-rag.md"
         - id: "shop.management.guidelines"
-          source-path: "classpath:pos-shop-manager/docs/shop-management-guidelines.md"
+          source-path: "classpath:rag/shop-management-guidelines.md"
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
     chunking:
