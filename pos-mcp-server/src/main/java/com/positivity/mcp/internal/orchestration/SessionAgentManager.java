@@ -272,7 +272,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
                 "tier2-hybrid-reranked-retriever");
 
-        // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution at runtime)
+        // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution
+        // at runtime)
         // Note: RoleAwareMetadataFilter requires user roles from SecurityContext.
         // Currently applied at chat boundary where user context is available.
 

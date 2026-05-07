@@ -7,7 +7,7 @@ The functionality described here spans two services that work together:
 - **pos-shop-manager** — appointments, scheduling, bay/mobile unit configuration, conflict detection, and workorder operational context.
 - **pos-workorder** — estimates, work order lifecycle, technician assignment, labor tracking, parts usage, change requests, and invoicing.
 
-Security note: the permissions and roles below reflect the current built-in mappings in `pos-security-service`. Today, `Admin` is the only standard role that carries most shop and workorder permissions by default. Rows marked `None by default` require the permission to be granted explicitly through Security Admin. Rows marked `Any authenticated user` require authentication but no specific permission.
+Security note: the permissions and roles below reflect the current built-in mappings in `pos-security-service`. Shop and workorder access is now mainly split across `SERVICE_ADVISOR`, `LOCATION_MANAGER`, and `TECHNICIAN`, with `ADMIN` retaining full access. `ACCOUNTING_ASSOCIATE` and `ACCOUNT_MANAGER` are mostly out of scope for the shop/workorder APIs documented here, except where separate invoice-service permissions apply. Rows marked `Any authenticated user` require authentication but no specific permission.
 
 ---
 
@@ -36,7 +36,7 @@ Shop location and service details are available via the Shop API. Technician ide
 
 | Operation                                           | Required permission(s) | Roles with permission |
 | --------------------------------------------------- | ---------------------- | --------------------- |
-| View shop location, technician, and service details | `shop:location:view`   | `Admin`               |
+| View shop location, technician, and service details | `shop:location:view`   | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Bays
 
@@ -50,10 +50,10 @@ Bays are the physical service stalls at a location. The Bay API supports the fol
 
 | Operation               | Required permission(s) | Roles with permission |
 | ----------------------- | ---------------------- | --------------------- |
-| View bays               | `shop:bay:view`        | `Admin`               |
-| Create a bay            | `shop:bay:create`      | `Admin`               |
-| Edit / bulk manage bays | `shop:bay:edit`        | `Admin`               |
-| Delete a bay            | `shop:bay:edit`        | `Admin`               |
+| View bays               | `shop:bay:view`        | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Create a bay            | `shop:bay:create`      | `ADMIN`, `LOCATION_MANAGER` |
+| Edit / bulk manage bays | `shop:bay:edit`        | `ADMIN`, `LOCATION_MANAGER` |
+| Delete a bay            | `shop:bay:edit`        | `ADMIN`, `LOCATION_MANAGER` |
 
 ### Mobile Units
 
@@ -66,10 +66,10 @@ Mobile units are treated as schedulable resources in the same way bays are. They
 
 | Operation                       | Required permission(s) | Roles with permission |
 | ------------------------------- | ---------------------- | --------------------- |
-| View mobile units               | `shop:bay:view`        | `Admin`               |
-| Create a mobile unit            | `shop:bay:create`      | `Admin`               |
-| Edit / bulk manage mobile units | `shop:bay:edit`        | `Admin`               |
-| Delete a mobile unit            | `shop:bay:edit`        | `Admin`               |
+| View mobile units               | `shop:bay:view`        | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Create a mobile unit            | `shop:bay:create`      | `ADMIN`, `LOCATION_MANAGER` |
+| Edit / bulk manage mobile units | `shop:bay:edit`        | `ADMIN`, `LOCATION_MANAGER` |
+| Delete a mobile unit            | `shop:bay:edit`        | `ADMIN`, `LOCATION_MANAGER` |
 
 ---
 
@@ -81,33 +81,33 @@ An appointment books a time slot for a customer vehicle at a location. The syste
 
 Appointments support idempotent creation via an `Idempotency-Key` header — submitting the same key twice returns the original result without creating a duplicate.
 
-| Operation           | Required permission(s)                            | Roles with permission |
-| ------------------- | ------------------------------------------------- | --------------------- |
-| Create appointment  | `appointments:create` or `shop:schedule:edit`     | `Admin`               |
+| Operation          | Required permission(s)                        | Roles with permission |
+| ------------------ | --------------------------------------------- | --------------------- |
+| Create appointment | `appointments:create` or `shop:schedule:edit` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Retrieving an appointment
 
 Retrieve a single appointment by its ID.
 
-| Operation          | Required permission(s)                        | Roles with permission |
-| ------------------ | --------------------------------------------- | --------------------- |
-| View appointment   | `appointments:view` or `shop:schedule:view`   | `Admin`               |
+| Operation        | Required permission(s)                      | Roles with permission |
+| ---------------- | ------------------------------------------- | --------------------- |
+| View appointment | `appointments:view` or `shop:schedule:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Rescheduling an appointment
 
 An appointment can be rescheduled to a new time slot as long as it is in a reschedulable status. The request must include the new time and a reason. If the reason is `OTHER`, a notes field is required. Returns 409 if the appointment is in a state that does not allow rescheduling.
 
-| Operation                | Required permission(s)     | Roles with permission |
-| ------------------------ | -------------------------- | --------------------- |
-| Reschedule appointment   | `appointments:reschedule`  | `Admin`               |
+| Operation              | Required permission(s)    | Roles with permission |
+| ---------------------- | ------------------------- | --------------------- |
+| Reschedule appointment | `appointments:reschedule` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Cancelling an appointment
 
 Cancel a scheduled appointment. Returns 409 if the appointment cannot be cancelled in its current state.
 
-| Operation             | Required permission(s) | Roles with permission |
-| --------------------- | ---------------------- | --------------------- |
-| Cancel appointment    | `appointments:cancel`  | `Admin`               |
+| Operation          | Required permission(s) | Roles with permission |
+| ------------------ | ---------------------- | --------------------- |
+| Cancel appointment | `appointments:cancel`  | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Appointment statuses
 
@@ -131,10 +131,10 @@ An appointment can be assigned to a bay or mobile unit, and one or more mechanic
 - **Create an assignment** — link a bay/mobile unit and mechanics to an appointment.
 - **List assignments** — retrieve all assignments for an appointment.
 
-| Operation         | Required permission(s)                        | Roles with permission |
-| ----------------- | --------------------------------------------- | --------------------- |
-| Create assignment | `shop:bay:assign`                             | `Admin`               |
-| View assignments  | `appointments:view` or `shop:schedule:view`   | `Admin`               |
+| Operation         | Required permission(s)                      | Roles with permission |
+| ----------------- | ------------------------------------------- | --------------------- |
+| Create assignment | `shop:bay:assign`                           | `ADMIN`, `LOCATION_MANAGER` |
+| View assignments  | `appointments:view` or `shop:schedule:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Conflict override
 
@@ -142,9 +142,9 @@ When creating an assignment or scheduling an appointment, the system checks for 
 
 An operator with schedule-editing access can explicitly override a detected conflict by calling the conflict override endpoint. The override is recorded with a reason for audit purposes. Returns 403 if the caller lacks the required authority.
 
-| Operation           | Required permission(s)                           | Roles with permission |
-| ------------------- | ------------------------------------------------ | --------------------- |
-| Conflict override   | `shop:schedule:edit` or `appointments:reschedule` | `Admin`               |
+| Operation         | Required permission(s)                            | Roles with permission |
+| ----------------- | ------------------------------------------------- | --------------------- |
+| Conflict override | `shop:schedule:edit` or `appointments:reschedule` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ---
 
@@ -161,17 +161,17 @@ Parameters:
 - `includeAvailabilityOverlay` (optional, default `false`) — overlay HR availability data from the people service.
 - `range` (optional, default `LOCATION_HOURS`) — the time window to show.
 
-| Operation       | Required permission(s) | Roles with permission |
-| --------------- | ---------------------- | --------------------- |
-| View schedule   | `shop:schedule:view`   | `Admin`               |
+| Operation     | Required permission(s) | Roles with permission |
+| ------------- | ---------------------- | --------------------- |
+| View schedule | `shop:schedule:view`   | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Workorder operational context
 
 For a given location and work order, this endpoint assembles the full operational context: bay assignment, mechanic details, vehicle information, and customer details. It is a read-only view used by the shop operations UI.
 
-| Operation                           | Required permission(s) | Roles with permission |
-| ----------------------------------- | ---------------------- | --------------------- |
-| View workorder operational context  | `shop:schedule:view`   | `Admin`               |
+| Operation                          | Required permission(s) | Roles with permission |
+| ---------------------------------- | ---------------------- | --------------------- |
+| View workorder operational context | `shop:schedule:view`   | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Shop audit trail
 
@@ -182,8 +182,8 @@ Every scheduling and assignment change is recorded in the shop audit trail. The 
 
 | Operation                | Required permission(s)                      | Roles with permission |
 | ------------------------ | ------------------------------------------- | --------------------- |
-| Search the audit trail   | `shop:schedule:view` or `appointments:view` | `Admin`               |
-| Get a single audit entry | `shop:schedule:view` or `appointments:view` | `Admin`               |
+| Search the audit trail   | `shop:schedule:view` or `appointments:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
+| Get a single audit entry | `shop:schedule:view` or `appointments:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ---
 
@@ -215,17 +215,17 @@ DRAFT → PENDING_APPROVAL → APPROVED → (promoted) → Work Order
 
 A new estimate is created in `DRAFT` status. Required fields are customer ID, vehicle ID, and location ID. Supports idempotent creation via `Idempotency-Key` header.
 
-| Operation         | Required permission(s)       | Roles with permission |
-| ----------------- | ---------------------------- | --------------------- |
-| Create estimate   | `workorder:estimate:create`  | `Admin`               |
+| Operation       | Required permission(s)      | Roles with permission |
+| --------------- | --------------------------- | --------------------- |
+| Create estimate | `workorder:estimate:create` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Viewing estimates
 
 Estimates can be retrieved individually by ID, or listed by customer, shop, or location.
 
-| Operation        | Required permission(s)      | Roles with permission |
-| ---------------- | --------------------------- | --------------------- |
-| View estimates   | `workorder:estimate:view`   | `Admin`               |
+| Operation      | Required permission(s)    | Roles with permission |
+| -------------- | ------------------------- | --------------------- |
+| View estimates | `workorder:estimate:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Adding and editing line items
 
@@ -235,19 +235,19 @@ While an estimate is in `DRAFT` status, line items (parts and labor) can be adde
 - **Update item** — change any field on an existing line item.
 - **Remove item** — soft-delete a line item. The estimate must remain in `DRAFT` status.
 
-| Operation        | Required permission(s)            | Roles with permission |
-| ---------------- | --------------------------------- | --------------------- |
-| Add line item    | `workorder:estimate_item:add`     | `Admin`               |
-| Edit line item   | `workorder:estimate_item:edit`    | `Admin`               |
-| Remove line item | `workorder:estimate_item:delete`  | `Admin`               |
+| Operation        | Required permission(s)           | Roles with permission |
+| ---------------- | -------------------------------- | --------------------- |
+| Add line item    | `workorder:estimate_item:add`    | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Edit line item   | `workorder:estimate_item:edit`   | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Remove line item | `workorder:estimate_item:delete` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Calculating taxes and totals
 
 Once items are added, the estimate's subtotal, tax amount, and total can be calculated. The estimate must be in `DRAFT` status. The calculation calls the tax service to apply the correct rate.
 
-| Operation                  | Required permission(s)          | Roles with permission |
-| -------------------------- | ------------------------------- | --------------------- |
-| Calculate taxes and totals | `workorder:estimate:calculate`  | `Admin`               |
+| Operation                  | Required permission(s)         | Roles with permission |
+| -------------------------- | ------------------------------ | --------------------- |
+| Calculate taxes and totals | `workorder:estimate:calculate` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Submitting for customer approval
 
@@ -257,9 +257,9 @@ A complete draft estimate can be submitted for customer approval. This transitio
 2. Creates an immutable snapshot of the estimate at that point.
 3. Moves the estimate to `PENDING_APPROVAL`.
 
-| Operation                        | Required permission(s)      | Roles with permission |
-| -------------------------------- | --------------------------- | --------------------- |
-| Submit estimate for approval     | `workorder:estimate:submit` | `None by default`     |
+| Operation                    | Required permission(s)      | Roles with permission |
+| ---------------------------- | --------------------------- | --------------------- |
+| Submit estimate for approval | `workorder:estimate:submit` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Customer approval
 
@@ -267,9 +267,9 @@ The customer approves the estimate by providing a signature (base64-encoded imag
 
 Selective line item approvals are supported — a customer can approve a subset of the estimate's items.
 
-| Operation                  | Required permission(s)       | Roles with permission |
-| -------------------------- | ---------------------------- | --------------------- |
-| Approve estimate           | `workorder:estimate:approve` | `Admin`               |
+| Operation        | Required permission(s)       | Roles with permission |
+| ---------------- | ---------------------------- | --------------------- |
+| Approve estimate | `workorder:estimate:approve` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Declining and reopening an estimate
 
@@ -277,8 +277,8 @@ An estimate can be declined from `DRAFT` or `APPROVED` status. A declined estima
 
 | Operation                | Required permission(s)       | Roles with permission |
 | ------------------------ | ---------------------------- | --------------------- |
-| Decline estimate         | `workorder:estimate:decline` | `Admin`               |
-| Reopen declined estimate | `workorder:estimate:reopen`  | `Admin`               |
+| Decline estimate         | `workorder:estimate:decline` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Reopen declined estimate | `workorder:estimate:reopen`  | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Promoting an estimate to a work order
 
@@ -291,25 +291,25 @@ An approved estimate is promoted to a work order using the promote endpoint. Pre
 
 If the estimate was previously promoted, the existing work order is returned (idempotent behaviour). Supports `Idempotency-Key` header.
 
-| Operation                   | Required permission(s)       | Roles with permission |
-| --------------------------- | ---------------------------- | --------------------- |
-| Promote estimate to work order | `workorder:estimate:promote` | `None by default`     |
+| Operation                      | Required permission(s)       | Roles with permission |
+| ------------------------------ | ---------------------------- | --------------------- |
+| Promote estimate to work order | `workorder:estimate:promote` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Estimate PDF
 
 A PDF document of the estimate can be generated for customer-facing use. The PDF is rendered by the document service and contains the header details, grouped line items, and financial totals.
 
-| Operation              | Required permission(s)      | Roles with permission |
-| ---------------------- | --------------------------- | --------------------- |
-| Generate estimate PDF  | `workorder:estimate:view`   | `Admin`               |
+| Operation             | Required permission(s)    | Roles with permission |
+| --------------------- | ------------------------- | --------------------- |
+| Generate estimate PDF | `workorder:estimate:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Estimate snapshots
 
 An immutable snapshot of an estimate's complete state (all header fields and line items) can be created manually for audit and version history purposes. Snapshots are also created automatically when an estimate is submitted for approval.
 
-| Operation                | Required permission(s)                | Roles with permission |
-| ------------------------ | ------------------------------------- | --------------------- |
-| Create estimate snapshot | `workorder:estimate_snapshot:create`  | `Admin`               |
+| Operation                | Required permission(s)               | Roles with permission |
+| ------------------------ | ------------------------------------ | --------------------- |
+| Create estimate snapshot | `workorder:estimate_snapshot:create` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ---
 
@@ -351,9 +351,9 @@ Work orders are normally created by promoting an approved estimate. They can als
 
 Work orders can be listed in full, retrieved by ID, or filtered by customer or location.
 
-| Operation         | Required permission(s)         | Roles with permission |
-| ----------------- | ------------------------------ | --------------------- |
-| View work orders  | `workorder:workorder:view`     | `Admin`               |
+| Operation        | Required permission(s)     | Roles with permission |
+| ---------------- | -------------------------- | --------------------- |
+| View work orders | `workorder:workorder:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Transition history and snapshots
 
@@ -368,26 +368,26 @@ The full state-transition history for a work order can be retrieved at any time.
 
 The work order can be approved by the customer with a signature. This transitions the work order from `DRAFT` to `APPROVED`. Requires a customer ID, base64 signature, signer name, and optional notes.
 
-| Operation               | Required permission(s)          | Roles with permission |
-| ----------------------- | ------------------------------- | --------------------- |
-| Approve work order      | `workorder:workorder:approve`   | `Admin`               |
+| Operation          | Required permission(s)        | Roles with permission |
+| ------------------ | ----------------------------- | --------------------- |
+| Approve work order | `workorder:workorder:approve` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Completing a work order
 
 Completing a work order transitions it to `COMPLETED` and emits a work-completed event. Before calling complete, use the completion preconditions endpoint to check whether all blocking conditions are satisfied (e.g. unresolved change requests, pending parts, un-acknowledged customer denials).
 
-| Operation                           | Required permission(s)           | Roles with permission |
-| ----------------------------------- | -------------------------------- | --------------------- |
-| View completion preconditions       | `workorder:workorder:complete`   | `Admin`               |
-| Complete work order                 | `workorder:workorder:complete`   | `Admin`               |
+| Operation                     | Required permission(s)         | Roles with permission |
+| ----------------------------- | ------------------------------ | --------------------- |
+| View completion preconditions | `workorder:workorder:complete` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Complete work order           | `workorder:workorder:complete` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Reopening a completed work order
 
 A completed work order can be reopened if additional work is needed. A mandatory reason must be provided. This is a controlled, elevated action.
 
-| Operation                 | Required permission(s)                    | Roles with permission |
-| ------------------------- | ----------------------------------------- | --------------------- |
-| Reopen completed work order | `workorder:workorder:reopen_completed` | `Admin`               |
+| Operation                   | Required permission(s)                 | Roles with permission |
+| --------------------------- | -------------------------------------- | --------------------- |
+| Reopen completed work order | `workorder:workorder:reopen_completed` | `ADMIN`, `LOCATION_MANAGER` |
 
 ### Cancelling a work order
 
@@ -401,9 +401,9 @@ Cancel a work order by deleting it. Only works on work orders that have not yet 
 
 Once a work order is in `COMPLETED` status, an invoice draft can be generated. The invoice is created by calling the invoice service. Supports idempotent generation via `Idempotency-Key`.
 
-| Operation           | Required permission(s)                   | Roles with permission |
-| ------------------- | ---------------------------------------- | --------------------- |
-| Generate invoice    | `workorder:workorder:generate_invoice`   | `None by default`     |
+| Operation        | Required permission(s)                 | Roles with permission |
+| ---------------- | -------------------------------------- | --------------------- |
+| Generate invoice | `workorder:workorder:generate_invoice` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ---
 
@@ -415,25 +415,25 @@ A technician (mechanic) is assigned to a work order to record who is doing the w
 
 Provide the work order ID and the technician's person ID. If the work order is in `APPROVED` status, it transitions to `ASSIGNED` on successful assignment. Supports `Idempotency-Key`.
 
-| Operation             | Required permission(s)                      | Roles with permission |
-| --------------------- | ------------------------------------------- | --------------------- |
-| Assign a technician   | `workorder:workorder:assign-technician`     | `None by default`     |
+| Operation           | Required permission(s)                  | Roles with permission |
+| ------------------- | --------------------------------------- | --------------------- |
+| Assign a technician | `workorder:workorder:assign-technician` | `ADMIN`, `LOCATION_MANAGER` |
 
 ### Reassigning a technician
 
 A work order can be reassigned to a different technician. The reassignment reason must be provided and is recorded in the assignment history.
 
-| Operation                | Required permission(s)                      | Roles with permission |
-| ------------------------ | ------------------------------------------- | --------------------- |
-| Reassign a technician    | `workorder:workorder:assign-technician`     | `None by default`     |
+| Operation             | Required permission(s)                  | Roles with permission |
+| --------------------- | --------------------------------------- | --------------------- |
+| Reassign a technician | `workorder:workorder:assign-technician` | `ADMIN`, `LOCATION_MANAGER` |
 
 ### Viewing assignment history
 
 The current assignment and full assignment history for a work order can be retrieved at any time.
 
-| Operation                  | Required permission(s)         | Roles with permission |
-| -------------------------- | ------------------------------ | --------------------- |
-| View assignment history    | `workorder:workorder:view`     | `Admin`               |
+| Operation               | Required permission(s)     | Roles with permission |
+| ----------------------- | -------------------------- | --------------------- |
+| View assignment history | `workorder:workorder:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ---
 
@@ -445,25 +445,25 @@ A change request is raised when additional work is discovered during the service
 
 Provide the work order ID and the change request items (description, parts, labor). Items are placed in `PENDING_APPROVAL` status. Supports `Idempotency-Key`.
 
-| Operation                | Required permission(s)                 | Roles with permission |
-| ------------------------ | -------------------------------------- | --------------------- |
-| Create a change request  | `workorder:change_request:create`      | `Admin`               |
+| Operation               | Required permission(s)            | Roles with permission |
+| ----------------------- | --------------------------------- | --------------------- |
+| Create a change request | `workorder:change_request:create` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Approving a change request
 
 Approve a pending change request. Items move to `READY_TO_EXECUTE` status. An approval note is required.
 
-| Operation                 | Required permission(s)                  | Roles with permission |
-| ------------------------- | --------------------------------------- | --------------------- |
-| Approve a change request  | `workorder:change_request:approve`      | `Admin`               |
+| Operation                | Required permission(s)             | Roles with permission |
+| ------------------------ | ---------------------------------- | --------------------- |
+| Approve a change request | `workorder:change_request:approve` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Declining a change request
 
 Decline a change request. Items are cancelled and will not be billed. A decline note is required.
 
-| Operation                  | Required permission(s)                  | Roles with permission |
-| -------------------------- | --------------------------------------- | --------------------- |
-| Decline a change request   | `workorder:change_request:decline`      | `Admin`               |
+| Operation                | Required permission(s)             | Roles with permission |
+| ------------------------ | ---------------------------------- | --------------------- |
+| Decline a change request | `workorder:change_request:decline` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Emergency override
 
@@ -471,9 +471,9 @@ In urgent situations (e.g. a safety-critical repair that cannot wait for custome
 
 After an emergency override, the customer must acknowledge the denial before the work order can be closed.
 
-| Operation             | Required permission(s)                           | Roles with permission |
-| --------------------- | ------------------------------------------------ | --------------------- |
-| Emergency override    | `workorder:change_request:emergency_override`    | `Admin`               |
+| Operation          | Required permission(s)                        | Roles with permission |
+| ------------------ | --------------------------------------------- | --------------------- |
+| Emergency override | `workorder:change_request:emergency_override` | `ADMIN`, `LOCATION_MANAGER` |
 
 ### Acknowledging a customer denial
 
@@ -487,9 +487,9 @@ If a customer denies a change request for safety-critical work, the denial must 
 
 Before completing a work order, use the `canClose` endpoint to verify there are no unresolved change requests, un-acknowledged denials, or other blocking conditions.
 
-| Operation                  | Required permission(s) | Roles with permission    |
-| -------------------------- | ---------------------- | ------------------------ |
-| Check if a work order can close | Authentication only | `Any authenticated user` |
+| Operation                       | Required permission(s) | Roles with permission    |
+| ------------------------------- | ---------------------- | ------------------------ |
+| Check if a work order can close | Authentication only    | `Any authenticated user` |
 
 ---
 
@@ -501,33 +501,33 @@ Labor entries record when a technician starts and stops work on a service line.
 
 To start a labor session, provide the work order ID and service line ID. The system records the current timestamp as the start time and creates a labor entry.
 
-| Operation               | Required permission(s) | Roles with permission |
-| ----------------------- | ---------------------- | --------------------- |
-| Start a labor session   | `workorder:labor:add`  | `Admin`               |
+| Operation             | Required permission(s) | Roles with permission |
+| --------------------- | ---------------------- | --------------------- |
+| Start a labor session | `workorder:labor:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Stopping a labor session
 
 Stop an active labor session by providing the work order ID and labor entry ID. The system calculates the total hours worked.
 
-| Operation              | Required permission(s) | Roles with permission |
-| ---------------------- | ---------------------- | --------------------- |
-| Stop a labor session   | `workorder:labor:add`  | `Admin`               |
+| Operation            | Required permission(s) | Roles with permission |
+| -------------------- | ---------------------- | --------------------- |
+| Stop a labor session | `workorder:labor:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Adjusting labor hours
 
 If a labor entry needs correction, hours can be manually adjusted by providing the entry ID and the corrected values.
 
-| Operation              | Required permission(s) | Roles with permission |
-| ---------------------- | ---------------------- | --------------------- |
-| Adjust labor hours     | `workorder:labor:add`  | `Admin`               |
+| Operation          | Required permission(s) | Roles with permission |
+| ------------------ | ---------------------- | --------------------- |
+| Adjust labor hours | `workorder:labor:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Viewing labor history
 
 All labor entries for a work order can be retrieved.
 
-| Operation             | Required permission(s)  | Roles with permission |
-| --------------------- | ----------------------- | --------------------- |
-| View labor history    | `workorder:labor:view`  | `Admin`               |
+| Operation          | Required permission(s) | Roles with permission |
+| ------------------ | ---------------------- | --------------------- |
+| View labor history | `workorder:labor:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Timer-based time tracking (mechanic self-service)
 
@@ -537,11 +537,11 @@ Technicians can start and stop their own timers without specifying a labor entry
 - **Start timer** — opens a new timer for the mechanic's current assignment.
 - **Stop timer** — stops all active timers for the mechanic.
 
-| Operation         | Required permission(s)  | Roles with permission |
-| ----------------- | ----------------------- | --------------------- |
-| Get active timers | `workorder:labor:view`  | `Admin`               |
-| Start timer       | `workorder:labor:add`   | `Admin`               |
-| Stop timer        | `workorder:labor:add`   | `Admin`               |
+| Operation         | Required permission(s) | Roles with permission |
+| ----------------- | ---------------------- | --------------------- |
+| Get active timers | `workorder:labor:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
+| Start timer       | `workorder:labor:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
+| Stop timer        | `workorder:labor:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Job time totals (reporting)
 
@@ -554,9 +554,9 @@ Parameters:
 - `locationId` (optional)
 - `technicianIds` (optional, list of person IDs to filter)
 
-| Operation            | Required permission(s)  | Roles with permission |
-| -------------------- | ----------------------- | --------------------- |
-| View job time totals | `workorder:labor:view`  | `Admin`               |
+| Operation            | Required permission(s) | Roles with permission |
+| -------------------- | ---------------------- | --------------------- |
+| View job time totals | `workorder:labor:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ---
 
@@ -568,33 +568,33 @@ Parts usage on a work order is tracked through three stages: issuing from invent
 
 Issue a part from inventory to the work order. This reserves the item for this job. Supports idempotency via `Idempotency-Key`.
 
-| Operation      | Required permission(s) | Roles with permission |
-| -------------- | ---------------------- | --------------------- |
-| Issue parts    | `workorder:parts:add`  | `Admin`               |
+| Operation   | Required permission(s) | Roles with permission |
+| ----------- | ---------------------- | --------------------- |
+| Issue parts | `workorder:parts:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Consuming parts
 
 Record the actual quantity of a part consumed during the service. Quantity cannot exceed the issued amount.
 
-| Operation        | Required permission(s) | Roles with permission |
-| ---------------- | ---------------------- | --------------------- |
-| Consume parts    | `workorder:parts:add`  | `Admin`               |
+| Operation     | Required permission(s) | Roles with permission |
+| ------------- | ---------------------- | --------------------- |
+| Consume parts | `workorder:parts:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Returning parts
 
 Return unused parts back to inventory. Returns 201 on success.
 
-| Operation       | Required permission(s) | Roles with permission |
-| --------------- | ---------------------- | --------------------- |
-| Return parts    | `workorder:parts:add`  | `Admin`               |
+| Operation    | Required permission(s) | Roles with permission |
+| ------------ | ---------------------- | --------------------- |
+| Return parts | `workorder:parts:add`  | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ### Parts usage history
 
 Retrieve the full history of parts issued, consumed, and returned for a work order. An optional `partLineId` filter narrows the results to a specific line.
 
-| Operation                | Required permission(s)  | Roles with permission |
-| ------------------------ | ----------------------- | --------------------- |
-| View parts usage history | `workorder:parts:view`  | `Admin`               |
+| Operation                | Required permission(s) | Roles with permission |
+| ------------------------ | ---------------------- | --------------------- |
+| View parts usage history | `workorder:parts:view` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN` |
 
 ### Pick list
 
@@ -608,11 +608,11 @@ The pick list shows which inventory items need to be pulled from stock for a wor
 
 | Operation                  | Required permission(s)        | Roles with permission |
 | -------------------------- | ----------------------------- | --------------------- |
-| Get pick list              | `inventory:pick_list:view`    | `Admin`               |
-| Get pick tasks             | `inventory:pick_list:view`    | `Admin`               |
-| Resolve scan               | `inventory:pick_list:execute` | `Admin`               |
-| Confirm pick line quantity | `inventory:pick_list:execute` | `Admin`               |
-| Complete pick task         | `inventory:pick_list:execute` | `Admin`               |
+| Get pick list              | `inventory:pick_list:view`    | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
+| Get pick tasks             | `inventory:pick_list:view`    | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
+| Resolve scan               | `inventory:pick_list:execute` | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
+| Confirm pick line quantity | `inventory:pick_list:execute` | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
+| Complete pick task         | `inventory:pick_list:execute` | `ADMIN`, `LOCATION_MANAGER`, `TECHNICIAN` |
 
 ---
 
@@ -623,10 +623,10 @@ The WIP board provides a live view of all active work orders at a location.
 - **List active WIP** — returns all in-progress work orders, paginated. Users with multi-location access see all locations; otherwise results are scoped to the user's assigned location.
 - **Get WIP detail** — retrieve the full WIP record for a specific work order.
 
-| Operation        | Required permission(s) | Roles with permission |
-| ---------------- | ---------------------- | --------------------- |
-| List active WIP  | `workorder:wip:view` (`workorder:wip:view_all_locations` is also required when requesting cross-location results) | `Admin` |
-| Get WIP detail   | `workorder:wip:view`   | `Admin`               |
+| Operation       | Required permission(s)                                                                                            | Roles with permission |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------- |
+| List active WIP | `workorder:wip:view` (`workorder:wip:view_all_locations` is also required when requesting cross-location results) | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| Get WIP detail  | `workorder:wip:view`                                                                                              | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
 
 ### Daily dispatch dashboard
 
@@ -637,9 +637,9 @@ Parameters:
 - `locationId` (required)
 - `date` (optional, defaults to today)
 
-| Operation                     | Required permission(s)      | Roles with permission |
-| ----------------------------- | --------------------------- | --------------------- |
-| View daily dispatch dashboard | `workorder:dashboard:view`  | `None by default`     |
+| Operation                     | Required permission(s)     | Roles with permission |
+| ----------------------------- | -------------------------- | --------------------- |
+| View daily dispatch dashboard | `workorder:dashboard:view` | `ADMIN`, `LOCATION_MANAGER` |
 
 ---
 
@@ -656,12 +656,12 @@ Approval configurations define the rules for when and how estimates and change r
 - **Update configuration** — modify an existing rule set.
 - **Delete configuration** — remove a rule set.
 
-| Operation                | Required permission(s)               | Roles with permission |
-| ------------------------ | ------------------------------------ | --------------------- |
-| View configurations      | `workorder:approval_config:view`     | `Admin`               |
-| Create configuration     | `workorder:approval_config:create`   | `Admin`               |
-| Edit configuration       | `workorder:approval_config:edit`     | `Admin`               |
-| Delete configuration     | `workorder:approval_config:delete`   | `Admin`               |
+| Operation            | Required permission(s)             | Roles with permission |
+| -------------------- | ---------------------------------- | --------------------- |
+| View configurations  | `workorder:approval_config:view`   | `ADMIN`, `LOCATION_MANAGER` |
+| Create configuration | `workorder:approval_config:create` | `ADMIN`, `LOCATION_MANAGER` |
+| Edit configuration   | `workorder:approval_config:edit`   | `ADMIN`, `LOCATION_MANAGER` |
+| Delete configuration | `workorder:approval_config:delete` | `ADMIN` |
 
 ---
 
@@ -673,7 +673,7 @@ The work order must be in `COMPLETED` status. Attempting to generate an invoice 
 
 Existing work order invoices can also be viewed.
 
-| Operation              | Required permission(s)                   | Roles with permission |
-| ---------------------- | ---------------------------------------- | --------------------- |
-| Generate invoice       | `workorder:workorder:generate_invoice`   | `None by default`     |
-| View workorder invoice | `workorder:invoice:view`                 | `Admin`               |
+| Operation              | Required permission(s)                 | Roles with permission |
+| ---------------------- | -------------------------------------- | --------------------- |
+| Generate invoice       | `workorder:workorder:generate_invoice` | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |
+| View workorder invoice | `workorder:invoice:view`               | `ADMIN`, `LOCATION_MANAGER`, `SERVICE_ADVISOR` |

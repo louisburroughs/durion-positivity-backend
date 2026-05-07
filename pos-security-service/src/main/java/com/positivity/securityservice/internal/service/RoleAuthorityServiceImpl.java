@@ -53,6 +53,11 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 case ROLE_AP_CLERK -> authorities.addAll(apClerkAuthorities());
                 case ROLE_ACCOUNTANT -> authorities.addAll(accountantAuthorities());
                 case ROLE_CONTROLLER -> authorities.addAll(controllerAuthorities());
+                case ROLE_ACCOUNTING_ASSOCIATE -> authorities.addAll(accountingAssociateAuthorities());
+                case ROLE_ACCOUNT_MANAGER -> authorities.addAll(accountManagerAuthorities());
+                case ROLE_LOCATION_MANAGER -> authorities.addAll(locationManagerAuthorities());
+                case ROLE_SERVICE_ADVISOR -> authorities.addAll(serviceAdvisorAuthorities());
+                case ROLE_TECHNICIAN -> authorities.addAll(technicianAuthorities());
                 default -> {
                     /* unknown role — ROLE_* prefix already added above */ }
             }
@@ -139,6 +144,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         set.addAll(pricingAuthorities());
         set.addAll(appointmentAuthorities());
         set.addAll(invoiceAuthorities());
+        set.addAll(timekeepingAuthorities());
         set.addAll(nltiAuthorities());
         set.addAll(productLifecycleAuthorities());
         set.addAll(mcpAuthorities());
@@ -244,6 +250,126 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "accounting:posting_rules:archive",
                 "accounting:export:request"));
         return set;
+    }
+
+    private Set<String> accountingAssociateAuthorities() {
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of(
+                "accounting:coa:view",
+                "accounting:mapping:view",
+                "accounting:posting_rules:view",
+                "accounting:je:view",
+                "accounting:events:view",
+                "accounting:export:view",
+                "accounting:ap:view",
+                "accounting:ap:approve",
+                "accounting:ap:reject",
+                "accounting:ap:pay"));
+        return authorities;
+    }
+
+    private Set<String> accountManagerAuthorities() {
+        Set<String> authorities = new HashSet<>(accountantAuthorities());
+        authorities.addAll(List.of(
+                "invoice:manage",
+                "invoice:billing-rules"));
+        return authorities;
+    }
+
+    private Set<String> serviceAdvisorAuthorities() {
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of(
+                "appointments:view",
+                "appointments:create",
+                "appointments:reschedule",
+                "appointments:cancel",
+                "shop:location:view",
+                "shop:bay:view",
+                "shop:schedule:view",
+                "workorder:workorder:view",
+                "workorder:workorder:create",
+                "workorder:workorder:approve",
+                "workorder:workorder:complete",
+                "workorder:workorder:generate_invoice",
+                "workorder:wip:view",
+                "workorder:estimate:view",
+                "workorder:estimate:create",
+                "workorder:estimate:edit",
+                "workorder:estimate:calculate",
+                "workorder:estimate:approve",
+                "workorder:estimate:decline",
+                "workorder:estimate:reopen",
+                "workorder:estimate:submit",
+                "workorder:estimate:promote",
+                "workorder:estimate_item:view",
+                "workorder:estimate_item:add",
+                "workorder:estimate_item:edit",
+                "workorder:estimate_item:delete",
+                "workorder:estimate_snapshot:view",
+                "workorder:estimate_snapshot:create",
+                "workorder:change_request:view",
+                "workorder:change_request:create",
+                "workorder:change_request:approve",
+                "workorder:change_request:decline",
+                "workorder:labor:view",
+                "workorder:parts:view",
+                "workorder:invoice:view",
+                "workorder:invoice:create",
+                "invoice:manage",
+                "invoice:finalize"));
+        return authorities;
+    }
+
+    private Set<String> locationManagerAuthorities() {
+        Set<String> authorities = new HashSet<>(serviceAdvisorAuthorities());
+        authorities.addAll(List.of(
+                "shop:location:create",
+                "shop:location:edit",
+                "shop:bay:create",
+                "shop:bay:edit",
+                "shop:bay:assign",
+                "shop:schedule:edit",
+                "inventory:pick_list:view",
+                "inventory:pick_list:create",
+                "inventory:pick_list:execute",
+                "workorder:workorder:edit",
+                "workorder:workorder:reopen_completed",
+                "workorder:workorder:assign-technician",
+                "workorder:dashboard:view",
+                "workorder:change_request:emergency_override",
+                "workorder:approval_config:view",
+                "workorder:approval_config:create",
+                "workorder:approval_config:edit",
+                "workorder:parts:add",
+                "workorder:parts:consume",
+                "workorder:operationalContext:override",
+                "workorder:start",
+                "timekeeping:overlap_override"));
+        return authorities;
+    }
+
+    private Set<String> technicianAuthorities() {
+        Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
+        authorities.addAll(List.of(
+                "shop:schedule:view",
+                "workorder:workorder:view",
+                "workorder:start",
+                "workorder:estimate:view",
+                "workorder:estimate_snapshot:view",
+                "workorder:change_request:view",
+                "workorder:change_request:create",
+                "workorder:labor:view",
+                "workorder:labor:add",
+                "workorder:parts:view",
+                "workorder:parts:add",
+                "workorder:parts:consume",
+                "inventory:pick_list:view",
+                "inventory:pick_list:execute",
+                "timekeeping:work_session:create",
+                "timekeeping:work_session:stop",
+                "timekeeping:work_session:break_start",
+                "timekeeping:work_session:break_stop"));
+        return authorities;
     }
 
     // ============================================================================
@@ -362,17 +488,23 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "workorder:workorder:edit",
                 "workorder:workorder:approve",
                 "workorder:workorder:start",
+                "workorder:start",
                 "workorder:workorder:complete",
                 "workorder:workorder:delete",
                 "workorder:workorder:reopen_completed",
+                "workorder:workorder:generate_invoice",
+                "workorder:workorder:assign-technician",
                 "workorder:wip:view",
                 "workorder:wip:view_all_locations",
+                "workorder:dashboard:view",
                 "workorder:estimate:view",
                 "workorder:estimate:create",
                 "workorder:estimate:edit",
                 "workorder:estimate:calculate",
                 "workorder:estimate:approve",
                 "workorder:estimate:decline",
+                "workorder:estimate:submit",
+                "workorder:estimate:promote",
                 "workorder:estimate:delete",
                 "workorder:estimate:reopen",
                 "workorder:estimate_item:view",
@@ -386,6 +518,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "workorder:change_request:approve",
                 "workorder:change_request:decline",
                 "workorder:change_request:emergency_override",
+                "workorder:operationalContext:override",
                 "workorder:approval_config:view",
                 "workorder:approval_config:create",
                 "workorder:approval_config:edit",
@@ -397,6 +530,15 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "workorder:parts:consume",
                 "workorder:invoice:view",
                 "workorder:invoice:create"));
+    }
+
+    private Set<String> timekeepingAuthorities() {
+        return new HashSet<>(List.of(
+                "timekeeping:work_session:create",
+                "timekeeping:work_session:stop",
+                "timekeeping:work_session:break_start",
+                "timekeeping:work_session:break_stop",
+                "timekeeping:overlap_override"));
     }
 
     private Set<String> shopAuthorities() {

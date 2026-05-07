@@ -10,6 +10,8 @@ This guide describes the workforce management capabilities of the `pos-people` s
 
 The service exposes a REST API. All endpoints require a valid bearer token, and each operation is protected by a specific permission scope described below.
 
+Security note: the current built-in role mappings in `pos-security-service` grant the core HR employee/staffing/role-management permissions only to `ADMIN` by default. Work-session endpoints require authentication but no specific permission. Several advanced people/time/reporting/user-link permissions exist in `pos-people` but are not included in any standard role by default; those must be granted explicitly through Security Admin.
+
 ---
 
 ## Concepts
@@ -35,13 +37,15 @@ An employee is created with a legal name, a preferred name (optional), a unique 
 
 The `duplicatePolicy` field controls what happens if a potential duplicate is detected. The default is `STRICT`, which rejects the request. Use `LENIENT` or `IGNORE` if importing from a legacy system where duplicates are expected.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:create`  
+**Roles with permission:** `ADMIN`
 
 ### Updating an employee
 
 Employee profile information can be updated at any time: name, employee number, status, hire date, termination date, and contact details.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:edit`  
+**Roles with permission:** `ADMIN`
 
 ### Disabling (offboarding) an employee
 
@@ -50,7 +54,8 @@ Disabling an employee marks them as inactive. An optional reason can be recorded
 - `IMMEDIATE` — all active assignments are ended right away (default).
 - `GRACE_PERIOD` — assignments are ended on the date specified in `assignmentEndDate`, allowing a transition period.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:deactivate`  
+**Roles with permission:** `ADMIN`
 
 ### Employee statuses
 
@@ -66,7 +71,8 @@ Disabling an employee marks them as inactive. An optional reason can be recorded
 
 Retrieve an employee profile by their employee ID.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:view`  
+**Roles with permission:** `ADMIN`
 
 ---
 
@@ -83,7 +89,13 @@ Person records are the underlying identity layer beneath employee records. They 
 - **Update** — modify a person's details.
 - **Delete** — remove a person record. This is a hard delete; use with caution.
 
-**Required role(s):** No standard role includes these permissions by default. The `people:person:view`, `people:person:create`, `people:person:edit`, and `people:person:delete` permissions must be explicitly granted to the appropriate roles via Security Admin.
+**Required permission(s):**
+- List all people / get by ID: `people:person:view`
+- Create / resolve: `people:person:create`
+- Update: `people:person:edit`
+- Delete: `people:person:delete`
+
+**Roles with permission:** `None by default`
 
 ---
 
@@ -100,7 +112,8 @@ For large-scale onboarding (e.g. system migrations or importing from an HRIS), e
 
 The response reports how many records succeeded and how many failed, with per-row error detail for failures. Successful rows are not rolled back if other rows fail.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:create`  
+**Roles with permission:** `ADMIN`
 
 ---
 
@@ -112,25 +125,29 @@ Staffing assignments define where a person works and in what role. A person can 
 
 Provide the person ID, location ID, role, effective start date, and whether this is the primary assignment. An optional end date can be set for fixed-term placements. If an overlapping active assignment already exists for the same person and location, the request is rejected with a 409 conflict.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:edit`  
+**Roles with permission:** `ADMIN`
 
 ### Viewing assignments
 
 Retrieve all assignments for a given person by providing their person ID as a query parameter. Individual assignments can also be fetched by their assignment ID.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:view`  
+**Roles with permission:** `ADMIN`
 
 ### Updating an assignment
 
 Role, dates, and the primary flag can all be updated. Overlap validation applies the same way as on creation.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:edit`  
+**Roles with permission:** `ADMIN`
 
 ### Ending an assignment
 
 Assignments are soft-deleted — the record is retained for audit purposes but the assignment is marked as `ENDED`. Use this when a person transfers locations or leaves a role.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:employee:edit`  
+**Roles with permission:** `ADMIN`
 
 ### Assignment statuses
 
@@ -154,7 +171,8 @@ The response includes each person's name, their role, whether the assignment is 
 
 An authenticated user can query their own primary location without needing to know their person or assignment ID. This returns the location ID of their active primary staffing assignment.
 
-**Required role(s):** No standard role includes this permission by default. The `people:availability:view` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:availability:view`  
+**Roles with permission:** `None by default`
 
 ---
 
@@ -174,7 +192,8 @@ Provide the person ID to close the active session. The system records the curren
 
 While a session is active, breaks can be started and stopped against the session's ID. Break time is tracked separately and excluded from net hours worked.
 
-**Required role(s):** Any authenticated user — no specific role or permission is required beyond a valid login.
+**Required permission(s):** Authentication only  
+**Roles with permission:** `Any authenticated user`
 
 ---
 
@@ -203,7 +222,11 @@ Multiple time entries can be approved or rejected in a single request by providi
 
 Rejections require a `rejectionReason` for each entry — the API will return 400 if any decision in the batch is missing a reason.
 
-**Required role(s):** No standard role includes these permissions by default. The `people:timeEntry:approve` and `people:timeEntry:reject` permissions must be explicitly granted via Security Admin.
+**Required permission(s):**
+- Batch approval: `people:timeEntry:approve`
+- Batch rejection: `people:timeEntry:reject`
+
+**Roles with permission:** `None by default`
 
 ---
 
@@ -222,19 +245,22 @@ An adjustment requires:
 
 The new adjustment starts in `PENDING` status.
 
-**Required role(s):** No standard role includes this permission by default. The `people:timeAdjustment:create` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:timeAdjustment:create`  
+**Roles with permission:** `None by default`
 
 ### Viewing adjustments
 
 All adjustments for a given time entry can be listed by providing the time entry ID.
 
-**Required role(s):** No standard role includes this permission by default. The `people:timeAdjustment:view` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:timeAdjustment:view`  
+**Roles with permission:** `None by default`
 
 ### Approving an adjustment
 
 A pending adjustment can be approved by a user with the approval permission. Once approved, the underlying time entry is corrected.
 
-**Required role(s):** No standard role includes this permission by default. The `people:timeAdjustment:approve` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:timeAdjustment:approve`  
+**Roles with permission:** `None by default`
 
 ---
 
@@ -253,13 +279,15 @@ Exceptions are system-generated or manually raised flags that indicate something
 
 Exceptions can be raised manually or by the system during timekeeping ingestion.
 
-**Required role(s):** No standard role includes this permission by default. The `people:timeException:create` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:timeException:create`  
+**Roles with permission:** `None by default`
 
 ### Viewing exceptions
 
 Exceptions can be listed for all employees or filtered to a specific employee.
 
-**Required role(s):** No standard role includes this permission by default. The `people:timeException:view` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:timeException:view`  
+**Roles with permission:** `None by default`
 
 ### Resolving, acknowledging, or waiving an exception
 
@@ -269,7 +297,12 @@ Exceptions can be listed for all employees or filtered to a specific employee.
 | **Resolve**     | The underlying issue has been corrected. Optional resolution notes can be recorded.                        |
 | **Waive**       | The exception is being dismissed without correction. A `waiveReason` is required — this is not reversible. |
 
-**Required role(s):** No standard role includes these permissions by default. The `people:timeException:acknowledge` and `people:timeException:resolve` permissions must be explicitly granted via Security Admin.
+**Required permission(s):**
+- Acknowledge: `people:timeException:acknowledge`
+- Resolve: `people:timeException:resolve`
+- Waive: `people:timeException:resolve`
+
+**Roles with permission:** `None by default`
 
 ---
 
@@ -281,13 +314,15 @@ Roles control what a person can do within the platform. The access control APIs 
 
 Retrieve the list of roles that can be assigned to a person.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:role:view`  
+**Roles with permission:** `ADMIN`
 
 ### Viewing a person's current role assignments
 
 Role assignments can be retrieved with optional history (including past assignments) and an optional end-date filter.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:role:view`  
+**Roles with permission:** `ADMIN`
 
 ### Assigning a role
 
@@ -297,13 +332,15 @@ Assign a role to a person by providing:
 - `locationId` (optional) — scope the role to a specific location.
 - `startDate` / `endDate` (optional) — date range for the assignment.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:role:assign`  
+**Roles with permission:** `ADMIN`
 
 ### Revoking a role
 
 Remove a role assignment from a person. An optional `endDate` can be provided to end the assignment at a specific point in the past rather than immediately.
 
-**Required role(s):** Admin
+**Required permission(s):** `people:role:revoke`  
+**Roles with permission:** `ADMIN`
 
 ---
 
@@ -315,25 +352,29 @@ Every user account in the authentication system must be linked to a person recor
 
 Provide the user ID (from the authentication system) and the person ID. If the link already exists, the existing link is returned without error. A user cannot be linked to more than one person — attempting this returns a 409 conflict.
 
-**Required role(s):** No standard role includes this permission by default. The `people:userLink:write` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:userLink:write`  
+**Roles with permission:** `None by default`
 
 ### Looking up the person for a user
 
 Given a user ID, retrieve the person record that is linked to it. This is used by other services to resolve the person behind an authenticated request.
 
-**Required role(s):** No standard role includes this permission by default. The `people:userLink:view` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:userLink:view`  
+**Roles with permission:** `None by default`
 
 ### Looking up users for a person
 
 Given a person ID, retrieve all user account IDs that are linked to that person.
 
-**Required role(s):** No standard role includes this permission by default. The `people:userLink:view` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:userLink:view`  
+**Roles with permission:** `None by default`
 
 ### Removing a link
 
 Unlink a user from their person record. This is typically done as part of offboarding or when correcting a mis-linked account.
 
-**Required role(s):** No standard role includes this permission by default. The `people:userLink:write` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:userLink:write`  
+**Roles with permission:** `None by default`
 
 ---
 
@@ -351,7 +392,8 @@ Parameters:
 - `technicianIds` (optional list of person IDs to limit the report)
 - `flaggedOnly` — when `true`, only returns rows where a discrepancy was detected
 
-**Required role(s):** No standard role includes these permissions by default. Either the `people:time:export:read` or `accounting:time:export` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:time:export:read` or `accounting:time:export`  
+**Roles with permission:** `None by default`
 
 ### Approved time export
 
@@ -364,4 +406,5 @@ Parameters:
 - `startDate` / `endDate` (inclusive)
 - `locationId` — one or more location IDs (required)
 
-**Required role(s):** No standard role includes these permissions by default. Either the `people:time:export:read` or `accounting:time:export` permission must be explicitly granted via Security Admin.
+**Required permission(s):** `people:time:export:read` or `accounting:time:export`  
+**Roles with permission:** `None by default`

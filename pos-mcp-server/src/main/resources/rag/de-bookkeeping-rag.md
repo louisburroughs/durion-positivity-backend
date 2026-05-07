@@ -1,6 +1,6 @@
 # Double-Entry Bookkeeping & Core Accounting Principles
 
-_For Use in Durion ETSMS / Positivity RAG Knowledge Base_
+_For Use in Durion Positivity ETSMS RAG Knowledge Base_
 
 ---
 
@@ -17,7 +17,24 @@ This document complements the accounting module README and serves as conceptual 
 
 ---
 
-## 2. Fundamental Accounting Equation
+## 2. Accounting Roles and Built-In Permissions
+
+The accounting module in `pos-security-service` currently exposes the following built-in accounting personas. These roles are cumulative in places: `AP_CLERK` includes the `GL_ANALYST` set, `ACCOUNTANT` includes `AP_CLERK`, and `CONTROLLER` includes `ACCOUNTANT`. `ACCOUNT_MANAGER` is aligned more closely with invoice and billing operations than pure ledger administration.
+
+| Role                   | Typical focus                              | Built-in permissions                                                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNTING_ASSOCIATE` | Day-to-day accounting operations           | `accounting:coa:view`, `accounting:mapping:view`, `accounting:posting_rules:view`, `accounting:je:view`, `accounting:events:view`, `accounting:export:view`, `accounting:ap:view`, `accounting:ap:approve`, `accounting:ap:reject`, `accounting:ap:pay` |
+| `GL_ANALYST`           | GL setup, mappings, and draft entries      | `accounting:coa:view/create/edit`, `accounting:mapping:view/create/edit`, `accounting:posting_rules:view/create`, `accounting:je:view/create`, `accounting:events:view/submit`, `accounting:export:view`, `accounting:ap:view`                          |
+| `AP_CLERK`             | Accounts payable processing                | All `GL_ANALYST` permissions plus `accounting:ap:approve`, `accounting:ap:reject`, `accounting:ap:pay`                                                                                                                                                  |
+| `ACCOUNTANT`           | Posting, reversals, and accounting control | All `AP_CLERK` permissions plus `accounting:coa:deactivate`, `accounting:mapping:deactivate`, `accounting:posting_rules:publish`, `accounting:je:post`, `accounting:je:reverse`, `accounting:events:retry`, `accounting:events:reprocess`               |
+| `CONTROLLER`           | Highest built-in accounting authority      | All `ACCOUNTANT` permissions plus `accounting:posting_rules:archive`, `accounting:export:request`                                                                                                                                                       |
+| `ACCOUNT_MANAGER`      | Commercial account and invoice operations  | All `ACCOUNTANT` permissions plus `invoice:manage`, `invoice:billing-rules`                                                                                                                                                                             |
+
+Every built-in accounting role also receives `mcp:chat:execute`, which allows the MCP/NLI layer to respond within the user’s security context.
+
+---
+
+## 3. Fundamental Accounting Equation
 
 At the core of all accounting systems:
 
@@ -27,7 +44,7 @@ This equation must always remain balanced. Every transaction affects at least tw
 
 ---
 
-## 3. Double-Entry Bookkeeping
+## 4. Double-Entry Bookkeeping
 
 ### Definition
 
@@ -40,7 +57,7 @@ Total debits must always equal total credits.
 
 ---
 
-## 4. Account Types and Normal Balances
+## 5. Account Types and Normal Balances
 
 | Account Type    | Description                        | Normal Balance |
 | --------------- | ---------------------------------- | -------------- |
@@ -52,7 +69,7 @@ Total debits must always equal total credits.
 
 ---
 
-## 5. Debit vs Credit Rules
+## 6. Debit vs Credit Rules
 
 | Account Type | Increase | Decrease |
 | ------------ | -------- | -------- |
@@ -64,7 +81,7 @@ Total debits must always equal total credits.
 
 ---
 
-## 6. Transaction Structure
+## 7. Transaction Structure
 
 Each transaction:
 
@@ -85,7 +102,7 @@ Each transaction:
 
 ---
 
-## 7. Journal Entries
+## 8. Journal Entries
 
 A **journal entry** is the atomic unit of accounting.
 
@@ -105,7 +122,7 @@ A **journal entry** is the atomic unit of accounting.
 
 ---
 
-## 8. Ledger and Posting
+## 9. Ledger and Posting
 
 - **General Ledger (GL):** Master record of all accounts
 - Each account has a running balance
@@ -113,7 +130,7 @@ A **journal entry** is the atomic unit of accounting.
 
 ---
 
-## 9. Trial Balance
+## 10. Trial Balance
 
 A validation step:
 
@@ -126,9 +143,9 @@ Used to detect errors before financial statements are generated.
 
 ---
 
-## 10. Financial Statements
+## 11. Financial Statements
 
-### 10.1 Balance Sheet
+### 11.1 Balance Sheet
 
 Snapshot at a point in time:
 
@@ -136,7 +153,7 @@ Snapshot at a point in time:
 - Liabilities
 - Equity
 
-### 10.2 Income Statement
+### 11.2 Income Statement
 
 Performance over a period:
 
@@ -144,7 +161,7 @@ Performance over a period:
 - Expenses
 - Net Income = Revenue − Expenses
 
-### 10.3 Cash Flow Statement
+### 11.3 Cash Flow Statement
 
 Tracks movement of cash:
 
@@ -154,7 +171,7 @@ Tracks movement of cash:
 
 ---
 
-## 11. Accrual vs Cash Accounting
+## 12. Accrual vs Cash Accounting
 
 ### Accrual Accounting (Preferred)
 
@@ -169,55 +186,55 @@ Tracks movement of cash:
 
 ---
 
-## 12. Core Principles
+## 13. Core Principles
 
-### 12.1 Consistency
+### 13.1 Consistency
 
 Use the same accounting methods over time.
 
-### 12.2 Conservatism
+### 13.2 Conservatism
 
 Avoid overstating assets or income.
 
-### 12.3 Matching Principle
+### 13.3 Matching Principle
 
 Expenses should match the revenue they generate.
 
-### 12.4 Revenue Recognition
+### 13.4 Revenue Recognition
 
 Recognize revenue when earned, not when paid.
 
-### 12.5 Materiality
+### 13.5 Materiality
 
 Focus on information that impacts decision-making.
 
 ---
 
-## 13. Accounting Constraints for System Design
+## 14. Accounting Constraints for System Design
 
-### 13.1 Immutability
+### 14.1 Immutability
 
 - Posted entries should not be edited
 - Corrections must be reversing entries
 
-### 13.2 Auditability
+### 14.2 Auditability
 
 - Every transaction must be traceable
 - Include timestamps, user, and source
 
-### 13.3 Idempotency
+### 14.3 Idempotency
 
 - Duplicate transaction submissions must not double-post
 
-### 13.4 Referential Integrity
+### 14.4 Referential Integrity
 
 - All journal lines must reference valid accounts
 
 ---
 
-## 14. Domain-Specific Considerations (Durion / ETSMS)
+## 15. Domain-Specific Considerations (Positivity / ETSMS)
 
-### 14.1 Common Events
+### 15.1 Common Events
 
 - Workorder completion → Revenue + Receivable
 - Parts consumption → Inventory reduction + COGS
@@ -226,7 +243,7 @@ Focus on information that impacts decision-making.
 
 ---
 
-### 14.2 Example: Workorder Invoice
+### 15.2 Example: Workorder Invoice
 
 | Account             | Debit | Credit |
 | ------------------- | ----- | ------ |
@@ -235,7 +252,7 @@ Focus on information that impacts decision-making.
 
 ---
 
-### 14.3 Example: Payment Received
+### 15.3 Example: Payment Received
 
 | Account             | Debit | Credit |
 | ------------------- | ----- | ------ |
@@ -244,7 +261,7 @@ Focus on information that impacts decision-making.
 
 ---
 
-## 15. Natural Language Interpretation Guidelines
+## 16. Natural Language Interpretation Guidelines
 
 The NLI should:
 
@@ -269,7 +286,7 @@ The NLI should:
 
 ---
 
-## 16. Error Handling Patterns
+## 17. Error Handling Patterns
 
 ### Common Errors
 
@@ -286,7 +303,7 @@ The NLI should:
 
 ---
 
-## 17. Summary
+## 18. Summary
 
 Double-entry bookkeeping ensures:
 
@@ -303,7 +320,7 @@ The system must enforce:
 
 ---
 
-## 18. Suggested Extensions (Future RAG Enhancements)
+## 19. Suggested Extensions (Future RAG Enhancements)
 
 - Chart of Accounts (COA) definitions
 - Industry-specific accounting rules (fleet service, tire dealers)

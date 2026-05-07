@@ -136,7 +136,7 @@ class SessionAgentManagerTest {
                                 orderFacadeTool,
                                 toolRegistryService,
                                 null,
-                                null,  // sessionSummaryService
+                                null, // sessionSummaryService
                                 rolePromptResolver,
                                 simpleChatClassifier,
                                 30,
@@ -278,7 +278,7 @@ class SessionAgentManagerTest {
                                 orderFacadeTool,
                                 toolRegistryService,
                                 null,
-                                null,  // sessionSummaryService
+                                null, // sessionSummaryService
                                 rolePromptResolver,
                                 simpleChatClassifier,
                                 0,
