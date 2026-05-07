@@ -6,6 +6,12 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
+import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
+import com.positivity.mcp.internal.orchestration.retrieval.RoleAwareMetadataFilter;
+import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
+import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
+import com.positivity.mcp.internal.orchestration.retrieval.RoleAwareMetadataFilter;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -54,6 +60,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
     private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
     private static final int TIER2_FINAL_TOP_K = 5;
+    private static final int TIER3_TOOL_RESULT_TOP_K = 5;
 
     private final Cache<String, PosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -71,6 +78,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     @Nullable
     private final ToolAuditService toolAuditService;
+
+    @Nullable
+    private final SessionSummaryService sessionSummaryService;
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
 
@@ -88,6 +98,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull OrderFacadeTool orderFacadeTool,
             @Nullable ToolRegistryService toolRegistryService,
             @Nullable ToolAuditService toolAuditService,
+            @Nullable SessionSummaryService sessionSummaryService,
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
@@ -104,6 +115,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.orderFacadeTool = orderFacadeTool;
         this.toolRegistryService = toolRegistryService;
         this.toolAuditService = toolAuditService;
+        this.sessionSummaryService = sessionSummaryService;
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
         this.memoryMaxMessages = memoryMaxMessages;
@@ -260,6 +272,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
                 "tier2-hybrid-reranked-retriever");
 
+        // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution at runtime)
+        // Note: RoleAwareMetadataFilter requires user roles from SecurityContext.
+        // Currently applied at chat boundary where user context is available.
+
         // 3. Assemble AiServices proxy. Chat memory remains per user+role through
         // the provider, so role-level agent prebuilds do not share conversations.
         PosAssistant agent = AiServices.builder(PosAssistant.class)
@@ -308,8 +324,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
+        // Tier 3: Replace MessageWindowChatMemory with SemanticChatMemoryStore
+        // for persistent semantic memory and session summarization
         return chatMemoryCache.get(
-                String.valueOf(memoryId), ignored -> MessageWindowChatMemory.withMaxMessages(memoryMaxMessages));
+                String.valueOf(memoryId),
+                ignored -> new SemanticChatMemoryStore(memoryMaxMessages, chatModel, embeddingModel,
+                        embeddingStore, sessionSummaryService));
     }
 
     private @NonNull String simpleChat(
