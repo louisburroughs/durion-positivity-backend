@@ -1,6 +1,6 @@
 -- Repeatable seed migration for pos-security-service operational users.
 -- 16 employees across 7 roles for Durion Positivity (medium truck mechanical repair corporation).
--- Password: abc123456! (BCrypt rounds=10, embedded as literal — no Flyway placeholder used)
+
 SET TIME ZONE 'UTC';
 
 -- Operational users
