@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -71,7 +72,7 @@ class StreamingSessionAgentManagerTest {
     private PgVectorEmbeddingStore embeddingStore;
 
     @Mock
-    private ToolRegistry toolRegistry;
+    private MasterAgentRegistry toolRegistry;
 
     @Mock
     private RolePromptResolver rolePromptResolver;

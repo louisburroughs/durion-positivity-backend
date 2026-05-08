@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
@@ -63,7 +64,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
     private final PgVectorEmbeddingStore embeddingStore;
-    private final ToolRegistry toolRegistry;
+    private final MasterAgentRegistry toolRegistry;
     private final ExaWebSearchTool exaWebSearchTool;
     private final InventoryFacadeTool inventoryFacadeTool;
     private final OrderFacadeTool orderFacadeTool;
@@ -88,7 +89,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
             @NonNull PgVectorEmbeddingStore embeddingStore,
-            @NonNull ToolRegistry toolRegistry,
+            @NonNull MasterAgentRegistry toolRegistry,
             @NonNull ExaWebSearchTool exaWebSearchTool,
             @NonNull InventoryFacadeTool inventoryFacadeTool,
             @NonNull OrderFacadeTool orderFacadeTool,
