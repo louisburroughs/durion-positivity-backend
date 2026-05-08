@@ -26,7 +26,8 @@ class MasterAgentRegistryTest {
         when(loader.loadRegistryDefinition())
                 .thenReturn(new MasterAgentRegistryLoader.LoadedMasterAgentRegistry(
                         List.of(sharedTool),
-                        List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)))));
+                        List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
+                        java.util.Map.of("ROLE_MANAGER", List.of(inventoryTool))));
 
         MasterAgentRegistry registry = new MasterAgentRegistry(loader);
 
@@ -34,6 +35,7 @@ class MasterAgentRegistryTest {
         assertThat(registry.domainAgents())
                 .extracting(DomainAgentDefinition::agentName)
                 .containsExactly("inventory");
+        assertThat(registry.resolveToolsForDomainAgent("ROLE_MANAGER")).containsExactly(sharedTool, inventoryTool);
         assertThat(registry.resolveToolsForDomainAgent("inventory")).containsExactly(sharedTool, inventoryTool);
     }
 
@@ -77,7 +79,26 @@ class MasterAgentRegistryTest {
         assertThat(registry.preloadableDomainAgents()).containsExactly("inventory", "orders");
     }
 
+    @Test
+    void resolveToolsForDomainAgentPrefersRoleAssignmentsWhenPresent() {
+        Object sharedTool = new SharedToolStub();
+        Object inventoryTool = new InventoryFacadeToolStub();
+        Object orderTool = new OrderFacadeToolStub();
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(sharedTool),
+                List.of(
+                        new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)),
+                        new DomainAgentDefinition("orders", "orders", List.of(orderTool))),
+                java.util.Map.of("ROLE_MANAGER", List.of(inventoryTool, orderTool)));
+
+        assertThat(registry.resolveToolsForDomainAgent("ROLE_MANAGER"))
+                .containsExactly(sharedTool, inventoryTool, orderTool);
+        assertThat(registry.resolveToolsForDomainAgent("orders")).containsExactly(sharedTool, orderTool);
+    }
+
     private static final class SharedToolStub {}
 
     private static final class InventoryFacadeToolStub {}
+
+    private static final class OrderFacadeToolStub {}
 }

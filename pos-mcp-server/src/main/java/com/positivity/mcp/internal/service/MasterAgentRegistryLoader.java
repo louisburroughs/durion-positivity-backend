@@ -50,12 +50,15 @@ public class MasterAgentRegistryLoader {
             log.warn("No workflow-scoped tools found for workflowState={}; master agent registry will be empty", workflowState);
         }
         List<Object> sharedTools = new ArrayList<>();
+        Map<String, List<Object>> domainScopedTools = new TreeMap<>();
         for (ToolMetadata tool : tools) {
             String domain = normalizeDomain(tool.domain());
-            if (MASTER_DOMAINS.contains(domain)) {
-                Object bean = loadToolBean(tool);
-                if (bean != null) {
+            Object bean = loadToolBean(tool);
+            if (bean != null) {
+                if (MASTER_DOMAINS.contains(domain)) {
                     sharedTools.add(bean);
+                } else {
+                    domainScopedTools.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(bean);
                 }
             }
         }
@@ -73,10 +76,10 @@ public class MasterAgentRegistryLoader {
             }
             roleScopedTools.put(normalizeRoleName(roleName), List.copyOf(resolvedRoleTools));
         }
-        List<DomainAgentDefinition> domainAgents = roleScopedTools.entrySet().stream()
+        List<DomainAgentDefinition> domainAgents = domainScopedTools.entrySet().stream()
                 .map(entry -> new DomainAgentDefinition(entry.getKey(), entry.getKey(), List.copyOf(entry.getValue())))
                 .toList();
-        return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), domainAgents);
+        return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), domainAgents, Map.copyOf(roleScopedTools));
     }
 
     private Object loadToolBean(@NonNull ToolMetadata tool) {
@@ -111,5 +114,12 @@ public class MasterAgentRegistryLoader {
     }
 
     public record LoadedMasterAgentRegistry(
-            @NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {}
+            @NonNull List<Object> sharedTools,
+            @NonNull List<DomainAgentDefinition> domainAgents,
+            @NonNull Map<String, List<Object>> roleToolAssignments) {
+
+        public LoadedMasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
+            this(sharedTools, domainAgents, Map.of());
+        }
+    }
 }

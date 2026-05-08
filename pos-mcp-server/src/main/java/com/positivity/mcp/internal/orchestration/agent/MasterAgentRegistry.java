@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -24,6 +25,7 @@ public final class MasterAgentRegistry {
 
     private final List<Object> sharedTools;
     private final List<DomainAgentDefinition> domainAgents;
+    private final Map<String, List<Object>> roleToolAssignments;
 
     @Autowired
     public MasterAgentRegistry(@NonNull MasterAgentRegistryLoader loader) {
@@ -31,12 +33,20 @@ public final class MasterAgentRegistry {
     }
 
     private MasterAgentRegistry(MasterAgentRegistryLoader.LoadedMasterAgentRegistry loadedRegistry) {
-        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents());
+        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents(), loadedRegistry.roleToolAssignments());
     }
 
     public MasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
+        this(sharedTools, domainAgents, Map.of());
+    }
+
+    public MasterAgentRegistry(
+            @NonNull List<Object> sharedTools,
+            @NonNull List<DomainAgentDefinition> domainAgents,
+            @NonNull Map<String, List<Object>> roleToolAssignments) {
         this.sharedTools = List.copyOf(sharedTools);
         this.domainAgents = List.copyOf(domainAgents);
+        this.roleToolAssignments = Map.copyOf(roleToolAssignments);
     }
 
     public @NonNull List<Object> sharedTools() {
@@ -53,7 +63,12 @@ public final class MasterAgentRegistry {
 
     public @NonNull List<Object> resolveToolsForDomainAgent(@NonNull String agentName) {
         List<Object> resolvedTools = new ArrayList<>(sharedTools);
-        findDomainAgent(agentName).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
+        List<Object> assignedTools = roleToolAssignments.get(agentName);
+        if (assignedTools != null) {
+            resolvedTools.addAll(assignedTools);
+        } else {
+            findDomainAgent(agentName).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
+        }
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP master registry resolve-all agentName={} sharedTools={} resolvedTools={}",
