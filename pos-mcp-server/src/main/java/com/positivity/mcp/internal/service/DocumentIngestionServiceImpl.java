@@ -76,12 +76,13 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
     @Override
     public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
-        documentEmbeddingIngestor.ingestDocument(content, metadata);
+        documentEmbeddingIngestor.ingestDocument(content, DocumentEmbeddingIngestor.normalizeRagScope(metadata));
     }
 
     @Override
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
-        documentEmbeddingIngestor.ingestDocuments(contents, metadataList);
+        documentEmbeddingIngestor.ingestDocuments(
+                contents, metadataList.stream().map(DocumentEmbeddingIngestor::normalizeRagScope).toList());
     }
 
     public void resumeIncompleteJobs() {
@@ -157,7 +158,8 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
     private @NonNull Map<String, Object> metadataWithDocumentId(
             @NonNull Map<String, Object> metadata, @NonNull String documentId) {
-        java.util.LinkedHashMap<String, Object> normalized = new java.util.LinkedHashMap<>(metadata);
+        java.util.LinkedHashMap<String, Object> normalized =
+                new java.util.LinkedHashMap<>(DocumentEmbeddingIngestor.normalizeRagScope(metadata));
         normalized.put(DOCUMENT_ID, documentId);
         return normalized;
     }

@@ -41,6 +41,7 @@ class StaticRagPreloadServiceImplTest {
     private static final String TEST_DOC_ID = "test-doc";
     private static final String TEST_DOC_ID_2 = "test-doc-2";
     private static final String TEST_SOURCE_PATH = "rag-test/test-doc.md";
+    private static final String TEST_RAG_SCOPE = "inventory";
     // Hardcoded stub UUID per project convention
     private static final UUID STUB_JOB_ID = UUID.fromString("00000000-0000-7000-8000-000000000300");
 
@@ -66,6 +67,10 @@ class StaticRagPreloadServiceImplTest {
         StaticRagPreloadProperties properties = new StaticRagPreloadProperties(docs);
         return new StaticRagPreloadServiceImpl(
                 documentIngestionService, ragPreloadRecordRepository, properties, meterRegistry);
+    }
+
+    private static StaticRagPreloadProperties.StaticDocEntry docEntry(String docId) {
+        return new StaticRagPreloadProperties.StaticDocEntry(docId, TEST_SOURCE_PATH, TEST_RAG_SCOPE);
     }
 
     private static String computeFileHash() throws Exception {
@@ -143,7 +148,7 @@ class StaticRagPreloadServiceImplTest {
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         StaticRagPreloadServiceImpl service =
-                createService(List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+                createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -170,7 +175,7 @@ class StaticRagPreloadServiceImplTest {
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         StaticRagPreloadServiceImpl service =
-                createService(List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+                createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -196,7 +201,7 @@ class StaticRagPreloadServiceImplTest {
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         StaticRagPreloadServiceImpl service =
-                createService(List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+                createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -219,9 +224,7 @@ class StaticRagPreloadServiceImplTest {
                 .thenReturn(stubJob(TEST_DOC_ID_2));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service = createService(List.of(
-                new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH),
-                new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID_2, TEST_SOURCE_PATH)));
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID), docEntry(TEST_DOC_ID_2)));
 
         service.preloadAll();
 
@@ -241,6 +244,29 @@ class StaticRagPreloadServiceImplTest {
                         .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID_2)
                         .count())
                 .isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("preloadAll submits normalized rag scope in document metadata")
+    void preloadAll_submitsNormalizedRagScope() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.empty());
+        when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        StaticRagPreloadServiceImpl service = createService(List.of(
+                new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH, " INVENTORY ")));
+
+        service.preloadAll();
+
+        verify(documentIngestionService)
+                .submitDocument(anyString(), eq(java.util.Map.of(
+                        "document_id", TEST_DOC_ID,
+                        "source_path", TEST_SOURCE_PATH,
+                        "rag_scope", "inventory")));
     }
 
     @Test

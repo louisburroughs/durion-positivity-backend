@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,7 +61,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
             for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
                 try {
-                    preloadDocument(entry.id(), entry.sourcePath());
+                    preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope());
                 } catch (Exception exception) {
                     String hash = resolveHashOrNull(entry.sourcePath());
                     persistFailedRecord(entry.id(), hash, entry.sourcePath());
@@ -155,7 +156,8 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         }
     }
 
-    private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath) throws IOException {
+    private void preloadDocument(
+            @NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope) throws IOException {
         Resource resource = new ClassPathResource(resourcePath(sourcePath));
         byte[] bytes = resource.getContentAsByteArray();
         String content = new String(bytes, StandardCharsets.UTF_8);
@@ -173,7 +175,10 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             return;
         }
 
-        Map<String, Object> metadata = Map.of("document_id", documentId, "source_path", sourcePath);
+        Map<String, Object> metadata = Map.of(
+                "document_id", documentId,
+                "source_path", sourcePath,
+                "rag_scope", normalizeRagScope(ragScope));
         var job = documentIngestionService.submitDocument(content, metadata);
         LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
         persistRecord(documentId, hash, sourcePath, RagPreloadStatus.QUEUED, job.jobId());
@@ -226,5 +231,12 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
 
     private static @NonNull String resourcePath(@NonNull String sourcePath) {
         return sourcePath.startsWith("classpath:") ? sourcePath.substring("classpath:".length()) : sourcePath;
+    }
+
+    private static @NonNull String normalizeRagScope(@Nullable String rawScope) {
+        if (rawScope == null || rawScope.trim().isEmpty()) {
+            return "master";
+        }
+        return rawScope.trim().toLowerCase(Locale.ROOT);
     }
 }

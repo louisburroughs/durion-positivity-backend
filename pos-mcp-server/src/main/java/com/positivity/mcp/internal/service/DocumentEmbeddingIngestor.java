@@ -9,12 +9,15 @@ import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.filter.logical.And;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Component;
 public class DocumentEmbeddingIngestor {
 
     private static final String DOCUMENT_ID = "document_id";
+    private static final String RAG_SCOPE = "rag_scope";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DocumentEmbeddingIngestor.class);
 
@@ -50,14 +54,15 @@ public class DocumentEmbeddingIngestor {
 
     public int ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
         long totalStartNanos = System.nanoTime();
-        Object providedDocumentId = metadata.get(DOCUMENT_ID);
+        Map<String, Object> normalizedMetadata = normalizeRagScope(metadata);
+        Object providedDocumentId = normalizedMetadata.get(DOCUMENT_ID);
         boolean replaceExisting = providedDocumentId instanceof String documentIdValue && !documentIdValue.isBlank();
         String documentId = replaceExisting
                 ? ((String) providedDocumentId).trim()
                 : UUID.randomUUID().toString();
 
         try {
-            List<TextSegment> segments = segments(content, metadata, documentId);
+            List<TextSegment> segments = segments(content, normalizedMetadata, documentId);
             long embeddingStartNanos = System.nanoTime();
             List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
             LOGGER.info(
@@ -73,7 +78,9 @@ public class DocumentEmbeddingIngestor {
 
             long storeStartNanos = System.nanoTime();
             if (replaceExisting) {
-                embeddingStore.removeAll(metadataKey(DOCUMENT_ID).isEqualTo(documentId));
+                embeddingStore.removeAll(new And(
+                        metadataKey(DOCUMENT_ID).isEqualTo(documentId),
+                        metadataKey(RAG_SCOPE).isEqualTo((String) normalizedMetadata.get(RAG_SCOPE))));
             }
             embeddingStore.addAll(embeddings, segments);
             LOGGER.info(
@@ -94,6 +101,13 @@ public class DocumentEmbeddingIngestor {
                             .formatted(documentId, replaceExisting, elapsedMs(totalStartNanos)),
                     exception);
         }
+    }
+
+    static @NonNull Map<String, Object> normalizeRagScope(@NonNull Map<String, Object> metadata) {
+        java.util.LinkedHashMap<String, Object> normalized = new java.util.LinkedHashMap<>(metadata);
+        Object rawScope = metadata.get(RAG_SCOPE);
+        normalized.put(RAG_SCOPE, normalizeRagScopeValue(rawScope instanceof String value ? value : null));
+        return normalized;
     }
 
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
@@ -132,5 +146,12 @@ public class DocumentEmbeddingIngestor {
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
+
+    private static @NonNull String normalizeRagScopeValue(@Nullable String rawScope) {
+        if (rawScope == null || rawScope.trim().isEmpty()) {
+            return "master";
+        }
+        return rawScope.trim().toLowerCase(Locale.ROOT);
     }
 }
