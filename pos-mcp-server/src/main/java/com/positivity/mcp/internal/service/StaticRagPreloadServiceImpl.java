@@ -64,7 +64,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                     preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope());
                 } catch (Exception exception) {
                     String hash = resolveHashOrNull(entry.sourcePath());
-                    persistFailedRecord(entry.id(), hash, entry.sourcePath());
+                    persistFailedRecord(entry.id(), hash, entry.sourcePath(), entry.ragScope());
                     LOGGER.warn(
                             "Preload failed for document_id={} error={}",
                             entry.id(),
@@ -91,6 +91,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                         queuedRecord.getDocumentId(),
                         queuedRecord.getContentHash(),
                         queuedRecord.getSourcePath(),
+                        queuedRecord.getRagScope(),
                         RagPreloadStatus.FAILED,
                         null);
                 meterRegistry
@@ -109,6 +110,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                                 queuedRecord.getDocumentId(),
                                                 queuedRecord.getContentHash(),
                                                 queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
                                                 RagPreloadStatus.LOADED,
                                                 null);
                                         meterRegistry
@@ -123,6 +125,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                                 queuedRecord.getDocumentId(),
                                                 queuedRecord.getContentHash(),
                                                 queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
                                                 RagPreloadStatus.FAILED,
                                                 null);
                                         meterRegistry
@@ -147,6 +150,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                         queuedRecord.getDocumentId(),
                                         queuedRecord.getContentHash(),
                                         queuedRecord.getSourcePath(),
+                                        queuedRecord.getRagScope(),
                                         RagPreloadStatus.FAILED,
                                         null);
                                 meterRegistry
@@ -163,12 +167,14 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         String content = new String(bytes, StandardCharsets.UTF_8);
 
         String hash = computeHash(bytes);
+        String normalizedRagScope = normalizeRagScope(ragScope);
 
-        Optional<RagPreloadRecord> prior = ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
-                documentId, RagPreloadStatus.LOADED);
+        Optional<RagPreloadRecord> prior =
+                ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        documentId, normalizedRagScope, RagPreloadStatus.LOADED);
         if (prior.isPresent() && prior.get().getContentHash().equals(hash)) {
             LOGGER.info("Skipping unchanged RAG document document_id={}", documentId);
-            persistRecord(documentId, hash, sourcePath, RagPreloadStatus.SKIPPED, null);
+            persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.SKIPPED, null);
             meterRegistry
                     .counter(METRIC_PRELOAD_SKIPPED, TAG_DOCUMENT_ID, documentId)
                     .increment();
@@ -178,14 +184,16 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         Map<String, Object> metadata = Map.of(
                 "document_id", documentId,
                 "source_path", sourcePath,
-                "rag_scope", normalizeRagScope(ragScope));
+                "rag_scope", normalizedRagScope);
         var job = documentIngestionService.submitDocument(content, metadata);
         LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
-        persistRecord(documentId, hash, sourcePath, RagPreloadStatus.QUEUED, job.jobId());
+        persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.QUEUED, job.jobId());
     }
 
-    private void persistFailedRecord(@NonNull String documentId, @Nullable String hash, @NonNull String sourcePath) {
-        persistRecord(documentId, hash != null ? hash : "", sourcePath, RagPreloadStatus.FAILED, null);
+    private void persistFailedRecord(
+            @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath, @Nullable String ragScope) {
+        persistRecord(
+                documentId, hash != null ? hash : "", sourcePath, normalizeRagScope(ragScope), RagPreloadStatus.FAILED, null);
         meterRegistry
                 .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId)
                 .increment();
@@ -195,12 +203,14 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             @NonNull String documentId,
             @NonNull String hash,
             @NonNull String sourcePath,
+            @NonNull String ragScope,
             @NonNull RagPreloadStatus status,
             @Nullable UUID jobId) {
         var preloadRecord = new RagPreloadRecord();
         preloadRecord.setDocumentId(documentId);
         preloadRecord.setContentHash(hash);
         preloadRecord.setSourcePath(sourcePath);
+        preloadRecord.setRagScope(ragScope);
         preloadRecord.setStatus(status);
         preloadRecord.setJobId(jobId);
         ragPreloadRecordRepository.save(preloadRecord);

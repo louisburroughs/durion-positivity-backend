@@ -40,6 +40,9 @@ public class RagPreloadRecord {
     @Column(name = "source_path", nullable = false, length = 255)
     private String sourcePath;
 
+    @Column(name = "rag_scope", nullable = false, length = 80)
+    private String ragScope;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private RagPreloadStatus status;
