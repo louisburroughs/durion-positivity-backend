@@ -1,12 +1,14 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,7 @@ public class MasterAgentRegistryLoader {
 
     private static final Logger log = LoggerFactory.getLogger(MasterAgentRegistryLoader.class);
     private static final String DEFAULT_PRELOAD_WORKFLOW_STATE = "IDLE";
+    private static final Set<String> MASTER_DOMAINS = Set.of("master", "shared");
 
     private final ToolMetadataRepository repository;
     private final ApplicationContext applicationContext;
@@ -40,34 +43,44 @@ public class MasterAgentRegistryLoader {
         this.preloadWorkflowState = sanitizeWorkflowState(preloadWorkflowState);
     }
 
-    public @NonNull Map<String, List<Object>> loadRoleToolMappings() {
+    public @NonNull LoadedMasterAgentRegistry loadRegistryDefinition() {
         String workflowState = resolvePreloadWorkflowState();
-        List<String> roles = repository.findAllRoleNames();
-        if (roles.isEmpty()) {
-            log.warn("No roles found in mcp_role table; master agent registry will be empty");
+        List<ToolMetadata> tools = repository.findEnabledByWorkflow(workflowState);
+        if (tools.isEmpty()) {
+            log.warn("No workflow-scoped tools found for workflowState={}; master agent registry will be empty", workflowState);
         }
-        Map<String, List<Object>> result = new HashMap<>();
-        for (String role : roles) {
-            result.put(role, loadRoleTools(role, workflowState));
+        List<Object> sharedTools = new ArrayList<>();
+        Map<String, List<Object>> domainTools = new TreeMap<>();
+        for (ToolMetadata tool : tools) {
+            Object bean = loadToolBean(tool);
+            if (bean == null) {
+                continue;
+            }
+            String domain = normalizeDomain(tool.domain());
+            if (MASTER_DOMAINS.contains(domain)) {
+                sharedTools.add(bean);
+                continue;
+            }
+            domainTools.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(bean);
         }
-        return result;
+        List<DomainAgentDefinition> domainAgents = domainTools.entrySet().stream()
+                .map(entry -> new DomainAgentDefinition(entry.getKey(), entry.getKey(), List.copyOf(entry.getValue())))
+                .toList();
+        return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), domainAgents);
     }
 
-    private @NonNull List<Object> loadRoleTools(@NonNull String role, @NonNull String workflowState) {
-        List<ToolMetadata> tools = repository.findEnabledByRoleAndWorkflow(role, workflowState);
-        List<Object> beans = new ArrayList<>();
-        for (ToolMetadata meta : tools) {
-            try {
-                beans.add(applicationContext.getBean(meta.handlerBean()));
-            } catch (NoSuchBeanDefinitionException e) {
-                log.warn(
-                        "Tool bean '{}' not found for role '{}', skipping: {}",
-                        meta.handlerBean(),
-                        role,
-                        e.getMessage());
-            }
+    private Object loadToolBean(@NonNull ToolMetadata tool) {
+        try {
+            return applicationContext.getBean(tool.handlerBean());
+        } catch (NoSuchBeanDefinitionException e) {
+            log.warn(
+                    "Tool bean '{}' not found for tool '{}' in domain '{}', skipping: {}",
+                    tool.handlerBean(),
+                    tool.name(),
+                    tool.domain(),
+                    e.getMessage());
+            return null;
         }
-        return List.copyOf(beans);
     }
 
     private @NonNull String resolvePreloadWorkflowState() {
@@ -78,4 +91,11 @@ public class MasterAgentRegistryLoader {
         String normalized = workflowState.trim().toUpperCase(Locale.ROOT);
         return normalized.isBlank() ? DEFAULT_PRELOAD_WORKFLOW_STATE : normalized;
     }
+
+    private static @NonNull String normalizeDomain(@NonNull String domain) {
+        return domain.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public record LoadedMasterAgentRegistry(
+            @NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {}
 }

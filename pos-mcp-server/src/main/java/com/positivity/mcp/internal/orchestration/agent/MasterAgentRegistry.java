@@ -7,7 +7,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -28,7 +27,11 @@ public final class MasterAgentRegistry {
 
     @Autowired
     public MasterAgentRegistry(@NonNull MasterAgentRegistryLoader loader) {
-        this(List.of(), toDomainAgents(loader.loadRoleToolMappings()));
+        this(loader.loadRegistryDefinition());
+    }
+
+    private MasterAgentRegistry(MasterAgentRegistryLoader.LoadedMasterAgentRegistry loadedRegistry) {
+        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents());
     }
 
     public MasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
@@ -48,36 +51,38 @@ public final class MasterAgentRegistry {
         return domainAgents.stream().filter(agent -> agent.agentName().equals(agentName)).findFirst();
     }
 
-    public @NonNull List<Object> resolveToolsForRole(@NonNull String role) {
+    public @NonNull List<Object> resolveToolsForDomainAgent(@NonNull String agentName) {
         List<Object> resolvedTools = new ArrayList<>(sharedTools);
-        findDomainAgent(role).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
+        findDomainAgent(agentName).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP master registry resolve-all role={} sharedTools={} resolvedTools={}",
-                    role,
+                    "MCP master registry resolve-all agentName={} sharedTools={} resolvedTools={}",
+                    agentName,
                     sharedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList(),
                     resolvedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList());
         }
         return resolvedTools;
     }
 
-    public @NonNull List<Object> resolveToolsForRole(@NonNull String role, @NonNull Collection<String> toolNames) {
+    public @NonNull List<Object> resolveToolsForDomainAgent(
+            @NonNull String agentName, @NonNull Collection<String> toolNames) {
         Set<String> selectedNames = new HashSet<>();
         for (String toolName : toolNames) {
             selectedNames.add(toolName.toLowerCase(Locale.ROOT));
         }
         if (selectedNames.isEmpty()) {
-            LOGGER.debug("MCP master registry resolve-selected role={} selectedNames=[] resolvedTools=[]", role);
+            LOGGER.debug(
+                    "MCP master registry resolve-selected agentName={} selectedNames=[] resolvedTools=[]", agentName);
             return new ArrayList<>();
         }
-        List<Object> availableTools = resolveToolsForRole(role);
+        List<Object> availableTools = resolveToolsForDomainAgent(agentName);
         List<Object> resolvedTools = availableTools.stream()
                 .filter(tool -> matchesSelectedTool(tool, selectedNames))
                 .toList();
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP master registry resolve-selected role={} selectedNames={} availableTools={} resolvedTools={}",
-                    role,
+                    "MCP master registry resolve-selected agentName={} selectedNames={} availableTools={} resolvedTools={}",
+                    agentName,
                     new TreeSet<>(selectedNames),
                     availableTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList(),
                     resolvedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList());
@@ -85,7 +90,7 @@ public final class MasterAgentRegistry {
         return resolvedTools;
     }
 
-    public @NonNull Set<String> preloadableRoles() {
+    public @NonNull Set<String> preloadableDomainAgents() {
         Set<String> roleNames = new TreeSet<>();
         for (DomainAgentDefinition domainAgent : domainAgents) {
             roleNames.add(domainAgent.agentName());
@@ -98,14 +103,5 @@ public final class MasterAgentRegistry {
         String beanStyleClassName = Introspector.decapitalize(simpleClassName);
         return selectedNames.contains(simpleClassName.toLowerCase(Locale.ROOT))
                 || selectedNames.contains(beanStyleClassName.toLowerCase(Locale.ROOT));
-    }
-
-    private static @NonNull List<DomainAgentDefinition> toDomainAgents(@NonNull Map<String, List<Object>> roleToolMap) {
-        List<DomainAgentDefinition> domainAgentDefinitions = new ArrayList<>();
-        for (Map.Entry<String, List<Object>> entry : roleToolMap.entrySet()) {
-            domainAgentDefinitions.add(new DomainAgentDefinition(
-                    entry.getKey(), entry.getKey().toLowerCase(Locale.ROOT), entry.getValue()));
-        }
-        return domainAgentDefinitions;
     }
 }

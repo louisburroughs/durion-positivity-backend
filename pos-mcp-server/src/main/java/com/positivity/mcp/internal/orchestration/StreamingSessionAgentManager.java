@@ -209,7 +209,7 @@ public class StreamingSessionAgentManager
 
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
         List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(
-                toolRegistry.resolveToolsForRole(role), exaWebSearchTool);
+                toolRegistry.resolveToolsForDomainAgent(role), exaWebSearchTool);
         return buildAgent(role, tools);
     }
 
@@ -268,7 +268,7 @@ public class StreamingSessionAgentManager
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
-        for (String role : toolRegistry.preloadableRoles()) {
+        for (String role : toolRegistry.preloadableDomainAgents()) {
             try {
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
                 prebuilt++;
@@ -289,7 +289,7 @@ public class StreamingSessionAgentManager
     }
 
     private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
-        List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
+        List<Object> fullRoleTools = toolRegistry.resolveToolsForDomainAgent(role);
         if (toolRegistryService == null) {
             LOGGER.debug(
                     "MCP streaming tool selector unavailable role={} resolvedRoleTools={} queryPreview=\"{}\"",
@@ -328,7 +328,7 @@ public class StreamingSessionAgentManager
                         toolNames(fullRoleTools));
                 return fullRoleTools;
             }
-            List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
+            List<Object> resolvedTools = toolRegistry.resolveToolsForDomainAgent(role, selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 LOGGER.debug(
                         "MCP streaming tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",

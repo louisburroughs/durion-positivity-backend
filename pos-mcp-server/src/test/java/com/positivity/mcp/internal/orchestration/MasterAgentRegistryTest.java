@@ -1,81 +1,80 @@
 package com.positivity.mcp.internal.orchestration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.service.MasterAgentRegistryLoader;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class MasterAgentRegistryTest {
 
+    @Mock
+    private MasterAgentRegistryLoader loader;
+
     @Test
-    void exposesSharedToolsSeparatelyFromDomainAgents() {
-        Object exaTool = new Object();
-        Object inventoryTool = new Object();
-        DomainAgentDefinition inventory = new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool));
+    void constructorFromLoaderPreservesSharedAndDomainRuntimeSplit() {
+        Object sharedTool = new SharedToolStub();
+        Object inventoryTool = new InventoryFacadeToolStub();
+        when(loader.loadRegistryDefinition())
+                .thenReturn(new MasterAgentRegistryLoader.LoadedMasterAgentRegistry(
+                        List.of(sharedTool),
+                        List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)))));
 
-        MasterAgentRegistry registry = new MasterAgentRegistry(List.of(exaTool), List.of(inventory));
+        MasterAgentRegistry registry = new MasterAgentRegistry(loader);
 
-        assertEquals(List.of(exaTool), registry.sharedTools());
-        assertTrue(registry.findDomainAgent("inventory").isPresent());
-        assertSame(inventoryTool, registry.findDomainAgent("inventory").orElseThrow().tools().getFirst());
+        assertThat(registry.sharedTools()).containsExactly(sharedTool);
+        assertThat(registry.domainAgents())
+                .extracting(DomainAgentDefinition::agentName)
+                .containsExactly("inventory");
+        assertThat(registry.resolveToolsForDomainAgent("inventory")).containsExactly(sharedTool, inventoryTool);
     }
 
     @Test
-    void resolveToolsForRoleCombinesSharedAndDomainTools() {
-        Object sharedTool = new Object();
-        Object domainTool = new InventoryFacadeToolStub();
-        MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(sharedTool),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
-
-        List<Object> tools = registry.resolveToolsForRole("inventory");
-
-        assertIterableEquals(List.of(sharedTool, domainTool), tools);
-    }
-
-    @Test
-    void resolveToolsForRoleReturnsMutableCopy() {
+    void resolveToolsForDomainAgentReturnsMutableCopy() {
         Object domainTool = new Object();
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(),
                 List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
 
-        List<Object> firstCall = registry.resolveToolsForRole("inventory");
+        List<Object> firstCall = registry.resolveToolsForDomainAgent("inventory");
         firstCall.add(new Object());
 
-        List<Object> secondCall = registry.resolveToolsForRole("inventory");
+        List<Object> secondCall = registry.resolveToolsForDomainAgent("inventory");
 
-        assertEquals(1, secondCall.size());
+        assertThat(secondCall).hasSize(1);
         assertSame(domainTool, secondCall.getFirst());
     }
 
     @Test
-    void resolveToolsForRoleWithSelectedNamesFiltersMatchingTools() {
+    void resolveToolsForDomainAgentWithSelectedNamesFiltersMatchingTools() {
         Object sharedTool = new SharedToolStub();
         Object domainTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(sharedTool),
                 List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
 
-        List<Object> tools = registry.resolveToolsForRole("inventory", List.of("inventoryFacadeToolStub"));
+        List<Object> tools = registry.resolveToolsForDomainAgent("inventory", List.of("inventoryFacadeToolStub"));
 
-        assertIterableEquals(List.of(domainTool), tools);
+        assertThat(tools).containsExactly(domainTool);
     }
 
     @Test
-    void preloadableRolesReturnsDomainAgentNames() {
+    void preloadableDomainAgentsReturnsAgentNames() {
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(),
                 List.of(
                         new DomainAgentDefinition("inventory", "inventory", List.of()),
                         new DomainAgentDefinition("orders", "orders", List.of())));
 
-        assertIterableEquals(List.of("inventory", "orders"), registry.preloadableRoles());
+        assertThat(registry.preloadableDomainAgents()).containsExactly("inventory", "orders");
     }
 
     private static final class SharedToolStub {}

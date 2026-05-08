@@ -233,7 +233,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private PosAssistant buildAgent(@NonNull String role) {
         return buildAgent(
                 role,
-                toolRegistry.resolveToolsForRole(role),
+                toolRegistry.resolveToolsForDomainAgent(role),
                 List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
     }
 
@@ -307,7 +307,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
-        for (String role : toolRegistry.preloadableRoles()) {
+        for (String role : toolRegistry.preloadableDomainAgents()) {
             try {
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
                 prebuilt++;
@@ -362,7 +362,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
-        List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
+        List<Object> fullRoleTools = toolRegistry.resolveToolsForDomainAgent(role);
         if (toolRegistryService == null) {
             LOGGER.debug("MCP tool selector unavailable role={} resolvedRoleTools={}", role, toolNames(fullRoleTools));
             return fullRoleTools;
@@ -400,7 +400,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         toolNames(fullRoleTools));
                 return fullRoleTools;
             }
-            List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
+            List<Object> resolvedTools = toolRegistry.resolveToolsForDomainAgent(role, selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 LOGGER.debug(
                         "MCP tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",

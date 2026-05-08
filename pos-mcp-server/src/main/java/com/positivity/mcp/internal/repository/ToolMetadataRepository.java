@@ -15,6 +15,9 @@ public interface ToolMetadataRepository {
     @NonNull
     List<ToolMetadata> findEnabledByRoleAndWorkflow(@NonNull String role, @NonNull String workflowState);
 
+    @NonNull
+    List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState);
+
     /**
      * Returns up to {@code limit} tools ordered by semantic similarity to the given
      * embedding,

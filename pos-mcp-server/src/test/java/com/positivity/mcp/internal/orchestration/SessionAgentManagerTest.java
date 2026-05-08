@@ -105,11 +105,11 @@ class SessionAgentManagerTest {
     void setUp() {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
-        when(toolRegistry.resolveToolsForRole(anyString())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForDomainAgent(anyString())).thenAnswer(inv -> new ArrayList<>());
         lenient()
-                .when(toolRegistry.resolveToolsForRole(anyString(), anyCollection()))
+                .when(toolRegistry.resolveToolsForDomainAgent(anyString(), anyCollection()))
                 .thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(toolRegistry.preloadableDomainAgents()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
@@ -181,7 +181,7 @@ class SessionAgentManagerTest {
     @Test
     @DisplayName("getOrCreateAgent skips fallback tools already resolved for the role")
     void getOrCreateAgent_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
+        when(toolRegistry.resolveToolsForDomainAgent("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(inventoryFacadeTool)));
 
         PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_DUPLICATE");
@@ -235,7 +235,7 @@ class SessionAgentManagerTest {
                 "inventoryFacadeTool");
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of(inventoryTool));
-        when(toolRegistry.resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool")))
+        when(toolRegistry.resolveToolsForDomainAgent("ROLE_ADMIN", List.of("inventoryFacadeTool")))
                 .thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
         when(chatModel.chat(any(ChatRequest.class)))
                 .thenReturn(ChatResponse.builder()
@@ -246,13 +246,14 @@ class SessionAgentManagerTest {
 
         assertThat(response).isEqualTo("Stock found");
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
-        verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN", List.of("inventoryFacadeTool"));
+        verify(toolRegistry).resolveToolsForDomainAgent("ROLE_ADMIN", List.of("inventoryFacadeTool"));
     }
 
     @Test
     @DisplayName("chat with empty semantic selection falls back to full role tool set")
     void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
-        when(toolRegistry.resolveToolsForRole("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(toolRegistry.resolveToolsForDomainAgent("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
         when(chatModel.chat(any(ChatRequest.class)))
@@ -263,8 +264,8 @@ class SessionAgentManagerTest {
         String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "check stock for sku ABC");
 
         assertThat(response).isEqualTo("Stock found");
-        verify(toolRegistry).resolveToolsForRole("ROLE_ADMIN");
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_ADMIN", List.of());
+        verify(toolRegistry).resolveToolsForDomainAgent("ROLE_ADMIN");
+        verify(toolRegistry, never()).resolveToolsForDomainAgent("ROLE_ADMIN", List.of());
     }
 
     @Test
@@ -293,7 +294,7 @@ class SessionAgentManagerTest {
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
 
-        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, times(2)).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {

@@ -91,8 +91,8 @@ class StreamingSessionAgentManagerTest {
     void setUp() {
         // Return a fresh mutable list each invocation so buildAgent mutations don't
         // bleed
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(toolRegistry.resolveToolsForDomainAgent(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.preloadableDomainAgents()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
@@ -139,7 +139,7 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second message");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @Test
@@ -149,7 +149,7 @@ class StreamingSessionAgentManagerTest {
         manager.evict("user-1");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "after evict");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @Test
@@ -158,14 +158,14 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_MANAGER"), "second");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_MANAGER");
+        verify(toolRegistry, never()).resolveToolsForDomainAgent("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveToolsForDomainAgent("ROLE_MANAGER");
     }
 
     @Test
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
+        when(toolRegistry.resolveToolsForDomainAgent("ROLE_DUPLICATE"))
                 .thenAnswer(inv -> new ArrayList<>(List.of(exaWebSearchTool)));
 
         Flux<String> result =
@@ -191,8 +191,8 @@ class StreamingSessionAgentManagerTest {
                 true,
                 "inventoryFacadeTool");
         when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of(candidate));
-        when(toolRegistry.resolveToolsForRole(any())).thenReturn(List.of(exaWebSearchTool));
-        when(toolRegistry.resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool")))
+        when(toolRegistry.resolveToolsForDomainAgent(any())).thenReturn(List.of(exaWebSearchTool));
+        when(toolRegistry.resolveToolsForDomainAgent("ROLE_CASHIER", List.of("InventoryFacadeTool")))
                 .thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
@@ -218,15 +218,15 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool"));
-        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry).resolveToolsForDomainAgent("ROLE_CASHIER", List.of("InventoryFacadeTool"));
+        verify(toolRegistry, times(1)).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @Test
     @DisplayName("streamChat falls back to full role tools when selector returns empty")
     void streamChat_semanticSelection_fallsBackToFullRoleToolsOnEmptyResult() {
         when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForDomainAgent(any())).thenAnswer(inv -> new ArrayList<>());
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel,
@@ -250,7 +250,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         // resolveToolsForRole(role) is called for the fallback path
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @Test
@@ -258,7 +258,7 @@ class StreamingSessionAgentManagerTest {
     void streamChat_semanticSelection_fallsBackToFullRoleToolsOnException() {
         when(toolRegistryService.resolveCandidateTools(any(), anyInt()))
                 .thenThrow(new RuntimeException("selector unavailable"));
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.resolveToolsForDomainAgent(any())).thenAnswer(inv -> new ArrayList<>());
 
         StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
                 streamingChatModel,
@@ -282,7 +282,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         // fallback resolves from role tool set
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @Test
@@ -367,7 +367,7 @@ class StreamingSessionAgentManagerTest {
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
-        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, times(2)).resolveToolsForDomainAgent("ROLE_CASHIER");
     }
 
     @SuppressWarnings("unchecked")
