@@ -9,6 +9,8 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
@@ -23,16 +25,24 @@ public class ToolRegistryLoader {
 
     private static final Logger log = LoggerFactory.getLogger(ToolRegistryLoader.class);
 
-    // TODO(AC8): preload additional workflow states once session-driven routing is implemented
-    private static final String WORKFLOW_IDLE = "IDLE";
+    private static final String DEFAULT_PRELOAD_WORKFLOW_STATE = "IDLE";
 
     private final ToolMetadataRepository repository;
     private final ApplicationContext applicationContext;
+    private final String preloadWorkflowState;
 
+    ToolRegistryLoader(@NonNull ToolMetadataRepository repository, @NonNull ApplicationContext applicationContext) {
+        this(repository, applicationContext, DEFAULT_PRELOAD_WORKFLOW_STATE);
+    }
+
+    @Autowired
     public ToolRegistryLoader(
-            @NonNull ToolMetadataRepository repository, @NonNull ApplicationContext applicationContext) {
+            @NonNull ToolMetadataRepository repository,
+            @NonNull ApplicationContext applicationContext,
+            @Value("${mcp.agent.preload-workflow-state:IDLE}") @NonNull String preloadWorkflowState) {
         this.repository = repository;
         this.applicationContext = applicationContext;
+        this.preloadWorkflowState = sanitizeWorkflowState(preloadWorkflowState);
     }
 
     /**
@@ -44,13 +54,14 @@ public class ToolRegistryLoader {
      * Tools are resolved by their Spring bean name (handler_bean column).
      */
     public @NonNull Map<String, List<Object>> loadRoleToolMappings() {
+        String workflowState = resolvePreloadWorkflowState();
         List<String> roles = repository.findAllRoleNames();
         if (roles.isEmpty()) {
             log.warn("No roles found in mcp_role table; tool registry will be empty");
         }
         Map<String, List<Object>> result = new HashMap<>();
         for (String role : roles) {
-            List<ToolMetadata> tools = repository.findEnabledByRoleAndWorkflow(role, WORKFLOW_IDLE);
+            List<ToolMetadata> tools = repository.findEnabledByRoleAndWorkflow(role, workflowState);
             List<Object> beans = new ArrayList<>();
             for (ToolMetadata meta : tools) {
                 try {
@@ -67,5 +78,14 @@ public class ToolRegistryLoader {
             result.put(role, beans);
         }
         return result;
+    }
+
+    private @NonNull String resolvePreloadWorkflowState() {
+        return preloadWorkflowState;
+    }
+
+    private static @NonNull String sanitizeWorkflowState(@NonNull String workflowState) {
+        String normalized = workflowState.trim().toUpperCase(java.util.Locale.ROOT);
+        return normalized.isBlank() ? DEFAULT_PRELOAD_WORKFLOW_STATE : normalized;
     }
 }

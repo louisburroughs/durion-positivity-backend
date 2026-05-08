@@ -473,6 +473,13 @@ jobs:
           key: ${{ runner.os }}-maven-wrapper-${{
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
+      - name: Restore reactor build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          fail-on-cache-miss: true
+
       - name: Run Checkstyle
         if: github.event_name != 'pull_request'
         run: ./mvnw checkstyle:check -B

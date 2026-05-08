@@ -50,9 +50,6 @@ public class StreamingSessionAgentManager
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
     private static final String FULL_TOOL_CACHE_KEY = "full";
-    // TODO(AC8): derive workflow state from session context instead of hardcoding
-    // IDLE
-    private static final String WORKFLOW_IDLE = "IDLE";
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
     private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
     private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
@@ -151,8 +148,8 @@ public class StreamingSessionAgentManager
         if (toolRegistryService != null) {
             List<Object> roleTools = roleToolsForMessage(role, message);
             List<Object> fallbackTools = fallbackToolsForMessage(message);
-            List<Object> allTools =
-                    ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools, fallbackTools.toArray());
+            List<Object> allTools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
+                    fallbackTools.toArray());
             String cacheKey = toolCacheKey(allTools);
             LOGGER.debug(
                     "MCP streaming tool selection username={} role={} cacheKey={} tools={}",
@@ -231,11 +228,11 @@ public class StreamingSessionAgentManager
                 .build();
         ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever hybridRetriever =
-                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever = new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever),
+                TIER2_RETRIEVAL_CANDIDATES);
         ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
-        ContentRetriever resilientContentRetriever =
-                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
+        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
+                "tier2-hybrid-reranked-retriever");
 
         StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
@@ -301,8 +298,13 @@ public class StreamingSessionAgentManager
             return fullRoleTools;
         }
         try {
+            String workflowState = deriveWorkflowState(message);
+            LOGGER.debug(
+                    "MCP streaming workflow state derived message preview=\"{}\" workflowState={}",
+                    preview(message),
+                    workflowState);
             List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
-                    new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit);
+                    new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
             if (LOGGER.isDebugEnabled()) {
                 for (int i = 0; i < candidates.size(); i++) {
                     ToolMetadata candidate = candidates.get(i);
@@ -310,14 +312,13 @@ public class StreamingSessionAgentManager
                     LOGGER.debug(
                             "MCP streaming tool candidate role={} workflowState={} toolName={} score={} priority={}",
                             role,
-                            WORKFLOW_IDLE,
+                            workflowState,
                             candidate.name(),
                             String.format(Locale.ROOT, "%.3f", confidence),
                             String.format(Locale.ROOT, "%.3f", candidate.priority()));
                 }
             }
-            List<String> selectedNames =
-                    candidates.stream().map(ToolMetadata::name).toList();
+            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 LOGGER.debug(
                         "MCP streaming tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
@@ -352,6 +353,25 @@ public class StreamingSessionAgentManager
                     exception);
             return fullRoleTools;
         }
+    }
+
+    /**
+     * Derives workflow state from user message intent.
+     */
+    private @NonNull String deriveWorkflowState(@NonNull String message) {
+        String lower = message.toLowerCase(Locale.ROOT);
+        if (containsAny(lower, Set.of("save", "create", "add", "new", "submit", "approve", "post"))) {
+            return "CREATE";
+        } else if (containsAny(lower, Set.of("delete", "remove", "cancel", "void", "purge"))) {
+            return "DELETE";
+        } else if (containsAny(lower, Set.of("update", "edit", "modify", "change", "put", "patch"))) {
+            return "UPDATE";
+        } else if (containsAny(lower, Set.of("list", "find", "search", "show", "get", "view", "retrieve", "fetch"))) {
+            return "READ";
+        } else if (containsAny(lower, Set.of("export", "report", "download", "extract", "backup"))) {
+            return "EXPORT";
+        }
+        return "IDLE";
     }
 
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
