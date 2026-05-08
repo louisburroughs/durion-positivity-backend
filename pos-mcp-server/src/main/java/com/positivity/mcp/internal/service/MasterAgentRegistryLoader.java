@@ -50,20 +50,30 @@ public class MasterAgentRegistryLoader {
             log.warn("No workflow-scoped tools found for workflowState={}; master agent registry will be empty", workflowState);
         }
         List<Object> sharedTools = new ArrayList<>();
-        Map<String, List<Object>> domainTools = new TreeMap<>();
         for (ToolMetadata tool : tools) {
-            Object bean = loadToolBean(tool);
-            if (bean == null) {
-                continue;
-            }
             String domain = normalizeDomain(tool.domain());
             if (MASTER_DOMAINS.contains(domain)) {
-                sharedTools.add(bean);
-                continue;
+                Object bean = loadToolBean(tool);
+                if (bean != null) {
+                    sharedTools.add(bean);
+                }
             }
-            domainTools.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(bean);
         }
-        List<DomainAgentDefinition> domainAgents = domainTools.entrySet().stream()
+        Map<String, List<Object>> roleScopedTools = new TreeMap<>();
+        for (String roleName : repository.findAllRoleNames()) {
+            List<Object> resolvedRoleTools = new ArrayList<>();
+            for (ToolMetadata tool : repository.findEnabledByRoleAndWorkflow(roleName, workflowState)) {
+                if (MASTER_DOMAINS.contains(normalizeDomain(tool.domain()))) {
+                    continue;
+                }
+                Object bean = loadToolBean(tool);
+                if (bean != null) {
+                    resolvedRoleTools.add(bean);
+                }
+            }
+            roleScopedTools.put(normalizeRoleName(roleName), List.copyOf(resolvedRoleTools));
+        }
+        List<DomainAgentDefinition> domainAgents = roleScopedTools.entrySet().stream()
                 .map(entry -> new DomainAgentDefinition(entry.getKey(), entry.getKey(), List.copyOf(entry.getValue())))
                 .toList();
         return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), domainAgents);
@@ -94,6 +104,10 @@ public class MasterAgentRegistryLoader {
 
     private static @NonNull String normalizeDomain(@NonNull String domain) {
         return domain.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static @NonNull String normalizeRoleName(@NonNull String roleName) {
+        return roleName.trim();
     }
 
     public record LoadedMasterAgentRegistry(

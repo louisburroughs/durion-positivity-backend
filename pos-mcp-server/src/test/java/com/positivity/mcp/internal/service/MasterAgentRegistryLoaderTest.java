@@ -24,7 +24,7 @@ class MasterAgentRegistryLoaderTest {
     private ApplicationContext applicationContext;
 
     @Test
-    void loadRegistryDefinitionGroupsWorkflowToolsIntoMasterAndDomainRegistries() {
+    void loadRegistryDefinitionBuildsRoleKeyedRegistriesFromWorkflowAndRoleAssignments() {
         ToolMetadata masterTool = tool("ExaWebSearchTool", "master", "exaWebSearchTool");
         ToolMetadata inventoryFacadeTool = tool("InventoryFacadeTool", "inventory", "inventoryFacadeTool");
         ToolMetadata inventoryLookupTool = tool("InventoryLookupTool", "inventory", "inventoryLookupTool");
@@ -35,6 +35,11 @@ class MasterAgentRegistryLoaderTest {
         Object orderBean = new Object();
         when(repository.findEnabledByWorkflow("IDLE"))
                 .thenReturn(List.of(orderTool, inventoryFacadeTool, masterTool, inventoryLookupTool));
+        when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE"))
+                .thenReturn(List.of(masterTool, inventoryFacadeTool));
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_MANAGER", "IDLE"))
+                .thenReturn(List.of(masterTool, inventoryLookupTool, orderTool));
         when(applicationContext.getBean("exaWebSearchTool")).thenReturn(sharedBean);
         when(applicationContext.getBean("inventoryFacadeTool")).thenReturn(inventoryBean);
         when(applicationContext.getBean("inventoryLookupTool")).thenReturn(inventoryLookupBean);
@@ -47,9 +52,31 @@ class MasterAgentRegistryLoaderTest {
         assertThat(loaded.sharedTools()).containsExactly(sharedBean);
         assertThat(loaded.domainAgents())
                 .extracting(DomainAgentDefinition::agentName)
-                .containsExactly("inventory", "order");
-        assertThat(loaded.domainAgents().getFirst().tools()).containsExactly(inventoryBean, inventoryLookupBean);
-        assertThat(loaded.domainAgents().get(1).tools()).containsExactly(orderBean);
+                .containsExactly("ROLE_CASHIER", "ROLE_MANAGER");
+        assertThat(loaded.domainAgents().getFirst().tools()).containsExactly(inventoryBean);
+        assertThat(loaded.domainAgents().get(1).tools()).containsExactly(inventoryLookupBean, orderBean);
+    }
+
+    @Test
+    void loadRegistryDefinitionRetainsRolesWithSharedOnlyToolAccessForPrewarming() {
+        ToolMetadata masterTool = tool("ExaWebSearchTool", "master", "exaWebSearchTool");
+        Object sharedBean = new Object();
+        when(repository.findEnabledByWorkflow("IDLE")).thenReturn(List.of(masterTool));
+        when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_ADMIN"));
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE")).thenReturn(List.of(masterTool));
+        when(applicationContext.getBean("exaWebSearchTool")).thenReturn(sharedBean);
+
+        MasterAgentRegistryLoader loader = new MasterAgentRegistryLoader(repository, applicationContext, "idle");
+
+        MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
+
+        assertThat(loaded.sharedTools()).containsExactly(sharedBean);
+        assertThat(loaded.domainAgents())
+                .singleElement()
+                .satisfies(agent -> {
+                    assertThat(agent.agentName()).isEqualTo("ROLE_ADMIN");
+                    assertThat(agent.tools()).isEmpty();
+                });
     }
 
     private static ToolMetadata tool(String name, String domain, String handlerBean) {
