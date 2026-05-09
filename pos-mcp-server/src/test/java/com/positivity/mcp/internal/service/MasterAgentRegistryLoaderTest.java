@@ -1,11 +1,9 @@
 package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
-import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.List;
 import java.util.UUID;
@@ -51,11 +49,9 @@ class MasterAgentRegistryLoaderTest {
         MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
 
         assertThat(loaded.sharedTools()).containsExactly(sharedBean);
-        assertThat(loaded.domainAgents())
-                .extracting(DomainAgentDefinition::agentName, DomainAgentDefinition::ragScope)
-                .containsExactly(tuple("inventory", "inventory"), tuple("order", "order"));
-        assertThat(loaded.domainAgents().getFirst().tools()).containsExactly(inventoryBean, inventoryLookupBean);
-        assertThat(loaded.domainAgents().get(1).tools()).containsExactly(orderBean);
+        assertThat(loaded.domainToolAssignments())
+                .containsEntry("inventory", List.of(inventoryBean, inventoryLookupBean))
+                .containsEntry("order", List.of(orderBean));
         assertThat(loaded.roleToolAssignments())
                 .containsEntry("ROLE_CASHIER", List.of(inventoryBean))
                 .containsEntry("ROLE_MANAGER", List.of(inventoryLookupBean, orderBean));
@@ -75,7 +71,7 @@ class MasterAgentRegistryLoaderTest {
         MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
 
         assertThat(loaded.sharedTools()).containsExactly(sharedBean);
-        assertThat(loaded.domainAgents()).isEmpty();
+        assertThat(loaded.domainToolAssignments()).isEmpty();
         assertThat(loaded.roleToolAssignments()).containsEntry("ROLE_ADMIN", List.of());
     }
 

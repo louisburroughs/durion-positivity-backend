@@ -5,12 +5,15 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
+import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("alpha")
 public class ScopedContentRetrieverFactory {
 
     private static final String RAG_SCOPE = "rag_scope";
@@ -26,13 +29,14 @@ public class ScopedContentRetrieverFactory {
 
     public @NonNull ContentRetriever create(@Nullable String ragScope, int maxResults, double minScore) {
         String normalizedScope = RagScope.normalize(ragScope);
+        Filter ragScopeFilter = metadataKey(RAG_SCOPE).isEqualTo(normalizedScope);
         return EmbeddingStoreContentRetriever.builder()
                 .displayName("rag-scope-" + normalizedScope)
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
                 .maxResults(maxResults)
                 .minScore(minScore)
-                .filter(metadataKey(RAG_SCOPE).isEqualTo(normalizedScope))
+                .filter(ragScopeFilter)
                 .build();
     }
 }

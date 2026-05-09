@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
-import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -76,10 +75,8 @@ public class MasterAgentRegistryLoader {
             }
             roleScopedTools.put(normalizeRoleName(roleName), List.copyOf(resolvedRoleTools));
         }
-        List<DomainAgentDefinition> domainAgents = domainScopedTools.entrySet().stream()
-                .map(entry -> new DomainAgentDefinition(entry.getKey(), entry.getKey(), List.copyOf(entry.getValue())))
-                .toList();
-        return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), domainAgents, Map.copyOf(roleScopedTools));
+        return new LoadedMasterAgentRegistry(
+                List.copyOf(sharedTools), immutableCopy(domainScopedTools), Map.copyOf(roleScopedTools));
     }
 
     private Object loadToolBean(@NonNull ToolMetadata tool) {
@@ -113,13 +110,20 @@ public class MasterAgentRegistryLoader {
         return roleName.trim();
     }
 
+    private static @NonNull Map<String, List<Object>> immutableCopy(@NonNull Map<String, List<Object>> source) {
+        Map<String, List<Object>> copied = new TreeMap<>();
+        source.forEach((key, value) -> copied.put(key, List.copyOf(value)));
+        return Map.copyOf(copied);
+    }
+
     public record LoadedMasterAgentRegistry(
             @NonNull List<Object> sharedTools,
-            @NonNull List<DomainAgentDefinition> domainAgents,
+            @NonNull Map<String, List<Object>> domainToolAssignments,
             @NonNull Map<String, List<Object>> roleToolAssignments) {
 
-        public LoadedMasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
-            this(sharedTools, domainAgents, Map.of());
+        public LoadedMasterAgentRegistry(
+                @NonNull List<Object> sharedTools, @NonNull Map<String, List<Object>> domainToolAssignments) {
+            this(sharedTools, domainToolAssignments, Map.of());
         }
     }
 }

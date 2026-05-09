@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
-import com.positivity.mcp.internal.service.MasterAgentRegistryLoader;
+import com.positivity.mcp.internal.orchestration.rag.RagScope;
 import java.beans.Introspector;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,11 +28,11 @@ public final class MasterAgentRegistry {
     private final Map<String, List<Object>> roleToolAssignments;
 
     @Autowired
-    public MasterAgentRegistry(@NonNull MasterAgentRegistryLoader loader) {
-        this(loader.loadRegistryDefinition());
+    public MasterAgentRegistry(@NonNull MasterAgentRegistryFactory registryFactory) {
+        this(registryFactory.loadRegistryDefinition());
     }
 
-    private MasterAgentRegistry(MasterAgentRegistryLoader.LoadedMasterAgentRegistry loadedRegistry) {
+    private MasterAgentRegistry(MasterAgentRegistryFactory.LoadedMasterAgentRegistry loadedRegistry) {
         this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents(), loadedRegistry.roleToolAssignments());
     }
 
@@ -53,6 +53,10 @@ public final class MasterAgentRegistry {
         return sharedTools;
     }
 
+    public @NonNull List<Object> resolveMasterTools() {
+        return new ArrayList<>(sharedTools);
+    }
+
     public @NonNull List<DomainAgentDefinition> domainAgents() {
         return domainAgents;
     }
@@ -61,8 +65,8 @@ public final class MasterAgentRegistry {
         return domainAgents.stream().filter(agent -> agent.agentName().equals(agentName)).findFirst();
     }
 
-    public @NonNull List<Object> resolveToolsForDomainAgent(@NonNull String agentName) {
-        List<Object> resolvedTools = new ArrayList<>(sharedTools);
+    public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
+        List<Object> resolvedTools = new ArrayList<>();
         List<Object> assignedTools = roleToolAssignments.get(agentName);
         if (assignedTools != null) {
             resolvedTools.addAll(assignedTools);
@@ -79,7 +83,7 @@ public final class MasterAgentRegistry {
         return resolvedTools;
     }
 
-    public @NonNull List<Object> resolveToolsForDomainAgent(
+    public @NonNull List<Object> resolveDomainTools(
             @NonNull String agentName, @NonNull Collection<String> toolNames) {
         Set<String> selectedNames = new HashSet<>();
         for (String toolName : toolNames) {
@@ -90,7 +94,7 @@ public final class MasterAgentRegistry {
                     "MCP master registry resolve-selected agentName={} selectedNames=[] resolvedTools=[]", agentName);
             return new ArrayList<>();
         }
-        List<Object> availableTools = resolveToolsForDomainAgent(agentName);
+        List<Object> availableTools = resolveDomainTools(agentName);
         List<Object> resolvedTools = availableTools.stream()
                 .filter(tool -> matchesSelectedTool(tool, selectedNames))
                 .toList();
@@ -103,6 +107,24 @@ public final class MasterAgentRegistry {
                     resolvedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList());
         }
         return resolvedTools;
+    }
+
+    public @NonNull String resolveRagScopeForTools(@NonNull Collection<Object> tools) {
+        if (tools.stream().anyMatch(this::isSharedTool)) {
+            return RagScope.MASTER;
+        }
+        Set<String> ragScopes = new TreeSet<>();
+        for (Object tool : tools) {
+            Optional<DomainAgentDefinition> domainAgent = findDomainAgentForTool(tool);
+            if (domainAgent.isEmpty()) {
+                return RagScope.MASTER;
+            }
+            ragScopes.add(domainAgent.orElseThrow().ragScope());
+        }
+        if (ragScopes.size() == 1) {
+            return ragScopes.iterator().next();
+        }
+        return RagScope.MASTER;
     }
 
     public @NonNull Set<String> preloadableDomainAgents() {
@@ -118,5 +140,19 @@ public final class MasterAgentRegistry {
         String beanStyleClassName = Introspector.decapitalize(simpleClassName);
         return selectedNames.contains(simpleClassName.toLowerCase(Locale.ROOT))
                 || selectedNames.contains(beanStyleClassName.toLowerCase(Locale.ROOT));
+    }
+
+    private @NonNull Optional<DomainAgentDefinition> findDomainAgentForTool(@NonNull Object selectedTool) {
+        return domainAgents.stream()
+                .filter(agent -> agent.tools().stream().anyMatch(tool -> sameTool(tool, selectedTool)))
+                .findFirst();
+    }
+
+    private boolean isSharedTool(@NonNull Object selectedTool) {
+        return sharedTools.stream().anyMatch(tool -> sameTool(tool, selectedTool));
+    }
+
+    private static boolean sameTool(@NonNull Object left, @NonNull Object right) {
+        return ClassUtils.getUserClass(left).equals(ClassUtils.getUserClass(right));
     }
 }

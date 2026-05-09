@@ -14,8 +14,13 @@ import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.lang.reflect.Field;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
 
 class ScopedContentRetrieverFactoryTest {
+
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withUserConfiguration(ScopedContentRetrieverFactory.class, ScopedContentRetrieverFactoryContextTestConfig.class);
 
     @Test
     void createsRetrieverFilteredToNormalizedRagScope() throws Exception {
@@ -30,6 +35,29 @@ class ScopedContentRetrieverFactoryTest {
                 .isEqualTo(metadataKey("rag_scope").isEqualTo("inventory"));
         assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("stock"))).isEqualTo(7);
         assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("stock"))).isEqualTo(0.42);
+    }
+
+    @Test
+    void createsRetrieverFilteredToMasterScopeWhenBlankRagScopeProvided() throws Exception {
+        ScopedContentRetrieverFactory factory =
+                new ScopedContentRetrieverFactory(mock(PgVectorEmbeddingStore.class), mock(EmbeddingModel.class));
+
+        ContentRetriever retriever = factory.create(" ", 3, 0.21);
+
+        assertThat(retriever).isInstanceOf(EmbeddingStoreContentRetriever.class);
+        EmbeddingStoreContentRetriever embeddingRetriever = (EmbeddingStoreContentRetriever) retriever;
+        assertThat(filterProvider(embeddingRetriever).apply(Query.from("anything")))
+                .isEqualTo(metadataKey("rag_scope").isEqualTo("master"));
+        assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("anything"))).isEqualTo(3);
+        assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("anything"))).isEqualTo(0.21);
+    }
+
+    @Test
+    void testProfileDoesNotCreateScopedContentRetrieverFactoryBean() {
+        contextRunner.withPropertyValues("spring.profiles.active=test").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).doesNotHaveBean(ScopedContentRetrieverFactory.class);
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -51,6 +79,14 @@ class ScopedContentRetrieverFactoryTest {
         Field field = EmbeddingStoreContentRetriever.class.getDeclaredField("minScoreProvider");
         field.setAccessible(true);
         return (Function<Query, Double>) field.get(retriever);
+    }
+
+    static class ScopedContentRetrieverFactoryContextTestConfig {
+
+        @Bean
+        EmbeddingModel embeddingModel() {
+            return mock(EmbeddingModel.class);
+        }
     }
 }
 
