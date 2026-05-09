@@ -253,8 +253,15 @@ public class StreamingSessionAgentManager
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
-        for (String role : toolRegistry.preloadableDomainAgents()) {
+        for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
+                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
+                List<Object> selectedTools =
+                        sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
+                String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
+                roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + warmCacheKey, buildAgent(role, selectedTools));
+
+                // Keep the legacy full key warm for direct role-level access paths.
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
                 prebuilt++;
             } catch (RuntimeException exception) {

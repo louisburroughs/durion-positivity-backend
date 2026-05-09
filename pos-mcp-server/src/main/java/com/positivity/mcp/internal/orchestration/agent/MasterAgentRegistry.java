@@ -135,6 +135,15 @@ public final class MasterAgentRegistry {
         return roleNames;
     }
 
+    public @NonNull Set<String> preloadableRoleIdentifiers() {
+        Set<String> roleIdentifiers = new TreeSet<>();
+        roleIdentifiers.addAll(roleToolAssignments.keySet());
+        if (!roleIdentifiers.isEmpty()) {
+            return roleIdentifiers;
+        }
+        return preloadableDomainAgents();
+    }
+
     private static boolean matchesSelectedTool(@NonNull Object tool, @NonNull Set<String> selectedNames) {
         String simpleClassName = ClassUtils.getUserClass(tool).getSimpleName();
         String beanStyleClassName = Introspector.decapitalize(simpleClassName);

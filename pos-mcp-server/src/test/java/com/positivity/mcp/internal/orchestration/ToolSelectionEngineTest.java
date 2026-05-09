@@ -55,6 +55,7 @@ class ToolSelectionEngineTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
         toolSelectionEngine = new ToolSelectionEngine(
                 toolRegistry,
                 exaWebSearchTool,
@@ -90,7 +91,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", "show stock for sku ABC");
 
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
-        assertThat(result.fallbackTools()).containsExactly(inventoryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));

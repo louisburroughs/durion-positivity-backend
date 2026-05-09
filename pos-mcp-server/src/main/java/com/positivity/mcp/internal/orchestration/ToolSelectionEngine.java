@@ -53,7 +53,8 @@ public class ToolSelectionEngine {
 
     public @NonNull ToolSelectionResult selectRoleTools(@NonNull String role, @NonNull String message) {
         List<Object> roleTools = roleToolsForMessage(role, message);
-        List<Object> fallbackTools = fallbackToolsForMessage(message);
+        List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
+            toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
         LOGGER.debug(
                 "MCP shared tool selection role={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
                 role,

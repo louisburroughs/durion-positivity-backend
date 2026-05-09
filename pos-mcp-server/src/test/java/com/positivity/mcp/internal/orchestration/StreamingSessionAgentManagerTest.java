@@ -111,7 +111,7 @@ class StreamingSessionAgentManagerTest {
         // Return a fresh mutable list each invocation so buildAgent mutations don't
         // bleed
         when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableDomainAgents()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(any(), any()))
@@ -245,8 +245,6 @@ class StreamingSessionAgentManagerTest {
         assertThat(result).isNotNull();
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
-        verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool");
     }
@@ -285,8 +283,6 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
@@ -307,8 +303,6 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
@@ -317,7 +311,7 @@ class StreamingSessionAgentManagerTest {
     void constructor_prebuildRoleAgents_mergesFullSharedFallbackTools() {
         SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport());
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
-        when(toolRegistry.preloadableDomainAgents()).thenReturn(Set.of("ROLE_CASHIER"));
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER"));
 
         new StreamingSessionAgentManager(
                 streamingChatModel,
@@ -404,7 +398,7 @@ class StreamingSessionAgentManagerTest {
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
-        verify(toolSelectionEngine, times(2)).selectRoleTools(eq("ROLE_CASHIER"), any());
+        verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any());
     }
 
     @SuppressWarnings("unchecked")

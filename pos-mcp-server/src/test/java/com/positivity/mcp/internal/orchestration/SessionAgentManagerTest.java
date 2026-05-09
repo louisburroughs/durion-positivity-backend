@@ -118,14 +118,17 @@ class SessionAgentManagerTest {
     void setUp() {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
-        when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
+        lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
         lenient()
                 .when(toolRegistry.resolveDomainTools(anyString(), anyCollection()))
                 .thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableDomainAgents()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anyString()))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient().when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
         lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
