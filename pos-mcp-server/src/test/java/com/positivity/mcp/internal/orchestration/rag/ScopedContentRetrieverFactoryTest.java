@@ -53,7 +53,15 @@ class ScopedContentRetrieverFactoryTest {
     }
 
     @Test
-    void testProfileDoesNotCreateScopedContentRetrieverFactoryBean() {
+    void alphaProfileCreatesScopedContentRetrieverFactoryBean() {
+        contextRunner.withPropertyValues("spring.profiles.active=alpha").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(ScopedContentRetrieverFactory.class);
+        });
+    }
+
+    @Test
+    void testProfileAloneDoesNotCreateScopedContentRetrieverFactoryBean() {
         contextRunner.withPropertyValues("spring.profiles.active=test").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(ScopedContentRetrieverFactory.class);
@@ -82,6 +90,11 @@ class ScopedContentRetrieverFactoryTest {
     }
 
     static class ScopedContentRetrieverFactoryContextTestConfig {
+
+        @Bean
+        PgVectorEmbeddingStore embeddingStore() {
+            return mock(PgVectorEmbeddingStore.class);
+        }
 
         @Bean
         EmbeddingModel embeddingModel() {
