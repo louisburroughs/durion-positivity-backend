@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RolePromptResolverImpl implements RolePromptResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RolePromptResolverImpl.class);
-    private static final String DEFAULT_PROMPT_NAME = SystemPromptDefaults.DEFAULT_PROMPT_NAME;
+    private static final String MASTER_PROMPT_NAME = SystemPromptDefaults.MASTER_PROMPT_NAME;
     private static final String BUILT_IN_PROMPT = SystemPromptDefaults.DEFAULT_PROMPT_TEXT;
 
     private final SystemPromptRepository systemPromptRepository;
@@ -24,19 +24,22 @@ public class RolePromptResolverImpl implements RolePromptResolver {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull String resolvePrompt(@NonNull String role) {
+    public @NonNull String resolvePrompt(@NonNull String promptName) {
         return systemPromptRepository
-                .findByName(role)
+                .findByName(promptName)
                 .map(SystemPrompt::getContent)
                 .or(() -> {
                     LOGGER.warn(
-                            "MCP no role-specific system prompt found role={}; falling back to 'default' prompt", role);
+                            "MCP no agent system prompt found promptName={}; falling back to master prompt", promptName);
                     return systemPromptRepository
-                            .findByName(DEFAULT_PROMPT_NAME)
+                            .findByName(MASTER_PROMPT_NAME)
                             .map(SystemPrompt::getContent);
                 })
                 .orElseGet(() -> {
-                    LOGGER.warn("MCP no system prompt found role={} name=default; using built-in prompt", role);
+                    LOGGER.warn(
+                            "MCP no system prompt found promptName={} name={}; using built-in prompt",
+                            promptName,
+                            MASTER_PROMPT_NAME);
                     return BUILT_IN_PROMPT;
                 });
     }

@@ -8,6 +8,7 @@ import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
@@ -227,6 +228,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 long startNanos = System.nanoTime();
                 List<Object> tools = sharedOrchestrationSupport.mergeTools(roleTools, fallbackTools);
                 String ragScope = toolRegistry.resolveRagScopeForTools(tools);
+                String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
+                String prompt = rolePromptResolver.resolvePrompt(promptName);
 
                 // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
                 ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
@@ -251,17 +254,19 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                                 .chatModel(chatModel)
                                 .tools(tools)
                                 .contentRetriever(resilientContentRetriever)
-                                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
+                                .systemMessageProvider(memoryId -> prompt)
                                 .chatMemoryProvider(this::chatMemoryFor)
                                 .build();
                 LOGGER.debug(
-                                "Built MCP role agent role={} ragScope={} toolNames={}",
+                                "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                                 role,
+                                promptName,
                                 ragScope,
                                 sharedOrchestrationSupport.toolNames(tools));
                 LOGGER.info(
-                                "Built MCP role agent role={} ragScope={} tools={} in {} ms",
+                                "Built MCP role agent role={} promptName={} ragScope={} tools={} in {} ms",
                                 role,
+                                promptName,
                                 ragScope,
                                 tools.size(),
                                 elapsedMs(startNanos));
@@ -325,7 +330,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         private @NonNull String simpleChat(
                         @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
                 long simpleStartNanos = System.nanoTime();
-                String prompt = rolePromptResolver.resolvePrompt(currentUserContext.primaryRole())
+                String prompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
                                 + System.lineSeparator()
                                 + formatUserContext(currentUserContext);
                 String response = chatModel

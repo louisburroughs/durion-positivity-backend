@@ -163,6 +163,7 @@ class StreamingSessionAgentManagerTest {
                 clearInvocations(toolRegistry);
                 clearInvocations(toolSelectionEngine);
                 clearInvocations(scopedContentRetrieverFactory);
+                clearInvocations(rolePromptResolver);
         }
 
         @Test

@@ -30,6 +30,20 @@ class SystemPromptSeedRunnerTest {
   private ApplicationArguments applicationArguments;
 
   @Test
+  @DisplayName("seedPrompts uses master and domain agent prompt names")
+  void seedPrompts_usesMasterAndDomainAgentPromptNames() {
+    Map<String, String> seedPrompts = SystemPromptSeedRunner.seedPrompts();
+
+    assertThat(seedPrompts)
+        .containsKeys("master", "inventory", "order", "customer", "workorder", "admin");
+    assertThat(seedPrompts)
+        .doesNotContainKeys(
+            SystemPromptDefaults.ROLE_ADMIN_PROMPT_NAME,
+            SystemPromptDefaults.ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
+            SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME);
+  }
+
+  @Test
   @DisplayName("run seeds missing prompts")
   void run_whenPromptMissing_seedsPrompt() {
     Map<String, String> seedPrompts = SystemPromptSeedRunner.seedPrompts();
@@ -52,7 +66,7 @@ class SystemPromptSeedRunnerTest {
   void run_whenPromptExistsWithDifferentContent_updatesPrompt() {
     Map<String, String> seedPrompts = SystemPromptSeedRunner.seedPrompts();
     Map<String, SystemPrompt> existingByName = existingPromptsWithSameContent(seedPrompts);
-    existingByName.get(SystemPromptDefaults.DEFAULT_PROMPT_NAME).setContent("stale default content");
+    existingByName.get("master").setContent("stale master content");
 
     when(systemPromptRepository.findByName(anyString()))
         .thenAnswer(invocation -> Optional.ofNullable(existingByName.get(invocation.getArgument(0))));
@@ -64,9 +78,8 @@ class SystemPromptSeedRunnerTest {
 
     ArgumentCaptor<SystemPrompt> promptCaptor = ArgumentCaptor.forClass(SystemPrompt.class);
     verify(systemPromptRepository).save(promptCaptor.capture());
-    assertThat(promptCaptor.getValue().getName()).isEqualTo(SystemPromptDefaults.DEFAULT_PROMPT_NAME);
-    assertThat(promptCaptor.getValue().getContent())
-        .isEqualTo(seedPrompts.get(SystemPromptDefaults.DEFAULT_PROMPT_NAME));
+    assertThat(promptCaptor.getValue().getName()).isEqualTo("master");
+    assertThat(promptCaptor.getValue().getContent()).isEqualTo(seedPrompts.get("master"));
   }
 
   @Test

@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -179,6 +180,7 @@ class SessionAgentManagerTest {
                 clearInvocations(toolRegistryService);
                 clearInvocations(toolSelectionEngine);
                 clearInvocations(scopedContentRetrieverFactory);
+                clearInvocations(rolePromptResolver);
         }
 
         @Test
@@ -246,6 +248,7 @@ class SessionAgentManagerTest {
                 String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
 
                 assertThat(response).isEqualTo("Hello!");
+                verify(rolePromptResolver, atLeastOnce()).resolvePrompt("master");
                 verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anyString());
                 verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
         }
@@ -272,6 +275,7 @@ class SessionAgentManagerTest {
                 String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
 
                 assertThat(response).isEqualTo("Stock found");
+                verify(rolePromptResolver).resolvePrompt("inventory");
                 ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor
                                 .forClass(ToolSelectionContext.class);
                 verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
@@ -301,6 +305,7 @@ class SessionAgentManagerTest {
                 String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
 
                 assertThat(response).isEqualTo("Stock found");
+                verify(rolePromptResolver, atLeastOnce()).resolvePrompt("master");
                 verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
                 verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
                 verify(scopedContentRetrieverFactory).create("master", 20, 0.55);

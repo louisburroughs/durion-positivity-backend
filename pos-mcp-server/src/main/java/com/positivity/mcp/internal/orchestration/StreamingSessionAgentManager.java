@@ -6,6 +6,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
@@ -180,6 +181,8 @@ public class StreamingSessionAgentManager
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role, @NonNull List<Object> tools) {
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
+        String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
+        String prompt = rolePromptResolver.resolvePrompt(promptName);
         ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
         ContentRetriever broadSemanticRetriever = scopedContentRetrieverFactory.create(ragScope,
                 TIER2_RETRIEVAL_CANDIDATES, 0.55);
@@ -195,17 +198,19 @@ public class StreamingSessionAgentManager
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
+                .systemMessageProvider(memoryId -> prompt)
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.debug(
-                "Built MCP streaming role agent role={} ragScope={} toolNames={}",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
+                promptName,
                 ragScope,
                 sharedOrchestrationSupport.toolNames(tools));
         LOGGER.info(
-                "Built MCP streaming role agent role={} ragScope={} tools={} in {} ms",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} tools={} in {} ms",
                 role,
+                promptName,
                 ragScope,
                 tools.size(),
                 elapsedMs(startNanos));
