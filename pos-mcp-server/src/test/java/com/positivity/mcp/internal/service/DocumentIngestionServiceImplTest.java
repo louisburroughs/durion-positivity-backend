@@ -64,14 +64,14 @@ class DocumentIngestionServiceImplTest {
                     storedJob.set(entity);
                     return entity;
                 });
-        when(jobRepository.findById(JOB_ID)).thenAnswer(invocation -> Optional.ofNullable(storedJob.get()));
+        lenient().when(jobRepository.findById(JOB_ID)).thenAnswer(invocation -> Optional.ofNullable(storedJob.get()));
     }
 
     @Test
     @DisplayName("submitDocument persists pending job and processes it in the background")
     void submitDocument_persistsPendingJobAndProcesses() {
         when(documentEmbeddingIngestor.ingestDocument(
-                        eq("policy text"), eq(Map.of("source", "manual", "document_id", "policy-1"))))
+                        eq("policy text"), eq(Map.of("source", "manual", "document_id", "policy-1", "rag_scope", "master"))))
                 .thenReturn(2);
 
         var accepted = service.submitDocument("policy text", Map.of("source", "manual", "document_id", "policy-1"));
@@ -95,7 +95,40 @@ class DocumentIngestionServiceImplTest {
 
         assertThat(accepted.documentId()).isNotBlank();
         verify(documentEmbeddingIngestor)
-                .ingestDocument("content", Map.of("source", "manual", "document_id", accepted.documentId()));
+                .ingestDocument(
+                        "content",
+                        Map.of("source", "manual", "document_id", accepted.documentId(), "rag_scope", "master"));
+    }
+
+    @Test
+    @DisplayName("submitDocument normalizes rag scope before background ingestion")
+    void submitDocument_normalizesRagScope() {
+        when(documentEmbeddingIngestor.ingestDocument(
+                        eq("content"), eq(Map.of("document_id", "doc-1", "rag_scope", "inventory"))))
+                .thenReturn(1);
+
+        service.submitDocument("content", Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "));
+
+        verify(documentEmbeddingIngestor)
+                .ingestDocument("content", Map.of("document_id", "doc-1", "rag_scope", "inventory"));
+    }
+
+    @Test
+    @DisplayName("ingestDocuments passes metadata through to the ingestor")
+    void ingestDocuments_normalizesRagScope() {
+        List<String> contents = List.of("one", "two");
+        List<Map<String, Object>> metadata = List.of(
+                Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "),
+                Map.of("document_id", "doc-2"));
+
+        service.ingestDocuments(contents, metadata);
+
+        verify(documentEmbeddingIngestor)
+                .ingestDocuments(
+                        contents,
+                        List.of(
+                                Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "),
+                                Map.of("document_id", "doc-2")));
     }
 
     @Test

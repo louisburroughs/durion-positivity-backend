@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
@@ -60,10 +61,10 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
             for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
                 try {
-                    preloadDocument(entry.id(), entry.sourcePath());
+                    preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope());
                 } catch (Exception exception) {
                     String hash = resolveHashOrNull(entry.sourcePath());
-                    persistFailedRecord(entry.id(), hash, entry.sourcePath());
+                    persistFailedRecord(entry.id(), hash, entry.sourcePath(), entry.ragScope());
                     LOGGER.warn(
                             "Preload failed for document_id={} error={}",
                             entry.id(),
@@ -90,6 +91,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                         queuedRecord.getDocumentId(),
                         queuedRecord.getContentHash(),
                         queuedRecord.getSourcePath(),
+                        queuedRecord.getRagScope(),
                         RagPreloadStatus.FAILED,
                         null);
                 meterRegistry
@@ -108,6 +110,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                                 queuedRecord.getDocumentId(),
                                                 queuedRecord.getContentHash(),
                                                 queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
                                                 RagPreloadStatus.LOADED,
                                                 null);
                                         meterRegistry
@@ -122,6 +125,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                                 queuedRecord.getDocumentId(),
                                                 queuedRecord.getContentHash(),
                                                 queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
                                                 RagPreloadStatus.FAILED,
                                                 null);
                                         meterRegistry
@@ -146,6 +150,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
                                         queuedRecord.getDocumentId(),
                                         queuedRecord.getContentHash(),
                                         queuedRecord.getSourcePath(),
+                                        queuedRecord.getRagScope(),
                                         RagPreloadStatus.FAILED,
                                         null);
                                 meterRegistry
@@ -155,32 +160,45 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         }
     }
 
-    private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath) throws IOException {
+    private void preloadDocument(
+            @NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope) throws IOException {
         Resource resource = new ClassPathResource(resourcePath(sourcePath));
         byte[] bytes = resource.getContentAsByteArray();
         String content = new String(bytes, StandardCharsets.UTF_8);
 
         String hash = computeHash(bytes);
+        String normalizedRagScope = RagScope.normalize(ragScope);
 
-        Optional<RagPreloadRecord> prior = ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(
-                documentId, RagPreloadStatus.LOADED);
+        Optional<RagPreloadRecord> prior =
+                ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        documentId, normalizedRagScope, RagPreloadStatus.LOADED);
         if (prior.isPresent() && prior.get().getContentHash().equals(hash)) {
             LOGGER.info("Skipping unchanged RAG document document_id={}", documentId);
-            persistRecord(documentId, hash, sourcePath, RagPreloadStatus.SKIPPED, null);
+            persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.SKIPPED, null);
             meterRegistry
                     .counter(METRIC_PRELOAD_SKIPPED, TAG_DOCUMENT_ID, documentId)
                     .increment();
             return;
         }
 
-        Map<String, Object> metadata = Map.of("document_id", documentId, "source_path", sourcePath);
+        Map<String, Object> metadata = Map.of(
+                "document_id", documentId,
+                "source_path", sourcePath,
+                "rag_scope", normalizedRagScope);
         var job = documentIngestionService.submitDocument(content, metadata);
         LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
-        persistRecord(documentId, hash, sourcePath, RagPreloadStatus.QUEUED, job.jobId());
+        persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.QUEUED, job.jobId());
     }
 
-    private void persistFailedRecord(@NonNull String documentId, @Nullable String hash, @NonNull String sourcePath) {
-        persistRecord(documentId, hash != null ? hash : "", sourcePath, RagPreloadStatus.FAILED, null);
+    private void persistFailedRecord(
+            @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath, @Nullable String ragScope) {
+        persistRecord(
+            documentId,
+            hash != null ? hash : "",
+            sourcePath,
+            RagScope.normalize(ragScope),
+            RagPreloadStatus.FAILED,
+            null);
         meterRegistry
                 .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId)
                 .increment();
@@ -190,12 +208,14 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             @NonNull String documentId,
             @NonNull String hash,
             @NonNull String sourcePath,
+            @NonNull String ragScope,
             @NonNull RagPreloadStatus status,
             @Nullable UUID jobId) {
         var preloadRecord = new RagPreloadRecord();
         preloadRecord.setDocumentId(documentId);
         preloadRecord.setContentHash(hash);
         preloadRecord.setSourcePath(sourcePath);
+        preloadRecord.setRagScope(ragScope);
         preloadRecord.setStatus(status);
         preloadRecord.setJobId(jobId);
         ragPreloadRecordRepository.save(preloadRecord);

@@ -47,6 +47,23 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
+        String sql = """
+                SELECT t.id, t.name, t.display_name, t.description,
+                       t.domain, t.priority, t.cost_level,
+                       t.avg_latency_ms, t.enabled, t.handler_bean
+                FROM mcp_tool t
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND ws.name = ?
+                ORDER BY lower(t.domain), t.name
+                """;
+
+        return jdbcTemplate.query(sql, this::mapRow, workflowState);
+    }
+
+    @Override
     public @NonNull List<ToolMetadata> findTopKByEmbeddingForRole(
             float @NonNull [] embedding, int limit, @NonNull String role, @NonNull String workflowState) {
         String sql = """

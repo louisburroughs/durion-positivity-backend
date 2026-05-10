@@ -1,17 +1,28 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -20,6 +31,7 @@ import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -71,7 +84,7 @@ class StreamingSessionAgentManagerTest {
     private PgVectorEmbeddingStore embeddingStore;
 
     @Mock
-    private ToolRegistry toolRegistry;
+    private MasterAgentRegistry toolRegistry;
 
     @Mock
     private RolePromptResolver rolePromptResolver;
@@ -79,10 +92,17 @@ class StreamingSessionAgentManagerTest {
     @Mock
     private ToolRegistryService toolRegistryService;
 
+    @Mock
+    private ToolSelectionEngine toolSelectionEngine;
+
+    @Mock
+    private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
+
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
+    private SharedOrchestrationSupport sharedOrchestrationSupport;
 
     private StreamingSessionAgentManager manager;
 
@@ -90,9 +110,12 @@ class StreamingSessionAgentManagerTest {
     void setUp() {
         // Return a fresh mutable list each invocation so buildAgent mutations don't
         // bleed
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableRoles()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(any(), any()))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
                 RestClient.builder(),
@@ -105,6 +128,18 @@ class StreamingSessionAgentManagerTest {
                 "http://api-gateway",
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
+        sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        ContentRetriever scopedRetriever = mock(ContentRetriever.class);
+        lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
+        lenient()
+                .when(toolSelectionEngine.fullFallbackTools())
+                .thenReturn(List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+        lenient()
+                .when(toolRegistry.resolveRagScopeForTools(anyCollection()))
+                .thenAnswer(invocation -> ragScopeFor(invocation.getArgument(0)));
+        lenient()
+                .when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
+                .thenReturn(scopedRetriever);
         manager = new StreamingSessionAgentManager(
                 streamingChatModel,
                 embeddingModel,
@@ -113,15 +148,27 @@ class StreamingSessionAgentManagerTest {
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
+                sharedOrchestrationSupport,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
                 rolePromptResolver,
-                null, // toolRegistryService — null exercises null-safe fallback path
                 null, // toolAuditService
                 30,
                 500,
                 50,
-                2,
                 100);
         clearInvocations(toolRegistry);
+        clearInvocations(toolSelectionEngine);
+        clearInvocations(scopedContentRetrieverFactory);
+    }
+
+    @Test
+    @DisplayName("manager no longer retains tool registry service state")
+    void manager_doesNotRetainToolRegistryServiceField() {
+        assertThat(java.util.Arrays.stream(StreamingSessionAgentManager.class.getDeclaredFields())
+                        .map(field -> field.getName())
+                        .toList())
+                .doesNotContain("toolRegistryService");
     }
 
     @Test
@@ -138,7 +185,7 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second message");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
     }
 
     @Test
@@ -148,7 +195,7 @@ class StreamingSessionAgentManagerTest {
         manager.evict("user-1");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "after evict");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
     }
 
     @Test
@@ -157,139 +204,116 @@ class StreamingSessionAgentManagerTest {
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_MANAGER"), "second");
 
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_CASHIER");
-        verify(toolRegistry, never()).resolveToolsForRole("ROLE_MANAGER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_MANAGER");
     }
 
     @Test
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveToolsForRole("ROLE_DUPLICATE"))
-                .thenAnswer(inv -> new ArrayList<>(List.of(exaWebSearchTool)));
+        when(toolSelectionEngine.selectRoleTools("ROLE_DUPLICATE", "hello"))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
+                        List.of(exaWebSearchTool), List.of(exaWebSearchTool)));
 
         Flux<String> result =
                 manager.streamChat(userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"), "hello");
 
         assertThat(result).isNotNull();
+        assertThat(roleAgentCacheKeys(manager)).contains("ROLE_DUPLICATE::ExaWebSearchTool");
     }
 
-    // --- Phase 3: semantic tool selection (toolRegistryService != null) ---
+    // --- Phase 3: semantic tool selection through ToolSelectionEngine ---
 
     @Test
-    @DisplayName("streamChat uses semantically narrowed tools when selector returns candidates")
+    @DisplayName("streamChat uses shared workflow derivation and tool narrowing")
     void streamChat_semanticSelection_narrowsToolsWhenCandidatesReturned() {
-        ToolMetadata candidate = new ToolMetadata(
-                UUID.randomUUID(),
-                "InventoryFacadeTool",
-                "Inventory",
-                "Manage inventory",
-                "inventory",
-                0.8,
-                "LOW",
-                50,
-                true,
-                "inventoryFacadeTool");
-        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of(candidate));
-        when(toolRegistry.resolveToolsForRole(any())).thenReturn(List.of(exaWebSearchTool));
-        when(toolRegistry.resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool")))
+        String message = "show me inventory levels";
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER", List.of("inventoryFacadeTool")))
                 .thenReturn(List.of(inventoryFacadeTool));
 
-        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                rolePromptResolver,
-                toolRegistryService,
-                null,
-                30,
-                500,
-                50,
-                2,
-                100);
-        clearInvocations(toolRegistry);
+        StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
+        clearInvocations(toolRegistryService);
+        clearInvocations(scopedContentRetrieverFactory);
 
-        Flux<String> result =
-                selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show me inventory levels");
+        Flux<String> result = selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        verify(toolRegistryService).resolveCandidateTools(any(), anyInt());
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER", List.of("InventoryFacadeTool"));
-        verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
+        ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool");
     }
 
     @Test
-    @DisplayName("streamChat falls back to full role tools when selector returns empty")
+    @DisplayName("streamChat uses shared tool selection even when registry service is unavailable")
+    void streamChat_withoutRegistryService_usesSharedSelectionPath() {
+        String message = "latest internet sales report";
+        when(toolSelectionEngine.selectRoleTools("ROLE_CASHIER", message))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
+                        List.of(orderFacadeTool), List.of(exaWebSearchTool, inventoryFacadeTool)));
+
+        Flux<String> result = manager.streamChat(userContext("user-shared-path", USER_ID, "ROLE_CASHIER"), message);
+
+        assertThat(result).isNotNull();
+        verify(toolSelectionEngine).selectRoleTools("ROLE_CASHIER", message);
+        assertThat(roleAgentCacheKeys(manager))
+                .contains("ROLE_CASHIER::ExaWebSearchTool+InventoryFacadeTool+OrderFacadeTool");
+    }
+
+    @Test
+    @DisplayName("streamChat falls back to shared full role selection when selector returns empty")
     void streamChat_semanticSelection_fallsBackToFullRoleToolsOnEmptyResult() {
-        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        String message = "show sales orders";
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of());
 
-        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                rolePromptResolver,
-                toolRegistryService,
-                null,
-                30,
-                500,
-                50,
-                2,
-                100);
-        clearInvocations(toolRegistry);
+        StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
+        clearInvocations(toolRegistryService);
+        clearInvocations(scopedContentRetrieverFactory);
 
-        Flux<String> result = selectorManager.streamChat(userContext("user-2", USER_ID, "ROLE_CASHIER"), "anything");
+        Flux<String> result = selectorManager.streamChat(userContext("user-2", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        // resolveToolsForRole(role) is called for the fallback path
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
-    @DisplayName("streamChat falls back to full role tools when selector throws")
+    @DisplayName("streamChat falls back to shared full role selection when selector throws")
     void streamChat_semanticSelection_fallsBackToFullRoleToolsOnException() {
-        when(toolRegistryService.resolveCandidateTools(any(), anyInt()))
-                .thenThrow(new RuntimeException("selector unavailable"));
-        when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenThrow(new IllegalStateException("selector unavailable"));
 
-        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                rolePromptResolver,
-                toolRegistryService,
-                null,
-                30,
-                500,
-                50,
-                2,
-                100);
-        clearInvocations(toolRegistry);
+        StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
+        clearInvocations(toolRegistryService);
+        clearInvocations(scopedContentRetrieverFactory);
 
         Flux<String> result = selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "anything");
 
         assertThat(result).isNotNull();
-        // fallback resolves from role tool set
-        verify(toolRegistry).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
-    @DisplayName("streamChat with inventory keyword includes inventory fallback tool")
-    void streamChat_withInventoryKeyword_includesInventoryFallbackTool() {
-        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
+    @DisplayName("prebuild merges the full shared fallback tool set")
+    void constructor_prebuildRoleAgents_mergesFullSharedFallbackTools() {
+        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport());
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER"));
 
-        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
+        new StreamingSessionAgentManager(
                 streamingChatModel,
                 embeddingModel,
                 embeddingStore,
@@ -297,14 +321,34 @@ class StreamingSessionAgentManagerTest {
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
+                sharedSupportSpy,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
                 rolePromptResolver,
-                toolRegistryService,
                 null,
                 30,
                 500,
                 50,
-                2,
                 100);
+
+        ArgumentCaptor<List<Object>> fallbackToolsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(sharedSupportSpy, atLeastOnce())
+                .mergeTools(argThat((List<Object> tools) -> tools.isEmpty()), fallbackToolsCaptor.capture());
+        assertThat(fallbackToolsCaptor.getAllValues())
+                .anySatisfy(fallbackTools -> assertThat(fallbackTools)
+                        .containsExactly(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+        verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 10, 0.6);
+        verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 20, 0.55);
+    }
+
+    @Test
+    @DisplayName("streamChat applies shared inventory fallback selection")
+    void streamChat_withInventoryKeyword_includesInventoryFallbackTool() {
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3))).thenReturn(List.of());
+
+        StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
 
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "stock part 1234");
 
@@ -314,26 +358,13 @@ class StreamingSessionAgentManagerTest {
     }
 
     @Test
-    @DisplayName("streamChat with web keyword includes exa fallback tool")
+    @DisplayName("streamChat applies shared web fallback selection")
     void streamChat_withWebKeyword_includesExaFallbackTool() {
-        when(toolRegistryService.resolveCandidateTools(any(), anyInt())).thenReturn(List.of());
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3))).thenReturn(List.of());
 
-        StreamingSessionAgentManager selectorManager = new StreamingSessionAgentManager(
-                streamingChatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                rolePromptResolver,
-                toolRegistryService,
-                null,
-                30,
-                500,
-                50,
-                2,
-                100);
+        StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
 
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "latest internet news");
 
@@ -353,20 +384,21 @@ class StreamingSessionAgentManagerTest {
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
+                sharedOrchestrationSupport,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
                 rolePromptResolver,
-                null,
                 null,
                 0,
                 500,
                 50,
-                2,
                 100);
         clearInvocations(toolRegistry);
 
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
-        verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
+        verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any());
     }
 
     @SuppressWarnings("unchecked")
@@ -375,6 +407,63 @@ class StreamingSessionAgentManagerTest {
         assertThat(cache).isNotNull();
         cache.cleanUp();
         return cache.asMap().keySet();
+    }
+
+    private StreamingSessionAgentManager streamingManagerWithToolSelectionEngine(ToolSelectionEngine selectionEngine) {
+        return new StreamingSessionAgentManager(
+                streamingChatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                sharedOrchestrationSupport,
+                selectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                null,
+                30,
+                500,
+                50,
+                100);
+    }
+
+    private ToolSelectionEngine realToolSelectionEngine() {
+        return new ToolSelectionEngine(
+                toolRegistry,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                toolRegistryService,
+                sharedOrchestrationSupport,
+                3);
+    }
+
+    private static ToolMetadata inventoryToolMetadata() {
+        return new ToolMetadata(
+                UUID.randomUUID(),
+                "inventoryFacadeTool",
+                "Inventory",
+                "Inventory availability",
+                "inventory",
+                1.0,
+                "low",
+                200,
+                true,
+                "inventoryFacadeTool");
+    }
+
+    private static String ragScopeFor(java.util.Collection<?> tools) {
+        boolean hasInventory = tools.stream().anyMatch(tool -> tool instanceof InventoryFacadeTool);
+        boolean hasOrder = tools.stream().anyMatch(tool -> tool instanceof OrderFacadeTool);
+        if (hasInventory && !hasOrder) {
+            return "inventory";
+        }
+        if (hasOrder && !hasInventory) {
+            return "orders";
+        }
+        return "master";
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {

@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
-import com.positivity.mcp.internal.service.SimpleChatRuleCatalogService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,8 +18,8 @@ final class SimpleChatClassifier {
     private final Supplier<SimpleChatRuleCatalog> catalogSupplier;
 
     @Autowired
-    SimpleChatClassifier(@NonNull SimpleChatRuleCatalogService catalogService) {
-        this(catalogService::currentCatalog);
+    SimpleChatClassifier(@NonNull SimpleChatCatalogProvider catalogProvider) {
+        this(catalogProvider::currentCatalog);
     }
 
     // Test-only constructor for supplying a fixed in-memory catalog.

@@ -56,16 +56,22 @@ mcp:
       docs:
         - id: "accounting.de-bookkeeping"
           source-path: "classpath:rag/de-bookkeeping-rag.md"
+          rag-scope: "accounting"
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
+          rag-scope: "inventory"
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
+          rag-scope: "hr"
         - id: "shop.management"
           source-path: "classpath:rag/shop-management-rag.md"
+          rag-scope: "shopmanager"
         - id: "shop.management.guidelines"
           source-path: "classpath:rag/shop-management-guidelines.md"
+          rag-scope: "shopmanager"
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
+          rag-scope: "master"
   agent:
     cache-ttl-minutes: 30
     max-cached-agents: 500

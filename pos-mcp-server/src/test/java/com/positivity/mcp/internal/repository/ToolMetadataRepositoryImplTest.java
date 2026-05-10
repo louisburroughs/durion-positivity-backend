@@ -74,6 +74,18 @@ class ToolMetadataRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("findEnabledByWorkflow returns workflow-scoped tools from JdbcTemplate query")
+    @SuppressWarnings("unchecked")
+    void findEnabledByWorkflow_returnsMappedTools() {
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("IDLE"))).thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = repository.findEnabledByWorkflow("IDLE");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().domain()).isEqualTo("customer");
+    }
+
+    @Test
     @DisplayName("findTopKByEmbedding returns bounded list from JdbcTemplate query")
     @SuppressWarnings("unchecked")
     void findTopKByEmbedding_returnsBoundedList() {
