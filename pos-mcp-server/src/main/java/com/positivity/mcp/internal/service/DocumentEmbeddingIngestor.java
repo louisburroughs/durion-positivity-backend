@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
+import com.positivity.mcp.internal.orchestration.rag.RagScope;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
@@ -13,11 +14,9 @@ import dev.langchain4j.store.embedding.filter.logical.And;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -106,7 +105,7 @@ public class DocumentEmbeddingIngestor {
     static @NonNull Map<String, Object> normalizeRagScope(@NonNull Map<String, Object> metadata) {
         java.util.LinkedHashMap<String, Object> normalized = new java.util.LinkedHashMap<>(metadata);
         Object rawScope = metadata.get(RAG_SCOPE);
-        normalized.put(RAG_SCOPE, normalizeRagScopeValue(rawScope instanceof String value ? value : null));
+        normalized.put(RAG_SCOPE, RagScope.normalize(rawScope instanceof String value ? value : null));
         return normalized;
     }
 
@@ -146,12 +145,5 @@ public class DocumentEmbeddingIngestor {
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-    }
-
-    private static @NonNull String normalizeRagScopeValue(@Nullable String rawScope) {
-        if (rawScope == null || rawScope.trim().isEmpty()) {
-            return "master";
-        }
-        return rawScope.trim().toLowerCase(Locale.ROOT);
     }
 }

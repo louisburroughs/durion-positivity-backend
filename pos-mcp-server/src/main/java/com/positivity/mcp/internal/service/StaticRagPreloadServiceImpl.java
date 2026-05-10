@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
+import com.positivity.mcp.internal.orchestration.rag.RagScope;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
 import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
@@ -14,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -167,7 +167,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         String content = new String(bytes, StandardCharsets.UTF_8);
 
         String hash = computeHash(bytes);
-        String normalizedRagScope = normalizeRagScope(ragScope);
+        String normalizedRagScope = RagScope.normalize(ragScope);
 
         Optional<RagPreloadRecord> prior =
                 ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
@@ -193,7 +193,12 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
     private void persistFailedRecord(
             @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath, @Nullable String ragScope) {
         persistRecord(
-                documentId, hash != null ? hash : "", sourcePath, normalizeRagScope(ragScope), RagPreloadStatus.FAILED, null);
+            documentId,
+            hash != null ? hash : "",
+            sourcePath,
+            RagScope.normalize(ragScope),
+            RagPreloadStatus.FAILED,
+            null);
         meterRegistry
                 .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId)
                 .increment();
@@ -241,12 +246,5 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
 
     private static @NonNull String resourcePath(@NonNull String sourcePath) {
         return sourcePath.startsWith("classpath:") ? sourcePath.substring("classpath:".length()) : sourcePath;
-    }
-
-    private static @NonNull String normalizeRagScope(@Nullable String rawScope) {
-        if (rawScope == null || rawScope.trim().isEmpty()) {
-            return "master";
-        }
-        return rawScope.trim().toLowerCase(Locale.ROOT);
     }
 }
