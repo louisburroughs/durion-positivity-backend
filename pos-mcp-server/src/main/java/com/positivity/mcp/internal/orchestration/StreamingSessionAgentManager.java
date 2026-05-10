@@ -6,9 +6,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
-import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
-import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
-import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
@@ -16,10 +13,8 @@ import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,7 +36,6 @@ public class StreamingSessionAgentManager
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
     private static final String FULL_TOOL_CACHE_KEY = "full";
-    private static final int MAX_LOG_PREVIEW_LENGTH = 160;
     private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
     private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
     private static final int TIER2_FINAL_TOP_K = 5;
@@ -50,12 +44,7 @@ public class StreamingSessionAgentManager
     private final Cache<String, ChatMemory> chatMemoryCache;
     private final Cache<String, AtomicInteger> requestCountCache;
     private final StreamingChatModel streamingChatModel;
-    private final EmbeddingModel embeddingModel;
-    private final PgVectorEmbeddingStore embeddingStore;
     private final MasterAgentRegistry toolRegistry;
-    private final ExaWebSearchTool exaWebSearchTool;
-    private final InventoryFacadeTool inventoryFacadeTool;
-    private final OrderFacadeTool orderFacadeTool;
     private final SharedOrchestrationSupport sharedOrchestrationSupport;
     private final ToolSelectionEngine toolSelectionEngine;
     private final ScopedContentRetrieverFactory scopedContentRetrieverFactory;
@@ -69,12 +58,7 @@ public class StreamingSessionAgentManager
 
     public StreamingSessionAgentManager(
             @NonNull StreamingChatModel streamingChatModel,
-            @NonNull EmbeddingModel embeddingModel,
-            @NonNull PgVectorEmbeddingStore embeddingStore,
             @NonNull MasterAgentRegistry toolRegistry,
-            @NonNull ExaWebSearchTool exaWebSearchTool,
-            @NonNull InventoryFacadeTool inventoryFacadeTool,
-            @NonNull OrderFacadeTool orderFacadeTool,
             @NonNull SharedOrchestrationSupport sharedOrchestrationSupport,
             @NonNull ToolSelectionEngine toolSelectionEngine,
             @NonNull ScopedContentRetrieverFactory scopedContentRetrieverFactory,
@@ -85,12 +69,7 @@ public class StreamingSessionAgentManager
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.streamingChatModel = streamingChatModel;
-        this.embeddingModel = embeddingModel;
-        this.embeddingStore = embeddingStore;
         this.toolRegistry = toolRegistry;
-        this.exaWebSearchTool = exaWebSearchTool;
-        this.inventoryFacadeTool = inventoryFacadeTool;
-        this.orderFacadeTool = orderFacadeTool;
         this.sharedOrchestrationSupport = sharedOrchestrationSupport;
         this.toolSelectionEngine = toolSelectionEngine;
         this.scopedContentRetrieverFactory = scopedContentRetrieverFactory;
@@ -145,8 +124,8 @@ public class StreamingSessionAgentManager
                 role,
                 cacheKey,
                 sharedOrchestrationSupport.toolNames(allTools));
-        StreamingPosAssistant agent =
-                roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
+        StreamingPosAssistant agent = roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey,
+                ignored -> buildAgent(role, allTools));
 
         String userContext = formatUserContext(currentUserContext);
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
@@ -202,8 +181,8 @@ public class StreamingSessionAgentManager
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
-        ContentRetriever broadSemanticRetriever =
-                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
+        ContentRetriever broadSemanticRetriever = scopedContentRetrieverFactory.create(ragScope,
+                TIER2_RETRIEVAL_CANDIDATES, 0.55);
         ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
         ContentRetriever hybridRetriever = new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever),
@@ -256,8 +235,8 @@ public class StreamingSessionAgentManager
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
                 ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
-                List<Object> selectedTools =
-                        sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
+                List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(selection.roleTools(),
+                        selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + warmCacheKey, buildAgent(role, selectedTools));
 
@@ -297,10 +276,5 @@ public class StreamingSessionAgentManager
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-    }
-
-    private static double confidenceScore(int rankIndex, double priority) {
-        double rankScore = 1.0 / (rankIndex + 1);
-        return Math.clamp((rankScore * 0.7) + (Math.clamp(priority, 0.0, 1.0) * 0.3), 0.0, 1.0);
     }
 }

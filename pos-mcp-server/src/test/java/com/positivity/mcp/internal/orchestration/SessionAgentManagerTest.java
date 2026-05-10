@@ -78,334 +78,331 @@ import org.springframework.web.client.RestClient;
 @ExtendWith(MockitoExtension.class)
 class SessionAgentManagerTest {
 
-    private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
+        private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
 
-    @Mock
-    private ChatModel chatModel;
+        @Mock
+        private ChatModel chatModel;
 
-    @Mock
-    private EmbeddingModel embeddingModel;
+        @Mock
+        private EmbeddingModel embeddingModel;
 
-    @Mock
-    private PgVectorEmbeddingStore embeddingStore;
+        @Mock
+        private PgVectorEmbeddingStore embeddingStore;
 
-    @Mock
-    private MasterAgentRegistry toolRegistry;
+        @Mock
+        private MasterAgentRegistry toolRegistry;
 
-    @Mock
-    private ToolRegistryService toolRegistryService;
+        @Mock
+        private ToolRegistryService toolRegistryService;
 
-    @Mock
-    private RolePromptResolver rolePromptResolver;
+        @Mock
+        private RolePromptResolver rolePromptResolver;
 
-    @Mock
-    private ToolSelectionEngine toolSelectionEngine;
+        @Mock
+        private ToolSelectionEngine toolSelectionEngine;
 
-    @Mock
-    private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
+        @Mock
+        private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
-    // Real instance required: Mockito subclasses cause @Tool duplicate registration
-    // in LangChain4j
-    private ExaWebSearchTool exaWebSearchTool;
-    private InventoryFacadeTool inventoryFacadeTool;
-    private OrderFacadeTool orderFacadeTool;
-    private SimpleChatClassifier simpleChatClassifier;
-    private SharedOrchestrationSupport sharedOrchestrationSupport;
+        // Real instance required: Mockito subclasses cause @Tool duplicate registration
+        // in LangChain4j
+        private ExaWebSearchTool exaWebSearchTool;
+        private InventoryFacadeTool inventoryFacadeTool;
+        private OrderFacadeTool orderFacadeTool;
+        private SimpleChatClassifier simpleChatClassifier;
+        private SharedOrchestrationSupport sharedOrchestrationSupport;
 
-    private SessionAgentManager manager;
+        private SessionAgentManager manager;
 
-    @BeforeEach
-    void setUp() {
-        // Return a FRESH list on every invocation so buildAgent mutations don't bleed
-        // across calls
-        lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
-        lenient()
-                .when(toolRegistry.resolveDomainTools(anyString(), anyCollection()))
-                .thenAnswer(inv -> new ArrayList<>());
-        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
-        lenient()
-                .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
-                .thenReturn(List.of());
-        lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anyString()))
-                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
-        lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
-        lenient().when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
-        lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
-        exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
-        inventoryFacadeTool = new InventoryFacadeTool(
-                RestClient.builder(),
-                "http://api-gateway",
-                "/inventory/v1/inventory/stock/{sku}",
-                "/inventory/v1/inventory/search?q={query}",
-                "/inventory/v1/inventory/locations/{locationId}/stock");
-        orderFacadeTool = new OrderFacadeTool(
-                RestClient.builder(),
-                "http://api-gateway",
-                "/order/v1/orders/{orderId}",
-                "/order/v1/orders/search?q={query}");
-        simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
-        sharedOrchestrationSupport = new SharedOrchestrationSupport();
-        ContentRetriever scopedRetriever = mock(ContentRetriever.class);
-        lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
-        lenient()
-                .when(toolSelectionEngine.fullFallbackTools())
-                .thenReturn(List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
-        lenient()
-                .when(toolRegistry.resolveRagScopeForTools(anyCollection()))
-                .thenAnswer(invocation -> ragScopeFor(invocation.getArgument(0)));
-        lenient()
-                .when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
-                .thenReturn(scopedRetriever);
-        manager = new SessionAgentManager(
-                chatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                sharedOrchestrationSupport,
-                toolSelectionEngine,
-                scopedContentRetrieverFactory,
-                null,
-                null, // sessionSummaryService
-                rolePromptResolver,
-                simpleChatClassifier,
-                30,
-                500,
-                50,
-                100);
-        clearInvocations(toolRegistry);
-        clearInvocations(toolRegistryService);
-        clearInvocations(toolSelectionEngine);
-        clearInvocations(scopedContentRetrieverFactory);
-    }
+        @BeforeEach
+        void setUp() {
+                // Return a FRESH list on every invocation so buildAgent mutations don't bleed
+                // across calls
+                lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
+                lenient()
+                                .when(toolRegistry.resolveDomainTools(anyString(), anyCollection()))
+                                .thenAnswer(inv -> new ArrayList<>());
+                when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+                lenient()
+                                .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class),
+                                                anyInt()))
+                                .thenReturn(List.of());
+                lenient()
+                                .when(toolSelectionEngine.selectRoleTools(anyString(), anyString()))
+                                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+                lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
+                lenient().when(embeddingModel.embed(anyString()))
+                                .thenReturn(Response.from(Embedding.from(new float[] { 0.1f })));
+                lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
+                exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
+                inventoryFacadeTool = new InventoryFacadeTool(
+                                RestClient.builder(),
+                                "http://api-gateway",
+                                "/inventory/v1/inventory/stock/{sku}",
+                                "/inventory/v1/inventory/search?q={query}",
+                                "/inventory/v1/inventory/locations/{locationId}/stock");
+                orderFacadeTool = new OrderFacadeTool(
+                                RestClient.builder(),
+                                "http://api-gateway",
+                                "/order/v1/orders/{orderId}",
+                                "/order/v1/orders/search?q={query}");
+                simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
+                sharedOrchestrationSupport = new SharedOrchestrationSupport();
+                ContentRetriever scopedRetriever = mock(ContentRetriever.class);
+                lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
+                lenient()
+                                .when(toolSelectionEngine.fullFallbackTools())
+                                .thenReturn(List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+                lenient()
+                                .when(toolRegistry.resolveRagScopeForTools(anyCollection()))
+                                .thenAnswer(invocation -> ragScopeFor(invocation.getArgument(0)));
+                lenient()
+                                .when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
+                                .thenReturn(scopedRetriever);
+                manager = new SessionAgentManager(
+                                chatModel,
+                                embeddingModel,
+                                embeddingStore,
+                                toolRegistry,
+                                sharedOrchestrationSupport,
+                                toolSelectionEngine,
+                                scopedContentRetrieverFactory,
+                                null,
+                                null, // sessionSummaryService
+                                rolePromptResolver,
+                                simpleChatClassifier,
+                                30,
+                                500,
+                                50,
+                                100);
+                clearInvocations(toolRegistry);
+                clearInvocations(toolRegistryService);
+                clearInvocations(toolSelectionEngine);
+                clearInvocations(scopedContentRetrieverFactory);
+        }
 
-    @Test
-    @DisplayName("getOrCreateAgent returns the same proxy instance for the same userId")
-    void getOrCreateAgent_returnsSameInstanceForSameUser() {
-        PosAssistant first = manager.getOrCreateAgent("user-1", "TECH");
-        PosAssistant second = manager.getOrCreateAgent("user-1", "TECH");
+        @Test
+        @DisplayName("getOrCreateAgent returns the same proxy instance for the same userId")
+        void getOrCreateAgent_returnsSameInstanceForSameUser() {
+                PosAssistant first = manager.getOrCreateAgent("user-1", "TECH");
+                PosAssistant second = manager.getOrCreateAgent("user-1", "TECH");
 
-        assertThat(first).isSameAs(second);
-    }
+                assertThat(first).isSameAs(second);
+        }
 
-    @Test
-    @DisplayName("getOrCreateAgent reuses the prebuilt role proxy for different userIds")
-    void getOrCreateAgent_reusesRoleProxyForDifferentUsers() {
-        PosAssistant forUser1 = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
-        PosAssistant forUser2 = manager.getOrCreateAgent("user-2", "ROLE_CASHIER");
+        @Test
+        @DisplayName("getOrCreateAgent reuses the prebuilt role proxy for different userIds")
+        void getOrCreateAgent_reusesRoleProxyForDifferentUsers() {
+                PosAssistant forUser1 = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+                PosAssistant forUser2 = manager.getOrCreateAgent("user-2", "ROLE_CASHIER");
 
-        assertThat(forUser1).isSameAs(forUser2);
-    }
+                assertThat(forUser1).isSameAs(forUser2);
+        }
 
-    @Test
-    @DisplayName("getOrCreateAgent rebuilds agent when role changes for same userId")
-    void getOrCreateAgent_roleChange_rebuildsAgent() {
-        PosAssistant original = manager.getOrCreateAgent("user-1", "TECH");
-        PosAssistant afterRoleChange = manager.getOrCreateAgent("user-1", "MANAGER");
+        @Test
+        @DisplayName("getOrCreateAgent rebuilds agent when role changes for same userId")
+        void getOrCreateAgent_roleChange_rebuildsAgent() {
+                PosAssistant original = manager.getOrCreateAgent("user-1", "TECH");
+                PosAssistant afterRoleChange = manager.getOrCreateAgent("user-1", "MANAGER");
 
-        assertThat(afterRoleChange).isNotSameAs(original);
-    }
+                assertThat(afterRoleChange).isNotSameAs(original);
+        }
 
-    @Test
-    @DisplayName("getOrCreateAgent skips fallback tools already resolved for the role")
-    void getOrCreateAgent_skipsDuplicateFallbackTool() {
-        when(toolRegistry.resolveDomainTools("ROLE_DUPLICATE"))
-                .thenAnswer(inv -> new ArrayList<>(List.of(inventoryFacadeTool)));
+        @Test
+        @DisplayName("getOrCreateAgent skips fallback tools already resolved for the role")
+        void getOrCreateAgent_skipsDuplicateFallbackTool() {
+                when(toolRegistry.resolveDomainTools("ROLE_DUPLICATE"))
+                                .thenAnswer(inv -> new ArrayList<>(List.of(inventoryFacadeTool)));
 
-        PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_DUPLICATE");
+                PosAssistant agent = manager.getOrCreateAgent("user-with-role-tool", "ROLE_DUPLICATE");
 
-        assertThat(agent).isNotNull();
-    }
+                assertThat(agent).isNotNull();
+        }
 
-    @Test
-    @DisplayName("evict leaves prebuilt role agent cached")
-    void evict_leavesPrebuiltRoleAgentCached() {
-        PosAssistant before = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
-        manager.evict("user-1");
+        @Test
+        @DisplayName("evict leaves prebuilt role agent cached")
+        void evict_leavesPrebuiltRoleAgentCached() {
+                PosAssistant before = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+                manager.evict("user-1");
+
+                @SuppressWarnings("unchecked")
+                Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(manager, "roleAgentCache");
+                assertThat(cache).isNotNull();
+                cache.cleanUp();
+                assertThat(cache.estimatedSize()).isPositive();
+
+                PosAssistant after = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+                assertThat(after).isSameAs(before);
+        }
+
+        @Test
+        @DisplayName("chat with greeting uses simple no-tool model path")
+        void chat_withGreeting_usesSimpleModelPath() {
+                when(chatModel.chat(org.mockito.ArgumentMatchers.<List<ChatMessage>>any()))
+                                .thenReturn(ChatResponse.builder()
+                                                .aiMessage(AiMessage.from("Hello!"))
+                                                .build());
+
+                String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
+
+                assertThat(response).isEqualTo("Hello!");
+                verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anyString());
+                verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
+        }
+
+        @Test
+        @DisplayName("chat with business request uses shared workflow derivation and tool narrowing")
+        void chat_withBusinessRequest_narrowsRoleToolsPerMessage() {
+                String message = "show stock for sku ABC";
+                ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+                when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+                when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                                .thenReturn(List.of(inventoryToolMetadata()));
+                when(toolRegistry.resolveDomainTools("ROLE_ADMIN", List.of("inventoryFacadeTool")))
+                                .thenReturn(List.of(inventoryFacadeTool));
+                when(chatModel.chat(any(ChatRequest.class)))
+                                .thenReturn(ChatResponse.builder()
+                                                .aiMessage(AiMessage.from("Stock found"))
+                                                .build());
+                SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
+                clearInvocations(toolRegistryService);
+                clearInvocations(scopedContentRetrieverFactory);
+
+                String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
+
+                assertThat(response).isEqualTo("Stock found");
+                ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor
+                                .forClass(ToolSelectionContext.class);
+                verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+                verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
+                verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
+                assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
+                assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool");
+        }
+
+        @Test
+        @DisplayName("chat with empty shared selection falls back to full role tool set")
+        void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
+                String message = "show stock for sku ABC";
+                ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+                when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+                when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                                .thenReturn(List.of());
+                when(chatModel.chat(any(ChatRequest.class)))
+                                .thenReturn(ChatResponse.builder()
+                                                .aiMessage(AiMessage.from("Stock found"))
+                                                .build());
+                SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
+                clearInvocations(toolRegistryService);
+                clearInvocations(scopedContentRetrieverFactory);
+
+                String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
+
+                assertThat(response).isEqualTo("Stock found");
+                verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+                verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
+                verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
+                assertThat(roleAgentCacheKeys(selectorManager))
+                                .contains("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
+        }
+
+        @Test
+        @DisplayName("getOrCreateAgent rebuilds agent after cache TTL expiry")
+        void getOrCreateAgent_rebuildsAgentAfterCacheTtlExpiry() {
+                SessionAgentManager expiringManager = new SessionAgentManager(
+                                chatModel,
+                                embeddingModel,
+                                embeddingStore,
+                                toolRegistry,
+                                sharedOrchestrationSupport,
+                                toolSelectionEngine,
+                                scopedContentRetrieverFactory,
+                                null,
+                                null, // sessionSummaryService
+                                rolePromptResolver,
+                                simpleChatClassifier,
+                                0,
+                                500,
+                                50,
+                                100);
+                clearInvocations(toolRegistry);
+
+                expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+                expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+
+                verify(toolRegistry, times(2)).resolveDomainTools("ROLE_CASHIER");
+        }
+
+        private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
+                return new CurrentUserContext(
+                                username, userId, primaryRole, Set.of(primaryRole),
+                                Set.of(primaryRole, "mcp:chat:execute"));
+        }
+
+        private SessionAgentManager managerWithToolSelectionEngine(ToolSelectionEngine selectionEngine) {
+                return new SessionAgentManager(
+                                chatModel,
+                                embeddingModel,
+                                embeddingStore,
+                                toolRegistry,
+                                sharedOrchestrationSupport,
+                                selectionEngine,
+                                scopedContentRetrieverFactory,
+                                null,
+                                null,
+                                rolePromptResolver,
+                                simpleChatClassifier,
+                                30,
+                                500,
+                                50,
+                                100);
+        }
+
+        private ToolSelectionEngine realToolSelectionEngine() {
+                return new ToolSelectionEngine(
+                                toolRegistry,
+                                exaWebSearchTool,
+                                inventoryFacadeTool,
+                                orderFacadeTool,
+                                toolRegistryService,
+                                sharedOrchestrationSupport,
+                                3);
+        }
+
+        private static ToolMetadata inventoryToolMetadata() {
+                return new ToolMetadata(
+                                UUID.randomUUID(),
+                                "inventoryFacadeTool",
+                                "Inventory",
+                                "Inventory availability",
+                                "inventory",
+                                1.0,
+                                "low",
+                                200,
+                                true,
+                                "inventoryFacadeTool");
+        }
+
+        private static String ragScopeFor(java.util.Collection<?> tools) {
+                boolean hasInventory = tools.stream().anyMatch(tool -> tool instanceof InventoryFacadeTool);
+                boolean hasOrder = tools.stream().anyMatch(tool -> tool instanceof OrderFacadeTool);
+                if (hasInventory && !hasOrder) {
+                        return "inventory";
+                }
+                if (hasOrder && !hasInventory) {
+                        return "orders";
+                }
+                return "master";
+        }
 
         @SuppressWarnings("unchecked")
-        Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(manager, "roleAgentCache");
-        assertThat(cache).isNotNull();
-        cache.cleanUp();
-        assertThat(cache.estimatedSize()).isPositive();
-
-        PosAssistant after = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
-        assertThat(after).isSameAs(before);
-    }
-
-    @Test
-    @DisplayName("chat with greeting uses simple no-tool model path")
-    void chat_withGreeting_usesSimpleModelPath() {
-        when(chatModel.chat(org.mockito.ArgumentMatchers.<List<ChatMessage>>any()))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Hello!"))
-                        .build());
-
-        String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
-
-        assertThat(response).isEqualTo("Hello!");
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anyString());
-        verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
-    }
-
-    @Test
-    @DisplayName("chat with business request uses shared workflow derivation and tool narrowing")
-    void chat_withBusinessRequest_narrowsRoleToolsPerMessage() {
-        String message = "show stock for sku ABC";
-        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
-                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
-        when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Stock found"))
-                        .build());
-        SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
-        clearInvocations(toolRegistryService);
-        clearInvocations(scopedContentRetrieverFactory);
-
-        String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
-
-        assertThat(response).isEqualTo("Stock found");
-        ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
-        verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
-        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool");
-    }
-
-    @Test
-    @DisplayName("chat with empty shared selection falls back to full role tool set")
-    void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
-        String message = "show stock for sku ABC";
-        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
-                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
-        when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Stock found"))
-                        .build());
-        SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
-        clearInvocations(toolRegistryService);
-        clearInvocations(scopedContentRetrieverFactory);
-
-        String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
-
-        assertThat(response).isEqualTo("Stock found");
-        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
-    }
-
-    @Test
-    @DisplayName("getOrCreateAgent rebuilds agent after cache TTL expiry")
-    void getOrCreateAgent_rebuildsAgentAfterCacheTtlExpiry() {
-        SessionAgentManager expiringManager = new SessionAgentManager(
-                chatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                sharedOrchestrationSupport,
-                toolSelectionEngine,
-                scopedContentRetrieverFactory,
-                null,
-                null, // sessionSummaryService
-                rolePromptResolver,
-                simpleChatClassifier,
-                0,
-                500,
-                50,
-                100);
-        clearInvocations(toolRegistry);
-
-        expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
-        expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
-
-        verify(toolRegistry, times(2)).resolveDomainTools("ROLE_CASHIER");
-    }
-
-    private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
-        return new CurrentUserContext(
-                username, userId, primaryRole, Set.of(primaryRole), Set.of(primaryRole, "mcp:chat:execute"));
-    }
-
-    private SessionAgentManager managerWithToolSelectionEngine(ToolSelectionEngine selectionEngine) {
-        return new SessionAgentManager(
-                chatModel,
-                embeddingModel,
-                embeddingStore,
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                sharedOrchestrationSupport,
-                selectionEngine,
-                scopedContentRetrieverFactory,
-                null,
-                null,
-                rolePromptResolver,
-                simpleChatClassifier,
-                30,
-                500,
-                50,
-                100);
-    }
-
-    private ToolSelectionEngine realToolSelectionEngine() {
-        return new ToolSelectionEngine(
-                toolRegistry,
-                exaWebSearchTool,
-                inventoryFacadeTool,
-                orderFacadeTool,
-                toolRegistryService,
-                sharedOrchestrationSupport,
-                3);
-    }
-
-    private static ToolMetadata inventoryToolMetadata() {
-        return new ToolMetadata(
-                UUID.randomUUID(),
-                "inventoryFacadeTool",
-                "Inventory",
-                "Inventory availability",
-                "inventory",
-                1.0,
-                "low",
-                200,
-                true,
-                "inventoryFacadeTool");
-    }
-
-    private static String ragScopeFor(java.util.Collection<?> tools) {
-        boolean hasInventory = tools.stream().anyMatch(tool -> tool instanceof InventoryFacadeTool);
-        boolean hasOrder = tools.stream().anyMatch(tool -> tool instanceof OrderFacadeTool);
-        if (hasInventory && !hasOrder) {
-            return "inventory";
+        private static Set<String> roleAgentCacheKeys(SessionAgentManager sessionAgentManager) {
+                Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(sessionAgentManager,
+                                "roleAgentCache");
+                assertThat(cache).isNotNull();
+                cache.cleanUp();
+                return cache.asMap().keySet();
         }
-        if (hasOrder && !hasInventory) {
-            return "orders";
-        }
-        return "master";
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Set<String> roleAgentCacheKeys(SessionAgentManager sessionAgentManager) {
-        Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(sessionAgentManager, "roleAgentCache");
-        assertThat(cache).isNotNull();
-        cache.cleanUp();
-        return cache.asMap().keySet();
-    }
 }

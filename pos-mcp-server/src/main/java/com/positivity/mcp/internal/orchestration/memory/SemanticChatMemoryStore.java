@@ -5,7 +5,6 @@ import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,7 +56,6 @@ public class SemanticChatMemoryStore implements ChatMemory {
     private final String sessionId;
     private final List<ChatMessage> messages;
     private final Map<String, Object> sessionMetadata;
-    private volatile Instant sessionStartTime;
     private volatile boolean shouldGenerateSummaryOnClose;
 
     public SemanticChatMemoryStore(
@@ -74,7 +72,6 @@ public class SemanticChatMemoryStore implements ChatMemory {
         this.sessionId = UUID.randomUUID().toString();
         this.messages = Collections.synchronizedList(new ArrayList<>());
         this.sessionMetadata = new HashMap<>();
-        this.sessionStartTime = Instant.now();
         this.shouldGenerateSummaryOnClose = true;
         LOGGER.debug("Created SemanticChatMemoryStore sessionId={} maxMessages={}", sessionId, maxMessages);
     }

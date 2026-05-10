@@ -4,7 +4,6 @@ import com.positivity.mcp.internal.service.MasterAgentRegistryLoader;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -12,7 +11,6 @@ public final class MasterAgentRegistryFactory {
 
     private final MasterAgentRegistryLoader loader;
 
-    @Autowired
     public MasterAgentRegistryFactory(@NonNull MasterAgentRegistryLoader loader) {
         this.loader = loader;
     }
@@ -31,7 +29,8 @@ public final class MasterAgentRegistryFactory {
             @NonNull List<DomainAgentDefinition> domainAgents,
             @NonNull Map<String, List<Object>> roleToolAssignments) {
 
-        public LoadedMasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
+        public LoadedMasterAgentRegistry(@NonNull List<Object> sharedTools,
+                @NonNull List<DomainAgentDefinition> domainAgents) {
             this(sharedTools, domainAgents, Map.of());
         }
     }
