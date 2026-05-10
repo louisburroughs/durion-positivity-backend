@@ -109,6 +109,11 @@ class StreamingSessionAgentManagerTest {
 
         private StreamingSessionAgentManager manager;
 
+        @SuppressWarnings({ "rawtypes", "unchecked" })
+        private static <T> ArgumentCaptor<List<T>> listCaptor() {
+                return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+        }
+
         @BeforeEach
         void setUp() {
                 // Return a fresh mutable list each invocation so buildAgent mutations don't
@@ -335,7 +340,7 @@ class StreamingSessionAgentManagerTest {
                                 50,
                                 100);
 
-                ArgumentCaptor<List<Object>> fallbackToolsCaptor = ArgumentCaptor.forClass(List.class);
+                ArgumentCaptor<List<Object>> fallbackToolsCaptor = listCaptor();
                 verify(sharedSupportSpy, atLeastOnce())
                                 .mergeTools(argThat(Collection::isEmpty),
                                                 fallbackToolsCaptor.capture());

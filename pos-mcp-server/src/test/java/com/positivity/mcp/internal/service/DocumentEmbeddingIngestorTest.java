@@ -21,40 +21,49 @@ import org.junit.jupiter.api.Test;
 
 class DocumentEmbeddingIngestorTest {
 
-    @Test
-    void addsNormalizedRagScopeToSegmentMetadata() {
-        Map<String, Object> metadata = Map.of("document_id", "inventory.stock", "rag_scope", " INVENTORY ");
+        @SuppressWarnings({ "rawtypes", "unchecked" })
+        private static <T> ArgumentCaptor<List<T>> listCaptor() {
+                return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+        }
 
-        PgVectorEmbeddingStore embeddingStore = mock(PgVectorEmbeddingStore.class);
-        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
-        when(embeddingModel.embedAll(anyList()))
-                .thenReturn(Response.from(List.of(Embedding.from(new float[] { 1.0f }))));
-        DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, false, 2000,
-                200);
+        @Test
+        void addsNormalizedRagScopeToSegmentMetadata() {
+                Map<String, Object> metadata = Map.of("document_id", "inventory.stock", "rag_scope", " INVENTORY ");
 
-        assertEquals(1, ingestor.ingestDocument("stock policy", metadata));
+                PgVectorEmbeddingStore embeddingStore = mock(PgVectorEmbeddingStore.class);
+                EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+                when(embeddingModel.embedAll(anyList()))
+                                .thenReturn(Response.from(List.of(Embedding.from(new float[] { 1.0f }))));
+                DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel,
+                                false, 2000,
+                                200);
 
-        ArgumentCaptor<List<TextSegment>> segmentCaptor = ArgumentCaptor.forClass(List.class);
-        verify(embeddingStore).addAll(anyList(), segmentCaptor.capture());
-        assertTrue(
-                segmentCaptor.getValue().stream()
-                        .allMatch(segment -> "inventory".equals(segment.metadata().getString("rag_scope"))));
-    }
+                assertEquals(1, ingestor.ingestDocument("stock policy", metadata));
 
-    @Test
-    void replacesExistingDocumentWithinSameRagScopeOnly() {
-        PgVectorEmbeddingStore embeddingStore = mock(PgVectorEmbeddingStore.class);
-        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
-        when(embeddingModel.embedAll(anyList()))
-                .thenReturn(Response.from(List.of(Embedding.from(new float[] { 1.0f }))));
-        DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, false, 2000,
-                200);
+                ArgumentCaptor<List<TextSegment>> segmentCaptor = listCaptor();
+                verify(embeddingStore).addAll(anyList(), segmentCaptor.capture());
+                assertTrue(
+                                segmentCaptor.getValue().stream()
+                                                .allMatch(segment -> "inventory"
+                                                                .equals(segment.metadata().getString("rag_scope"))));
+        }
 
-        ingestor.ingestDocument("stock policy", Map.of("document_id", "inventory.stock", "rag_scope", "inventory"));
+        @Test
+        void replacesExistingDocumentWithinSameRagScopeOnly() {
+                PgVectorEmbeddingStore embeddingStore = mock(PgVectorEmbeddingStore.class);
+                EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+                when(embeddingModel.embedAll(anyList()))
+                                .thenReturn(Response.from(List.of(Embedding.from(new float[] { 1.0f }))));
+                DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel,
+                                false, 2000,
+                                200);
 
-        verify(embeddingStore)
-                .removeAll(new And(
-                        metadataKey("document_id").isEqualTo("inventory.stock"),
-                        metadataKey("rag_scope").isEqualTo("inventory")));
-    }
+                ingestor.ingestDocument("stock policy",
+                                Map.of("document_id", "inventory.stock", "rag_scope", "inventory"));
+
+                verify(embeddingStore)
+                                .removeAll(new And(
+                                                metadataKey("document_id").isEqualTo("inventory.stock"),
+                                                metadataKey("rag_scope").isEqualTo("inventory")));
+        }
 }
