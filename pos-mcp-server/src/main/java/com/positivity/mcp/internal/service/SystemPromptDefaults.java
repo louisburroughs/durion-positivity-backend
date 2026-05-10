@@ -1,12 +1,19 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.domain.RagScope;
 import java.util.List;
-import java.util.Locale;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Shared default prompt constants. Package-private — not part of the public
- * service API.
+ * System prompt definitions and defaults for seed initialization and agent configuration.
+ *
+ * This class provides constants for master prompt names, domain-specific prompt names,
+ * and role priority ordering. Constants are part of the public system prompt
+ * initialization contract and are used by SystemPromptSeedRunner, RolePromptResolverImpl,
+ * and orchestration managers.
+ *
+ * Note: Individual prompt name constants are service-internal configuration; they are not
+ * part of a versioned API contract and may change across releases without notice.
  */
 public final class SystemPromptDefaults {
 
@@ -56,13 +63,14 @@ public final class SystemPromptDefaults {
             """;
 
     public static @NonNull String promptNameForRagScope(@NonNull String ragScope) {
-        String normalized = ragScope.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isBlank() || "master".equals(normalized) || "shared".equals(normalized)) {
+        // Delegate to RagScope.normalize() to maintain single source of truth for normalization logic.
+        String normalizedScope = RagScope.normalize(ragScope);
+        // Map "shared" scope to master prompt (semantic equivalence in agent context).
+        if ("shared".equals(normalizedScope)) {
             return MASTER_PROMPT_NAME;
         }
-        return normalized;
+        return normalizedScope;
     }
 
-    private SystemPromptDefaults() {
-    }
+    private SystemPromptDefaults() {}
 }

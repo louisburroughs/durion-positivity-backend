@@ -45,8 +45,8 @@ class MasterAgentRegistryTest {
     @Test
     void resolveMasterToolsReturnsMutableCopy() {
         Object sharedTool = new SharedToolStub();
-        MasterAgentRegistry registry =
-                new MasterAgentRegistry(List.of(sharedTool), List.of(new DomainAgentDefinition("inventory", "inventory", List.of())));
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(sharedTool), List.of(new DomainAgentDefinition("inventory", "inventory", List.of())));
 
         List<Object> firstCall = registry.resolveMasterTools();
         firstCall.add(new Object());
@@ -61,8 +61,7 @@ class MasterAgentRegistryTest {
     void resolveDomainToolsReturnsMutableCopy() {
         Object domainTool = new Object();
         MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
+                List.of(), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
 
         List<Object> firstCall = registry.resolveDomainTools("inventory");
         firstCall.add(new Object());
@@ -78,8 +77,7 @@ class MasterAgentRegistryTest {
         Object sharedTool = new SharedToolStub();
         Object domainTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(sharedTool),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
+                List.of(sharedTool), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
 
         List<Object> tools = registry.resolveDomainTools("inventory", List.of("inventoryFacadeToolStub"));
 
@@ -134,18 +132,20 @@ class MasterAgentRegistryTest {
                 List.of(sharedTool),
                 List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))));
 
-        assertThat(registry.resolveRagScopeForTools(List.of(sharedTool, inventoryTool))).isEqualTo("master");
+        assertThat(registry.resolveRagScopeForTools(List.of(sharedTool, inventoryTool)))
+                .isEqualTo("master");
     }
 
     @Test
     void resolveRagScopeForToolsReturnsMasterWhenUnregisteredFallbackAndDomainToolsMixed() {
-        ExaWebSearchTool exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
+        ExaWebSearchTool exaWebSearchTool =
+                new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         Object inventoryTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))));
+                List.of(), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))));
 
-        assertThat(registry.resolveRagScopeForTools(List.of(inventoryTool, exaWebSearchTool))).isEqualTo("master");
+        assertThat(registry.resolveRagScopeForTools(List.of(inventoryTool, exaWebSearchTool)))
+                .isEqualTo("master");
     }
 
     private static final class SharedToolStub {}

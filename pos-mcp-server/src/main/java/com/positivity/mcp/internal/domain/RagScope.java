@@ -1,10 +1,10 @@
 package com.positivity.mcp.internal.domain;
 
-import java.util.Locale;
-import org.jspecify.annotations.Nullable;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public final class RagScope {
 

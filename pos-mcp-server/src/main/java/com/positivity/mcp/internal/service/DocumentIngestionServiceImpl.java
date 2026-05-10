@@ -159,7 +159,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     private @NonNull Map<String, Object> metadataWithDocumentId(
             @NonNull Map<String, Object> metadata, @NonNull String documentId) {
         java.util.LinkedHashMap<String, Object> normalized =
-            new java.util.LinkedHashMap<>(RagScope.normalizeInMetadata(metadata));
+                new java.util.LinkedHashMap<>(RagScope.normalizeInMetadata(metadata));
         normalized.put(DOCUMENT_ID, documentId);
         return normalized;
     }

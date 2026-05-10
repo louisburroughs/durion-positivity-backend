@@ -33,7 +33,8 @@ class McpRoleResolverImplTest {
     }
 
     private void givenAuthorities(String... roles) {
-        Collection<? extends GrantedAuthority> authorities = Stream.of(roles).map(SimpleGrantedAuthority::new).toList();
+        Collection<? extends GrantedAuthority> authorities =
+                Stream.of(roles).map(SimpleGrantedAuthority::new).toList();
         when(authentication.getAuthorities()).thenAnswer(inv -> authorities);
     }
 

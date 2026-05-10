@@ -13,8 +13,7 @@ class RagScopeMigrationScriptsTest {
     void postgresMigrationBackfillsLegacyEmbeddingMetadataWithMasterScope() throws IOException {
         String sql = new String(
                 Objects.requireNonNull(
-                                getClass()
-                                        .getResourceAsStream("/db/migration/V16__backfill_embedding_rag_scope.sql"))
+                                getClass().getResourceAsStream("/db/migration/V16__backfill_embedding_rag_scope.sql"))
                         .readAllBytes(),
                 UTF_8);
 
@@ -28,9 +27,8 @@ class RagScopeMigrationScriptsTest {
     @Test
     void h2MigrationExistsForFlywayVersionAlignment() throws IOException {
         String sql = new String(
-                Objects.requireNonNull(
-                                getClass()
-                                        .getResourceAsStream("/db/h2-migration/V16__backfill_embedding_rag_scope.sql"))
+                Objects.requireNonNull(getClass()
+                                .getResourceAsStream("/db/h2-migration/V16__backfill_embedding_rag_scope.sql"))
                         .readAllBytes(),
                 UTF_8);
 

@@ -30,10 +30,9 @@ public class RolePromptResolverImpl implements RolePromptResolver {
                 .map(SystemPrompt::getContent)
                 .or(() -> {
                     LOGGER.warn(
-                            "MCP no agent system prompt found promptName={}; falling back to master prompt", promptName);
-                    return systemPromptRepository
-                            .findByName(MASTER_PROMPT_NAME)
-                            .map(SystemPrompt::getContent);
+                            "MCP no agent system prompt found promptName={}; falling back to master prompt",
+                            promptName);
+                    return systemPromptRepository.findByName(MASTER_PROMPT_NAME).map(SystemPrompt::getContent);
                 })
                 .orElseGet(() -> {
                     LOGGER.warn(

@@ -13,5 +13,7 @@ public record StaticRagPreloadProperties(List<StaticDocEntry> docs) {
     }
 
     public record StaticDocEntry(
-            @NonNull String id, @NonNull String sourcePath, @Nullable String ragScope) {}
+            @NonNull String id,
+            @NonNull String sourcePath,
+            @Nullable String ragScope) {}
 }
