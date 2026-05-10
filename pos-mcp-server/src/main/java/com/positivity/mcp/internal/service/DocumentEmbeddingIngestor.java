@@ -2,7 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
-import com.positivity.mcp.internal.orchestration.rag.RagScope;
+import com.positivity.mcp.internal.domain.RagScope;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;

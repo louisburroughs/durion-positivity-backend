@@ -1,9 +1,9 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
-import com.positivity.mcp.internal.orchestration.rag.RagScope;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
 import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;

@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.orchestration.rag;
+package com.positivity.mcp.internal.domain;
 
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;

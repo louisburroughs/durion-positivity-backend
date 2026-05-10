@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
-import com.positivity.mcp.internal.orchestration.rag.RagScope;
+import com.positivity.mcp.internal.domain.RagScope;
 import java.beans.Introspector;
 import java.util.ArrayList;
 import java.util.Collection;
