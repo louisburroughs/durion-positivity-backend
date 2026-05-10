@@ -103,7 +103,9 @@ class MasterAgentRegistryTest {
                 MasterAgentRegistry registry = new MasterAgentRegistry(
                                 List.of(),
                                 List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
-                                java.util.Map.of("ROLE_MANAGER", List.of(inventoryTool), "ROLE_CASHIER", List.of(inventoryTool)));
+                                java.util.Map.of(
+                                                "ROLE_MANAGER", List.of(inventoryTool),
+                                                "ROLE_CASHIER", List.of(inventoryTool)));
 
                 assertThat(registry.preloadableRoleIdentifiers()).containsExactly("ROLE_CASHIER", "ROLE_MANAGER");
         }
