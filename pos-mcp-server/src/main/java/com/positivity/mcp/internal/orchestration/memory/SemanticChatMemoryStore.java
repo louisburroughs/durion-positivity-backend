@@ -196,11 +196,13 @@ public class SemanticChatMemoryStore implements ChatMemory {
         }
         try {
             List<String> context = sessionSummaryService.retrieveRelevantContext(query, userId, 3);
-            LOGGER.debug(
-                    "Retrieved relevant context userId={} queryPreview=\"{}\" contextCount={}",
-                    userId,
-                    query.substring(0, Math.min(50, query.length())),
-                    context.size());
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "Retrieved relevant context userId={} queryPreview=\"{}\" contextCount={}",
+                        userId,
+                        query.substring(0, Math.min(50, query.length())),
+                        context.size());
+            }
             return context;
         } catch (RuntimeException e) {
             LOGGER.warn(

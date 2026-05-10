@@ -386,8 +386,8 @@ class SessionAgentManagerTest {
         }
 
         private static String ragScopeFor(java.util.Collection<?> tools) {
-                boolean hasInventory = tools.stream().anyMatch(tool -> tool instanceof InventoryFacadeTool);
-                boolean hasOrder = tools.stream().anyMatch(tool -> tool instanceof OrderFacadeTool);
+                boolean hasInventory = tools.stream().anyMatch(InventoryFacadeTool.class::isInstance);
+                boolean hasOrder = tools.stream().anyMatch(OrderFacadeTool.class::isInstance);
                 if (hasInventory && !hasOrder) {
                         return "inventory";
                 }

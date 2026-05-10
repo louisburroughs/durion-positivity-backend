@@ -33,7 +33,10 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
+
+import java.lang.reflect.Member;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -161,7 +164,7 @@ class StreamingSessionAgentManagerTest {
         @DisplayName("manager no longer retains tool registry service state")
         void manager_doesNotRetainToolRegistryServiceField() {
                 assertThat(java.util.Arrays.stream(StreamingSessionAgentManager.class.getDeclaredFields())
-                                .map(field -> field.getName())
+                                .map(Member::getName)
                                 .toList())
                                 .doesNotContain("toolRegistryService");
         }
@@ -334,7 +337,7 @@ class StreamingSessionAgentManagerTest {
 
                 ArgumentCaptor<List<Object>> fallbackToolsCaptor = ArgumentCaptor.forClass(List.class);
                 verify(sharedSupportSpy, atLeastOnce())
-                                .mergeTools(argThat((List<Object> tools) -> tools.isEmpty()),
+                                .mergeTools(argThat(Collection::isEmpty),
                                                 fallbackToolsCaptor.capture());
                 assertThat(fallbackToolsCaptor.getAllValues())
                                 .anySatisfy(fallbackTools -> assertThat(fallbackTools)
@@ -454,8 +457,8 @@ class StreamingSessionAgentManagerTest {
         }
 
         private static String ragScopeFor(java.util.Collection<?> tools) {
-                boolean hasInventory = tools.stream().anyMatch(tool -> tool instanceof InventoryFacadeTool);
-                boolean hasOrder = tools.stream().anyMatch(tool -> tool instanceof OrderFacadeTool);
+                boolean hasInventory = tools.stream().anyMatch(InventoryFacadeTool.class::isInstance);
+                boolean hasOrder = tools.stream().anyMatch(OrderFacadeTool.class::isInstance);
                 if (hasInventory && !hasOrder) {
                         return "inventory";
                 }

@@ -191,12 +191,6 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         return response;
                 } catch (RuntimeException exception) {
                         int elapsedMs = (int) (System.currentTimeMillis() - startMs);
-                        LOGGER.warn(
-                                        "MCP chat failed role={} elapsedMs={} errorName={} ",
-                                        role,
-                                        elapsedMs,
-                                        exception.getClass().getSimpleName(),
-                                        exception);
                         if (toolExecutionAuditLogger != null) {
                                 toolExecutionAuditLogger.logToolExecution(
                                                 null,
@@ -206,7 +200,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                                                 elapsedMs,
                                                 exception.getClass().getSimpleName());
                         }
-                        throw exception;
+                        throw new IllegalStateException(
+                                        "MCP chat failed role=%s elapsedMs=%d errorName=%s"
+                                                        .formatted(role, elapsedMs,
+                                                                        exception.getClass().getSimpleName()),
+                                        exception);
                 }
         }
 
