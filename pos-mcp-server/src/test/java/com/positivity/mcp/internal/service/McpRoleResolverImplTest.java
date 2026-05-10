@@ -33,15 +33,14 @@ class McpRoleResolverImplTest {
     }
 
     private void givenAuthorities(String... roles) {
-        Collection<? extends GrantedAuthority> authorities =
-                Stream.of(roles).map(SimpleGrantedAuthority::new).toList();
+        Collection<? extends GrantedAuthority> authorities = Stream.of(roles).map(SimpleGrantedAuthority::new).toList();
         when(authentication.getAuthorities()).thenAnswer(inv -> authorities);
     }
 
     @Test
     @DisplayName("resolvePrimaryRole returns ROLE_ADMIN when caller has admin authority")
     void resolvePrimaryRole_admin_returnsAdmin() {
-        givenAuthorities("ROLE_ADMIN", "ROLE_CASHIER");
+        givenAuthorities("ROLE_ADMIN", "ROLE_SERVICE_ADVISOR");
         assertThat(resolver.resolvePrimaryRole(authentication)).isEqualTo("ROLE_ADMIN");
     }
 
@@ -76,17 +75,18 @@ class McpRoleResolverImplTest {
 
     static Stream<Arguments> rolePriorityScenarios() {
         return Stream.of(
-                Arguments.of(List.of("ROLE_MANAGER", "ROLE_CASHIER"), "ROLE_MANAGER"),
-                Arguments.of(List.of("ROLE_SERVICE_WRITER", "ROLE_TECHNICIAN"), "ROLE_SERVICE_WRITER"),
-                Arguments.of(List.of("ROLE_CASHIER", "ROLE_SUPPLIER"), "ROLE_CASHIER"),
-                Arguments.of(List.of("ROLE_SUPPLIER", "ROLE_TECHNICIAN"), "ROLE_SUPPLIER"),
+                Arguments.of(List.of("ROLE_SYSTEM_ADMINISTRATOR", "ROLE_ADMIN"), "ROLE_SYSTEM_ADMINISTRATOR"),
+                Arguments.of(List.of("ROLE_ADMIN", "ROLE_LOCATION_MANAGER"), "ROLE_ADMIN"),
+                Arguments.of(List.of("ROLE_LOCATION_MANAGER", "ROLE_ACCOUNT_MANAGER"), "ROLE_LOCATION_MANAGER"),
+                Arguments.of(List.of("ROLE_ACCOUNT_MANAGER", "ROLE_SERVICE_ADVISOR"), "ROLE_ACCOUNT_MANAGER"),
+                Arguments.of(List.of("ROLE_SERVICE_ADVISOR", "ROLE_DISPATCHER"), "ROLE_SERVICE_ADVISOR"),
                 Arguments.of(List.of("ROLE_TECHNICIAN"), "ROLE_TECHNICIAN"));
     }
 
     @Test
     @DisplayName("resolvePrimaryRole ignores non-ROLE_ authorities")
     void resolvePrimaryRole_ignoresNonRoleAuthorities() {
-        givenAuthorities("mcp:chat:execute", "ROLE_CASHIER");
-        assertThat(resolver.resolvePrimaryRole(authentication)).isEqualTo("ROLE_CASHIER");
+        givenAuthorities("mcp:chat:execute", "ROLE_SERVICE_ADVISOR");
+        assertThat(resolver.resolvePrimaryRole(authentication)).isEqualTo("ROLE_SERVICE_ADVISOR");
     }
 }

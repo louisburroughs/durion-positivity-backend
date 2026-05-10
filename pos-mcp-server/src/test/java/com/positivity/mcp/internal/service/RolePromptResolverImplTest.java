@@ -19,8 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RolePromptResolverImplTest {
 
-    private static final String ROLE_NAME = "ROLE_CASHIER";
-    private static final String DEFAULT_NAME = "default";
+    private static final String ROLE_NAME = SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME;
+    private static final String DEFAULT_NAME = SystemPromptDefaults.DEFAULT_PROMPT_NAME;
 
     @Mock
     private SystemPromptRepository systemPromptRepository;
@@ -42,12 +42,12 @@ class RolePromptResolverImplTest {
     @Test
     @DisplayName("resolvePrompt returns role content when role name exists")
     void resolvePrompt_roleExists_returnsRoleContent() {
-        SystemPrompt rolePrompt = buildPrompt(ROLE_NAME, "You are a cashier assistant.");
+        SystemPrompt rolePrompt = buildPrompt(ROLE_NAME, "You are a service advisor assistant.");
         when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.of(rolePrompt));
 
         String result = resolver.resolvePrompt(ROLE_NAME);
 
-        assertThat(result).isEqualTo("You are a cashier assistant.");
+        assertThat(result).isEqualTo("You are a service advisor assistant.");
     }
 
     @Test

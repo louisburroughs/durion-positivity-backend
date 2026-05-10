@@ -54,13 +54,15 @@ public class ToolSelectionEngine {
     public @NonNull ToolSelectionResult selectRoleTools(@NonNull String role, @NonNull String message) {
         List<Object> roleTools = roleToolsForMessage(role, message);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
-            toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
-        LOGGER.debug(
-                "MCP shared tool selection role={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
-                role,
-                sharedOrchestrationSupport.toolNames(roleTools),
-                sharedOrchestrationSupport.toolNames(fallbackTools),
-                sharedOrchestrationSupport.preview(message));
+                toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared tool selection role={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
+                    role,
+                    sharedOrchestrationSupport.toolNames(roleTools),
+                    sharedOrchestrationSupport.toolNames(fallbackTools),
+                    sharedOrchestrationSupport.preview(message));
+        }
         return new ToolSelectionResult(roleTools, fallbackTools);
     }
 
@@ -72,59 +74,24 @@ public class ToolSelectionEngine {
     private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
         List<Object> fullRoleTools = toolRegistry.resolveDomainTools(role);
         if (toolRegistryService == null) {
-            LOGGER.debug(
-                    "MCP shared tool selector unavailable role={} resolvedRoleTools={} queryPreview=\"{}\"",
-                    role,
-                    sharedOrchestrationSupport.toolNames(fullRoleTools),
-                    sharedOrchestrationSupport.preview(message));
+            logToolSelectorUnavailable(role, message, fullRoleTools);
             return fullRoleTools;
         }
         try {
             String workflowState = deriveWorkflowState(message);
-            LOGGER.debug(
-                    "MCP shared workflow state derived message preview=\"{}\" workflowState={}",
-                    sharedOrchestrationSupport.preview(message),
-                    workflowState);
+            logWorkflowState(message, workflowState);
             List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
                     new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
-            if (LOGGER.isDebugEnabled()) {
-                for (int i = 0; i < candidates.size(); i++) {
-                    ToolMetadata candidate = candidates.get(i);
-                    double confidence = confidenceScore(i, candidate.priority());
-                    LOGGER.debug(
-                            "MCP shared tool candidate role={} workflowState={} toolName={} score={} priority={}",
-                            role,
-                            workflowState,
-                            candidate.name(),
-                            String.format(Locale.ROOT, "%.3f", confidence),
-                            String.format(Locale.ROOT, "%.3f", candidate.priority()));
-                }
-            }
+            logCandidates(role, workflowState, candidates);
             List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
-                LOGGER.debug(
-                        "MCP shared tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
-                        role,
-                        sharedOrchestrationSupport.preview(message),
-                        sharedOrchestrationSupport.toolNames(fullRoleTools));
-                return fullRoleTools;
+                return logNoCandidates(role, message, fullRoleTools);
             }
             List<Object> resolvedTools = toolRegistry.resolveDomainTools(role, selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
-                LOGGER.debug(
-                        "MCP shared tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",
-                        role,
-                        sharedOrchestrationSupport.preview(message),
-                        selectedNames,
-                        sharedOrchestrationSupport.toolNames(fullRoleTools));
-                return fullRoleTools;
+                return logResolvedToZeroTools(role, message, selectedNames, fullRoleTools);
             }
-            LOGGER.debug(
-                    "MCP shared tool candidates role={} queryPreview=\"{}\" candidateNames={} resolvedRoleTools={}",
-                    role,
-                    sharedOrchestrationSupport.preview(message),
-                    selectedNames,
-                    sharedOrchestrationSupport.toolNames(resolvedTools));
+            logResolvedCandidates(role, message, selectedNames, resolvedTools);
             return resolvedTools;
         } catch (RuntimeException exception) {
             LOGGER.warn(
@@ -134,6 +101,86 @@ public class ToolSelectionEngine {
                     exception.getClass().getSimpleName(),
                     exception);
             return fullRoleTools;
+        }
+    }
+
+    private void logToolSelectorUnavailable(
+            @NonNull String role, @NonNull String message, @NonNull List<Object> fullRoleTools) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared tool selector unavailable role={} resolvedRoleTools={} queryPreview=\"{}\"",
+                    role,
+                    sharedOrchestrationSupport.toolNames(fullRoleTools),
+                    sharedOrchestrationSupport.preview(message));
+        }
+    }
+
+    private void logWorkflowState(@NonNull String message, @NonNull String workflowState) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared workflow state derived message preview=\"{}\" workflowState={}",
+                    sharedOrchestrationSupport.preview(message),
+                    workflowState);
+        }
+    }
+
+    private void logCandidates(
+            @NonNull String role, @NonNull String workflowState, @NonNull List<ToolMetadata> candidates) {
+        if (LOGGER.isDebugEnabled()) {
+            for (int i = 0; i < candidates.size(); i++) {
+                ToolMetadata candidate = candidates.get(i);
+                double confidence = confidenceScore(i, candidate.priority());
+                LOGGER.debug(
+                        "MCP shared tool candidate role={} workflowState={} toolName={} score={} priority={}",
+                        role,
+                        workflowState,
+                        candidate.name(),
+                        String.format(Locale.ROOT, "%.3f", confidence),
+                        String.format(Locale.ROOT, "%.3f", candidate.priority()));
+            }
+        }
+    }
+
+    private @NonNull List<Object> logNoCandidates(
+            @NonNull String role, @NonNull String message, @NonNull List<Object> fullRoleTools) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared tool selector returned no candidates role={} queryPreview=\"{}\" fullRoleTools={}; using full role tool set",
+                    role,
+                    sharedOrchestrationSupport.preview(message),
+                    sharedOrchestrationSupport.toolNames(fullRoleTools));
+        }
+        return fullRoleTools;
+    }
+
+    private @NonNull List<Object> logResolvedToZeroTools(
+            @NonNull String role,
+            @NonNull String message,
+            @NonNull List<String> selectedNames,
+            @NonNull List<Object> fullRoleTools) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared tool candidates resolved to zero role tools role={} queryPreview=\"{}\" candidateNames={} fullRoleTools={}; using full role tool set",
+                    role,
+                    sharedOrchestrationSupport.preview(message),
+                    selectedNames,
+                    sharedOrchestrationSupport.toolNames(fullRoleTools));
+        }
+        return fullRoleTools;
+    }
+
+    private void logResolvedCandidates(
+            @NonNull String role,
+            @NonNull String message,
+            @NonNull List<String> selectedNames,
+            @NonNull List<Object> resolvedTools) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared tool candidates role={} queryPreview=\"{}\" candidateNames={} resolvedRoleTools={}",
+                    role,
+                    sharedOrchestrationSupport.preview(message),
+                    selectedNames,
+                    sharedOrchestrationSupport.toolNames(resolvedTools));
         }
     }
 
@@ -166,8 +213,10 @@ public class ToolSelectionEngine {
         if (containsAny(text, Set.of("order", "po", "purchase", "sale", "sales"))) {
             selected.add(orderFacadeTool);
         }
-        LOGGER.debug(
-                "MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
+        }
         return selected;
     }
 
@@ -187,5 +236,6 @@ public class ToolSelectionEngine {
 
     public record ToolSelectionResult(
             @NonNull List<Object> roleTools,
-            @NonNull List<Object> fallbackTools) {}
+            @NonNull List<Object> fallbackTools) {
+    }
 }

@@ -133,19 +133,22 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 }
 
                 long startMs = System.currentTimeMillis();
-                String messagePreview = sharedOrchestrationSupport.preview(message);
-                int tokenCount = tokenCount(message);
                 try {
                         boolean simpleChat = simpleChatClassifier.isSimpleChat(message);
-                        LOGGER.debug(
-                                        "MCP chat request received username={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
-                                        username,
-                                        role,
-                                        simpleChat,
-                                        message.length(),
-                                        tokenCount,
-                                        messagePreview);
+                        if (LOGGER.isDebugEnabled()) {
+                                String messagePreview = sharedOrchestrationSupport.preview(message);
+                                int tokenCount = tokenCount(message);
+                                LOGGER.debug(
+                                                "MCP chat request received username={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
+                                                username,
+                                                role,
+                                                simpleChat,
+                                                message.length(),
+                                                tokenCount,
+                                                messagePreview);
+                        }
                         if (simpleChat) {
+                                String messagePreview = sharedOrchestrationSupport.preview(message);
                                 LOGGER.debug(
                                                 "MCP simple chat dispatch username={} role={} preview=\"{}\"", username,
                                                 role, messagePreview);
@@ -158,6 +161,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                                         selection.fallbackTools());
                         String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
                         if (LOGGER.isDebugEnabled()) {
+                                String messagePreview = sharedOrchestrationSupport.preview(message);
                                 LOGGER.debug(
                                                 "MCP tool selection for username={} role={} selectedTools={} preview=\"{}\"",
                                                 username,

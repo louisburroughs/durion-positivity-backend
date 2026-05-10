@@ -78,7 +78,7 @@ Three ApplicationRunner beans execute on startup (in addition to tool and event-
 
 | Runner                             | Profile | Behaviour                                                                                                                                                                                                                                              |
 | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SystemPromptSeedRunner`           | `!test` | Seeds `default`, `ROLE_CASHIER`, `ROLE_MANAGER`, `ROLE_ADMIN`, `ROLE_TECHNICIAN` system prompts if not already present. Best-effort — per-entry failures are logged and skipped.                                                                       |
+| `SystemPromptSeedRunner`           | `!test` | Upserts `default` and SQL-aligned `ROLE_*` prompts from code (create missing, overwrite changed content). Best-effort — per-entry failures are logged and skipped.                                                                                     |
 | `RagPreloadRunner`                 | `alpha` | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
 | `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run.                                                                                                                                                                              |
 
@@ -86,7 +86,7 @@ Three ApplicationRunner beans execute on startup (in addition to tool and event-
 
 The system prompt used for each chat session is resolved per-role by `RolePromptResolver`:
 
-1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_CASHIER`).
+1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_SERVICE_ADVISOR`).
 2. If not found, log a WARN and look up the prompt named `default`.
 3. If not found, log a WARN and use the built-in hardcoded fallback prompt.
 

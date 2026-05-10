@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RolePromptResolverImpl implements RolePromptResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RolePromptResolverImpl.class);
-    private static final String DEFAULT_PROMPT_NAME = "default";
+    private static final String DEFAULT_PROMPT_NAME = SystemPromptDefaults.DEFAULT_PROMPT_NAME;
     private static final String BUILT_IN_PROMPT = SystemPromptDefaults.DEFAULT_PROMPT_TEXT;
 
     private final SystemPromptRepository systemPromptRepository;
