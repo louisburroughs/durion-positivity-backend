@@ -53,7 +53,7 @@ public class DocumentEmbeddingIngestor {
 
     public int ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
         long totalStartNanos = System.nanoTime();
-        Map<String, Object> normalizedMetadata = normalizeRagScope(metadata);
+        Map<String, Object> normalizedMetadata = RagScope.normalizeInMetadata(metadata);
         Object providedDocumentId = normalizedMetadata.get(DOCUMENT_ID);
         boolean replaceExisting = providedDocumentId instanceof String documentIdValue && !documentIdValue.isBlank();
         String documentId = replaceExisting
@@ -100,13 +100,6 @@ public class DocumentEmbeddingIngestor {
                             .formatted(documentId, replaceExisting, elapsedMs(totalStartNanos)),
                     exception);
         }
-    }
-
-    static @NonNull Map<String, Object> normalizeRagScope(@NonNull Map<String, Object> metadata) {
-        java.util.LinkedHashMap<String, Object> normalized = new java.util.LinkedHashMap<>(metadata);
-        Object rawScope = metadata.get(RAG_SCOPE);
-        normalized.put(RAG_SCOPE, RagScope.normalize(rawScope instanceof String value ? value : null));
-        return normalized;
     }
 
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {

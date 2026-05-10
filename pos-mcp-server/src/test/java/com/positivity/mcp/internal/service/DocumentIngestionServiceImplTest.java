@@ -114,7 +114,7 @@ class DocumentIngestionServiceImplTest {
     }
 
     @Test
-    @DisplayName("ingestDocuments normalizes rag scope for each metadata entry")
+    @DisplayName("ingestDocuments passes metadata through to the ingestor")
     void ingestDocuments_normalizesRagScope() {
         List<String> contents = List.of("one", "two");
         List<Map<String, Object>> metadata = List.of(
@@ -127,8 +127,8 @@ class DocumentIngestionServiceImplTest {
                 .ingestDocuments(
                         contents,
                         List.of(
-                                Map.of("document_id", "doc-1", "rag_scope", "inventory"),
-                                Map.of("document_id", "doc-2", "rag_scope", "master")));
+                                Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "),
+                                Map.of("document_id", "doc-2")));
     }
 
     @Test

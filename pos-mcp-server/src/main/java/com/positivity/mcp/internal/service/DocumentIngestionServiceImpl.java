@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobEntity;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobState;
 import com.positivity.mcp.internal.repository.DocumentIngestionJobRepository;
@@ -76,13 +77,12 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
 
     @Override
     public void ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
-        documentEmbeddingIngestor.ingestDocument(content, DocumentEmbeddingIngestor.normalizeRagScope(metadata));
+        documentEmbeddingIngestor.ingestDocument(content, metadata);
     }
 
     @Override
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
-        documentEmbeddingIngestor.ingestDocuments(
-                contents, metadataList.stream().map(DocumentEmbeddingIngestor::normalizeRagScope).toList());
+        documentEmbeddingIngestor.ingestDocuments(contents, metadataList);
     }
 
     public void resumeIncompleteJobs() {
@@ -159,7 +159,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     private @NonNull Map<String, Object> metadataWithDocumentId(
             @NonNull Map<String, Object> metadata, @NonNull String documentId) {
         java.util.LinkedHashMap<String, Object> normalized =
-                new java.util.LinkedHashMap<>(DocumentEmbeddingIngestor.normalizeRagScope(metadata));
+            new java.util.LinkedHashMap<>(RagScope.normalizeInMetadata(metadata));
         normalized.put(DOCUMENT_ID, documentId);
         return normalized;
     }

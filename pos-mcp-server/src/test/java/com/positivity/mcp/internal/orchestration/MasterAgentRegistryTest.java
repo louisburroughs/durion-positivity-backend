@@ -97,18 +97,18 @@ class MasterAgentRegistryTest {
         assertThat(registry.preloadableDomainAgents()).containsExactly("inventory", "orders");
     }
 
-        @Test
-        void preloadableRoleIdentifiersPreferRoleAssignments() {
-                Object inventoryTool = new InventoryFacadeToolStub();
-                MasterAgentRegistry registry = new MasterAgentRegistry(
-                                List.of(),
-                                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
-                                java.util.Map.of(
-                                                "ROLE_MANAGER", List.of(inventoryTool),
-                                                "ROLE_CASHIER", List.of(inventoryTool)));
+    @Test
+    void preloadableRoleIdentifiersPreferRoleAssignments() {
+        Object inventoryTool = new InventoryFacadeToolStub();
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(),
+                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
+                java.util.Map.of(
+                        "ROLE_MANAGER", List.of(inventoryTool),
+                        "ROLE_CASHIER", List.of(inventoryTool)));
 
-                assertThat(registry.preloadableRoleIdentifiers()).containsExactly("ROLE_CASHIER", "ROLE_MANAGER");
-        }
+        assertThat(registry.preloadableRoleIdentifiers()).containsExactly("ROLE_CASHIER", "ROLE_MANAGER");
+    }
 
     @Test
     void resolveDomainToolsPrefersRoleAssignmentsWhenPresent() {
