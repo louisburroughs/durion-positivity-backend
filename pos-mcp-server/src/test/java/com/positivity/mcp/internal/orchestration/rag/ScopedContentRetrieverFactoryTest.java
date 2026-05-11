@@ -21,7 +21,8 @@ import org.springframework.context.annotation.Bean;
 class ScopedContentRetrieverFactoryTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(ScopedContentRetrieverFactory.class, ScopedContentRetrieverFactoryContextTestConfig.class);
+            .withUserConfiguration(
+                    ScopedContentRetrieverFactory.class, ScopedContentRetrieverFactoryContextTestConfig.class);
 
     @Test
     void createsRetrieverFilteredToNormalizedRagScope() throws Exception {
@@ -34,8 +35,10 @@ class ScopedContentRetrieverFactoryTest {
         EmbeddingStoreContentRetriever embeddingRetriever = (EmbeddingStoreContentRetriever) retriever;
         assertThat(filterProvider(embeddingRetriever).apply(Query.from("stock")))
                 .isEqualTo(metadataKey("rag_scope").isEqualTo("inventory"));
-        assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("stock"))).isEqualTo(7);
-        assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("stock"))).isEqualTo(0.42);
+        assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("stock")))
+                .isEqualTo(7);
+        assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("stock")))
+                .isEqualTo(0.42);
     }
 
     @Test
@@ -49,8 +52,10 @@ class ScopedContentRetrieverFactoryTest {
         EmbeddingStoreContentRetriever embeddingRetriever = (EmbeddingStoreContentRetriever) retriever;
         assertThat(filterProvider(embeddingRetriever).apply(Query.from("anything")))
                 .isEqualTo(metadataKey("rag_scope").isEqualTo("master"));
-        assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("anything"))).isEqualTo(3);
-        assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("anything"))).isEqualTo(0.21);
+        assertThat(maxResultsProvider(embeddingRetriever).apply(Query.from("anything")))
+                .isEqualTo(3);
+        assertThat(minScoreProvider(embeddingRetriever).apply(Query.from("anything")))
+                .isEqualTo(0.21);
     }
 
     @Test
@@ -77,7 +82,8 @@ class ScopedContentRetrieverFactoryTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Function<Query, Integer> maxResultsProvider(EmbeddingStoreContentRetriever retriever) throws Exception {
+    private static Function<Query, Integer> maxResultsProvider(EmbeddingStoreContentRetriever retriever)
+            throws Exception {
         Field field = EmbeddingStoreContentRetriever.class.getDeclaredField("maxResultsProvider");
         field.setAccessible(true);
         return (Function<Query, Integer>) field.get(retriever);

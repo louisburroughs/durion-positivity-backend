@@ -83,7 +83,8 @@ public class ToolSelectionEngine {
             List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
                     new ToolSelectionContext(message, role, workflowState), candidateToolLimit);
             logCandidates(role, workflowState, candidates);
-            List<String> selectedNames = candidates.stream().map(ToolMetadata::name).toList();
+            List<String> selectedNames =
+                    candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 return logNoCandidates(role, message, fullRoleTools);
             }
@@ -214,8 +215,7 @@ public class ToolSelectionEngine {
             selected.add(orderFacadeTool);
         }
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(
-                    "MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
+            LOGGER.debug("MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
         }
         return selected;
     }
@@ -235,7 +235,5 @@ public class ToolSelectionEngine {
     }
 
     public record ToolSelectionResult(
-            @NonNull List<Object> roleTools,
-            @NonNull List<Object> fallbackTools) {
-    }
+            @NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {}
 }

@@ -71,7 +71,8 @@ class DocumentIngestionServiceImplTest {
     @DisplayName("submitDocument persists pending job and processes it in the background")
     void submitDocument_persistsPendingJobAndProcesses() {
         when(documentEmbeddingIngestor.ingestDocument(
-                        eq("policy text"), eq(Map.of("source", "manual", "document_id", "policy-1", "rag_scope", "master"))))
+                        eq("policy text"),
+                        eq(Map.of("source", "manual", "document_id", "policy-1", "rag_scope", "master"))))
                 .thenReturn(2);
 
         var accepted = service.submitDocument("policy text", Map.of("source", "manual", "document_id", "policy-1"));
@@ -117,9 +118,8 @@ class DocumentIngestionServiceImplTest {
     @DisplayName("ingestDocuments passes metadata through to the ingestor")
     void ingestDocuments_normalizesRagScope() {
         List<String> contents = List.of("one", "two");
-        List<Map<String, Object>> metadata = List.of(
-                Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "),
-                Map.of("document_id", "doc-2"));
+        List<Map<String, Object>> metadata =
+                List.of(Map.of("document_id", "doc-1", "rag_scope", " INVENTORY "), Map.of("document_id", "doc-2"));
 
         service.ingestDocuments(contents, metadata);
 

@@ -19,8 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RolePromptResolverImplTest {
 
-    private static final String ROLE_NAME = SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME;
-    private static final String DEFAULT_NAME = SystemPromptDefaults.DEFAULT_PROMPT_NAME;
+    private static final String AGENT_NAME = "inventory";
+    private static final String MASTER_NAME = "master";
 
     @Mock
     private SystemPromptRepository systemPromptRepository;
@@ -40,46 +40,46 @@ class RolePromptResolverImplTest {
     // ─── resolvePrompt ──────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("resolvePrompt returns role content when role name exists")
-    void resolvePrompt_roleExists_returnsRoleContent() {
-        SystemPrompt rolePrompt = buildPrompt(ROLE_NAME, "You are a service advisor assistant.");
-        when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.of(rolePrompt));
+    @DisplayName("resolvePrompt returns agent content when agent prompt exists")
+    void resolvePrompt_agentPromptExists_returnsAgentContent() {
+        SystemPrompt agentPrompt = buildPrompt(AGENT_NAME, "You are the inventory domain agent.");
+        when(systemPromptRepository.findByName(AGENT_NAME)).thenReturn(Optional.of(agentPrompt));
 
-        String result = resolver.resolvePrompt(ROLE_NAME);
+        String result = resolver.resolvePrompt(AGENT_NAME);
 
-        assertThat(result).isEqualTo("You are a service advisor assistant.");
+        assertThat(result).isEqualTo("You are the inventory domain agent.");
     }
 
     @Test
-    @DisplayName("resolvePrompt returns default content when role not found but default exists")
-    void resolvePrompt_roleNotFound_defaultExists_returnsDefaultContent() {
-        SystemPrompt defaultPrompt = buildPrompt(DEFAULT_NAME, "You are a default assistant.");
-        when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.empty());
-        when(systemPromptRepository.findByName(DEFAULT_NAME)).thenReturn(Optional.of(defaultPrompt));
+    @DisplayName("resolvePrompt falls back to master prompt when agent prompt is missing")
+    void resolvePrompt_agentPromptMissing_masterExists_returnsMasterContent() {
+        SystemPrompt masterPrompt = buildPrompt(MASTER_NAME, "You are the master orchestration agent.");
+        when(systemPromptRepository.findByName(AGENT_NAME)).thenReturn(Optional.empty());
+        when(systemPromptRepository.findByName(MASTER_NAME)).thenReturn(Optional.of(masterPrompt));
 
-        String result = resolver.resolvePrompt(ROLE_NAME);
+        String result = resolver.resolvePrompt(AGENT_NAME);
 
-        assertThat(result).isEqualTo("You are a default assistant.");
+        assertThat(result).isEqualTo("You are the master orchestration agent.");
     }
 
     @Test
-    @DisplayName("resolvePrompt returns built-in prompt when neither role nor default exists")
+    @DisplayName("resolvePrompt returns built-in prompt when neither agent nor master prompt exists")
     void resolvePrompt_neitherFound_returnsBuiltIn() {
-        when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.empty());
-        when(systemPromptRepository.findByName(DEFAULT_NAME)).thenReturn(Optional.empty());
+        when(systemPromptRepository.findByName(AGENT_NAME)).thenReturn(Optional.empty());
+        when(systemPromptRepository.findByName(MASTER_NAME)).thenReturn(Optional.empty());
 
-        String result = resolver.resolvePrompt(ROLE_NAME);
+        String result = resolver.resolvePrompt(AGENT_NAME);
 
         assertThat(result).contains("concise POS assistant");
     }
 
     @Test
-    @DisplayName("resolvePrompt returns shared default text when neither role nor default prompt exists")
-    void resolvePrompt_noPromptFoundForRoleOrDefault_returnsSharedDefaultText() {
-        when(systemPromptRepository.findByName(ROLE_NAME)).thenReturn(Optional.empty());
-        when(systemPromptRepository.findByName(DEFAULT_NAME)).thenReturn(Optional.empty());
+    @DisplayName("resolvePrompt returns shared default text when neither agent nor master prompt exists")
+    void resolvePrompt_noPromptFoundForAgentOrMaster_returnsSharedDefaultText() {
+        when(systemPromptRepository.findByName(AGENT_NAME)).thenReturn(Optional.empty());
+        when(systemPromptRepository.findByName(MASTER_NAME)).thenReturn(Optional.empty());
 
-        String result = resolver.resolvePrompt(ROLE_NAME);
+        String result = resolver.resolvePrompt(AGENT_NAME);
 
         assertThat(result).isEqualTo(SystemPromptDefaults.DEFAULT_PROMPT_TEXT);
     }

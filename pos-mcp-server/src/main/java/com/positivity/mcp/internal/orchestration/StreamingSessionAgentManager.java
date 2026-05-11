@@ -1,11 +1,12 @@
 package com.positivity.mcp.internal.orchestration;
 
-import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
@@ -124,8 +125,8 @@ public class StreamingSessionAgentManager
                 role,
                 cacheKey,
                 sharedOrchestrationSupport.toolNames(allTools));
-        StreamingPosAssistant agent = roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey,
-                ignored -> buildAgent(role, allTools));
+        StreamingPosAssistant agent =
+                roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
 
         String userContext = formatUserContext(currentUserContext);
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
@@ -180,32 +181,37 @@ public class StreamingSessionAgentManager
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role, @NonNull List<Object> tools) {
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
+        String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
         ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
-        ContentRetriever broadSemanticRetriever = scopedContentRetrieverFactory.create(ragScope,
-                TIER2_RETRIEVAL_CANDIDATES, 0.55);
+        ContentRetriever broadSemanticRetriever =
+                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
         ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever hybridRetriever = new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever),
-                TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever =
+                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
         ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(rerankedRetriever,
-                "tier2-hybrid-reranked-retriever");
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
+        // Prompt resolution is deferred per-message via systemMessageProvider so that
+        // database updates to prompts are visible immediately without agent rebuild.
         StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
+                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(promptName))
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.debug(
-                "Built MCP streaming role agent role={} ragScope={} toolNames={}",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
+                promptName,
                 ragScope,
                 sharedOrchestrationSupport.toolNames(tools));
         LOGGER.info(
-                "Built MCP streaming role agent role={} ragScope={} tools={} in {} ms",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} tools={} in {} ms",
                 role,
+                promptName,
                 ragScope,
                 tools.size(),
                 elapsedMs(startNanos));
@@ -235,8 +241,8 @@ public class StreamingSessionAgentManager
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
                 ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
-                List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(selection.roleTools(),
-                        selection.fallbackTools());
+                List<Object> selectedTools =
+                        sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + warmCacheKey, buildAgent(role, selectedTools));
 

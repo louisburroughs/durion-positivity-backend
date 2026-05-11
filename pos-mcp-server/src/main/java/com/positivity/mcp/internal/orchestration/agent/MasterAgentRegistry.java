@@ -62,7 +62,9 @@ public final class MasterAgentRegistry {
     }
 
     public @NonNull Optional<DomainAgentDefinition> findDomainAgent(@NonNull String agentName) {
-        return domainAgents.stream().filter(agent -> agent.agentName().equals(agentName)).findFirst();
+        return domainAgents.stream()
+                .filter(agent -> agent.agentName().equals(agentName))
+                .findFirst();
     }
 
     public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
@@ -77,14 +79,17 @@ public final class MasterAgentRegistry {
             LOGGER.debug(
                     "MCP master registry resolve-all agentName={} sharedTools={} resolvedTools={}",
                     agentName,
-                    sharedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList(),
-                    resolvedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList());
+                    sharedTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList(),
+                    resolvedTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList());
         }
         return resolvedTools;
     }
 
-    public @NonNull List<Object> resolveDomainTools(
-            @NonNull String agentName, @NonNull Collection<String> toolNames) {
+    public @NonNull List<Object> resolveDomainTools(@NonNull String agentName, @NonNull Collection<String> toolNames) {
         Set<String> selectedNames = new HashSet<>();
         for (String toolName : toolNames) {
             selectedNames.add(toolName.toLowerCase(Locale.ROOT));
@@ -103,8 +108,12 @@ public final class MasterAgentRegistry {
                     "MCP master registry resolve-selected agentName={} selectedNames={} availableTools={} resolvedTools={}",
                     agentName,
                     new TreeSet<>(selectedNames),
-                    availableTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList(),
-                    resolvedTools.stream().map(tool -> ClassUtils.getUserClass(tool).getSimpleName()).toList());
+                    availableTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList(),
+                    resolvedTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList());
         }
         return resolvedTools;
     }

@@ -160,8 +160,8 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         }
     }
 
-    private void preloadDocument(
-            @NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope) throws IOException {
+    private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope)
+            throws IOException {
         Resource resource = new ClassPathResource(resourcePath(sourcePath));
         byte[] bytes = resource.getContentAsByteArray();
         String content = new String(bytes, StandardCharsets.UTF_8);
@@ -193,12 +193,12 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
     private void persistFailedRecord(
             @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath, @Nullable String ragScope) {
         persistRecord(
-            documentId,
-            hash != null ? hash : "",
-            sourcePath,
-            RagScope.normalize(ragScope),
-            RagPreloadStatus.FAILED,
-            null);
+                documentId,
+                hash != null ? hash : "",
+                sourcePath,
+                RagScope.normalize(ragScope),
+                RagPreloadStatus.FAILED,
+                null);
         meterRegistry
                 .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId)
                 .increment();

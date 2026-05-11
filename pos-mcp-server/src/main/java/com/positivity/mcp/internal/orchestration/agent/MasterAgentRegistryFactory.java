@@ -29,8 +29,8 @@ public final class MasterAgentRegistryFactory {
             @NonNull List<DomainAgentDefinition> domainAgents,
             @NonNull Map<String, List<Object>> roleToolAssignments) {
 
-        public LoadedMasterAgentRegistry(@NonNull List<Object> sharedTools,
-                @NonNull List<DomainAgentDefinition> domainAgents) {
+        public LoadedMasterAgentRegistry(
+                @NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
             this(sharedTools, domainAgents, Map.of());
         }
     }

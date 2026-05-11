@@ -157,8 +157,7 @@ class StaticRagPreloadServiceImplTest {
                 .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, hash)));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service =
-                createService(List.of(docEntry(TEST_DOC_ID)));
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -189,8 +188,7 @@ class StaticRagPreloadServiceImplTest {
         when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service =
-                createService(List.of(docEntry(TEST_DOC_ID)));
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -199,8 +197,9 @@ class StaticRagPreloadServiceImplTest {
         verify(ragPreloadRecordRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
         assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
-        verify(ragPreloadRecordRepository, never()).findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
-                TEST_DOC_ID, "master", RagPreloadStatus.LOADED);
+        verify(ragPreloadRecordRepository, never())
+                .findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, "master", RagPreloadStatus.LOADED);
     }
 
     @Test
@@ -215,8 +214,7 @@ class StaticRagPreloadServiceImplTest {
         when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service =
-                createService(List.of(docEntry(TEST_DOC_ID)));
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -242,8 +240,7 @@ class StaticRagPreloadServiceImplTest {
         when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service =
-                createService(List.of(docEntry(TEST_DOC_ID)));
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
         service.preloadAll();
 
@@ -300,16 +297,18 @@ class StaticRagPreloadServiceImplTest {
         when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
         when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        StaticRagPreloadServiceImpl service = createService(List.of(
-                new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH, " INVENTORY ")));
+        StaticRagPreloadServiceImpl service = createService(
+                List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH, " INVENTORY ")));
 
         service.preloadAll();
 
         verify(documentIngestionService)
-                .submitDocument(anyString(), eq(java.util.Map.of(
-                        "document_id", TEST_DOC_ID,
-                        "source_path", TEST_SOURCE_PATH,
-                        "rag_scope", "inventory")));
+                .submitDocument(
+                        anyString(),
+                        eq(java.util.Map.of(
+                                "document_id", TEST_DOC_ID,
+                                "source_path", TEST_SOURCE_PATH,
+                                "rag_scope", "inventory")));
     }
 
     @Test

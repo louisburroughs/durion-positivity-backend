@@ -28,7 +28,8 @@ public class MasterAgentRegistryLoader {
     private final ApplicationContext applicationContext;
     private final String preloadWorkflowState;
 
-    MasterAgentRegistryLoader(@NonNull ToolMetadataRepository repository, @NonNull ApplicationContext applicationContext) {
+    MasterAgentRegistryLoader(
+            @NonNull ToolMetadataRepository repository, @NonNull ApplicationContext applicationContext) {
         this(repository, applicationContext, DEFAULT_PRELOAD_WORKFLOW_STATE);
     }
 
@@ -46,7 +47,9 @@ public class MasterAgentRegistryLoader {
         String workflowState = resolvePreloadWorkflowState();
         List<ToolMetadata> tools = repository.findEnabledByWorkflow(workflowState);
         if (tools.isEmpty()) {
-            log.warn("No workflow-scoped tools found for workflowState={}; master agent registry will be empty", workflowState);
+            log.warn(
+                    "No workflow-scoped tools found for workflowState={}; master agent registry will be empty",
+                    workflowState);
         }
         List<Object> sharedTools = new ArrayList<>();
         Map<String, List<Object>> domainScopedTools = new TreeMap<>();
@@ -57,7 +60,9 @@ public class MasterAgentRegistryLoader {
                 if (MASTER_DOMAINS.contains(domain)) {
                     sharedTools.add(bean);
                 } else {
-                    domainScopedTools.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(bean);
+                    domainScopedTools
+                            .computeIfAbsent(domain, ignored -> new ArrayList<>())
+                            .add(bean);
                 }
             }
         }

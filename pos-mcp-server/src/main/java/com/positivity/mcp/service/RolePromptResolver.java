@@ -5,5 +5,5 @@ import org.jspecify.annotations.NonNull;
 public interface RolePromptResolver {
 
     @NonNull
-    String resolvePrompt(@NonNull String role);
+    String resolvePrompt(@NonNull String promptName);
 }
