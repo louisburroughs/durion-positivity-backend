@@ -1,8 +1,10 @@
 package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.internal.domain.RagScope;
 import java.util.List;
+import java.util.Locale;
+import com.positivity.mcp.internal.domain.RagScope;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * System prompt definitions and defaults for seed initialization and agent configuration.
@@ -62,7 +64,12 @@ public final class SystemPromptDefaults {
             - include next actions when they materially help the user move forward
             """;
 
-    public static @NonNull String promptNameForRagScope(@NonNull String ragScope) {
+    /**
+     * Resolves the system prompt key for a RAG scope.
+     *
+     * <p>Null or blank values normalize to {@link RagScope#MASTER}.
+     */
+    public static @NonNull String promptNameForRagScope(@Nullable String ragScope) {
         // Delegate to RagScope.normalize() to maintain single source of truth for normalization logic.
         String normalizedScope = RagScope.normalize(ragScope);
         // Map "shared" scope to master prompt (semantic equivalence in agent context).
@@ -72,5 +79,6 @@ public final class SystemPromptDefaults {
         return normalizedScope;
     }
 
-    private SystemPromptDefaults() {}
+    private SystemPromptDefaults() {
+    }
 }
