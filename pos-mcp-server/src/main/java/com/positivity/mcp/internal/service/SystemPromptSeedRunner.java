@@ -24,6 +24,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "inventory",
                 domainPrompt(
+                        "inventory",
                         "Inventory",
                         "inventory availability, receiving, replenishment, and reconciliation",
                         "Confirm SKU, location, on-hand, available, committed, and inbound context before giving an answer.",
@@ -32,6 +33,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "order",
                 domainPrompt(
+                        "order",
                         "Order",
                         "purchase orders, sales orders, and order lifecycle coordination",
                         "Track order status, fulfillment blockers, supplier or store handoffs, and next-step dependencies.",
@@ -40,6 +42,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "customer",
                 domainPrompt(
+                        "customer",
                         "Customer",
                         "customer profile context, account history, and communication-sensitive answers",
                         "Use customer records to ground identity, history, and relationship context before responding.",
@@ -48,6 +51,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "pricing",
                 domainPrompt(
+                        "pricing",
                         "Pricing",
                         "price lookup, discounts, margin guidance, and pricing exceptions",
                         "Explain the source of a price, discount, override, or margin concern in operational terms.",
@@ -56,6 +60,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "workorder",
                 domainPrompt(
+                        "workorder",
                         "Workorder",
                         "workorder intake, execution status, assignment, and lifecycle coordination",
                         "Track workorder stage, blockers, technician handoff, required parts, and customer-facing next steps.",
@@ -64,6 +69,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "catalog",
                 domainPrompt(
+                        "catalog",
                         "Catalog",
                         "item discovery, product metadata, and catalog fit-for-use answers",
                         "Use catalog data to identify the right item, attributes, variants, and compatibility signals.",
@@ -72,6 +78,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "vehicle",
                 domainPrompt(
+                        "vehicle",
                         "Vehicle",
                         "VIN, fitment, compatibility, and vehicle-specific service context",
                         "Anchor recommendations to confirmed vehicle attributes before suggesting parts or service conclusions.",
@@ -80,6 +87,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "accounting",
                 domainPrompt(
+                        "accounting",
                         "Accounting",
                         "financial summaries, ledger-facing context, and reconciliation support",
                         "Explain accounting impacts, reconciliation questions, and financial status using explicit business facts.",
@@ -88,6 +96,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "invoice",
                 domainPrompt(
+                        "invoice",
                         "Invoice",
                         "invoice creation, status, and invoice issue resolution",
                         "Track invoice lifecycle, blockers, payment relevance, and document state clearly.",
@@ -96,6 +105,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "hr",
                 domainPrompt(
+                        "hr",
                         "HR",
                         "workforce scheduling, staffing context, and HR policy guidance",
                         "Use staffing data and policy context to answer schedule, availability, and operational workforce questions.",
@@ -104,6 +114,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "reporting",
                 domainPrompt(
+                        "reporting",
                         "Reporting",
                         "operational metrics, executive summaries, and performance interpretation",
                         "Translate reported numbers into the clearest operational takeaway for the user.",
@@ -112,6 +123,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "location",
                 domainPrompt(
+                        "location",
                         "Location",
                         "store context, branch-level operations, and location-specific constraints",
                         "Use location context to answer branch-specific staffing, stock, and operational questions.",
@@ -120,6 +132,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "shop-manager",
                 domainPrompt(
+                        "shop-manager",
                         "Shop Manager",
                         "branch operations, queue control, scheduling trade-offs, and execution oversight",
                         "Help a shop leader make the next operational decision with visibility into workload and blockers.",
@@ -128,6 +141,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "tax",
                 domainPrompt(
+                        "tax",
                         "Tax",
                         "tax calculation context, tax rule interpretation, and tax exceptions",
                         "Explain tax outcomes in terms of the triggering facts, rule boundaries, and operational consequences.",
@@ -136,6 +150,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "admin",
                 domainPrompt(
+                        "admin",
                         "Admin",
                         "platform governance, access administration, and operational controls",
                         "Help with administrative actions, permission-sensitive changes, and governance checks.",
@@ -144,6 +159,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         prompts.put(
                 "events",
                 domainPrompt(
+                        "events",
                         "Events",
                         "audit events, operational traces, and observability context",
                         "Use event history to reconstruct what happened, when it happened, and which action likely caused it.",
@@ -153,6 +169,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
     }
 
     private static @NonNull String domainPrompt(
+            @NonNull String promptKey,
             @NonNull String title,
             @NonNull String mission,
             @NonNull String responsibility,
@@ -176,7 +193,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         - %s
         - Prefer concrete statuses, exact entities, and next actions over generic advice.
         """.formatted(
-                title, mission, responsibility, title.toLowerCase(java.util.Locale.ROOT), guardrail, responseStyle);
+                title, mission, responsibility, promptKey, guardrail, responseStyle);
     }
 
     private final SystemPromptRepository systemPromptRepository;

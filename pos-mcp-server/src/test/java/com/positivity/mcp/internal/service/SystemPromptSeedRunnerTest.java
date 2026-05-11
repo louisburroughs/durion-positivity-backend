@@ -40,6 +40,7 @@ class SystemPromptSeedRunnerTest {
                         SystemPromptDefaults.ROLE_ADMIN_PROMPT_NAME,
                         SystemPromptDefaults.ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
                         SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME);
+        assertThat(seedPrompts.get("shop-manager")).contains("Stay inside shop-manager scope");
     }
 
     @Test
