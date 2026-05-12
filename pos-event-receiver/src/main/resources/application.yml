@@ -52,3 +52,10 @@ logging:
       positivity:
         event:
           receiver: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

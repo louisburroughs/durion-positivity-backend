@@ -44,6 +44,12 @@ logging:
     com:
       positivity:
         people: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     enabled: true

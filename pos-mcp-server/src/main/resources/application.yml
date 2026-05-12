@@ -218,6 +218,12 @@ logging:
     com:
       positivity:
         mcp: DEBUG
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
     org:
       springframework:
         web: INFO

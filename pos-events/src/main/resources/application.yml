@@ -6,3 +6,10 @@ logging:
     com:
       positivity:
         events: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

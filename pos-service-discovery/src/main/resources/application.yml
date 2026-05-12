@@ -25,3 +25,13 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+logging:
+  level:
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

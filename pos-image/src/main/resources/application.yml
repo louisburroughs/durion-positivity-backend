@@ -42,3 +42,10 @@ logging:
     com:
       positivity:
         posimage: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

@@ -136,3 +136,10 @@ logging:
         mcp:
           internal:
             orchestration: DEBUG
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

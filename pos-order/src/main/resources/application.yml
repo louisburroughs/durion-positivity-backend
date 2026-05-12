@@ -36,6 +36,12 @@ logging:
     com:
       positivity:
         order: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
     org:
       springframework:
         web: INFO

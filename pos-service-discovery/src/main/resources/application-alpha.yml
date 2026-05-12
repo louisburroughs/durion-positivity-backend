@@ -1,2 +1,12 @@
 server:
   port: ${SERVER_PORT:8761}
+
+logging:
+  level:
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

@@ -43,6 +43,12 @@ logging:
       positivity:
         vehicle: INFO
 
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     path: /v3/api-docs

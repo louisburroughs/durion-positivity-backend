@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.service;
 
 import java.util.List;
-import java.util.Locale;
 import com.positivity.mcp.internal.domain.RagScope;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;

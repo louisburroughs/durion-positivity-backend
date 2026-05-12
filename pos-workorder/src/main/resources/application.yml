@@ -43,6 +43,12 @@ logging:
     com:
       positivity:
         workorder: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 # workorder:
 #   statemachine:
 #     audit:

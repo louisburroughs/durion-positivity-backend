@@ -8,3 +8,13 @@ eureka:
   client:
     serviceUrl:
       defaultZone: ${EUREKA_SERVER_URL}
+
+logging:
+  level:
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

@@ -85,6 +85,12 @@ logging:
     com:
       positivity:
         accounting: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
     org:
       springframework:
         security: DEBUG

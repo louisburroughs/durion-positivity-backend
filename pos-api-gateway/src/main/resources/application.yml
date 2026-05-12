@@ -235,3 +235,10 @@ logging:
     com:
       positivity:
         gateway: DEBUG
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

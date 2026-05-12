@@ -47,6 +47,12 @@ logging:
       positivity:
         invoice: INFO
 
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 # Billing defaults (CAP:092)
 billing:
   defaults:
