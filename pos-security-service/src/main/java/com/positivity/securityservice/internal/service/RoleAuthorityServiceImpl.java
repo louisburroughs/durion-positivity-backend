@@ -549,6 +549,12 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
 
     private Set<String> peopleAuthorities() {
         return new HashSet<>(List.of(
+                "people:person:view",
+                "people:person:create",
+                "people:person:edit",
+                "people:person:delete",
+                "people:userLink:view",
+                "people:userLink:write",
                 "people:employee:view",
                 "people:employee:create",
                 "people:employee:edit",
