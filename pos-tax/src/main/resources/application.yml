@@ -62,3 +62,13 @@ pos:
       max-attempts: 3
       initial-backoff: 500
       multiplier: 2.0
+
+logging:
+  level:
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

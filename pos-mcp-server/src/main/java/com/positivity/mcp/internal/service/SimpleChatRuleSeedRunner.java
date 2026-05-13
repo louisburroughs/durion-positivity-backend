@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.internal.entity.SimpleChatRule;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.classification.SimpleChatRuleSpec;
+import com.positivity.mcp.internal.entity.SimpleChatRule;
 import com.positivity.mcp.internal.repository.SimpleChatRuleRepository;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,7 +29,9 @@ public class SimpleChatRuleSeedRunner implements ApplicationRunner {
     @Override
     public void run(@NonNull ApplicationArguments args) {
         Set<String> existingKeys = new HashSet<>();
-        repository.findAll().forEach(rule -> existingKeys.add(key(rule.getRuleType().name(), rule.getPhrase())));
+        repository
+                .findAll()
+                .forEach(rule -> existingKeys.add(key(rule.getRuleType().name(), rule.getPhrase())));
 
         int inserted = 0;
         for (SimpleChatRuleSpec ruleSpec : SimpleChatRuleDefaults.defaults()) {

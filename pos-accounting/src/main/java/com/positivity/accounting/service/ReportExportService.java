@@ -17,35 +17,35 @@ import org.springframework.data.domain.Pageable;
  */
 public interface ReportExportService {
 
-  /**
-   * Submit a new asynchronous report export request.
-   *
-   * @param request    validated export request payload
-   * @param operatorId authenticated operator submitting the request
-   * @return initial export job response with PENDING status
-   */
-  @NonNull
-  ReportExportResponse requestExport(@NonNull ReportExportRequest request, @NonNull String operatorId);
+    /**
+     * Submit a new asynchronous report export request.
+     *
+     * @param request    validated export request payload
+     * @param operatorId authenticated operator submitting the request
+     * @return initial export job response with PENDING status
+     */
+    @NonNull
+    ReportExportResponse requestExport(@NonNull ReportExportRequest request, @NonNull String operatorId);
 
-  /**
-   * Get the current status of an export job.
-   *
-   * @param exportId export job UUID
-   * @return current export job state
-   * @throws org.springframework.web.server.ResponseStatusException with HTTP 404
-   *                                                                when no export
-   *                                                                exists for the
-   *                                                                given ID
-   */
-  @NonNull
-  ReportExportResponse getExportStatus(@NonNull UUID exportId);
+    /**
+     * Get the current status of an export job.
+     *
+     * @param exportId export job UUID
+     * @return current export job state
+     * @throws org.springframework.web.server.ResponseStatusException with HTTP 404
+     *                                                                when no export
+     *                                                                exists for the
+     *                                                                given ID
+     */
+    @NonNull
+    ReportExportResponse getExportStatus(@NonNull UUID exportId);
 
-  /**
-   * List export history (paginated, most recent first).
-   *
-   * @param pageable pagination and sort parameters
-   * @return page of export job responses
-   */
-  @NonNull
-  Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable);
+    /**
+     * List export history (paginated, most recent first).
+     *
+     * @param pageable pagination and sort parameters
+     * @return page of export job responses
+     */
+    @NonNull
+    Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable);
 }

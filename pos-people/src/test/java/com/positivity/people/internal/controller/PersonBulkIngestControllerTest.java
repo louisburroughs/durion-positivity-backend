@@ -26,75 +26,75 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(PersonBulkIngestController.class)
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
-@SuppressWarnings({ "java:S6813", "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class PersonBulkIngestControllerTest {
 
-  private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
-  private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000021");
-  private static final UUID EMPLOYEE_ID = UUID.fromString("00000000-0000-0000-0000-000000000022");
+    private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
+    private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000021");
+    private static final UUID EMPLOYEE_ID = UUID.fromString("00000000-0000-0000-0000-000000000022");
 
-  @Autowired
-  MockMvc mockMvc;
+    @Autowired
+    MockMvc mockMvc;
 
-  @Autowired
-  ObjectMapper objectMapper;
+    @Autowired
+    ObjectMapper objectMapper;
 
-  @MockitoBean
-  java.time.Clock clock;
+    @MockitoBean
+    java.time.Clock clock;
 
-  @MockitoBean
-  EmployeeService employeeService;
+    @MockitoBean
+    EmployeeService employeeService;
 
-  // ─── POST /v1/people/bulk-ingest — 200 OK ────────────────────────────────
+    // ─── POST /v1/people/bulk-ingest — 200 OK ────────────────────────────────
 
-  @Test
-  void bulkIngest_returnsOkWithResults_whenAllRecordsSucceed() throws Exception {
-    PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
-    ingestRecord.setLegalName("Alice Brown");
-    ingestRecord.setEmployeeNumber("EMP-001");
-    ingestRecord.setHireDate("2025-01-15");
+    @Test
+    void bulkIngest_returnsOkWithResults_whenAllRecordsSucceed() throws Exception {
+        PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
+        ingestRecord.setLegalName("Alice Brown");
+        ingestRecord.setEmployeeNumber("EMP-001");
+        ingestRecord.setHireDate("2025-01-15");
 
-    BulkIngestRequest<PersonBulkIngestRecord> request = new BulkIngestRequest<>();
-    request.setJobId(JOB_ID);
-    request.setLocationId(LOCATION_ID);
-    request.setRecords(List.of(ingestRecord));
+        BulkIngestRequest<PersonBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
 
-    EmployeeProfileDto profile = EmployeeProfileDto.builder()
-        .id(EMPLOYEE_ID)
-        .legalName("Alice Brown")
-        .employeeNumber("EMP-001")
-        .build();
+        EmployeeProfileDto profile = EmployeeProfileDto.builder()
+                .id(EMPLOYEE_ID)
+                .legalName("Alice Brown")
+                .employeeNumber("EMP-001")
+                .build();
 
-    when(employeeService.createEmployee(any())).thenReturn(profile);
+        when(employeeService.createEmployee(any())).thenReturn(profile);
 
-    mockMvc.perform(post("/v1/people/bulk-ingest")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalSubmitted").value(1))
-        .andExpect(jsonPath("$.successCount").value(1))
-        .andExpect(jsonPath("$.failureCount").value(0));
-  }
+        mockMvc.perform(post("/v1/people/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSubmitted").value(1))
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(0));
+    }
 
-  @Test
-  void bulkIngest_returnsPartialFailure_whenSomeDatesAreInvalid() throws Exception {
-    PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
-    ingestRecord.setLegalName("Bob Jones");
-    ingestRecord.setEmployeeNumber("EMP-002");
-    ingestRecord.setHireDate("15-Jan-2025"); // invalid ISO format
+    @Test
+    void bulkIngest_returnsPartialFailure_whenSomeDatesAreInvalid() throws Exception {
+        PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
+        ingestRecord.setLegalName("Bob Jones");
+        ingestRecord.setEmployeeNumber("EMP-002");
+        ingestRecord.setHireDate("15-Jan-2025"); // invalid ISO format
 
-    BulkIngestRequest<PersonBulkIngestRecord> request = new BulkIngestRequest<>();
-    request.setJobId(JOB_ID);
-    request.setLocationId(LOCATION_ID);
-    request.setRecords(List.of(ingestRecord));
+        BulkIngestRequest<PersonBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
 
-    mockMvc.perform(post("/v1/people/bulk-ingest")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalSubmitted").value(1))
-        .andExpect(jsonPath("$.successCount").value(0))
-        .andExpect(jsonPath("$.failureCount").value(1))
-        .andExpect(jsonPath("$.results[0].errorCode").value("PEOPLE_INGEST_FAILED"));
-  }
+        mockMvc.perform(post("/v1/people/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSubmitted").value(1))
+                .andExpect(jsonPath("$.successCount").value(0))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("PEOPLE_INGEST_FAILED"));
+    }
 }

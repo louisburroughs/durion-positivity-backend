@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class LocationFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-location/v1/locations";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private LocationFacadeTool tool;
@@ -27,14 +27,19 @@ class LocationFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new LocationFacadeTool(builder, BASE_URL);
+        tool = new LocationFacadeTool(
+                builder,
+                BASE_URL,
+                "/location/v1/locations/{locationId}",
+                "/location/v1/locations/search?q={query}",
+                "/location/v1/locations/{locationId}/inventory");
     }
 
     @Test
     @DisplayName("getLocation sends GET /{locationId} and returns body")
     void getLocation_sendsGetToLocationEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/LOC-001"))
+                .expect(requestTo(BASE_URL + "/location/v1/locations/LOC-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"LOC-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class LocationFacadeToolTest {
     @DisplayName("searchLocations sends GET /search?q={query} and returns body")
     void searchLocations_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=downtown"))
+                .expect(requestTo(BASE_URL + "/location/v1/locations/search?q=downtown"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class LocationFacadeToolTest {
     @DisplayName("getLocationInventory sends GET /{locationId}/inventory and returns body")
     void getLocationInventory_sendsGetToInventoryEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/LOC-001/inventory"))
+                .expect(requestTo(BASE_URL + "/location/v1/locations/LOC-001/inventory"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"locationId\":\"LOC-001\",\"stock\":[]}", MediaType.APPLICATION_JSON));
 

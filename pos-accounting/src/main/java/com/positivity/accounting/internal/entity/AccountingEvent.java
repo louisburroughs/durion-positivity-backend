@@ -23,9 +23,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-import org.jspecify.annotations.Nullable;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -44,14 +44,16 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "accounting_event", indexes = {
-        @Index(name = "idx_accounting_event_type", columnList = "event_type"),
-        @Index(name = "idx_accounting_event_status", columnList = "status"),
-        @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
-        @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
-        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
-        @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
-})
+@Table(
+        name = "accounting_event",
+        indexes = {
+            @Index(name = "idx_accounting_event_type", columnList = "event_type"),
+            @Index(name = "idx_accounting_event_status", columnList = "status"),
+            @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
+            @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
+            @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
+            @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
+        })
 public class AccountingEvent {
 
     @EqualsAndHashCode.Include

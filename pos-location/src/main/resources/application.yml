@@ -44,6 +44,12 @@ logging:
     com:
       positivity:
         location: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     enabled: true
@@ -52,3 +58,10 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   default-produces-media-type: application/json
+
+gateway:
+  url: ${GATEWAY_URL:http://api-gateway}
+
+pos:
+  gateway:
+    base-url: ${POS_GATEWAY_BASE_URL:http://api-gateway}

@@ -14,26 +14,36 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InventoryLedgerFilterParams {
-  @Nullable
-  private String productSku;
-  @Nullable
-  private UUID locationId;
-  @Nullable
-  private UUID storageLocationId;
-  @Nullable
-  private Instant dateFrom;
-  @Nullable
-  private Instant dateTo;
-  @Nullable
-  private UUID sourceTransactionId;
-  @Nullable
-  private UUID workorderId;
-  @Nullable
-  private UUID workorderLineId;
-  @Nullable
-  private List<String> movementTypes;
-  @Nullable
-  private String pageToken;
-  @Builder.Default
-  private int pageSize = 50;
+    @Nullable
+    private String productSku;
+
+    @Nullable
+    private UUID locationId;
+
+    @Nullable
+    private UUID storageLocationId;
+
+    @Nullable
+    private Instant dateFrom;
+
+    @Nullable
+    private Instant dateTo;
+
+    @Nullable
+    private UUID sourceTransactionId;
+
+    @Nullable
+    private UUID workorderId;
+
+    @Nullable
+    private UUID workorderLineId;
+
+    @Nullable
+    private List<String> movementTypes;
+
+    @Nullable
+    private String pageToken;
+
+    @Builder.Default
+    private int pageSize = 50;
 }

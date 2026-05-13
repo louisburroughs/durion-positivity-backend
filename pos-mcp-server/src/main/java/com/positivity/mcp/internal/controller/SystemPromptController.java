@@ -32,24 +32,27 @@ class SystemPromptController {
     }
 
     @GetMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "mcp:system_prompt:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:system_prompt:view"})
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_VIEW + "')")
     ResponseEntity<List<SystemPromptResponse>> list() {
         return ResponseEntity.ok(systemPromptService.findAll());
     }
 
     @GetMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "mcp:system_prompt:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:system_prompt:view"})
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_VIEW + "')")
     ResponseEntity<SystemPromptResponse> get(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(systemPromptService.get(id));
     }
 
     @PostMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "mcp:system_prompt:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:system_prompt:create"})
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_CREATE + "')")
     @EmitEvent(id = "MCP_SYSTEM_PROMPT_CREATE", apiVersion = "1")
     ResponseEntity<SystemPromptResponse> create(@Validated @RequestBody @NonNull SystemPromptRequest request) {
@@ -57,8 +60,9 @@ class SystemPromptController {
     }
 
     @PutMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "mcp:system_prompt:update" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:system_prompt:update"})
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_UPDATE + "')")
     @EmitEvent(id = "MCP_SYSTEM_PROMPT_UPDATE", apiVersion = "1")
     ResponseEntity<SystemPromptResponse> update(
@@ -67,8 +71,9 @@ class SystemPromptController {
     }
 
     @DeleteMapping("/{id}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "mcp:system_prompt:delete" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:system_prompt:delete"})
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_DELETE + "')")
     @EmitEvent(id = "MCP_SYSTEM_PROMPT_DELETE", apiVersion = "1")
     ResponseEntity<Void> delete(@PathVariable @NonNull UUID id) {

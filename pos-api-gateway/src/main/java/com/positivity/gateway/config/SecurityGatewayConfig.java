@@ -552,7 +552,10 @@ public class SecurityGatewayConfig {
         if (!StringUtils.hasText(csv)) {
             return 0;
         }
-        return (int) Arrays.stream(csv.split(",")).map(String::trim).filter(StringUtils::hasText).count();
+        return (int) Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .count();
     }
 
     private String tokenValidationReason(JwtException ex) {

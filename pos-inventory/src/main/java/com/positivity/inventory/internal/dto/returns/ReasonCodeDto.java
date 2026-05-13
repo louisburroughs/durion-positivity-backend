@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReasonCodeDto {
-  private String code;
-  private String description;
-  private String category;
+    private String code;
+    private String description;
+    private String category;
 }

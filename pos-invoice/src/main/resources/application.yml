@@ -47,6 +47,12 @@ logging:
       positivity:
         invoice: INFO
 
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 # Billing defaults (CAP:092)
 billing:
   defaults:
@@ -58,7 +64,6 @@ billing:
 # Event service configuration
 pos:
   events:
-    base-url: http://localhost:8085
     api-secret: ${POS_EVENTS_API_SECRET:}
 
 # OpenAPI/Swagger configuration

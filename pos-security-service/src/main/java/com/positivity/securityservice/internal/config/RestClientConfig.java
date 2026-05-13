@@ -1,9 +1,12 @@
 package com.positivity.securityservice.internal.config;
 
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -16,9 +19,21 @@ public class RestClientConfig {
     private static final String CUSTOMER_AUTHORITIES = "crm:person:read";
 
     @Bean
+    @Primary
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
     public RestClient peopleRegistrationRestClient(
-            RestClient.Builder builder,
-            @Value("${pos.people.base-url:http://pos-people:8084}") String peopleBaseUrl,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
+            @Value("${pos.people.base-url:http://api-gateway}") String peopleBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -33,8 +48,8 @@ public class RestClientConfig {
 
     @Bean
     public RestClient customerRegistrationRestClient(
-            RestClient.Builder builder,
-            @Value("${pos.customer.base-url:http://pos-customer:8084}") String customerBaseUrl,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
+            @Value("${pos.customer.base-url:http://api-gateway}") String customerBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

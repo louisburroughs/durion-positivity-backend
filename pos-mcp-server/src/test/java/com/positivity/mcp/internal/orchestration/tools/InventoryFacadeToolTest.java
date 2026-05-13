@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class InventoryFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-inventory/v1/inventory";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private InventoryFacadeTool tool;
@@ -27,14 +27,19 @@ class InventoryFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new InventoryFacadeTool(builder, BASE_URL);
+        tool = new InventoryFacadeTool(
+                builder,
+                BASE_URL,
+                "/inventory/v1/inventory/stock/{sku}",
+                "/inventory/v1/inventory/search?q={query}",
+                "/inventory/v1/inventory/locations/{locationId}/stock");
     }
 
     @Test
     @DisplayName("checkStock sends GET /stock/{sku} and returns body")
     void checkStock_sendsGetToStockEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/stock/SKU001"))
+                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/stock/SKU001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"sku\":\"SKU001\",\"qty\":42}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class InventoryFacadeToolTest {
     @DisplayName("searchInventory sends GET /search?q={query} and returns body")
     void searchInventory_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=oil%20filter"))
+                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/search?q=oil%20filter"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class InventoryFacadeToolTest {
     @DisplayName("getLocationStock sends GET /locations/{locationId}/stock and returns body")
     void getLocationStock_returnsStockForLocation() {
         mockServer
-                .expect(requestTo(BASE_URL + "/locations/LOC-001/stock"))
+                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/locations/LOC-001/stock"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"locationId\":\"LOC-001\",\"items\":[]}", MediaType.APPLICATION_JSON));
 

@@ -28,13 +28,13 @@
       "name": "invoice.tax.base-url",
       "type": "java.lang.String",
       "description": "Base URL for tax calculation requests from pos-invoice.",
-      "defaultValue": "http://pos-tax:8090/v1/tax"
+      "defaultValue": "http://pos-tax:8091/v1/tax"
     },
     {
       "name": "pos.events.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the pos-events/event-receiver API.",
-      "defaultValue": "http://localhost:8085"
+      "defaultValue": "http://pos-event-receiver:8080"
     },
     {
       "name": "pos.events.api-secret",
@@ -45,7 +45,7 @@
       "name": "pos.security.base-url",
       "type": "java.lang.String",
       "description": "Base URL for permission registration against pos-security-service.",
-      "defaultValue": "http://pos-security-service:8086"
+      "defaultValue": "http://pos-security-service:8080"
     },
     {
       "name": "pos.security.permission-registration.enabled",

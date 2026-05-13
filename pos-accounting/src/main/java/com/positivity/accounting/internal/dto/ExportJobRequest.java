@@ -15,17 +15,17 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request body for a timekeeping export job")
 public class ExportJobRequest {
 
-  @NotBlank
-  @Schema(description = "Type of export")
-  private String exportType;
+    @NotBlank
+    @Schema(description = "Type of export")
+    private String exportType;
 
-  @Schema(description = "Optional filter criteria as key-value pairs")
-  private Map<String, Object> filters;
+    @Schema(description = "Optional filter criteria as key-value pairs")
+    private Map<String, Object> filters;
 
-  @NotBlank
-  @Schema(description = "Export format: CSV or JSON")
-  private String format;
+    @NotBlank
+    @Schema(description = "Export format: CSV or JSON")
+    private String format;
 
-  @Schema(description = "How the export will be delivered")
-  private String deliveryMode;
+    @Schema(description = "How the export will be delivered")
+    private String deliveryMode;
 }

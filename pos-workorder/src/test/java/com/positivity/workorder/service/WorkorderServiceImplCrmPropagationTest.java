@@ -2,9 +2,9 @@ package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -34,7 +33,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.web.client.RestClient;
 
 /**
  * Unit tests for {@link WorkorderServiceImpl} — CRM reference ID propagation
@@ -74,8 +72,8 @@ class WorkorderServiceImplCrmPropagationTest {
     @Mock
     private WorkorderPartRepository workorderPartRepository;
 
-    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-    private RestClient restClient;
+    @Mock
+    private CustomerValidationClient customerValidationClient;
 
     @Mock
     private WorkorderStateMachine stateMachine;
@@ -103,9 +101,8 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @BeforeEach
     void stubCustomerRequirements() {
-        // Stub the RestClient fluent chain used by checkCustomerRequirements to return
-        // true
-        when(restClient.get().uri(anyString()).retrieve().body(Boolean.class)).thenReturn(true);
+        // Stub CustomerValidationClient to allow workorder creation
+        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
 
         // Default workorderRepository.save() behaviour: return the Workorder passed in
         when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> {

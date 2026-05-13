@@ -28,7 +28,7 @@ public class InventoryPickClient {
 
         InventoryPickListDto response = inventoryServiceRestClient
                 .get()
-                .uri("/v1/inventory/pick-lists/{pickListId}", pickListId)
+                .uri("/inventory/v1/inventory/pick-lists/{pickListId}", pickListId)
                 .retrieve()
                 .body(InventoryPickListDto.class);
 
@@ -46,7 +46,7 @@ public class InventoryPickClient {
         List<InventoryPickListDto> response = inventoryServiceRestClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/inventory/pick-lists")
+                        .path("/inventory/v1/inventory/pick-lists")
                         .queryParam("workorderId", workorderId)
                         .build())
                 .retrieve()
@@ -66,7 +66,7 @@ public class InventoryPickClient {
 
         InventoryPickListDto response = inventoryServiceRestClient
                 .post()
-                .uri("/v1/inventory/pick-lists/{pickListId}/release", pickListId)
+                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/release", pickListId)
                 .retrieve()
                 .body(InventoryPickListDto.class);
 
@@ -84,7 +84,7 @@ public class InventoryPickClient {
 
         List<InventoryPickTaskDto> response = inventoryServiceRestClient
                 .get()
-                .uri("/v1/inventory/pick-lists/{pickListId}/tasks", pickListId)
+                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/tasks", pickListId)
                 .retrieve()
                 .body(PICK_TASK_RESPONSE_TYPE);
 
@@ -103,7 +103,7 @@ public class InventoryPickClient {
 
         InventoryPickTaskDto response = inventoryServiceRestClient
                 .post()
-                .uri("/v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm", pickListId, taskId)
+                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm", pickListId, taskId)
                 .body(request)
                 .retrieve()
                 .body(InventoryPickTaskDto.class);
@@ -154,7 +154,7 @@ public class InventoryPickClient {
 
         InventoryConsumptionDto response = inventoryServiceRestClient
                 .post()
-                .uri("/v1/inventory/consumption")
+                .uri("/inventory/v1/inventory/consumption")
                 .body(request)
                 .retrieve()
                 .body(InventoryConsumptionDto.class);

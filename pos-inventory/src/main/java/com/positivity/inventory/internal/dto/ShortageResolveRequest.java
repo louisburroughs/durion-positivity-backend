@@ -14,14 +14,18 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ShortageResolveRequest {
-  @NotNull
-  private UUID allocationId;
-  @Nullable
-  private UUID allocationLineId;
-  @NotBlank
-  private String resolution;
-  @Nullable
-  private String substituteSku;
-  @Nullable
-  private String notes;
+    @NotNull
+    private UUID allocationId;
+
+    @Nullable
+    private UUID allocationLineId;
+
+    @NotBlank
+    private String resolution;
+
+    @Nullable
+    private String substituteSku;
+
+    @Nullable
+    private String notes;
 }

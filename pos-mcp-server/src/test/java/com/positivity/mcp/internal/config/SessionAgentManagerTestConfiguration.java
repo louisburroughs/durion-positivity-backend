@@ -1,11 +1,13 @@
 package com.positivity.mcp.internal.config;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.DocumentIngestionService;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import java.util.List;
@@ -22,7 +24,7 @@ public class SessionAgentManagerTestConfiguration {
     @Bean
     AgentOrchestrationService agentOrchestrationService() {
         AgentOrchestrationService service = mock(AgentOrchestrationService.class);
-        when(service.chat(anyString(), anyString(), anyString())).thenReturn("Test assistant response");
+        when(service.chat(any(CurrentUserContext.class), anyString())).thenReturn("Test assistant response");
         return service;
     }
 
@@ -31,7 +33,7 @@ public class SessionAgentManagerTestConfiguration {
         return new StreamingAgentOrchestrationService() {
             @Override
             public @NonNull Flux<String> streamChat(
-                    @NonNull String userId, @NonNull String role, @NonNull String message) {
+                    @NonNull CurrentUserContext currentUserContext, @NonNull String message) {
                 return Flux.just("test-token");
             }
 
@@ -51,8 +53,25 @@ public class SessionAgentManagerTestConfiguration {
     ToolMetadataRepository toolMetadataRepository() {
         return new ToolMetadataRepository() {
             @Override
+            public java.util.List<String> findAllRoleNames() {
+                return List.of();
+            }
+
+            @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByRoleAndWorkflow(
                     String role, String workflowState) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByWorkflow(
+                    String workflowState) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbeddingForRole(
+                    float[] embedding, int limit, String role, String workflowState) {
                 return List.of();
             }
 

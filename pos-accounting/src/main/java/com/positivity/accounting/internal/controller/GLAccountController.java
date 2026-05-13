@@ -50,10 +50,14 @@ public class GLAccountController {
     private final GLAccountService glAccountService;
 
     @GetMapping
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:view" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:view"})
     @PreAuthorize("hasAuthority('accounting:coa:view')")
-    @Operation(summary = "List GL accounts", description = "Retrieve paginated GL accounts filtered by status and sorted by a field.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "List GL accounts",
+            description = "Retrieve paginated GL accounts filtered by status and sorted by a field.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL accounts listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_LIST", apiVersion = "1")
@@ -68,10 +72,14 @@ public class GLAccountController {
     }
 
     @GetMapping("/{glAccountId}")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:view" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:view"})
     @PreAuthorize("hasAuthority('accounting:coa:view')")
-    @Operation(summary = "Get GL account", description = "Retrieve a GL account by identifier.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "Get GL account",
+            description = "Retrieve a GL account by identifier.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account returned")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     public ResponseEntity<GLAccountResponse> getGLAccount(
@@ -82,9 +90,14 @@ public class GLAccountController {
     }
 
     @PostMapping
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:create" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:create"})
     @PreAuthorize("hasAuthority('accounting:coa:create')")
-    @Operation(summary = "Create GL account", description = "Create a new GL account.", tags = { "GL Accounts" })
+    @Operation(
+            summary = "Create GL account",
+            description = "Create a new GL account.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "201", description = "GL account created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE", apiVersion = "1")
@@ -95,10 +108,14 @@ public class GLAccountController {
     }
 
     @PutMapping("/{glAccountId}")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:edit" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:edit"})
     @PreAuthorize("hasAuthority('accounting:coa:edit')")
-    @Operation(summary = "Update GL account", description = "Update details for an existing GL account.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "Update GL account",
+            description = "Update details for an existing GL account.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account updated")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE", apiVersion = "1")
@@ -111,9 +128,14 @@ public class GLAccountController {
     }
 
     @PostMapping("/{glAccountId}/activate")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:edit" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:edit"})
     @PreAuthorize("hasAuthority('accounting:coa:edit')")
-    @Operation(summary = "Activate GL account", description = "Mark a GL account as active.", tags = { "GL Accounts" })
+    @Operation(
+            summary = "Activate GL account",
+            description = "Mark a GL account as active.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account activated")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ACTIVATE", apiVersion = "1")
@@ -127,10 +149,14 @@ public class GLAccountController {
     }
 
     @PostMapping("/{glAccountId}/deactivate")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:deactivate" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:deactivate"})
     @PreAuthorize("hasAuthority('accounting:coa:deactivate')")
-    @Operation(summary = "Deactivate GL account", description = "Mark a GL account as inactive.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "Deactivate GL account",
+            description = "Mark a GL account as inactive.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account deactivated")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
@@ -143,10 +169,14 @@ public class GLAccountController {
     }
 
     @PostMapping("/{glAccountId}/archive")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:deactivate" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:deactivate"})
     @PreAuthorize("hasAuthority('accounting:coa:deactivate')")
-    @Operation(summary = "Archive GL account", description = "Archive a GL account and remove it from active use.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "Archive GL account",
+            description = "Archive a GL account and remove it from active use.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account archived")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
@@ -159,10 +189,14 @@ public class GLAccountController {
     }
 
     @GetMapping("/{glAccountId}/balance")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "accounting:coa:view" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:coa:view"})
     @PreAuthorize("hasAuthority('accounting:coa:view')")
-    @Operation(summary = "Get GL account balance", description = "Retrieve the current balance for a GL account.", tags = {
-            "GL Accounts" })
+    @Operation(
+            summary = "Get GL account balance",
+            description = "Retrieve the current balance for a GL account.",
+            tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "Balance returned")
     @ApiResponse(responseCode = "404", description = "GL account not found")
     public ResponseEntity<GLAccountBalanceResponse> getAccountBalance(

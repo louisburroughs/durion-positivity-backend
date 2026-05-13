@@ -33,7 +33,7 @@ public class WorkexecJobTimeClient {
                     .get()
                     .uri(uriBuilder -> {
                         var builder = uriBuilder
-                                .path("/v1/workexec/job-time-totals")
+                                .path("/workorder/v1/workexec/job-time-totals")
                                 .queryParam("startDate", startDate)
                                 .queryParam("endDate", endDate)
                                 .queryParam("timezone", timezone);

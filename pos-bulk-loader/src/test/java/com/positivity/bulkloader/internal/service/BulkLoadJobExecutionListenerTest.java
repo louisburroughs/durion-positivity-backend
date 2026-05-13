@@ -23,96 +23,94 @@ import org.springframework.batch.core.step.StepExecution;
 import org.springframework.batch.test.MetaDataInstanceFactory;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({ "java:S100", "java:S1192" })
+@SuppressWarnings({"java:S100", "java:S1192"})
 class BulkLoadJobExecutionListenerTest {
 
-  @Mock
-  BulkLoadJobRepository bulkLoadJobRepository;
+    @Mock
+    BulkLoadJobRepository bulkLoadJobRepository;
 
-  @InjectMocks
-  BulkLoadJobExecutionListener listener;
+    @InjectMocks
+    BulkLoadJobExecutionListener listener;
 
-  @Test
-  void afterJob_whenCompleted_updatesCountsAndStatus() {
-    UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000041");
-    BulkLoadJob bulkLoadJob = new BulkLoadJob();
-    bulkLoadJob.setId(jobId);
-    bulkLoadJob.setStatus(JobStatus.PROCESSING);
+    @Test
+    void afterJob_whenCompleted_updatesCountsAndStatus() {
+        UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000041");
+        BulkLoadJob bulkLoadJob = new BulkLoadJob();
+        bulkLoadJob.setId(jobId);
+        bulkLoadJob.setStatus(JobStatus.PROCESSING);
 
-    JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
-        "catalogBulkLoadJob",
-        11L,
-        21L,
-        new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
-    jobExecution.setStatus(BatchStatus.COMPLETED);
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                11L,
+                21L,
+                new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
+        jobExecution.setStatus(BatchStatus.COMPLETED);
 
-    StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobExecution, "catalogBulkLoadStep", 31L);
-    stepExecution.setReadCount(7);
-    stepExecution.setWriteCount(5);
-    stepExecution.setProcessSkipCount(1);
-    stepExecution.setWriteSkipCount(1);
-    jobExecution.addStepExecution(stepExecution);
+        StepExecution stepExecution =
+                MetaDataInstanceFactory.createStepExecution(jobExecution, "catalogBulkLoadStep", 31L);
+        stepExecution.setReadCount(7);
+        stepExecution.setWriteCount(5);
+        stepExecution.setProcessSkipCount(1);
+        stepExecution.setWriteSkipCount(1);
+        jobExecution.addStepExecution(stepExecution);
 
-    when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
-    when(bulkLoadJobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
+        when(bulkLoadJobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-    listener.afterJob(jobExecution);
+        listener.afterJob(jobExecution);
 
-    assertThat(bulkLoadJob.getProcessedRows()).isEqualTo(7L);
-    assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(5L);
-    assertThat(bulkLoadJob.getFailureCount()).isEqualTo(2L);
-    assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.COMPLETED);
-    assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
-    verify(bulkLoadJobRepository).save(bulkLoadJob);
-  }
+        assertThat(bulkLoadJob.getProcessedRows()).isEqualTo(7L);
+        assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(5L);
+        assertThat(bulkLoadJob.getFailureCount()).isEqualTo(2L);
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
+        verify(bulkLoadJobRepository).save(bulkLoadJob);
+    }
 
-  @Test
-  void afterJob_whenFailed_marksJobFailed() {
-    UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000042");
-    BulkLoadJob bulkLoadJob = new BulkLoadJob();
-    bulkLoadJob.setId(jobId);
-    bulkLoadJob.setStatus(JobStatus.PROCESSING);
+    @Test
+    void afterJob_whenFailed_marksJobFailed() {
+        UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000042");
+        BulkLoadJob bulkLoadJob = new BulkLoadJob();
+        bulkLoadJob.setId(jobId);
+        bulkLoadJob.setStatus(JobStatus.PROCESSING);
 
-    JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
-        "catalogBulkLoadJob",
-        12L,
-        22L,
-        new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
-    jobExecution.setStatus(BatchStatus.FAILED);
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                12L,
+                22L,
+                new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
+        jobExecution.setStatus(BatchStatus.FAILED);
 
-    when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
+        when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
 
-    listener.afterJob(jobExecution);
+        listener.afterJob(jobExecution);
 
-    assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.FAILED);
-    assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
-    verify(bulkLoadJobRepository).save(bulkLoadJob);
-  }
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.FAILED);
+        assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
+        verify(bulkLoadJobRepository).save(bulkLoadJob);
+    }
 
-  @Test
-  void afterJob_whenJobIdMissing_returnsWithoutSaving() {
-    JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
-        "catalogBulkLoadJob",
-        13L,
-        23L,
-        new JobParametersBuilder().toJobParameters());
-    jobExecution.setStatus(BatchStatus.COMPLETED);
+    @Test
+    void afterJob_whenJobIdMissing_returnsWithoutSaving() {
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob", 13L, 23L, new JobParametersBuilder().toJobParameters());
+        jobExecution.setStatus(BatchStatus.COMPLETED);
 
-    listener.afterJob(jobExecution);
+        listener.afterJob(jobExecution);
 
-    verify(bulkLoadJobRepository, org.mockito.Mockito.never()).save(any(BulkLoadJob.class));
-  }
+        verify(bulkLoadJobRepository, org.mockito.Mockito.never()).save(any(BulkLoadJob.class));
+    }
 
-  @Test
-  void afterJob_whenJobIdMalformed_throwsIllegalState() {
-    JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
-        "catalogBulkLoadJob",
-        14L,
-        24L,
-        new JobParametersBuilder().addString("jobId", "not-a-uuid").toJobParameters());
+    @Test
+    void afterJob_whenJobIdMalformed_throwsIllegalState() {
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                14L,
+                24L,
+                new JobParametersBuilder().addString("jobId", "not-a-uuid").toJobParameters());
 
-    assertThatThrownBy(() -> listener.afterJob(jobExecution))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Invalid bulk-load jobId");
-  }
+        assertThatThrownBy(() -> listener.afterJob(jobExecution))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid bulk-load jobId");
+    }
 }

@@ -1,7 +1,10 @@
 package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
@@ -73,7 +76,8 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbedding(vector, 10)).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findTopKByEmbeddingForRole(eq(vector), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
 
@@ -104,22 +108,43 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    @DisplayName("resolveCandidateTools filters semantic candidates not in gated role-workflow set")
-    void resolveCandidateTools_filtersToolsNotInGatedSet() {
+    @DisplayName("resolveCandidateTools falls back to priority-ordered gated set when ANN returns empty")
+    void resolveCandidateTools_fallsBackToGatedSet_whenAnnReturnsEmpty() {
+        // This test documents the Phase 2 fix: the gated ANN returns only authorized
+        // tools,
+        // so an unauthorized tool can never displace an authorized one.
         ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
         float[] vector = new float[] {0.1f, 0.2f};
 
-        UUID otherId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        ToolMetadata otherTool = new ToolMetadata(
-                otherId, "otherTool", "Other Tool", "Other", "other", 0.5, "low", 100, true, "otherTool");
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        // Gated ANN returns empty — simulates no embeddings for authorized tools
+        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+                .thenReturn(List.of());
+
+        // Should fall back to priority-ordered gated tools, not empty
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
+
+        assertThat(result).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("resolveCandidateTools returns authorized tool that would have been excluded by global ANN")
+    void resolveCandidateTools_authorizedToolNotInGlobalTopK_isReturnedByGatedAnn() {
+        // Phase 2 correctness proof: authorized tool ranks beyond global top-K but is
+        // correctly returned because gated ANN searches only authorized tools.
+        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        float[] vector = new float[] {0.1f, 0.2f};
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbedding(vector, 10)).thenReturn(List.of(otherTool));
+        // Gated ANN finds the authorized tool directly — no Java-filter step
+        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
 
-        assertThat(result).isEmpty();
+        assertThat(result).containsExactly(SAMPLE_TOOL);
     }
 
     @Test
@@ -159,7 +184,8 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByRoleAndWorkflow("ROLE_MANAGER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbedding(vector, 10)).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_MANAGER"), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
 

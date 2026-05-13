@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class EventsFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-event-receiver/v1/events";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private EventsFacadeTool tool;
@@ -27,14 +27,19 @@ class EventsFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new EventsFacadeTool(builder, BASE_URL);
+        tool = new EventsFacadeTool(
+                builder,
+                BASE_URL,
+                "/event-receiver/v1/events/eventTypes",
+                "/event-receiver/v1/events/events/summary?q={query}",
+                "/event-receiver/v1/events/events/summary?entityId={entityId}");
     }
 
     @Test
     @DisplayName("getEventTypes sends GET /eventTypes and returns body")
     void getEventTypes_sendsGetToTypesEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/eventTypes"))
+                .expect(requestTo(BASE_URL + "/event-receiver/v1/events/eventTypes"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"types\":[]}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class EventsFacadeToolTest {
     @DisplayName("searchEvents sends GET /events/summary?q={query} and returns body")
     void searchEvents_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/events/summary?q=ORDER"))
+                .expect(requestTo(BASE_URL + "/event-receiver/v1/events/events/summary?q=ORDER"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class EventsFacadeToolTest {
     @DisplayName("getEventHistory sends GET /events/summary?entityId={entityId} and returns body")
     void getEventHistory_sendsGetToHistoryEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/events/summary?entityId=ENT-001"))
+                .expect(requestTo(BASE_URL + "/event-receiver/v1/events/events/summary?entityId=ENT-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"entityId\":\"ENT-001\",\"events\":[]}", MediaType.APPLICATION_JSON));
 

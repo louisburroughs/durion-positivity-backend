@@ -24,24 +24,33 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #42
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "security:role:assign" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"security:role:assign"})
 @RequestMapping("/v1/users/principals")
 @RequiredArgsConstructor
 @Tag(name = "Principal Role Management", description = "Assign roles to principals for RBAC matrix operations")
 public class PrincipalRoleController {
 
-        private final RolePermissionService rolePermissionService;
+    private final RolePermissionService rolePermissionService;
 
-        @EmitEvent(id = "SECURITY_PRINCIPAL_ROLE_ASSIGN", apiVersion = "1")
-        @PostMapping("/{principalId}/roles/{roleId}")
-        @PreAuthorize("hasAuthority('security:role:assign')")
-        @Operation(summary = "Assign a role to a principal", description = "Assigns the specified role to the specified principal identifier for RBAC matrix authorization.")
-        @ApiResponse(responseCode = "200", description = "Role assigned to principal successfully")
-        @ApiResponse(responseCode = "404", description = "Principal or role not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
-        public ResponseEntity<Void> assignRoleToPrincipal(
-                        @Parameter(description = "Principal identifier receiving the role assignment") @PathVariable String principalId,
-                        @Parameter(description = "Role identifier to assign to the principal") @PathVariable UUID roleId) {
-                rolePermissionService.assignRoleToPrincipal(principalId, roleId);
-                return ResponseEntity.ok().build();
-        }
+    @EmitEvent(id = "SECURITY_PRINCIPAL_ROLE_ASSIGN", apiVersion = "1")
+    @PostMapping("/{principalId}/roles/{roleId}")
+    @PreAuthorize("hasAuthority('security:role:assign')")
+    @Operation(
+            summary = "Assign a role to a principal",
+            description =
+                    "Assigns the specified role to the specified principal identifier for RBAC matrix authorization.")
+    @ApiResponse(responseCode = "200", description = "Role assigned to principal successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Principal or role not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> assignRoleToPrincipal(
+            @Parameter(description = "Principal identifier receiving the role assignment") @PathVariable
+                    String principalId,
+            @Parameter(description = "Role identifier to assign to the principal") @PathVariable UUID roleId) {
+        rolePermissionService.assignRoleToPrincipal(principalId, roleId);
+        return ResponseEntity.ok().build();
+    }
 }

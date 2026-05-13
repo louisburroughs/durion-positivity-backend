@@ -406,8 +406,7 @@ class VehicleFitmentServiceTest {
         when(manufacturerRepository.findAllByNameIgnoreCase("Toyota")).thenReturn(List.of(manufacturer));
         when(makeRepository.findByManufacturerIdAndNameIgnoreCase(MANUFACTURER_ID, "Camry"))
                 .thenReturn(Optional.of(existingMake));
-        when(modelRepository.findByMakeIdAndNameIgnoreCase(MAKE_ID, "Corolla"))
-                .thenReturn(Optional.empty());
+        when(modelRepository.findByMakeIdAndNameIgnoreCase(MAKE_ID, "Corolla")).thenReturn(Optional.empty());
         when(modelRepository.saveAndFlush(any(Model.class))).thenReturn(savedModel);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 
@@ -548,8 +547,7 @@ class VehicleFitmentServiceTest {
         savedEntity.setId(UUID.randomUUID());
         savedEntity.setPartNumberId(1L);
 
-        when(modelRepository.findByMakeIsNullAndNameIgnoreCase("UnknownModel"))
-                .thenReturn(Optional.empty());
+        when(modelRepository.findByMakeIsNullAndNameIgnoreCase("UnknownModel")).thenReturn(Optional.empty());
         when(modelRepository.saveAndFlush(any(Model.class))).thenReturn(savedModel);
         when(partFitmentRepository.save(any(PartFitmentEntity.class))).thenReturn(savedEntity);
 

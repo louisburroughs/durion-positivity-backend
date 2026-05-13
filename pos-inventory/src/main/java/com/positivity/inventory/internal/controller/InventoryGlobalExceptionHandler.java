@@ -74,11 +74,11 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class,
-            ConstraintViolationException.class,
-            InvalidInventoryAvailabilityRequestException.class,
-            IllegalArgumentException.class
+        MethodArgumentTypeMismatchException.class,
+        HttpMessageNotReadableException.class,
+        ConstraintViolationException.class,
+        InvalidInventoryAvailabilityRequestException.class,
+        IllegalArgumentException.class
     })
     public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
@@ -119,7 +119,7 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class
+    @ExceptionHandler({ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class
     })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
@@ -171,16 +171,16 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            LocationNotValidForSkuException.class,
-            LocationAtCapacityException.class,
-            NoOnHandAtSourceLocationException.class,
-            PutawayValidationException.class
+        LocationNotValidForSkuException.class,
+        LocationAtCapacityException.class,
+        NoOnHandAtSourceLocationException.class,
+        PutawayValidationException.class
     })
     public ResponseEntity<ApiError> handlePutawayValidation(PutawayValidationException ex) {
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
-    @ExceptionHandler({ SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class })
+    @ExceptionHandler({SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class})
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }

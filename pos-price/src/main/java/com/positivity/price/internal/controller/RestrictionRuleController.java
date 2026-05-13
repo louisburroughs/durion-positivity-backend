@@ -43,8 +43,9 @@ public class RestrictionRuleController {
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
     @EmitEvent(id = "PRICE_RESTRICTION_RULE_CREATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "pricing:restriction:manage" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:restriction:manage"})
     @PreAuthorize("hasAuthority('pricing:restriction:manage')")
     @PostMapping
     public ResponseEntity<@NonNull RestrictionRuleResponse> createRule(
@@ -85,8 +86,9 @@ public class RestrictionRuleController {
     @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
     @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
     @EmitEvent(id = "PRICE_RESTRICTION_RULE_DEACTIVATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "pricing:restriction:manage" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:restriction:manage"})
     @PreAuthorize("hasAuthority('pricing:restriction:manage')")
     @DeleteMapping("/{ruleId}")
     public ResponseEntity<@NonNull RestrictionRuleResponse> deactivateRule(@PathVariable @NonNull UUID ruleId) {

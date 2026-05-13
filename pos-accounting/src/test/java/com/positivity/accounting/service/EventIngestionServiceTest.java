@@ -113,12 +113,14 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable)))
+        when(accountingEventRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
-        AccountingEventFilter filter = AccountingEventFilter.builder().organizationId(testOrganizationId).build();
+        AccountingEventFilter filter = AccountingEventFilter.builder()
+                .organizationId(testOrganizationId)
+                .build();
         Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
@@ -128,8 +130,8 @@ class EventIngestionServiceTest {
         assertThat(result.getContent().get(0).getEventType()).isEqualTo("INVOICE_RECEIVED");
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable));
+        verify(accountingEventRepository)
+                .findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable));
     }
 
     @Test
@@ -140,8 +142,8 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable)))
+        when(accountingEventRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
@@ -156,8 +158,8 @@ class EventIngestionServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable));
+        verify(accountingEventRepository)
+                .findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable));
     }
 
     @Test
@@ -168,8 +170,8 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable)))
+        when(accountingEventRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable)))
                 .thenReturn(eventPage);
 
         // Act
@@ -180,8 +182,8 @@ class EventIngestionServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);
 
-        verify(accountingEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable));
+        verify(accountingEventRepository)
+                .findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable));
     }
 
     @Test
@@ -191,12 +193,14 @@ class EventIngestionServiceTest {
         Page<AccountingEvent> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountingEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(),
-                eq(pageable)))
+        when(accountingEventRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<AccountingEvent>>any(), eq(pageable)))
                 .thenReturn(emptyPage);
 
         // Act
-        AccountingEventFilter filter = AccountingEventFilter.builder().organizationId(testOrganizationId).build();
+        AccountingEventFilter filter = AccountingEventFilter.builder()
+                .organizationId(testOrganizationId)
+                .build();
         Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert

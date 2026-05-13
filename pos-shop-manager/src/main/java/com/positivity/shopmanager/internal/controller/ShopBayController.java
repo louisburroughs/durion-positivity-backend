@@ -28,13 +28,18 @@ public class ShopBayController {
 
     private final BayService bayService;
 
-    @Operation(summary = "Get bays", description = "List all bays or get a specific bay detail by locationId and bayId.")
+    @Operation(
+            summary = "Get bays",
+            description = "List all bays or get a specific bay detail by locationId and bayId.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
-    @GetMapping({ "/bays", "/{locationId}/bays/{bayId}" })
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:view" })
+    @GetMapping({"/bays", "/{locationId}/bays/{bayId}"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"shop:bay:view"})
     @PreAuthorize("hasAuthority('shop:bay:view')")
     public ResponseEntity<Object> getBays(
-            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false) Long locationId,
+            @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false)
+                    Long locationId,
             @Parameter(description = "Bay ID (optional for specific bay)") @PathVariable(required = false) Long bayId) {
         log.info("Fetching bays - locationId(mask)={}, bayId(mask)={}", maskForLog(locationId), maskForLog(bayId));
         Object bays = bayService.getBays(locationId, bayId);
@@ -45,7 +50,9 @@ public class ShopBayController {
     @ApiResponse(responseCode = "200", description = "Bay created successfully.")
     @EmitEvent(id = "SHOP_BAY_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/bays")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"shop:bay:create"})
     @PreAuthorize("hasAuthority('shop:bay:create')")
     public ResponseEntity<Object> createBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
@@ -59,7 +66,9 @@ public class ShopBayController {
     @ApiResponse(responseCode = "200", description = "Bays managed successfully.")
     @EmitEvent(id = "SHOP_BAY_MANAGE", apiVersion = "1")
     @PutMapping("/bays")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:edit" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"shop:bay:edit"})
     @PreAuthorize("hasAuthority('shop:bay:edit')")
     public ResponseEntity<Object> manageBays(
             @Parameter(description = "Bay management request body") @RequestBody(required = false) Object request) {
@@ -72,7 +81,9 @@ public class ShopBayController {
     @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Bay not found.")
     @DeleteMapping("/{locationId}/bays/{bayId}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "shop:bay:edit" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"shop:bay:edit"})
     @PreAuthorize("hasAuthority('shop:bay:edit')")
     @EmitEvent(id = "SHOP_BAY_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteBay(
@@ -87,7 +98,8 @@ public class ShopBayController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

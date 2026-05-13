@@ -36,7 +36,9 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @Tag(name = "Invoice Payments", description = "Apply payments and query invoice status.")
-@SecurityRequirement(name = "bearerAuth", scopes = { "accounting:ap:view" })
+@SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"accounting:ap:view"})
 @Validated
 public class InvoicePaymentController {
 
@@ -63,9 +65,14 @@ public class InvoicePaymentController {
      */
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
-    @Operation(summary = "Get invoice status", description = "Retrieve current payment status for an invoice.", tags = {
-            "Invoice Payments" })
-    @ApiResponse(responseCode = "200", description = "Invoice status returned", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
+    @Operation(
+            summary = "Get invoice status",
+            description = "Retrieve current payment status for an invoice.",
+            tags = {"Invoice Payments"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Invoice status returned",
+            content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
     @ApiResponse(responseCode = "404", description = "Invoice not found")
     @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
@@ -91,8 +98,10 @@ public class InvoicePaymentController {
 
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
-    @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.", tags = {
-            "Invoice Payments" })
+    @Operation(
+            summary = "Regenerate invoice from workorder",
+            description = "Regenerate an invoice from a workorder.",
+            tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Invoice regenerated")
     @ApiResponse(responseCode = "404", description = "Workorder not found")
     @ApiResponse(responseCode = "409", description = "Workorder is not in COMPLETED state")
@@ -108,8 +117,10 @@ public class InvoicePaymentController {
 
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
-    @Operation(summary = "Get billing rules", description = "Retrieve billing rules for a customer.", tags = {
-            "Invoice Payments" })
+    @Operation(
+            summary = "Get billing rules",
+            description = "Retrieve billing rules for a customer.",
+            tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Billing rules returned")
     @ApiResponse(responseCode = "404", description = "Customer not found")
     @ApiResponse(responseCode = "503", description = "Customer service unavailable")

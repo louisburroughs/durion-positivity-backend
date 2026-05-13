@@ -297,6 +297,431 @@
       "type": "java.lang.String",
       "description": "Facade base URL for admin tools.",
       "defaultValue": "http://pos-security-service/v1/admin"
+    },
+    {
+      "name": "pos.show-actuator",
+      "type": "java.lang.Boolean",
+      "description": "Expose actuator endpoints in the MCP server.",
+      "defaultValue": true
+    },
+    {
+      "name": "mcp.rag.index-type",
+      "type": "java.lang.String",
+      "description": "pgvector index type used for RAG embedding similarity search (e.g. ivfflat, hnsw).",
+      "defaultValue": "ivfflat"
+    },
+    {
+      "name": "pos.accounting.account-balance-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching account balance from the accounting service.",
+      "defaultValue": "/accounting/v1/accounting/accounts/{accountId}/balance"
+    },
+    {
+      "name": "pos.accounting.journal-entries-search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching journal entries in the accounting service.",
+      "defaultValue": "/accounting/v1/accounting/journal-entries/search?q={query}"
+    },
+    {
+      "name": "pos.accounting.financial-summary-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching financial summary by period from the accounting service.",
+      "defaultValue": "/accounting/v1/accounting/summary/{period}"
+    },
+    {
+      "name": "pos.catalog.product-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single product from the catalog service.",
+      "defaultValue": "/catalog/v1/catalog/products/{productId}"
+    },
+    {
+      "name": "pos.catalog.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching the product catalog.",
+      "defaultValue": "/catalog/v1/catalog/search?q={query}"
+    },
+    {
+      "name": "pos.catalog.category-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching products by category from the catalog service.",
+      "defaultValue": "/catalog/v1/catalog/categories/{category}"
+    },
+    {
+      "name": "pos.customer.customer-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single customer record.",
+      "defaultValue": "/customer/v1/customers/{customerId}"
+    },
+    {
+      "name": "pos.customer.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching customers.",
+      "defaultValue": "/customer/v1/customers/search?q={query}"
+    },
+    {
+      "name": "pos.customer.history-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching customer history.",
+      "defaultValue": "/customer/v1/customers/{customerId}/history"
+    },
+    {
+      "name": "pos.event-receiver.event-types-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching registered event types from the event receiver.",
+      "defaultValue": "/event-receiver/v1/events/eventTypes"
+    },
+    {
+      "name": "pos.event-receiver.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching event summaries in the event receiver.",
+      "defaultValue": "/event-receiver/v1/events/events/summary?q={query}"
+    },
+    {
+      "name": "pos.event-receiver.history-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching event history by entity ID from the event receiver.",
+      "defaultValue": "/event-receiver/v1/events/events/summary?entityId={entityId}"
+    },
+    {
+      "name": "pos.inventory.stock-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching stock level by SKU from the inventory service.",
+      "defaultValue": "/inventory/v1/inventory/stock/{sku}"
+    },
+    {
+      "name": "pos.inventory.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching inventory items.",
+      "defaultValue": "/inventory/v1/inventory/search?q={query}"
+    },
+    {
+      "name": "pos.inventory.location-stock-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching stock levels at a specific location.",
+      "defaultValue": "/inventory/v1/inventory/locations/{locationId}/stock"
+    },
+    {
+      "name": "pos.invoice.invoice-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single invoice.",
+      "defaultValue": "/invoice/v1/invoices/{invoiceId}"
+    },
+    {
+      "name": "pos.invoice.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching invoices.",
+      "defaultValue": "/invoice/v1/invoices/search?q={query}"
+    },
+    {
+      "name": "pos.invoice.customer-invoices-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching all invoices for a specific customer.",
+      "defaultValue": "/invoice/v1/invoices/customer/{customerId}"
+    },
+    {
+      "name": "pos.location.location-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single location record.",
+      "defaultValue": "/location/v1/locations/{locationId}"
+    },
+    {
+      "name": "pos.location.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching locations.",
+      "defaultValue": "/location/v1/locations/search?q={query}"
+    },
+    {
+      "name": "pos.location.inventory-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching inventory at a specific location.",
+      "defaultValue": "/location/v1/locations/{locationId}/inventory"
+    },
+    {
+      "name": "pos.order.order-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single order.",
+      "defaultValue": "/order/v1/orders/{orderId}"
+    },
+    {
+      "name": "pos.order.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching orders.",
+      "defaultValue": "/order/v1/orders/search?q={query}"
+    },
+    {
+      "name": "pos.pricing.base-url",
+      "type": "java.lang.String",
+      "description": "Facade base URL for pricing tools.",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.pricing.sku-price-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching the price of a specific SKU.",
+      "defaultValue": "/price/v1/pricing/sku/{sku}"
+    },
+    {
+      "name": "pos.pricing.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching pricing rules.",
+      "defaultValue": "/price/v1/pricing/search?q={query}"
+    },
+    {
+      "name": "pos.pricing.price-list-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a price list by ID.",
+      "defaultValue": "/price/v1/pricing/lists/{priceListId}"
+    },
+    {
+      "name": "pos.reporting.sales-report-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a sales report for a given period.",
+      "defaultValue": "/accounting/v1/reporting/sales/{period}"
+    },
+    {
+      "name": "pos.reporting.inventory-report-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching an inventory report for a given location.",
+      "defaultValue": "/accounting/v1/reporting/inventory/{locationId}"
+    },
+    {
+      "name": "pos.reporting.revenue-report-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a revenue report for a given period.",
+      "defaultValue": "/accounting/v1/reporting/revenue/{period}"
+    },
+    {
+      "name": "pos.security.users.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the security service users API (via gateway).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.security.audit.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the security service audit API (via gateway).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.security.user-permissions-path-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching permissions for a specific user.",
+      "defaultValue": "/security-service/v1/users/{userId}/permissions"
+    },
+    {
+      "name": "pos.security.audit-search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching audit events by event type.",
+      "defaultValue": "/security-service/v1/audit/events?eventType={query}"
+    },
+    {
+      "name": "pos.hr.employee-base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the HR employee API (via gateway).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.hr.people-base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the HR people API (via gateway).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.hr.availability-base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for the HR availability API (via gateway).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.hr.employee-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching an employee record by ID.",
+      "defaultValue": "/people/v1/people/employees/{employeeId}"
+    },
+    {
+      "name": "pos.hr.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching people/HR records.",
+      "defaultValue": "/people/v1/people?q={query}"
+    },
+    {
+      "name": "pos.hr.schedule-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching employee availability/schedule.",
+      "defaultValue": "/people/v1/people/availability?employeeId={employeeId}"
+    },
+    {
+      "name": "pos.shopmanager.status-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching shop status by shop ID.",
+      "defaultValue": "/shop-manager/v1/shop/{shopId}/status"
+    },
+    {
+      "name": "pos.shopmanager.queue-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching the service queue for a shop.",
+      "defaultValue": "/shop-manager/v1/shop/{shopId}/queue"
+    },
+    {
+      "name": "pos.shopmanager.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching shop manager records.",
+      "defaultValue": "/shop-manager/v1/shop/search?q={query}"
+    },
+    {
+      "name": "pos.tax.tax-rate-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching tax rates for a given location.",
+      "defaultValue": "/rates/{locationId}"
+    },
+    {
+      "name": "pos.tax.tax-calculate-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for calculating tax on a given amount and location.",
+      "defaultValue": "/calculate?amount={amount}&locationId={locationId}"
+    },
+    {
+      "name": "pos.tax.tax-summary-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a tax summary for a given period.",
+      "defaultValue": "/summary/{period}"
+    },
+    {
+      "name": "pos.vehicle.vehicle-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single vehicle record.",
+      "defaultValue": "/customer/v1/vehicles/{vehicleId}"
+    },
+    {
+      "name": "pos.vehicle.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching vehicle records.",
+      "defaultValue": "/customer/v1/vehicles/search?q={query}"
+    },
+    {
+      "name": "pos.vehicle.customer-vehicles-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching all vehicles belonging to a customer.",
+      "defaultValue": "/customer/v1/vehicles/customer/{customerId}"
+    },
+    {
+      "name": "pos.workorder.workorder-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching a single workorder by ID.",
+      "defaultValue": "/workorder/v1/workorders/{workorderId}"
+    },
+    {
+      "name": "pos.workorder.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching workorders.",
+      "defaultValue": "/workorder/v1/workorders/search?q={query}"
+    },
+    {
+      "name": "pos.workorder.status-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for fetching the status of a specific workorder.",
+      "defaultValue": "/workorder/v1/workorders/{workorderId}/status"
+    },
+    {
+      "name": "langchain4j.ollama.chat-model.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the Ollama server used for the chat model.",
+      "defaultValue": "http://localhost:11434"
+    },
+    {
+      "name": "langchain4j.ollama.chat-model.model-name",
+      "type": "java.lang.String",
+      "description": "Ollama model name used for chat completions.",
+      "defaultValue": "qwen3.5:cloud"
+    },
+    {
+      "name": "langchain4j.ollama.chat-model.temperature",
+      "type": "java.lang.Double",
+      "description": "Sampling temperature for the Ollama chat model (0.0–1.0).",
+      "defaultValue": 0.2
+    },
+    {
+      "name": "langchain4j.ollama.chat-model.timeout",
+      "type": "java.time.Duration",
+      "description": "Request timeout for the Ollama chat model.",
+      "defaultValue": "180s"
+    },
+    {
+      "name": "langchain4j.ollama.chat-model.custom-headers",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "description": "Custom HTTP headers sent with each Ollama chat model request (e.g. Authorization)."
+    },
+    {
+      "name": "langchain4j.ollama.embedding-model.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the Ollama server used for the embedding model.",
+      "defaultValue": "http://localhost:11434"
+    },
+    {
+      "name": "langchain4j.ollama.embedding-model.model-name",
+      "type": "java.lang.String",
+      "description": "Ollama model name used for generating embeddings.",
+      "defaultValue": "nomic-embed-text"
+    },
+    {
+      "name": "langchain4j.ollama.embedding-model.timeout",
+      "type": "java.time.Duration",
+      "description": "Request timeout for the Ollama embedding model.",
+      "defaultValue": "30s"
+    },
+    {
+      "name": "langchain4j.ollama.embedding-model.custom-headers",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "description": "Custom HTTP headers sent with each Ollama embedding model request (e.g. Authorization)."
+    },
+    {
+      "name": "langchain4j.ollama.streaming-chat-model.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the Ollama server used for the streaming chat model.",
+      "defaultValue": "http://localhost:11434"
+    },
+    {
+      "name": "langchain4j.ollama.streaming-chat-model.model-name",
+      "type": "java.lang.String",
+      "description": "Ollama model name used for streaming chat completions.",
+      "defaultValue": "qwen3.5:cloud"
+    },
+    {
+      "name": "langchain4j.ollama.streaming-chat-model.temperature",
+      "type": "java.lang.Double",
+      "description": "Sampling temperature for the Ollama streaming chat model (0.0–1.0).",
+      "defaultValue": 0.2
+    },
+    {
+      "name": "langchain4j.ollama.streaming-chat-model.timeout",
+      "type": "java.time.Duration",
+      "description": "Request timeout for the Ollama streaming chat model.",
+      "defaultValue": "180s"
+    },
+    {
+      "name": "langchain4j.ollama.streaming-chat-model.custom-headers",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "description": "Custom HTTP headers sent with each Ollama streaming chat model request (e.g. Authorization)."
+    },
+    {
+      "name": "mcp.rag.preload.docs",
+      "type": "java.util.List<com.positivity.mcp.internal.config.RagPreloadProperties$RagDocument>",
+      "description": "List of RAG documents to preload into the vector store on startup."
+    },
+    {
+      "name": "mcp.rag.preload.docs[].id",
+      "type": "java.lang.String",
+      "description": "Unique identifier for the preloaded RAG document. Used for idempotent upsert."
+    },
+    {
+      "name": "mcp.rag.preload.docs[].source-path",
+      "type": "java.lang.String",
+      "description": "Resource path of the RAG document to ingest (e.g. classpath:rag/my-doc.md)."
+    },
+    {
+      "name": "mcp.rag.preload.docs[].rag-scope",
+      "type": "java.lang.String",
+      "description": "Scope tag applied to the preloaded document for scoped retrieval (e.g. accounting, inventory, master)."
     }
   ]
 }

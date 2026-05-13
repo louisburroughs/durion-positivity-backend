@@ -33,7 +33,10 @@ public class OperationalContextController {
     @GetMapping("/{workorderId}/operationalContext")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get operational context for workorder", description = "Returns the current operational context for a workorder, including flags and source data used to drive execution decisions.")
+    @Operation(
+            summary = "Get operational context for workorder",
+            description =
+                    "Returns the current operational context for a workorder, including flags and source data used to drive execution decisions.")
     @ApiResponse(responseCode = "200", description = "Operational context returned")
     @ApiResponse(responseCode = "404", description = "Workorder not found")
     public ResponseEntity<OperationalContextResponse> getOperationalContext(@PathVariable UUID workorderId) {
@@ -41,11 +44,15 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/operationalContext/override")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:operationalContext:override" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:operationalContext:override"})
     @PreAuthorize("hasAuthority('workorder:operationalContext:override')")
     @EmitEvent(id = "WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE", apiVersion = "1")
-    @Operation(summary = "Manager override of operational context", description = "Applies a manager-authorized override to operational context values before work starts; request is rejected once context is locked.")
+    @Operation(
+            summary = "Manager override of operational context",
+            description =
+                    "Applies a manager-authorized override to operational context values before work starts; request is rejected once context is locked.")
     @ApiResponse(responseCode = "200", description = "Override applied")
     @ApiResponse(responseCode = "404", description = "Workorder not found")
     @ApiResponse(responseCode = "409", description = "Context locked (work started)")
@@ -55,10 +62,15 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/start")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:start" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:start"})
     @PreAuthorize("hasAuthority('workorder:start')")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
-    @Operation(summary = "Start work on workorder, locking operational context", description = "Transitions the workorder into active execution and locks operational context to prevent further overrides.")
+    @Operation(
+            summary = "Start work on workorder, locking operational context",
+            description =
+                    "Transitions the workorder into active execution and locks operational context to prevent further overrides.")
     @ApiResponse(responseCode = "200", description = "Work started, context locked")
     @ApiResponse(responseCode = "400", description = "Cannot start workorder due to pending change requests")
     @ApiResponse(responseCode = "404", description = "Workorder not found")

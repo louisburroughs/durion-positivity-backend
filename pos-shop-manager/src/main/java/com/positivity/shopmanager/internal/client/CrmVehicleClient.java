@@ -1,5 +1,6 @@
 package com.positivity.shopmanager.internal.client;
 
+import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import java.util.Collections;
 import java.util.Map;
@@ -16,7 +17,7 @@ public class CrmVehicleClient {
 
     private final RestClient crmRestClient;
 
-    @Value("${pos.crm.vehicle-base-url:http://localhost:8080/v1/vehicles}")
+    @Value("${pos.crm.vehicle-base-url:http://api-gateway}")
     private String vehicleBaseUrl;
 
     public CrmVehicleClient(@Qualifier("crmRestClient") RestClient crmRestClient) {
@@ -27,7 +28,7 @@ public class CrmVehicleClient {
         try {
             Map<?, ?> payload = crmRestClient
                     .get()
-                    .uri(vehicleBaseUrl + "/{vehicleId}", vehicleId)
+                    .uri(vehicleBaseUrl + "/customer/v1/vehicles/{vehicleId}", vehicleId)
                     .retrieve()
                     .body(Map.class);
             if (payload == null) {
@@ -36,8 +37,10 @@ public class CrmVehicleClient {
             @SuppressWarnings("unchecked")
             Map<String, Object> typedPayload = (Map<String, Object>) payload;
             return typedPayload;
-        } catch (HttpClientErrorException.NotFound exception) {
+        } catch (HttpClientErrorException.NotFound _) {
             throw new CrmVehicleNotFoundException(vehicleId);
+        } catch (Exception e) {
+            throw new CrmUnavailableException("CRM is unavailable: " + e.getMessage(), e);
         }
     }
 }

@@ -14,12 +14,12 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Describes the expected structure of accounting event envelopes")
 public class EventEnvelopeContract {
 
-  @Schema(description = "Contract schema version")
-  private String version;
+    @Schema(description = "Contract schema version")
+    private String version;
 
-  @Schema(description = "Field definitions in the event envelope")
-  private List<ContractField> fields;
+    @Schema(description = "Field definitions in the event envelope")
+    private List<ContractField> fields;
 
-  @Schema(description = "Example event payloads")
-  private List<Object> examples;
+    @Schema(description = "Example event payloads")
+    private List<Object> examples;
 }

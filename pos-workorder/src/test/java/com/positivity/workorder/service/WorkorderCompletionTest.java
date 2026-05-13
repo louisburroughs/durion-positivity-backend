@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -103,7 +104,7 @@ class WorkorderCompletionTest {
     private ObjectMapper objectMapper;
 
     @Mock
-    private org.springframework.web.client.RestClient restClient;
+    private CustomerValidationClient customerValidationClient;
 
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
@@ -156,7 +157,7 @@ class WorkorderCompletionTest {
                 estimateItemRepository,
                 workorderServiceRepository,
                 workorderPartRepository,
-                restClient,
+                customerValidationClient,
                 stateMachine,
                 auditEventRepository,
                 idempotencyService,

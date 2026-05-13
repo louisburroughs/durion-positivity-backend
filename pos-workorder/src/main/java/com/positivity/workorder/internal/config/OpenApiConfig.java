@@ -1,11 +1,15 @@
 package com.positivity.workorder.internal.config;
 
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -13,12 +17,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.method.HandlerMethod;
-
-import io.swagger.v3.oas.models.Components;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.security.SecurityScheme;
 
 @Configuration
 public class OpenApiConfig {
@@ -39,10 +37,12 @@ public class OpenApiConfig {
                         .contact(
                                 new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")))
                 .components(new Components()
-                        .addSecuritySchemes("bearerAuth", new SecurityScheme()
-                                .type(SecurityScheme.Type.HTTP)
-                                .scheme("bearer")
-                                .bearerFormat("JWT")));
+                        .addSecuritySchemes(
+                                "bearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")));
     }
 
     @Bean
@@ -89,12 +89,12 @@ public class OpenApiConfig {
 
     private static List<String> extractRequiredPermissions(HandlerMethod handlerMethod) {
         var requiredPermissions = new LinkedHashSet<String>();
-        collectAuthorities(requiredPermissions,
-                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(),
-                        PreAuthorize.class));
-        collectAuthorities(requiredPermissions,
-                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(),
-                        PreAuthorize.class));
+        collectAuthorities(
+                requiredPermissions,
+                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(), PreAuthorize.class));
+        collectAuthorities(
+                requiredPermissions,
+                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), PreAuthorize.class));
         return new ArrayList<>(requiredPermissions);
     }
 

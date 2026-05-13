@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -42,13 +43,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.client.RestClient;
 
 @Service
 @Slf4j
@@ -64,18 +63,12 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final EstimateItemRepository estimateItemRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final RestClient restClient;
+    private final CustomerValidationClient customerValidationClient;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
     private final ShopmgrOperationalContextClient shopmgrClient;
-
-    @Value("${customer.service.url:http://localhost:8080/v1/customers}")
-    private String customerServiceUrl;
-
-    @Value("${customer.approval.service.url:http://localhost:8080/v1/approvals}")
-    private String customerApprovalServiceUrl;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -151,8 +144,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
-        Optional<UUID> existingWorkorderId = idempotencyService
-                .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
+        Optional<UUID> existingWorkorderId =
+                idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
         if (existingWorkorderId.isPresent()) {
             log.info(
                     "Idempotent request detected for key {}; returning existing workorder {}",
@@ -267,21 +260,21 @@ public class WorkorderServiceImpl implements WorkorderService {
         for (EstimateItem estimateItem : estimateItems) {
             if (estimateItem.getItemType() == EstimateItemType.LABOR) {
                 // Create WorkorderServiceLine for LABOR items
-                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService = com.positivity.workorder.internal.entity.WorkorderServiceLine
-                        .builder()
-                        .workOrder(workorder)
-                        .description(estimateItem.getDescription())
-                        .quantity(estimateItem.getQuantity())
-                        .unitPrice(estimateItem.getUnitPrice())
-                        .lineTotal(estimateItem.getLineTotal())
-                        .taxCode(estimateItem.getTaxCode())
-                        .originEstimateItem(estimateItem)
-                        .serviceEntityId(estimateItem.getServiceId())
-                        .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
-                        .declined(false)
-                        .isEmergencySafety(false)
-                        .photoNotPossible(false)
-                        .build();
+                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService =
+                        com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
+                                .workOrder(workorder)
+                                .description(estimateItem.getDescription())
+                                .quantity(estimateItem.getQuantity())
+                                .unitPrice(estimateItem.getUnitPrice())
+                                .lineTotal(estimateItem.getLineTotal())
+                                .taxCode(estimateItem.getTaxCode())
+                                .originEstimateItem(estimateItem)
+                                .serviceEntityId(estimateItem.getServiceId())
+                                .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
+                                .declined(false)
+                                .isEmergencySafety(false)
+                                .photoNotPossible(false)
+                                .build();
 
                 laborItems.add(workorderService);
 
@@ -347,31 +340,11 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private boolean checkCustomerRequirements(UUID customerId) {
-        try {
-            Boolean result = restClient
-                    .get()
-                    .uri(customerServiceUrl + "/" + customerId + "/requirements-met")
-                    .retrieve()
-                    .body(Boolean.class);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            log.error("Failed to check customer requirements", e);
-            return false;
-        }
+        return customerValidationClient.checkRequirementsMet(customerId);
     }
 
     private boolean checkCustomerApproval(UUID approvalId) {
-        try {
-            Boolean result = restClient
-                    .get()
-                    .uri(customerApprovalServiceUrl + "/" + approvalId + "/is-approved")
-                    .retrieve()
-                    .body(Boolean.class);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            log.error("Failed to check customer approval", e);
-            return false;
-        }
+        return customerValidationClient.checkApprovalStatus(approvalId);
     }
 
     @Override
@@ -627,8 +600,10 @@ public class WorkorderServiceImpl implements WorkorderService {
             return;
         }
 
-        String oldLocationId = workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
-        String oldResourceId = workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldLocationId =
+                workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
+        String oldResourceId =
+                workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
         String oldMechanicIds = workorder.getMechanicIds();
 
         AssignmentUpdatePayload payload = event.getPayload();
@@ -764,7 +739,7 @@ public class WorkorderServiceImpl implements WorkorderService {
             return Collections.emptyList();
         }
         return java.util.Arrays.stream(
-                mechanicIds.replace("[", "").replace("]", "").split(","))
+                        mechanicIds.replace("[", "").replace("]", "").split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(value -> value.replace("\"", ""))

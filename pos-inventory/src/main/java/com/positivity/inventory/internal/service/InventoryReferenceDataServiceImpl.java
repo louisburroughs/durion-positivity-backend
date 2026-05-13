@@ -14,21 +14,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class InventoryReferenceDataServiceImpl implements InventoryReferenceDataService {
 
-  @Override
-  public @NonNull Page<LocationDto> listLocations(@Nullable UUID siteId, @NonNull Pageable pageable) {
-    // Placeholder stub until pos-location client integration is available.
-    return Page.empty(pageable);
-  }
+    @Override
+    public @NonNull Page<LocationDto> listLocations(@Nullable UUID siteId, @NonNull Pageable pageable) {
+        // Placeholder stub until pos-location client integration is available.
+        return Page.empty(pageable);
+    }
 
-  @Override
-  public @NonNull Page<StorageLocationDto> listStorageLocations(@Nullable UUID locationId, @NonNull Pageable pageable) {
-    // Placeholder stub until pos-location client integration is available.
-    return Page.empty(pageable);
-  }
+    @Override
+    public @NonNull Page<StorageLocationDto> listStorageLocations(
+            @Nullable UUID locationId, @NonNull Pageable pageable) {
+        // Placeholder stub until pos-location client integration is available.
+        return Page.empty(pageable);
+    }
 
-  @Override
-  public @NonNull Page<LocationZoneDto> listLocationZones(@Nullable UUID locationId, @NonNull Pageable pageable) {
-    // Placeholder stub until pos-location client integration is available.
-    return Page.empty(pageable);
-  }
+    @Override
+    public @NonNull Page<LocationZoneDto> listLocationZones(@Nullable UUID locationId, @NonNull Pageable pageable) {
+        // Placeholder stub until pos-location client integration is available.
+        return Page.empty(pageable);
+    }
 }

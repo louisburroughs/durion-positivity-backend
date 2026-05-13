@@ -30,11 +30,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -101,9 +101,9 @@ class PermissionCatalogControllerTest {
     @BeforeEach
     void configureJwtFilterPassthrough() throws Exception {
         doAnswer(inv -> {
-            ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
-            return null;
-        })
+                    ((FilterChain) inv.getArgument(2)).doFilter(inv.getArgument(0), inv.getArgument(1));
+                    return null;
+                })
                 .when(jwtAuthenticationFilter)
                 .doFilter(any(), any(), any());
     }
@@ -157,8 +157,8 @@ class PermissionCatalogControllerTest {
                 .thenReturn(List.of("accounting:je:view", "accounting:je:create"));
 
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissions").isArray());
     }
@@ -174,8 +174,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /v1/permissions/decode without security:permission:view authority → 403 Forbidden")
     void decodePermissions_requires_security_permission_view_authority() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -192,8 +192,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /v1/permissions/decode with null perm_bits → 400 Bad Request")
     void decodePermissions_validates_perm_bits_not_null() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":null,\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":null,\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -202,8 +202,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with empty perm_bits returns 400 Bad Request")
     void decodePermissions_emptyPermBits_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -212,8 +212,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with perm_ver <= 0 returns 400 Bad Request")
     void decodePermissions_nonPositivePermVer_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -234,8 +234,7 @@ class PermissionCatalogControllerTest {
                 .description("View products")
                 .deprecated(false)
                 .build();
-        when(permissionService.listPermissions(isNull(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(dto)));
+        when(permissionService.listPermissions(isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(dto)));
 
         mockMvc.perform(get("/v1/permissions").param("page", "0").param("size", "20"))
                 .andExpect(status().isOk())
@@ -274,8 +273,7 @@ class PermissionCatalogControllerTest {
     @WithMockUser(roles = "VIEWER")
     @DisplayName("GET /v1/permissions without security:permission:view authority → 403 Forbidden")
     void listPermissions_missingAuthority_returns403() throws Exception {
-        mockMvc.perform(get("/v1/permissions"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/permissions")).andExpect(status().isForbidden());
     }
 
     // ── Test slice configuration ──────────────────────────────────────────────

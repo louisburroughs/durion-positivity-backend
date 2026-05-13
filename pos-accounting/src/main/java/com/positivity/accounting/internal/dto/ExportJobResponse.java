@@ -16,24 +16,24 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Status and metadata for an export job")
 public class ExportJobResponse {
 
-  @Schema(description = "Unique job identifier")
-  private UUID jobId;
+    @Schema(description = "Unique job identifier")
+    private UUID jobId;
 
-  @Schema(description = "Current job status")
-  private String status;
+    @Schema(description = "Current job status")
+    private String status;
 
-  @Schema(description = "When the export was requested")
-  private Instant requestedAt;
+    @Schema(description = "When the export was requested")
+    private Instant requestedAt;
 
-  @Nullable
-  @Schema(description = "When the export completed", nullable = true)
-  private Instant completedAt;
+    @Nullable
+    @Schema(description = "When the export completed", nullable = true)
+    private Instant completedAt;
 
-  @Nullable
-  @Schema(description = "Download URL when available", nullable = true)
-  private String downloadUrl;
+    @Nullable
+    @Schema(description = "Download URL when available", nullable = true)
+    private String downloadUrl;
 
-  @Nullable
-  @Schema(description = "Error message if job failed", nullable = true)
-  private String errorMessage;
+    @Nullable
+    @Schema(description = "Error message if job failed", nullable = true)
+    private String errorMessage;
 }

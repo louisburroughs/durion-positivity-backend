@@ -38,276 +38,393 @@ import org.springframework.core.io.ClassPathResource;
 @ExtendWith(MockitoExtension.class)
 class StaticRagPreloadServiceImplTest {
 
-  private static final String TEST_DOC_ID = "test-doc";
-  private static final String TEST_DOC_ID_2 = "test-doc-2";
-  private static final String TEST_SOURCE_PATH = "rag-test/test-doc.md";
-  // Hardcoded stub UUID per project convention
-  private static final UUID STUB_JOB_ID = UUID.fromString("00000000-0000-7000-8000-000000000300");
+    private static final String TEST_DOC_ID = "test-doc";
+    private static final String TEST_DOC_ID_2 = "test-doc-2";
+    private static final String TEST_SOURCE_PATH = "rag-test/test-doc.md";
+    private static final String TEST_RAG_SCOPE = "inventory";
+    // Hardcoded stub UUID per project convention
+    private static final UUID STUB_JOB_ID = UUID.fromString("00000000-0000-7000-8000-000000000300");
 
-  @Mock
-  private DocumentIngestionService documentIngestionService;
+    @Mock
+    private DocumentIngestionService documentIngestionService;
 
-  @Mock
-  private RagPreloadRecordRepository ragPreloadRecordRepository;
+    @Mock
+    private RagPreloadRecordRepository ragPreloadRecordRepository;
 
-  private SimpleMeterRegistry meterRegistry;
+    private SimpleMeterRegistry meterRegistry;
 
-  @BeforeEach
-  void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-    lenient().when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-  }
-
-  // ─── Helpers ────────────────────────────────────────────────────────────
-
-  private StaticRagPreloadServiceImpl createService(List<StaticRagPreloadProperties.StaticDocEntry> docs) {
-    StaticRagPreloadProperties properties = new StaticRagPreloadProperties(docs);
-    return new StaticRagPreloadServiceImpl(documentIngestionService, ragPreloadRecordRepository, properties,
-        meterRegistry);
-  }
-
-  private static String computeFileHash() throws Exception {
-    ClassPathResource resource = new ClassPathResource(TEST_SOURCE_PATH);
-    byte[] bytes = resource.getContentAsByteArray();
-    MessageDigest digest = MessageDigest.getInstance("SHA-256");
-    byte[] hashBytes = digest.digest(bytes);
-    StringBuilder sb = new StringBuilder();
-    for (byte b : hashBytes) {
-      sb.append(String.format("%02x", b));
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        lenient()
+                .when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
     }
-    return sb.toString();
-  }
 
-  private static DocumentIngestionJob stubJob(String docId) {
-    return stubJobWithStatus(docId, DocumentIngestionJobStatus.PENDING);
-  }
+    // ─── Helpers ────────────────────────────────────────────────────────────
 
-  private static DocumentIngestionJob stubJobWithStatus(String docId, DocumentIngestionJobStatus status) {
-    return new DocumentIngestionJob(
-        STUB_JOB_ID, docId, status,
-        OffsetDateTime.parse("2026-01-01T00:00:00Z"),
-        OffsetDateTime.parse("2026-01-01T00:00:00Z"),
-        null, null, null, null);
-  }
+    private StaticRagPreloadServiceImpl createService(List<StaticRagPreloadProperties.StaticDocEntry> docs) {
+        StaticRagPreloadProperties properties = new StaticRagPreloadProperties(docs);
+        return new StaticRagPreloadServiceImpl(
+                documentIngestionService, ragPreloadRecordRepository, properties, meterRegistry);
+    }
 
-  private static RagPreloadRecord loadedRecord(String docId, String hash) {
-    RagPreloadRecord preloadRecord = new RagPreloadRecord();
-    preloadRecord.setDocumentId(docId);
-    preloadRecord.setContentHash(hash);
-    preloadRecord.setSourcePath(TEST_SOURCE_PATH);
-    preloadRecord.setStatus(RagPreloadStatus.LOADED);
-    return preloadRecord;
-  }
+    private static StaticRagPreloadProperties.StaticDocEntry docEntry(String docId) {
+        return new StaticRagPreloadProperties.StaticDocEntry(docId, TEST_SOURCE_PATH, TEST_RAG_SCOPE);
+    }
 
-  private static RagPreloadRecord queuedRecord(String docId, String hash, UUID jobId) {
-    RagPreloadRecord preloadRecord = new RagPreloadRecord();
-    preloadRecord.setDocumentId(docId);
-    preloadRecord.setContentHash(hash);
-    preloadRecord.setSourcePath(TEST_SOURCE_PATH);
-    preloadRecord.setStatus(RagPreloadStatus.QUEUED);
-    preloadRecord.setJobId(jobId);
-    return preloadRecord;
-  }
+    private static String computeFileHash() throws Exception {
+        ClassPathResource resource = new ClassPathResource(TEST_SOURCE_PATH);
+        byte[] bytes = resource.getContentAsByteArray();
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hashBytes = digest.digest(bytes);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hashBytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
 
-  // ─── preloadAll ─────────────────────────────────────────────────────────
+    private static DocumentIngestionJob stubJob(String docId) {
+        return stubJobWithStatus(docId, DocumentIngestionJobStatus.PENDING);
+    }
 
-  @Test
-  @DisplayName("preloadAll with empty doc list does nothing")
-  void preloadAll_emptyDocList_doesNothing() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-    StaticRagPreloadServiceImpl service = createService(List.of());
+    private static DocumentIngestionJob stubJobWithStatus(String docId, DocumentIngestionJobStatus status) {
+        return new DocumentIngestionJob(
+                STUB_JOB_ID,
+                docId,
+                status,
+                OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+                OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+                null,
+                null,
+                null,
+                null);
+    }
 
-    service.preloadAll();
+    private static RagPreloadRecord loadedRecord(String docId, String hash) {
+        return loadedRecord(docId, hash, TEST_RAG_SCOPE);
+    }
 
-    verify(documentIngestionService, never()).submitDocument(anyString(), any());
-    verify(ragPreloadRecordRepository, never()).save(any());
-  }
+    private static RagPreloadRecord loadedRecord(String docId, String hash, String ragScope) {
+        RagPreloadRecord preloadRecord = new RagPreloadRecord();
+        preloadRecord.setDocumentId(docId);
+        preloadRecord.setContentHash(hash);
+        preloadRecord.setSourcePath(TEST_SOURCE_PATH);
+        preloadRecord.setRagScope(ragScope);
+        preloadRecord.setStatus(RagPreloadStatus.LOADED);
+        return preloadRecord;
+    }
 
-  @Test
-  @DisplayName("preloadAll skips document when prior record has same hash and LOADED status")
-  void preloadAll_sameHash_noIngestion_skipsDocument() throws Exception {
-    String hash = computeFileHash();
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
-        RagPreloadStatus.LOADED))
-        .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, hash)));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    private static RagPreloadRecord queuedRecord(String docId, String hash, UUID jobId) {
+        return queuedRecord(docId, hash, TEST_RAG_SCOPE, jobId);
+    }
 
-    StaticRagPreloadServiceImpl service = createService(
-        List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+    private static RagPreloadRecord queuedRecord(String docId, String hash, String ragScope, UUID jobId) {
+        RagPreloadRecord preloadRecord = new RagPreloadRecord();
+        preloadRecord.setDocumentId(docId);
+        preloadRecord.setContentHash(hash);
+        preloadRecord.setSourcePath(TEST_SOURCE_PATH);
+        preloadRecord.setRagScope(ragScope);
+        preloadRecord.setStatus(RagPreloadStatus.QUEUED);
+        preloadRecord.setJobId(jobId);
+        return preloadRecord;
+    }
 
-    service.preloadAll();
+    // ─── preloadAll ─────────────────────────────────────────────────────────
 
-    verify(documentIngestionService, never()).submitDocument(anyString(), any());
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.SKIPPED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.skipped", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-  }
+    @Test
+    @DisplayName("preloadAll with empty doc list does nothing")
+    void preloadAll_emptyDocList_doesNothing() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        StaticRagPreloadServiceImpl service = createService(List.of());
 
-  @Test
-  @DisplayName("preloadAll submits ingestion when prior record has different hash")
-  void preloadAll_differentHash_submitsIngestion() {
-    String differentHash = "0".repeat(64);
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
-        RagPreloadStatus.LOADED))
-        .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, differentHash)));
-    when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        service.preloadAll();
 
-    StaticRagPreloadServiceImpl service = createService(
-        List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+        verify(documentIngestionService, never()).submitDocument(anyString(), any());
+        verify(ragPreloadRecordRepository, never()).save(any());
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("preloadAll skips document when prior record has same hash and LOADED status")
+    void preloadAll_sameHash_noIngestion_skipsDocument() throws Exception {
+        String hash = computeFileHash();
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, TEST_RAG_SCOPE, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, hash)));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    verify(documentIngestionService).submitDocument(anyString(), any());
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID).count()).isEqualTo(0.0);
-  }
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
-  @Test
-  @DisplayName("preloadAll submits ingestion when no prior record exists")
-  void preloadAll_noExistingRecord_submitsIngestion() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
-        RagPreloadStatus.LOADED))
-        .thenReturn(Optional.empty());
-    when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        service.preloadAll();
 
-    StaticRagPreloadServiceImpl service = createService(
-        List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH)));
+        verify(documentIngestionService, never()).submitDocument(anyString(), any());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.SKIPPED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.skipped", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("preloadAll ignores loaded record in another rag scope")
+    void preloadAll_loadedRecordInDifferentScope_submitsIngestionForCurrentScope() throws Exception {
+        String hash = computeFileHash();
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, TEST_RAG_SCOPE, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.empty());
+        lenient()
+                .when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, "master", RagPreloadStatus.LOADED))
+                .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, hash, "master")));
+        when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    verify(documentIngestionService).submitDocument(anyString(), any());
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
-  }
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
-  @Test
-  @DisplayName("preloadAll persists FAILED record for erroring doc and continues to next document")
-  void preloadAll_ingestionThrows_persistsFailedRecord_continuesOtherDocs() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED)).thenReturn(List.of());
-    when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(anyString(),
-        eq(RagPreloadStatus.LOADED)))
-        .thenReturn(Optional.empty());
-    when(documentIngestionService.submitDocument(anyString(), any()))
-        .thenThrow(new RuntimeException("Ingestion failed"))
-        .thenReturn(stubJob(TEST_DOC_ID_2));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        service.preloadAll();
 
-    StaticRagPreloadServiceImpl service = createService(List.of(
-        new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH),
-        new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID_2, TEST_SOURCE_PATH)));
+        verify(documentIngestionService).submitDocument(anyString(), any());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        verify(ragPreloadRecordRepository, never())
+                .findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, "master", RagPreloadStatus.LOADED);
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("preloadAll submits ingestion when prior record has different hash")
+    void preloadAll_differentHash_submitsIngestion() {
+        String differentHash = "0".repeat(64);
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, TEST_RAG_SCOPE, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.of(loadedRecord(TEST_DOC_ID, differentHash)));
+        when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    verify(documentIngestionService, times(2)).submitDocument(anyString(), any());
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository, times(2)).save(captor.capture());
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
-    List<RagPreloadRecord> saved = captor.getAllValues();
-    assertThat(saved).extracting(RagPreloadRecord::getStatus)
-        .containsExactlyInAnyOrder(RagPreloadStatus.FAILED, RagPreloadStatus.QUEUED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-    assertThat(meterRegistry.counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID_2).count()).isEqualTo(0.0);
-  }
+        service.preloadAll();
 
-  @Test
-  @DisplayName("reconcileQueuedRecords persists LOADED record when queued job succeeded")
-  void reconcileQueuedRecords_jobSucceeded_persistsLoadedRecord() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
-        .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
-    lenient().when(ragPreloadRecordRepository.findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(TEST_DOC_ID,
-        RagPreloadStatus.LOADED)).thenReturn(Optional.empty());
-    when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
-        .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.SUCCEEDED)));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        verify(documentIngestionService).submitDocument(anyString(), any());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(0.0);
+    }
 
-    StaticRagPreloadServiceImpl service = createService(List.of());
+    @Test
+    @DisplayName("preloadAll submits ingestion when no prior record exists")
+    void preloadAll_noExistingRecord_submitsIngestion() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, TEST_RAG_SCOPE, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.empty());
+        when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    service.preloadAll();
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID)));
 
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.LOADED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-  }
+        service.preloadAll();
 
-  @Test
-  @DisplayName("reconcileQueuedRecords persists FAILED record when queued job failed")
-  void reconcileQueuedRecords_jobFailed_persistsFailedRecord() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
-        .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
-    when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
-        .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.FAILED)));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        verify(documentIngestionService).submitDocument(anyString(), any());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.QUEUED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+    }
 
-    StaticRagPreloadServiceImpl service = createService(List.of());
+    @Test
+    @DisplayName("preloadAll persists FAILED record for erroring doc and continues to next document")
+    void preloadAll_ingestionThrows_persistsFailedRecord_continuesOtherDocs() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        anyString(), anyString(), eq(RagPreloadStatus.LOADED)))
+                .thenReturn(Optional.empty());
+        when(documentIngestionService.submitDocument(anyString(), any()))
+                .thenThrow(new RuntimeException("Ingestion failed"))
+                .thenReturn(stubJob(TEST_DOC_ID_2));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    service.preloadAll();
+        StaticRagPreloadServiceImpl service = createService(List.of(docEntry(TEST_DOC_ID), docEntry(TEST_DOC_ID_2)));
 
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-    assertThat(meterRegistry.counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID).count()).isEqualTo(0.0);
-  }
+        service.preloadAll();
 
-  @Test
-  @DisplayName("reconcileQueuedRecords leaves queued record unchanged when job is pending")
-  void reconcileQueuedRecords_jobPending_leavesQueued() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
-        .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
-    when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
-        .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.PENDING)));
+        verify(documentIngestionService, times(2)).submitDocument(anyString(), any());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository, times(2)).save(captor.capture());
 
-    StaticRagPreloadServiceImpl service = createService(List.of());
+        List<RagPreloadRecord> saved = captor.getAllValues();
+        assertThat(saved)
+                .extracting(RagPreloadRecord::getStatus)
+                .containsExactlyInAnyOrder(RagPreloadStatus.FAILED, RagPreloadStatus.QUEUED);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID_2)
+                        .count())
+                .isEqualTo(0.0);
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("preloadAll submits normalized rag scope in document metadata")
+    void preloadAll_submitsNormalizedRagScope() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of());
+        when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, "inventory", RagPreloadStatus.LOADED))
+                .thenReturn(Optional.empty());
+        when(documentIngestionService.submitDocument(anyString(), any())).thenReturn(stubJob(TEST_DOC_ID));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    verify(ragPreloadRecordRepository, never()).save(any());
-  }
+        StaticRagPreloadServiceImpl service = createService(
+                List.of(new StaticRagPreloadProperties.StaticDocEntry(TEST_DOC_ID, TEST_SOURCE_PATH, " INVENTORY ")));
 
-  @Test
-  @DisplayName("reconcileQueuedRecords persists FAILED record when queued job is not found")
-  void reconcileQueuedRecords_jobNotFound_persistsFailedRecord() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
-        .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
-    when(documentIngestionService.getIngestionJob(STUB_JOB_ID)).thenReturn(Optional.empty());
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        service.preloadAll();
 
-    StaticRagPreloadServiceImpl service = createService(List.of());
+        verify(documentIngestionService)
+                .submitDocument(
+                        anyString(),
+                        eq(java.util.Map.of(
+                                "document_id", TEST_DOC_ID,
+                                "source_path", TEST_SOURCE_PATH,
+                                "rag_scope", "inventory")));
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("reconcileQueuedRecords persists LOADED record when queued job succeeded")
+    void reconcileQueuedRecords_jobSucceeded_persistsLoadedRecord() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
+        lenient()
+                .when(ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        TEST_DOC_ID, TEST_RAG_SCOPE, RagPreloadStatus.LOADED))
+                .thenReturn(Optional.empty());
+        when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
+                .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.SUCCEEDED)));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-  }
+        StaticRagPreloadServiceImpl service = createService(List.of());
 
-  @Test
-  @DisplayName("reconcileQueuedRecords persists FAILED record when queued record has null jobId")
-  void reconcileQueuedRecords_nullJobId_persistsFailedRecord() {
-    when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
-        .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", null)));
-    when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        service.preloadAll();
 
-    StaticRagPreloadServiceImpl service = createService(List.of());
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.LOADED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+    }
 
-    service.preloadAll();
+    @Test
+    @DisplayName("reconcileQueuedRecords persists FAILED record when queued job failed")
+    void reconcileQueuedRecords_jobFailed_persistsFailedRecord() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
+        when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
+                .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.FAILED)));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
-    verify(ragPreloadRecordRepository).save(captor.capture());
-    assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
-    assertThat(meterRegistry.counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID).count()).isEqualTo(1.0);
-    assertThat(meterRegistry.counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID).count()).isEqualTo(0.0);
-    verify(documentIngestionService, never()).getIngestionJob(any());
-  }
+        StaticRagPreloadServiceImpl service = createService(List.of());
+
+        service.preloadAll();
+
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("reconcileQueuedRecords leaves queued record unchanged when job is pending")
+    void reconcileQueuedRecords_jobPending_leavesQueued() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
+        when(documentIngestionService.getIngestionJob(STUB_JOB_ID))
+                .thenReturn(Optional.of(stubJobWithStatus(TEST_DOC_ID, DocumentIngestionJobStatus.PENDING)));
+
+        StaticRagPreloadServiceImpl service = createService(List.of());
+
+        service.preloadAll();
+
+        verify(ragPreloadRecordRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reconcileQueuedRecords persists FAILED record when queued job is not found")
+    void reconcileQueuedRecords_jobNotFound_persistsFailedRecord() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", STUB_JOB_ID)));
+        when(documentIngestionService.getIngestionJob(STUB_JOB_ID)).thenReturn(Optional.empty());
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        StaticRagPreloadServiceImpl service = createService(List.of());
+
+        service.preloadAll();
+
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("reconcileQueuedRecords persists FAILED record when queued record has null jobId")
+    void reconcileQueuedRecords_nullJobId_persistsFailedRecord() {
+        when(ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED))
+                .thenReturn(List.of(queuedRecord(TEST_DOC_ID, "hash-1", null)));
+        when(ragPreloadRecordRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        StaticRagPreloadServiceImpl service = createService(List.of());
+
+        service.preloadAll();
+
+        ArgumentCaptor<RagPreloadRecord> captor = ArgumentCaptor.forClass(RagPreloadRecord.class);
+        verify(ragPreloadRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RagPreloadStatus.FAILED);
+        assertThat(captor.getValue().getRagScope()).isEqualTo(TEST_RAG_SCOPE);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.failed", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.rag.preload.loaded", "documentId", TEST_DOC_ID)
+                        .count())
+                .isEqualTo(0.0);
+        verify(documentIngestionService, never()).getIngestionJob(any());
+    }
 }

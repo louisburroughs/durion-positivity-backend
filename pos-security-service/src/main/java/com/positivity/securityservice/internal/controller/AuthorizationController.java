@@ -20,25 +20,31 @@ import org.springframework.web.bind.annotation.RestController;
  * Issue: #42
  */
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                "security:authorization:decide" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"security:authorization:decide"})
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
 @Tag(name = "Authorization", description = "Authorization decision endpoints for principal permissions")
 public class AuthorizationController {
 
-        private final AuthorizationService authorizationService;
+    private final AuthorizationService authorizationService;
 
-        @GetMapping("/authorization/decision")
-        @PreAuthorize("hasAuthority('security:authorization:decide')")
-        @Operation(summary = "Get authorization decision", description = "Returns allow or deny for a principal and permission key")
-        @ApiResponse(responseCode = "200", description = "Authorization decision returned")
-        @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
-        public ResponseEntity<AuthorizationDecisionResponse> getDecision(
-                        @Parameter(description = "Principal identifier to evaluate", example = "userA") @RequestParam String principalId,
-                        @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit") @RequestParam(name = "permission") String permission) {
-                var decision = authorizationService.authorize(principalId, permission);
-                return ResponseEntity.ok(
-                                new AuthorizationDecisionResponse(decision.name().toLowerCase()));
-        }
+    @GetMapping("/authorization/decision")
+    @PreAuthorize("hasAuthority('security:authorization:decide')")
+    @Operation(
+            summary = "Get authorization decision",
+            description = "Returns allow or deny for a principal and permission key")
+    @ApiResponse(responseCode = "200", description = "Authorization decision returned")
+    @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
+    public ResponseEntity<AuthorizationDecisionResponse> getDecision(
+            @Parameter(description = "Principal identifier to evaluate", example = "userA") @RequestParam
+                    String principalId,
+            @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit")
+                    @RequestParam(name = "permission")
+                    String permission) {
+        var decision = authorizationService.authorize(principalId, permission);
+        return ResponseEntity.ok(
+                new AuthorizationDecisionResponse(decision.name().toLowerCase()));
+    }
 }

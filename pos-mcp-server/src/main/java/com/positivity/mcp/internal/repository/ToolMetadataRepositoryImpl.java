@@ -22,37 +22,82 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull List<String> findAllRoleNames() {
+        return jdbcTemplate.queryForList("SELECT name FROM mcp_role ORDER BY name", String.class);
+    }
+
+    @Override
     public @NonNull List<ToolMetadata> findEnabledByRoleAndWorkflow(
             @NonNull String role, @NonNull String workflowState) {
         String sql = """
-        SELECT t.id, t.name, t.display_name, t.description,
-               t.domain, t.priority, t.cost_level,
-               t.avg_latency_ms, t.enabled, t.handler_bean
-        FROM mcp_tool t
-        JOIN mcp_tool_role tr ON t.id = tr.tool_id
-        JOIN mcp_role r ON tr.role_id = r.id
-        JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
-        JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
-        WHERE t.enabled = true
-          AND r.name = ?
-          AND ws.name = ?
-        """;
+                SELECT t.id, t.name, t.display_name, t.description,
+                       t.domain, t.priority, t.cost_level,
+                       t.avg_latency_ms, t.enabled, t.handler_bean
+                FROM mcp_tool t
+                JOIN mcp_tool_role tr ON t.id = tr.tool_id
+                JOIN mcp_role r ON tr.role_id = r.id
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND r.name = ?
+                  AND ws.name = ?
+                """;
 
         return jdbcTemplate.query(sql, this::mapRow, role, workflowState);
     }
 
     @Override
+    public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
+        String sql = """
+                SELECT t.id, t.name, t.display_name, t.description,
+                       t.domain, t.priority, t.cost_level,
+                       t.avg_latency_ms, t.enabled, t.handler_bean
+                FROM mcp_tool t
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND ws.name = ?
+                ORDER BY lower(t.domain), t.name
+                """;
+
+        return jdbcTemplate.query(sql, this::mapRow, workflowState);
+    }
+
+    @Override
+    public @NonNull List<ToolMetadata> findTopKByEmbeddingForRole(
+            float @NonNull [] embedding, int limit, @NonNull String role, @NonNull String workflowState) {
+        String sql = """
+                SELECT t.id, t.name, t.display_name, t.description,
+                       t.domain, t.priority, t.cost_level,
+                       t.avg_latency_ms, t.enabled, t.handler_bean
+                FROM mcp_tool t
+                JOIN mcp_tool_role tr ON t.id = tr.tool_id
+                JOIN mcp_role r ON tr.role_id = r.id
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND t.embedding IS NOT NULL
+                  AND r.name = ?
+                  AND ws.name = ?
+                ORDER BY t.embedding <=> ?::vector, t.id
+                LIMIT ?
+                """;
+
+        return jdbcTemplate.query(sql, this::mapRow, role, workflowState, toVectorPGobject(embedding), limit);
+    }
+
+    @Override
     public @NonNull List<ToolMetadata> findTopKByEmbedding(float @NonNull [] embedding, int limit) {
         String sql = """
-        SELECT id, name, display_name, description,
-               domain, priority, cost_level,
-               avg_latency_ms, enabled, handler_bean
-        FROM mcp_tool
-        WHERE enabled = true
-          AND embedding IS NOT NULL
-        ORDER BY embedding <=> ?::vector, id
-        LIMIT ?
-        """;
+                SELECT id, name, display_name, description,
+                       domain, priority, cost_level,
+                       avg_latency_ms, enabled, handler_bean
+                FROM mcp_tool
+                WHERE enabled = true
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> ?::vector, id
+                LIMIT ?
+                """;
 
         return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
     }

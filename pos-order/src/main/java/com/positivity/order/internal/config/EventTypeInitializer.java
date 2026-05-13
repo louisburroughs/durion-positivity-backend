@@ -34,11 +34,11 @@ public class EventTypeInitializer implements ApplicationRunner {
 
     public EventTypeInitializer(
             RestClient.Builder restClientBuilder,
-            @Value("${gateway.base-url:http://localhost:8080}") String gatewayBaseUrl,
+            @Value("${pos.events.base-url:http://pos-event-receiver:8080}") String eventServiceBaseUrl,
             @Value("${pos.events.api-secret:}") String apiSecret,
             @Value("${pos-events.registration.enabled:true}") boolean enabled) {
         this.restClient = restClientBuilder
-                .baseUrl(gatewayBaseUrl + "/v1/event-receiver/v1/eventTypes/code")
+                .baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code")
                 .build();
         this.initializerSupport = new EventTypeInitializerSupport(SERVICE_NAME);
         this.apiSecret = apiSecret;

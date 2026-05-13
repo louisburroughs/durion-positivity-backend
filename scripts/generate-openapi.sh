@@ -160,12 +160,15 @@ specs = []
 for module in modules:
     spec_path = root_dir / module / "openapi.yaml"
     if not spec_path.is_file():
+        print(f"WARN: {module}/openapi.yaml not found; skipping", file=sys.stderr)
         continue
     with spec_path.open("r", encoding="utf-8") as f:
         spec = yaml.safe_load(f)
     if not isinstance(spec, dict):
+        print(f"WARN: {module}/openapi.yaml is not a valid object; skipping", file=sys.stderr)
         continue
     if not isinstance(spec.get("paths"), dict):
+        print(f"WARN: {module}/openapi.yaml has no paths section; skipping from aggregate", file=sys.stderr)
         continue
     specs.append((module, spec_path, spec))
 

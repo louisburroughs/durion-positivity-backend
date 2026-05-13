@@ -1,13 +1,13 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.dto.returns.ReasonCodeDto;
 import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
 import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
-import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
-import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnResponse;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
+import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
-import com.positivity.inventory.internal.dto.returns.ReasonCodeDto;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
@@ -172,8 +172,8 @@ public class ReturnServiceImpl implements ReturnService {
             throw new IllegalArgumentException("quantityReturned must be positive");
         }
 
-        List<InventoryLedgerEntry> consumptionEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+        List<InventoryLedgerEntry> consumptionEntries =
+                inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         item.getSkuId().toString(),
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());

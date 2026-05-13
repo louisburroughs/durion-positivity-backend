@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * Client for fetching mechanic availability from the People service.
@@ -32,7 +31,7 @@ public class PeopleAvailabilityClient {
             return peopleServiceRestClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/v1/people/availability")
+                            .path("/people/v1/people/availability")
                             .queryParam("locationId", locationId)
                             .queryParam("date", date.toString())
                             .queryParam("includeSchedule", "true")
@@ -46,9 +45,9 @@ public class PeopleAvailabilityClient {
                     .location(locationId)
                     .people(java.util.List.of())
                     .build();
-        } catch (RestClientException e) {
+        } catch (Exception e) {
             log.error("Failed to fetch people availability for locationId={} date={}", locationId, date, e);
-            throw new RestClientException(
+            throw new IllegalStateException(
                     "Failed to fetch people availability for locationId=" + locationId + " date=" + date, e);
         }
     }

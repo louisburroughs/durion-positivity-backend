@@ -19,8 +19,5 @@ public interface InventoryLeadTimeService {
      * @return lead-time view
      */
     @NonNull
-    LeadTimeView queryLeadTime(
-            @NonNull UUID productId,
-            @Nullable UUID locationId,
-            @Nullable UUID storageLocationId);
+    LeadTimeView queryLeadTime(@NonNull UUID productId, @Nullable UUID locationId, @Nullable UUID storageLocationId);
 }

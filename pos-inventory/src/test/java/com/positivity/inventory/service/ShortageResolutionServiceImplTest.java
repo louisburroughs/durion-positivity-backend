@@ -18,50 +18,46 @@ import org.mockito.Mockito;
 @DisplayName("ShortageResolutionServiceImpl")
 class ShortageResolutionServiceImplTest {
 
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        @Test
-        @DisplayName("listShortageOptions returns deterministic options for allocation")
-        void listShortageOptions_returnsExpectedOptions() {
-                ShortageResolutionServiceImpl service = new ShortageResolutionServiceImpl(
-                                Mockito.mock(ProductSubstituteClient.class),
-                                Mockito.mock(ExternalAvailabilityClient.class),
-                                Runnable::run,
-                                TEST_CLOCK);
+    @Test
+    @DisplayName("listShortageOptions returns deterministic options for allocation")
+    void listShortageOptions_returnsExpectedOptions() {
+        ShortageResolutionServiceImpl service = new ShortageResolutionServiceImpl(
+                Mockito.mock(ProductSubstituteClient.class),
+                Mockito.mock(ExternalAvailabilityClient.class),
+                Runnable::run,
+                TEST_CLOCK);
 
-                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                var options = service.listShortageOptions(allocationId);
+        var options = service.listShortageOptions(allocationId);
 
-                assertThat(options).hasSize(2);
-                assertThat(options)
-                                .extracting(ShortageOptionDto::getAllocationId)
-                                .containsOnly(allocationId);
-                assertThat(options)
-                                .extracting(ShortageOptionDto::getResolution)
-                                .containsExactly("BACKORDER", "CANCEL");
-        }
+        assertThat(options).hasSize(2);
+        assertThat(options).extracting(ShortageOptionDto::getAllocationId).containsOnly(allocationId);
+        assertThat(options).extracting(ShortageOptionDto::getResolution).containsExactly("BACKORDER", "CANCEL");
+    }
 
-        @Test
-        @DisplayName("resolveShortage maps request into resolved result")
-        void resolveShortage_returnsResolutionResult() {
-                ShortageResolutionServiceImpl service = new ShortageResolutionServiceImpl(
-                                Mockito.mock(ProductSubstituteClient.class),
-                                Mockito.mock(ExternalAvailabilityClient.class),
-                                Runnable::run,
-                                TEST_CLOCK);
+    @Test
+    @DisplayName("resolveShortage maps request into resolved result")
+    void resolveShortage_returnsResolutionResult() {
+        ShortageResolutionServiceImpl service = new ShortageResolutionServiceImpl(
+                Mockito.mock(ProductSubstituteClient.class),
+                Mockito.mock(ExternalAvailabilityClient.class),
+                Runnable::run,
+                TEST_CLOCK);
 
-                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                ShortageResolveRequest request = ShortageResolveRequest.builder()
-                                .allocationId(allocationId)
-                                .resolution("BACKORDER")
-                                .build();
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ShortageResolveRequest request = ShortageResolveRequest.builder()
+                .allocationId(allocationId)
+                .resolution("BACKORDER")
+                .build();
 
-                var result = service.resolveShortage(request);
+        var result = service.resolveShortage(request);
 
-                assertThat(result.getAllocationId()).isEqualTo(allocationId);
-                assertThat(result.getResolution()).isEqualTo("BACKORDER");
-                assertThat(result.getStatus()).isEqualTo("RESOLVED");
-                assertThat(result.getResolvedAt()).isEqualTo(Instant.parse("2024-01-01T00:00:00Z"));
-        }
+        assertThat(result.getAllocationId()).isEqualTo(allocationId);
+        assertThat(result.getResolution()).isEqualTo("BACKORDER");
+        assertThat(result.getStatus()).isEqualTo("RESOLVED");
+        assertThat(result.getResolvedAt()).isEqualTo(Instant.parse("2024-01-01T00:00:00Z"));
+    }
 }

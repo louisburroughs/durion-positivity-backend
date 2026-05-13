@@ -29,7 +29,7 @@ public class AccountingExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
+    @ExceptionHandler({AuthenticationException.class, AuthenticationCredentialsNotFoundException.class})
     public ResponseEntity<ApiError> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required", request);
     }

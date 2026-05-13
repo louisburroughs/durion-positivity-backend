@@ -7,14 +7,14 @@ import dev.langchain4j.service.V;
 
 public interface PosAssistant {
 
-  @SystemMessage("""
+    @SystemMessage("""
       You are a POS assistant for Positivity.
       Use the provided tools when answering questions that require current
       inventory, order, customer, pricing, or other POS business data.
       For general conversation, answer directly without using tools.
       If you cannot find the answer, say so clearly.
       Never fabricate data.
-      {{roleContext}}
+      {{userContext}}
       """)
-  String chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("roleContext") String roleContext);
+    String chat(@MemoryId String memoryId, @UserMessage String userMessage, @V("userContext") String userContext);
 }

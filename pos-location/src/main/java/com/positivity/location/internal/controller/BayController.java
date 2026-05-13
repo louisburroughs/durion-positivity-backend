@@ -39,10 +39,14 @@ public class BayController {
         this.bayService = bayService;
     }
 
-    @Operation(summary = "List bays", description = "List bays for a location with optional status and bayType filters.")
+    @Operation(
+            summary = "List bays",
+            description = "List bays for a location with optional status and bayType filters.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
     @PreAuthorize("hasAuthority('location:bay:read')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:bay:read" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:bay:read"})
     @GetMapping
     public ResponseEntity<Page<BayResponse>> listBays(
             @Parameter(description = "Location ID") @PathVariable String locationId,
@@ -58,7 +62,9 @@ public class BayController {
     @ApiResponse(responseCode = "200", description = "Bay retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Bay not found.")
     @PreAuthorize("hasAuthority('location:bay:read')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:bay:read" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:bay:read"})
     @GetMapping("/{bayId}")
     public ResponseEntity<BayResponse> getBay(
             @Parameter(description = "Location ID") @PathVariable String locationId,
@@ -70,7 +76,9 @@ public class BayController {
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:bay:manage')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:bay:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:bay:manage"})
     @PostMapping
     public ResponseEntity<BayResponse> createBay(
             @Parameter(description = "Location ID", example = "1") @PathVariable String locationId,
@@ -83,7 +91,9 @@ public class BayController {
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:bay:manage')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:bay:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:bay:manage"})
     @PatchMapping("/{bayId}")
     public ResponseEntity<BayResponse> patchBay(
             @PathVariable String locationId, @PathVariable String bayId, @RequestBody BayPatchRequest patchRequest) {

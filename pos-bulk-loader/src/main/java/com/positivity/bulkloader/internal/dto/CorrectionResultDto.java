@@ -15,12 +15,15 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Result of a single correction record submission")
 public class CorrectionResultDto {
 
-  @Schema(description = "ID of the audit record that was corrected", example = "00000000-0000-0000-0000-000000000001")
-  private UUID auditRecordId;
+    @Schema(description = "ID of the audit record that was corrected", example = "00000000-0000-0000-0000-000000000001")
+    private UUID auditRecordId;
 
-  @Schema(description = "Whether the correction was accepted or rejected", example = "ACCEPTED")
-  private CorrectionStatus status;
+    @Schema(description = "Whether the correction was accepted or rejected", example = "ACCEPTED")
+    private CorrectionStatus status;
 
-  @Schema(description = "Reason for rejection if status is REJECTED", example = "Audit record does not belong to this job", nullable = true)
-  private String rejectionReason;
+    @Schema(
+            description = "Reason for rejection if status is REJECTED",
+            example = "Audit record does not belong to this job",
+            nullable = true)
+    private String rejectionReason;
 }

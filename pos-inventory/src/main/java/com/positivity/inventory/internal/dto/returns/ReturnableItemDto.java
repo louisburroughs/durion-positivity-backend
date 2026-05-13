@@ -11,9 +11,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReturnableItemDto {
-  private UUID itemId;
-  private String sku;
-  private String description;
-  private int quantityReturnable;
-  private UUID workorderId;
+    private UUID itemId;
+    private String sku;
+    private String description;
+    private int quantityReturnable;
+    private UUID workorderId;
 }

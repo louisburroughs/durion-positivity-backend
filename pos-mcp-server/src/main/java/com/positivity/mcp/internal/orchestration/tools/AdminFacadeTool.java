@@ -1,8 +1,11 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.security.common.SecurityContextHelper;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -10,15 +13,21 @@ import org.springframework.web.client.RestClient;
 @Component
 public class AdminFacadeTool {
 
-    private final RestClient securityRestClient;
     private final RestClient usersRestClient;
+    private final RestClient auditRestClient;
+    private final String userPermissionsPathTemplate;
+    private final String auditSearchUriTemplate;
 
     public AdminFacadeTool(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.admin.base-url:http://pos-security-service/v1/admin}") @NonNull String adminBaseUrl,
-            @Value("${pos.security.users.base-url:http://pos-security-service/v1/users}") @NonNull String usersBaseUrl) {
-        this.securityRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, adminBaseUrl);
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.security.users.base-url}") @NonNull String usersBaseUrl,
+            @Value("${pos.security.audit.base-url}") @NonNull String auditBaseUrl,
+            @Value("${pos.security.user-permissions-path-template}") @NonNull String userPermissionsPathTemplate,
+            @Value("${pos.security.audit-search-uri-template}") @NonNull String auditSearchUriTemplate) {
         this.usersRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, usersBaseUrl);
+        this.auditRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, auditBaseUrl);
+        this.userPermissionsPathTemplate = userPermissionsPathTemplate;
+        this.auditSearchUriTemplate = auditSearchUriTemplate;
     }
 
     @Tool("Get overall platform system status and health summary")
@@ -26,23 +35,35 @@ public class AdminFacadeTool {
         return "pos-mcp-server status: UP";
     }
 
-    @Tool("List all users registered in the platform. Returns each user's ID, username, and assigned roles. " +
-          "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
+    @Tool(
+            "List all users registered in the platform. Returns each user's ID, username, and assigned roles. "
+                    + "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
     public String listUsers() {
         return usersRestClient.get().retrieve().body(String.class);
     }
 
     @Tool("Get effective user permissions and access details")
     public String getUserPermissions(@P("The user ID") @NonNull String userId) {
-        return securityRestClient
+        return usersRestClient
                 .get()
-                .uri("/users/{userId}/roles", userId)
+                .uri(userPermissionsPathTemplate, Map.of("userId", userId))
                 .retrieve()
                 .body(String.class);
     }
 
+    @Tool(
+            "Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
+    public String getMyPermissions() {
+        return getUserPermissions(SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException()
+                .toString());
+    }
+
     @Tool("Search the administrative audit log with a query string")
     public String getAuditLog(@P("Search query for audit log") @NonNull String query) {
-        return securityRestClient.get().uri("/audit?q={q}", query).retrieve().body(String.class);
+        return auditRestClient
+                .get()
+                .uri(auditSearchUriTemplate, Map.of("query", query))
+                .retrieve()
+                .body(String.class);
     }
 }

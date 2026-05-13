@@ -15,14 +15,18 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReturnLineDto {
-  @NotNull
-  private UUID itemId;
-  @Positive
-  private int quantity;
-  @NotBlank
-  private String reasonCode;
-  @NotNull
-  private UUID locationId;
-  @Nullable
-  private UUID storageLocationId;
+    @NotNull
+    private UUID itemId;
+
+    @Positive
+    private int quantity;
+
+    @NotBlank
+    private String reasonCode;
+
+    @NotNull
+    private UUID locationId;
+
+    @Nullable
+    private UUID storageLocationId;
 }

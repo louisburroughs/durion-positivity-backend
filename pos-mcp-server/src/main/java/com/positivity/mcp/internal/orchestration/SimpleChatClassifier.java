@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
-import com.positivity.mcp.internal.service.SimpleChatRuleCatalogService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,8 +18,8 @@ final class SimpleChatClassifier {
     private final Supplier<SimpleChatRuleCatalog> catalogSupplier;
 
     @Autowired
-    SimpleChatClassifier(@NonNull SimpleChatRuleCatalogService catalogService) {
-        this(catalogService::currentCatalog);
+    SimpleChatClassifier(@NonNull SimpleChatCatalogProvider catalogProvider) {
+        this(catalogProvider::currentCatalog);
     }
 
     // Test-only constructor for supplying a fixed in-memory catalog.
@@ -49,7 +48,6 @@ final class SimpleChatClassifier {
         }
 
         return !hasStrongTaskSignal(text, features, catalog);
-
     }
 
     private static boolean hasStrongTaskSignal(
@@ -68,8 +66,8 @@ final class SimpleChatClassifier {
                 || catalog.containsTaskCueKeyword(features.tokenSet());
     }
 
-    private record MessageFeatures(@NonNull List<String> tokens, @NonNull Set<String> tokenSet,
-            boolean hasQuestionMark) {
+    private record MessageFeatures(
+            @NonNull List<String> tokens, @NonNull Set<String> tokenSet, boolean hasQuestionMark) {
 
         static @NonNull MessageFeatures from(@NonNull String text) {
             List<String> tokens = SimpleChatRuleCatalog.tokenize(text);

@@ -11,9 +11,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LocationDto {
-  private UUID locationId;
-  private UUID siteId;
-  private String name;
-  private String type;
-  private boolean active;
+    private UUID locationId;
+    private UUID siteId;
+    private String name;
+    private String type;
+    private boolean active;
 }

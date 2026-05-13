@@ -21,8 +21,9 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Order Cancellation", description = "Cancel orders and retry failed cancellations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-        OrderPermissions.ORDER_CANCEL })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {OrderPermissions.ORDER_CANCEL})
 @RequestMapping("/v1/orders/carts")
 @RequiredArgsConstructor
 @Slf4j
@@ -30,8 +31,10 @@ public class OrderCancellationController {
 
     private final OrderCancellationService orderCancellationService;
 
-    @Operation(summary = "Cancel order", description = "Initiate cancellation for a sales order cart using the supplied cancellation context.", tags = {
-            "Order Cancellation" })
+    @Operation(
+            summary = "Cancel order",
+            description = "Initiate cancellation for a sales order cart using the supplied cancellation context.",
+            tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "201", description = "Cancellation initiated")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -56,8 +59,10 @@ public class OrderCancellationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Retry failed cancellation", description = "Retry a previously failed order cancellation using the original idempotency key.", tags = {
-            "Order Cancellation" })
+    @Operation(
+            summary = "Retry failed cancellation",
+            description = "Retry a previously failed order cancellation using the original idempotency key.",
+            tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "200", description = "Retry accepted")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Order not found")

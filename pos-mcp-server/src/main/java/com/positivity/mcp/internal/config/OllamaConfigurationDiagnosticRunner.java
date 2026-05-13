@@ -27,9 +27,12 @@ public class OllamaConfigurationDiagnosticRunner implements ApplicationRunner {
     public OllamaConfigurationDiagnosticRunner(
             @Value("${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}") @NonNull String chatBaseUrl,
             @Value("${OLLAMA_CHAT_MODEL:qwen3.5:cloud}") @NonNull String chatModel,
-            @Value("${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}") @NonNull String embeddingBaseUrl,
+            @Value("${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}") @NonNull
+                    String embeddingBaseUrl,
             @Value("${OLLAMA_EMBEDDING_MODEL:qwen3-embedding}") @NonNull String embeddingModel,
-            @Value("${OLLAMA_FALLBACK_BASE_URL:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}") @NonNull String fallbackBaseUrl,
+            @Value("${OLLAMA_FALLBACK_BASE_URL:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
+                    @NonNull
+                    String fallbackBaseUrl,
             @Value("${OLLAMA_FALLBACK_MODEL:gpt-oss:120b}") @NonNull String fallbackModel,
             @Value("${MCP_MODEL_FALLBACK_ENABLED:false}") boolean fallbackEnabled,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {

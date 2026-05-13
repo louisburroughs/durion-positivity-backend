@@ -52,6 +52,12 @@ logging:
       positivity:
         shop: INFO
 
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     enabled: true
@@ -63,7 +69,18 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   crm:
-    customer-base-url: ${POS_CRM_CUSTOMER_BASE_URL:http://localhost:8080/v1/customers}
-    vehicle-base-url: ${POS_CRM_VEHICLE_BASE_URL:http://localhost:8080/v1/vehicles}
+    customer-base-url: ${POS_CRM_CUSTOMER_BASE_URL:http://api-gateway}
+    vehicle-base-url: ${POS_CRM_VEHICLE_BASE_URL:http://api-gateway}
     connect-timeout-ms: ${POS_CRM_CONNECT_TIMEOUT_MS:200}
     read-timeout-ms: ${POS_CRM_READ_TIMEOUT_MS:2000}
+  hr:
+    base-url: ${POS_HR_BASE_URL:http://api-gateway}
+location:
+  service:
+    url: ${LOCATION_SERVICE_URL:http://api-gateway}
+people:
+  service:
+    url: ${PEOPLE_SERVICE_URL:http://api-gateway}
+catalog:
+  service:
+    url: ${CATALOG_SERVICE_URL:http://api-gateway}

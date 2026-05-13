@@ -17,7 +17,8 @@ public class UnavailablePaymentGatewayAdapter implements PaymentGatewayPort {
     private static final Logger log = LoggerFactory.getLogger(UnavailablePaymentGatewayAdapter.class);
 
     public UnavailablePaymentGatewayAdapter() {
-        log.warn("No PaymentGatewayPort implementation configured. Payment operations will fail until a real gateway adapter is provided.");
+        log.warn(
+                "No PaymentGatewayPort implementation configured. Payment operations will fail until a real gateway adapter is provided.");
     }
 
     @Override
@@ -51,8 +52,7 @@ public class UnavailablePaymentGatewayAdapter implements PaymentGatewayPort {
     }
 
     private PaymentGatewayException unavailable() {
-        return new PaymentGatewayException(
-                "No PaymentGatewayPort implementation is configured for pos-invoice. "
-                        + "Add a concrete payment gateway adapter before invoking payment operations.");
+        return new PaymentGatewayException("No PaymentGatewayPort implementation is configured for pos-invoice. "
+                + "Add a concrete payment gateway adapter before invoking payment operations.");
     }
 }

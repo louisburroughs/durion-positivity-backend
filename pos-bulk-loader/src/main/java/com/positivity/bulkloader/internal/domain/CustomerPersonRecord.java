@@ -5,10 +5,10 @@ import lombok.Data;
 @Data
 public class CustomerPersonRecord {
 
-  private String firstName;
-  private String lastName;
-  private String email;
-  private String phoneNumber;
-  private String primaryAddress;
-  private String customerNumber;
+    private String firstName;
+    private String lastName;
+    private String email;
+    private String phoneNumber;
+    private String primaryAddress;
+    private String customerNumber;
 }

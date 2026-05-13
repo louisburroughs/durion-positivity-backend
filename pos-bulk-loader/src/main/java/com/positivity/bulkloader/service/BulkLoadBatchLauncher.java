@@ -6,5 +6,5 @@ import org.jspecify.annotations.Nullable;
 
 public interface BulkLoadBatchLauncher {
 
-  void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader);
+    void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader);
 }

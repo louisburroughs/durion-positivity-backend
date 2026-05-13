@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
-import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -269,13 +269,12 @@ class CustomUserDetailsServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now());
 
             when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(entity));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(entity)).thenReturn(List.of(assignment));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(entity))
+                    .thenReturn(List.of(assignment));
 
             UserDetails principal = sut.loadUserByUsername("admin.alpha");
 
-            assertThat(principal.getAuthorities())
-                    .extracting("authority")
-                    .contains("ROLE_ADMIN");
+            assertThat(principal.getAuthorities()).extracting("authority").contains("ROLE_ADMIN");
         }
     }
 

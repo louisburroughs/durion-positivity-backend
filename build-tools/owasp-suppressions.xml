@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!--
+        commons-configuration-1.10 — CVE-2025-46392
+        The commons-configuration 1.x line is abandoned; 1.10 is the final release and no patched
+        version exists.  This dependency is pulled transitively by spring-cloud-starter-netflix-eureka-client
+        through archaius-core, which cannot be updated to commons-configuration2 without upstream
+        Spring Cloud changes.  The attack vector requires an adversary to supply a malicious
+        configuration file to a running JVM, which is not possible in this deployment model.
+        Revisit when Spring Cloud drops the Archaius 1.x dependency.
+    -->
+    <suppress>
+        <notes>No 1.x fix release exists; transitive via Eureka/Archaius; attack vector not reachable.</notes>
+        <gav regex="true">^commons-configuration:commons-configuration:.*$</gav>
+        <cve>CVE-2025-46392</cve>
+    </suppress>
+
+    <!--
+        swagger-ui-5.32.2 — DOMPurify 3.3.2 — CVE-2026-41240, CVE-2026-41238, CVE-2026-41239,
+                                                GHSA-39q2-94rc-95cp
+        DOMPurify 3.3.2 is bundled inside the swagger-ui webjar pulled by springdoc-openapi 3.0.3.
+        springdoc-openapi 3.0.3 is the only available 3.x release (Spring Boot 4 compatible) and no
+        newer version ships a fixed DOMPurify version.  The Swagger UI endpoint (/swagger-ui.html)
+        is only enabled in dev/local profiles and is not reachable in production deployments.
+        Revisit when springdoc-openapi 3.x ships with DOMPurify >= 3.4.0.
+    -->
+    <suppress>
+        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
+        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
+        <cve>CVE-2026-41240</cve>
+        <cve>CVE-2026-41238</cve>
+        <cve>CVE-2026-41239</cve>
+    </suppress>
+    <suppress>
+        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
+        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
+        <ghsa>GHSA-39q2-94rc-95cp</ghsa>
+    </suppress>
+
+</suppressions>

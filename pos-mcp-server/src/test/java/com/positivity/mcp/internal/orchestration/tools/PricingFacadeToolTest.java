@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class PricingFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-price/v1/pricing";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private PricingFacadeTool tool;
@@ -27,14 +27,19 @@ class PricingFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new PricingFacadeTool(builder, BASE_URL);
+        tool = new PricingFacadeTool(
+                builder,
+                BASE_URL,
+                "/price/v1/pricing/sku/{sku}",
+                "/price/v1/pricing/search?q={query}",
+                "/price/v1/pricing/lists/{priceListId}");
     }
 
     @Test
     @DisplayName("getPriceForSku sends GET /sku/{sku} and returns body")
     void getPriceForSku_sendsGetToSkuEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/sku/SKU-001"))
+                .expect(requestTo(BASE_URL + "/price/v1/pricing/sku/SKU-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"sku\":\"SKU-001\",\"price\":9.99}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class PricingFacadeToolTest {
     @DisplayName("searchPricing sends GET /search?q={query} and returns body")
     void searchPricing_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=oil%20filter"))
+                .expect(requestTo(BASE_URL + "/price/v1/pricing/search?q=oil%20filter"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class PricingFacadeToolTest {
     @DisplayName("getPriceList sends GET /lists/{priceListId} and returns body")
     void getPriceList_sendsGetToPriceListEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/lists/PL-001"))
+                .expect(requestTo(BASE_URL + "/price/v1/pricing/lists/PL-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"PL-001\",\"items\":[]}", MediaType.APPLICATION_JSON));
 

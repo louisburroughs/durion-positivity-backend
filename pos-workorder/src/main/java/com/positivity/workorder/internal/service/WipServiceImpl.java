@@ -119,8 +119,7 @@ public class WipServiceImpl implements WipService {
                     wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "", null);
         }
 
-        Instant lastUpdatedAt =
-                wo.getUpdatedAt() != null ? wo.getUpdatedAt() : Instant.now(clock);
+        Instant lastUpdatedAt = wo.getUpdatedAt() != null ? wo.getUpdatedAt() : Instant.now(clock);
         String locationId = wo.getShopId() != null ? wo.getShopId().toString() : "";
 
         return WorkorderStatusDetail.builder()
@@ -193,8 +192,7 @@ public class WipServiceImpl implements WipService {
             Map<UUID, String> technicianByWorkorderId,
             Map<UUID, CustomerReferenceService.CustomerContact> customerById,
             Map<UUID, VehicleReferenceService.VehicleReference> vehicleById) {
-        Instant lastUpdatedAt =
-                wo.getUpdatedAt() != null ? wo.getUpdatedAt() : Instant.now(clock);
+        Instant lastUpdatedAt = wo.getUpdatedAt() != null ? wo.getUpdatedAt() : Instant.now(clock);
         CustomerReferenceService.CustomerContact customerContact =
                 wo.getCustomerId() != null ? customerById.get(wo.getCustomerId()) : null;
         VehicleReferenceService.VehicleReference vehicleReference =

@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class VehicleFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-customer/v1/vehicles";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private VehicleFacadeTool tool;
@@ -27,14 +27,19 @@ class VehicleFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new VehicleFacadeTool(builder, BASE_URL);
+        tool = new VehicleFacadeTool(
+                builder,
+                BASE_URL,
+                "/customer/v1/vehicles/{vehicleId}",
+                "/customer/v1/vehicles/search?q={query}",
+                "/customer/v1/vehicles/customer/{customerId}");
     }
 
     @Test
     @DisplayName("getVehicle sends GET /{vehicleId} and returns body")
     void getVehicle_sendsGetToVehicleEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/VEH-001"))
+                .expect(requestTo(BASE_URL + "/customer/v1/vehicles/VEH-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"VEH-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class VehicleFacadeToolTest {
     @DisplayName("searchVehicles sends GET /search?q={query} and returns body")
     void searchVehicles_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=Honda"))
+                .expect(requestTo(BASE_URL + "/customer/v1/vehicles/search?q=Honda"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class VehicleFacadeToolTest {
     @DisplayName("getVehiclesByCustomer sends GET /customer/{customerId} and returns body")
     void getVehiclesByCustomer_sendsGetToCustomerVehiclesEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/customer/CUST-001"))
+                .expect(requestTo(BASE_URL + "/customer/v1/vehicles/customer/CUST-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"vehicles\":[]}", MediaType.APPLICATION_JSON));
 

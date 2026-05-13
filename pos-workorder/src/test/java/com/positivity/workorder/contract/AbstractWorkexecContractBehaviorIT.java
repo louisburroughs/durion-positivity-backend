@@ -87,8 +87,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
                             }
                         }
 
-                        var authentication = new UsernamePasswordAuthenticationToken(TEST_USERNAME, null,
-                                TEST_AUTHORITIES);
+                        var authentication =
+                                new UsernamePasswordAuthenticationToken(TEST_USERNAME, null, TEST_AUTHORITIES);
                         authentication.setDetails(Map.of(
                                 GatewaySecurityConstants.DETAIL_USER_ID, userId,
                                 GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));

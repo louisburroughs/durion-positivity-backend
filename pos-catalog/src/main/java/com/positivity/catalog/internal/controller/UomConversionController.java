@@ -34,66 +34,104 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "UOM Conversion API", description = "Unit of measure conversion API")
 public class UomConversionController {
 
-        private final UomConversionService uomConversionService;
+    private final UomConversionService uomConversionService;
 
-        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
-                        "ROLE_CATALOG_EDIT" })
-        @PostMapping
-        @Operation(summary = "Create UOM conversion", description = "Creates a new unit-of-measure conversion record.", operationId = "createUomConversion")
-        @ApiResponse(responseCode = "201", description = "Conversion created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-        @ApiResponse(responseCode = "400", description = "Invalid request")
-        @EmitEvent(id = "CATALOG_UOM_CONVERSION_CREATE", apiVersion = "1")
-        public ResponseEntity<UomConversionDto> create(@Valid @RequestBody UomConversionCreateRequestDto request) {
-                return ResponseEntity.status(HttpStatus.CREATED).body(uomConversionService.createConversion(request));
-        }
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @PostMapping
+    @Operation(
+            summary = "Create UOM conversion",
+            description = "Creates a new unit-of-measure conversion record.",
+            operationId = "createUomConversion")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Conversion created",
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @EmitEvent(id = "CATALOG_UOM_CONVERSION_CREATE", apiVersion = "1")
+    public ResponseEntity<UomConversionDto> create(@Valid @RequestBody UomConversionCreateRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(uomConversionService.createConversion(request));
+    }
 
-        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
-                        "ROLE_CATALOG_VIEW" })
-        @GetMapping
-        @Operation(summary = "List active conversions", description = "Returns all active unit-of-measure conversion records.", operationId = "listUomConversions")
-        @ApiResponse(responseCode = "200", description = "Conversions listed", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
-        public ResponseEntity<List<UomConversionDto>> list() {
-                return ResponseEntity.ok(uomConversionService.listActiveConversions());
-        }
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+    @GetMapping
+    @Operation(
+            summary = "List active conversions",
+            description = "Returns all active unit-of-measure conversion records.",
+            operationId = "listUomConversions")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Conversions listed",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = UomConversionDto.class))))
+    public ResponseEntity<List<UomConversionDto>> list() {
+        return ResponseEntity.ok(uomConversionService.listActiveConversions());
+    }
 
-        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
-                        "ROLE_CATALOG_VIEW" })
-        @GetMapping("/{id}")
-        @Operation(summary = "Get conversion", description = "Retrieves a unit-of-measure conversion by its ID.", operationId = "getUomConversionById")
-        @ApiResponse(responseCode = "200", description = "Conversion found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-        @ApiResponse(responseCode = "404", description = "Conversion not found")
-        public ResponseEntity<UomConversionDto> get(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
-                return ResponseEntity.ok(uomConversionService.getConversion(id));
-        }
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+    @GetMapping("/{id}")
+    @Operation(
+            summary = "Get conversion",
+            description = "Retrieves a unit-of-measure conversion by its ID.",
+            operationId = "getUomConversionById")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Conversion found",
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
+    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    public ResponseEntity<UomConversionDto> get(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
+        return ResponseEntity.ok(uomConversionService.getConversion(id));
+    }
 
-        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
-                        "ROLE_CATALOG_EDIT" })
-        @PutMapping("/{id}")
-        @Operation(summary = "Update conversion factor", description = "Updates the conversion factor and mutable fields for an existing conversion.", operationId = "updateUomConversion")
-        @ApiResponse(responseCode = "200", description = "Conversion updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-        @ApiResponse(responseCode = "400", description = "Invalid request")
-        @ApiResponse(responseCode = "404", description = "Conversion not found")
-        @EmitEvent(id = "CATALOG_UOM_CONVERSION_UPDATE", apiVersion = "1")
-        public ResponseEntity<UomConversionDto> update(
-                        @Parameter(description = "Conversion ID") @PathVariable UUID id,
-                        @Valid @RequestBody UomConversionUpdateRequestDto request) {
-                return ResponseEntity.ok(uomConversionService.updateConversion(id, request));
-        }
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @PutMapping("/{id}")
+    @Operation(
+            summary = "Update conversion factor",
+            description = "Updates the conversion factor and mutable fields for an existing conversion.",
+            operationId = "updateUomConversion")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Conversion updated",
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    @EmitEvent(id = "CATALOG_UOM_CONVERSION_UPDATE", apiVersion = "1")
+    public ResponseEntity<UomConversionDto> update(
+            @Parameter(description = "Conversion ID") @PathVariable UUID id,
+            @Valid @RequestBody UomConversionUpdateRequestDto request) {
+        return ResponseEntity.ok(uomConversionService.updateConversion(id, request));
+    }
 
-        @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "ROLE_ADMIN",
-                        "ROLE_CATALOG_EDIT" })
-        @DeleteMapping("/{id}")
-        @Operation(summary = "Deactivate conversion", description = "Deactivates a conversion so it is excluded from active conversion results.", operationId = "deactivateUomConversion")
-        @ApiResponse(responseCode = "204", description = "Conversion deactivated")
-        @ApiResponse(responseCode = "404", description = "Conversion not found")
-        @EmitEvent(id = "CATALOG_UOM_CONVERSION_DEACTIVATE", apiVersion = "1")
-        public ResponseEntity<Void> deactivate(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
-                uomConversionService.deactivateConversion(id);
-                return ResponseEntity.noContent().build();
-        }
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Deactivate conversion",
+            description = "Deactivates a conversion so it is excluded from active conversion results.",
+            operationId = "deactivateUomConversion")
+    @ApiResponse(responseCode = "204", description = "Conversion deactivated")
+    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    @EmitEvent(id = "CATALOG_UOM_CONVERSION_DEACTIVATE", apiVersion = "1")
+    public ResponseEntity<Void> deactivate(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
+        uomConversionService.deactivateConversion(id);
+        return ResponseEntity.noContent().build();
+    }
 }

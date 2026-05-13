@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
@@ -30,180 +31,220 @@ import org.springframework.stereotype.Service;
 @Profile("alpha")
 public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(StaticRagPreloadServiceImpl.class);
-  private static final String METRIC_PRELOAD_FAILED = "mcp.rag.preload.failed";
-  private static final String METRIC_PRELOAD_LOADED = "mcp.rag.preload.loaded";
-  private static final String METRIC_PRELOAD_SKIPPED = "mcp.rag.preload.skipped";
-  private static final String TAG_DOCUMENT_ID = "documentId";
+    private static final Logger LOGGER = LoggerFactory.getLogger(StaticRagPreloadServiceImpl.class);
+    private static final String METRIC_PRELOAD_FAILED = "mcp.rag.preload.failed";
+    private static final String METRIC_PRELOAD_LOADED = "mcp.rag.preload.loaded";
+    private static final String METRIC_PRELOAD_SKIPPED = "mcp.rag.preload.skipped";
+    private static final String TAG_DOCUMENT_ID = "documentId";
 
-  private final DocumentIngestionService documentIngestionService;
-  private final RagPreloadRecordRepository ragPreloadRecordRepository;
-  private final StaticRagPreloadProperties preloadProperties;
-  private final MeterRegistry meterRegistry;
+    private final DocumentIngestionService documentIngestionService;
+    private final RagPreloadRecordRepository ragPreloadRecordRepository;
+    private final StaticRagPreloadProperties preloadProperties;
+    private final MeterRegistry meterRegistry;
 
-  public StaticRagPreloadServiceImpl(
-      @NonNull DocumentIngestionService documentIngestionService,
-      @NonNull RagPreloadRecordRepository ragPreloadRecordRepository,
-      @NonNull StaticRagPreloadProperties preloadProperties,
-      @NonNull MeterRegistry meterRegistry) {
-    this.documentIngestionService = documentIngestionService;
-    this.ragPreloadRecordRepository = ragPreloadRecordRepository;
-    this.preloadProperties = preloadProperties;
-    this.meterRegistry = meterRegistry;
-  }
-
-  @Override
-  public void preloadAll() {
-    Timer.Sample sample = Timer.start(meterRegistry);
-    try {
-      reconcileQueuedRecords();
-      List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs() == null ? List.of()
-          : preloadProperties.docs();
-      for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
-        try {
-          preloadDocument(entry.id(), entry.sourcePath());
-        } catch (Exception exception) {
-          String hash = resolveHashOrNull(entry.sourcePath());
-          persistFailedRecord(entry.id(), hash, entry.sourcePath());
-          LOGGER.warn(
-              "Preload failed for document_id={} error={}",
-              entry.id(),
-              exception.getMessage(),
-              exception);
-        }
-      }
-    } finally {
-      sample.stop(Timer.builder("mcp.rag.preload.duration")
-          .description("Total time to preload all static RAG documents")
-          .register(meterRegistry));
+    public StaticRagPreloadServiceImpl(
+            @NonNull DocumentIngestionService documentIngestionService,
+            @NonNull RagPreloadRecordRepository ragPreloadRecordRepository,
+            @NonNull StaticRagPreloadProperties preloadProperties,
+            @NonNull MeterRegistry meterRegistry) {
+        this.documentIngestionService = documentIngestionService;
+        this.ragPreloadRecordRepository = ragPreloadRecordRepository;
+        this.preloadProperties = preloadProperties;
+        this.meterRegistry = meterRegistry;
     }
-  }
 
-  private void reconcileQueuedRecords() {
-    List<RagPreloadRecord> queued = ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED);
-    for (RagPreloadRecord queuedRecord : queued) {
-      UUID jobId = queuedRecord.getJobId();
-      if (jobId == null) {
-        LOGGER.warn("QUEUED preload record has no job_id, marking failed document_id={}", queuedRecord.getDocumentId());
-        persistRecord(
-            queuedRecord.getDocumentId(),
-            queuedRecord.getContentHash(),
-            queuedRecord.getSourcePath(),
-            RagPreloadStatus.FAILED,
-            null);
-        meterRegistry.counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId()).increment();
-        continue;
-      }
-      documentIngestionService.getIngestionJob(jobId).ifPresentOrElse(
-          job -> {
-            DocumentIngestionJobStatus status = job.status();
-            switch (status) {
-              case SUCCEEDED -> {
-                persistRecord(
-                    queuedRecord.getDocumentId(),
-                    queuedRecord.getContentHash(),
-                    queuedRecord.getSourcePath(),
-                    RagPreloadStatus.LOADED,
-                    null);
-                meterRegistry.counter(METRIC_PRELOAD_LOADED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId())
-                    .increment();
-              }
-              case FAILED -> {
-                persistRecord(
-                    queuedRecord.getDocumentId(),
-                    queuedRecord.getContentHash(),
-                    queuedRecord.getSourcePath(),
-                    RagPreloadStatus.FAILED,
-                    null);
-                meterRegistry.counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId())
-                    .increment();
-              }
-              default -> LOGGER.debug(
-                  "Preload job still in progress document_id={} status={}", queuedRecord.getDocumentId(), status);
+    @Override
+    public void preloadAll() {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            reconcileQueuedRecords();
+            List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
+            for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
+                try {
+                    preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope());
+                } catch (Exception exception) {
+                    String hash = resolveHashOrNull(entry.sourcePath());
+                    persistFailedRecord(entry.id(), hash, entry.sourcePath(), entry.ragScope());
+                    LOGGER.warn(
+                            "Preload failed for document_id={} error={}",
+                            entry.id(),
+                            exception.getMessage(),
+                            exception);
+                }
             }
-          },
-          () -> {
-            LOGGER.warn("Preload job not found, marking failed document_id={}", queuedRecord.getDocumentId());
-            persistRecord(
-                queuedRecord.getDocumentId(),
-                queuedRecord.getContentHash(),
-                queuedRecord.getSourcePath(),
+        } finally {
+            sample.stop(Timer.builder("mcp.rag.preload.duration")
+                    .description("Total time to preload all static RAG documents")
+                    .register(meterRegistry));
+        }
+    }
+
+    private void reconcileQueuedRecords() {
+        List<RagPreloadRecord> queued = ragPreloadRecordRepository.findAllByStatus(RagPreloadStatus.QUEUED);
+        for (RagPreloadRecord queuedRecord : queued) {
+            UUID jobId = queuedRecord.getJobId();
+            if (jobId == null) {
+                LOGGER.warn(
+                        "QUEUED preload record has no job_id, marking failed document_id={}",
+                        queuedRecord.getDocumentId());
+                persistRecord(
+                        queuedRecord.getDocumentId(),
+                        queuedRecord.getContentHash(),
+                        queuedRecord.getSourcePath(),
+                        queuedRecord.getRagScope(),
+                        RagPreloadStatus.FAILED,
+                        null);
+                meterRegistry
+                        .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId())
+                        .increment();
+                continue;
+            }
+            documentIngestionService
+                    .getIngestionJob(jobId)
+                    .ifPresentOrElse(
+                            job -> {
+                                DocumentIngestionJobStatus status = job.status();
+                                switch (status) {
+                                    case SUCCEEDED -> {
+                                        persistRecord(
+                                                queuedRecord.getDocumentId(),
+                                                queuedRecord.getContentHash(),
+                                                queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
+                                                RagPreloadStatus.LOADED,
+                                                null);
+                                        meterRegistry
+                                                .counter(
+                                                        METRIC_PRELOAD_LOADED,
+                                                        TAG_DOCUMENT_ID,
+                                                        queuedRecord.getDocumentId())
+                                                .increment();
+                                    }
+                                    case FAILED -> {
+                                        persistRecord(
+                                                queuedRecord.getDocumentId(),
+                                                queuedRecord.getContentHash(),
+                                                queuedRecord.getSourcePath(),
+                                                queuedRecord.getRagScope(),
+                                                RagPreloadStatus.FAILED,
+                                                null);
+                                        meterRegistry
+                                                .counter(
+                                                        METRIC_PRELOAD_FAILED,
+                                                        TAG_DOCUMENT_ID,
+                                                        queuedRecord.getDocumentId())
+                                                .increment();
+                                    }
+                                    default ->
+                                        LOGGER.debug(
+                                                "Preload job still in progress document_id={} status={}",
+                                                queuedRecord.getDocumentId(),
+                                                status);
+                                }
+                            },
+                            () -> {
+                                LOGGER.warn(
+                                        "Preload job not found, marking failed document_id={}",
+                                        queuedRecord.getDocumentId());
+                                persistRecord(
+                                        queuedRecord.getDocumentId(),
+                                        queuedRecord.getContentHash(),
+                                        queuedRecord.getSourcePath(),
+                                        queuedRecord.getRagScope(),
+                                        RagPreloadStatus.FAILED,
+                                        null);
+                                meterRegistry
+                                        .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId())
+                                        .increment();
+                            });
+        }
+    }
+
+    private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope)
+            throws IOException {
+        Resource resource = new ClassPathResource(resourcePath(sourcePath));
+        byte[] bytes = resource.getContentAsByteArray();
+        String content = new String(bytes, StandardCharsets.UTF_8);
+
+        String hash = computeHash(bytes);
+        String normalizedRagScope = RagScope.normalize(ragScope);
+
+        Optional<RagPreloadRecord> prior =
+                ragPreloadRecordRepository.findFirstByDocumentIdAndRagScopeAndStatusOrderByLoadedAtDesc(
+                        documentId, normalizedRagScope, RagPreloadStatus.LOADED);
+        if (prior.isPresent() && prior.get().getContentHash().equals(hash)) {
+            LOGGER.info("Skipping unchanged RAG document document_id={}", documentId);
+            persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.SKIPPED, null);
+            meterRegistry
+                    .counter(METRIC_PRELOAD_SKIPPED, TAG_DOCUMENT_ID, documentId)
+                    .increment();
+            return;
+        }
+
+        Map<String, Object> metadata = Map.of(
+                "document_id", documentId,
+                "source_path", sourcePath,
+                "rag_scope", normalizedRagScope);
+        var job = documentIngestionService.submitDocument(content, metadata);
+        LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
+        persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.QUEUED, job.jobId());
+    }
+
+    private void persistFailedRecord(
+            @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath, @Nullable String ragScope) {
+        persistRecord(
+                documentId,
+                hash != null ? hash : "",
+                sourcePath,
+                RagScope.normalize(ragScope),
                 RagPreloadStatus.FAILED,
                 null);
-            meterRegistry.counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, queuedRecord.getDocumentId())
+        meterRegistry
+                .counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId)
                 .increment();
-          });
-    }
-  }
-
-  private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath) throws IOException {
-    Resource resource = new ClassPathResource(resourcePath(sourcePath));
-    byte[] bytes = resource.getContentAsByteArray();
-    String content = new String(bytes, StandardCharsets.UTF_8);
-
-    String hash = computeHash(bytes);
-
-    Optional<RagPreloadRecord> prior = ragPreloadRecordRepository
-        .findFirstByDocumentIdAndStatusOrderByLoadedAtDesc(documentId, RagPreloadStatus.LOADED);
-    if (prior.isPresent()
-        && prior.get().getContentHash().equals(hash)) {
-      LOGGER.info("Skipping unchanged RAG document document_id={}", documentId);
-      persistRecord(documentId, hash, sourcePath, RagPreloadStatus.SKIPPED, null);
-      meterRegistry.counter(METRIC_PRELOAD_SKIPPED, TAG_DOCUMENT_ID, documentId).increment();
-      return;
     }
 
-    Map<String, Object> metadata = Map.of("document_id", documentId, "source_path", sourcePath);
-    var job = documentIngestionService.submitDocument(content, metadata);
-    LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
-    persistRecord(documentId, hash, sourcePath, RagPreloadStatus.QUEUED, job.jobId());
-  }
-
-  private void persistFailedRecord(
-      @NonNull String documentId, @Nullable String hash, @NonNull String sourcePath) {
-    persistRecord(documentId, hash != null ? hash : "", sourcePath, RagPreloadStatus.FAILED, null);
-    meterRegistry.counter(METRIC_PRELOAD_FAILED, TAG_DOCUMENT_ID, documentId).increment();
-  }
-
-  private void persistRecord(
-      @NonNull String documentId,
-      @NonNull String hash,
-      @NonNull String sourcePath,
-      @NonNull RagPreloadStatus status,
-      @Nullable UUID jobId) {
-    var preloadRecord = new RagPreloadRecord();
-    preloadRecord.setDocumentId(documentId);
-    preloadRecord.setContentHash(hash);
-    preloadRecord.setSourcePath(sourcePath);
-    preloadRecord.setStatus(status);
-    preloadRecord.setJobId(jobId);
-    ragPreloadRecordRepository.save(preloadRecord);
-  }
-
-  private @Nullable String resolveHashOrNull(@NonNull String sourcePath) {
-    try {
-      Resource resource = new ClassPathResource(resourcePath(sourcePath));
-      return computeHash(resource.getContentAsByteArray());
-    } catch (Exception _) {
-      return null;
+    private void persistRecord(
+            @NonNull String documentId,
+            @NonNull String hash,
+            @NonNull String sourcePath,
+            @NonNull String ragScope,
+            @NonNull RagPreloadStatus status,
+            @Nullable UUID jobId) {
+        var preloadRecord = new RagPreloadRecord();
+        preloadRecord.setDocumentId(documentId);
+        preloadRecord.setContentHash(hash);
+        preloadRecord.setSourcePath(sourcePath);
+        preloadRecord.setRagScope(ragScope);
+        preloadRecord.setStatus(status);
+        preloadRecord.setJobId(jobId);
+        ragPreloadRecordRepository.save(preloadRecord);
     }
-  }
 
-  private static @NonNull String computeHash(@NonNull byte[] bytes) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hashBytes = digest.digest(bytes);
-      StringBuilder sb = new StringBuilder();
-      for (byte b : hashBytes) {
-        sb.append(String.format("%02x", b));
-      }
-      return sb.toString();
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("SHA-256 not available", exception);
+    private @Nullable String resolveHashOrNull(@NonNull String sourcePath) {
+        try {
+            Resource resource = new ClassPathResource(resourcePath(sourcePath));
+            return computeHash(resource.getContentAsByteArray());
+        } catch (Exception _) {
+            return null;
+        }
     }
-  }
 
-  private static @NonNull String resourcePath(@NonNull String sourcePath) {
-    return sourcePath.startsWith("classpath:") ? sourcePath.substring("classpath:".length()) : sourcePath;
-  }
+    private static @NonNull String computeHash(@NonNull byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(bytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 not available", exception);
+        }
+    }
+
+    private static @NonNull String resourcePath(@NonNull String sourcePath) {
+        return sourcePath.startsWith("classpath:") ? sourcePath.substring("classpath:".length()) : sourcePath;
+    }
 }

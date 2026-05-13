@@ -1,9 +1,9 @@
 package com.positivity.shopmanager.internal.controller;
 
+import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.service.ShopAuditService;
-import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -47,10 +47,20 @@ public class ShopAuditController {
      */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
-    @Operation(operationId = "searchShopAudit", summary = "Search shop audit trail", description = "Searches the shop audit trail using filter criteria. At least one filter criterion is required.")
+    @Operation(
+            operationId = "searchShopAudit",
+            summary = "Search shop audit trail",
+            description =
+                    "Searches the shop audit trail using filter criteria. At least one filter criterion is required.")
     @ApiResponse(responseCode = "200", description = "Audit entries returned")
-    @ApiResponse(responseCode = "400", description = "No filter criteria provided", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "No filter criteria provided",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient authority",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public @NonNull List<ShopAuditEntryResponse> searchAudit(@ModelAttribute ShopAuditFilter filter) {
         return shopAuditService.search(filter);
     }
@@ -63,10 +73,19 @@ public class ShopAuditController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
-    @Operation(operationId = "getShopAuditEntry", summary = "Get shop audit entry by ID", description = "Returns a single shop audit entry by its UUID.")
+    @Operation(
+            operationId = "getShopAuditEntry",
+            summary = "Get shop audit entry by ID",
+            description = "Returns a single shop audit entry by its UUID.")
     @ApiResponse(responseCode = "200", description = "Audit entry returned")
-    @ApiResponse(responseCode = "403", description = "Insufficient authority", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Audit entry not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient authority",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Audit entry not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public @NonNull ResponseEntity<ShopAuditEntryResponse> getAuditById(@PathVariable @NonNull UUID id) {
         return shopAuditService
                 .findById(id)

@@ -20,28 +20,44 @@ import org.springframework.web.bind.annotation.RestController;
  * dropdowns when creating or editing a commercial account. The list is stable
  * and does not vary per party or caller.
  */
-@Tag(name = "CRM Accounts", description = "Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations")
+@Tag(
+        name = "CRM Accounts",
+        description =
+                "Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations")
 @RestController
 @RequestMapping("/v1/crm")
 public class CrmBillingTermsController {
 
-  private static final List<BillingTermsRef> BILLING_TERMS = List.of(
-      BillingTermsRef.builder().code("NET_30").label("Net 30").netDays(30).build(),
-      BillingTermsRef.builder().code("NET_60").label("Net 60").netDays(60).build(),
-      BillingTermsRef.builder().code("NET_90").label("Net 90").netDays(90).build(),
-      BillingTermsRef.builder().code("COD").label("Cash on Delivery").netDays(0).build(),
-      BillingTermsRef.builder().code("PREPAID").label("Prepaid").netDays(-1).build());
+    private static final List<BillingTermsRef> BILLING_TERMS = List.of(
+            BillingTermsRef.builder().code("NET_30").label("Net 30").netDays(30).build(),
+            BillingTermsRef.builder().code("NET_60").label("Net 60").netDays(60).build(),
+            BillingTermsRef.builder().code("NET_90").label("Net 90").netDays(90).build(),
+            BillingTermsRef.builder()
+                    .code("COD")
+                    .label("Cash on Delivery")
+                    .netDays(0)
+                    .build(),
+            BillingTermsRef.builder()
+                    .code("PREPAID")
+                    .label("Prepaid")
+                    .netDays(-1)
+                    .build());
 
-  @Operation(summary = "List billing terms", description = "Returns the reference list of all available billing terms. "
-      + "This is a static reference endpoint; it does not vary per party or account.")
-  @ApiResponse(responseCode = "200", description = "Billing terms retrieved successfully")
-  @ApiResponse(responseCode = "401", description = "Authentication required")
-  @ApiResponse(responseCode = "403", description = "Forbidden - missing authority " + CrmPermissionRegistry.PARTY_VIEW)
-  @GetMapping("/billing-terms")
-  @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-      CrmPermissionRegistry.PARTY_VIEW })
-  @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
-  public ResponseEntity<List<BillingTermsRef>> listBillingTerms() {
-    return ResponseEntity.ok(BILLING_TERMS);
-  }
+    @Operation(
+            summary = "List billing terms",
+            description = "Returns the reference list of all available billing terms. "
+                    + "This is a static reference endpoint; it does not vary per party or account.")
+    @ApiResponse(responseCode = "200", description = "Billing terms retrieved successfully")
+    @ApiResponse(responseCode = "401", description = "Authentication required")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing authority " + CrmPermissionRegistry.PARTY_VIEW)
+    @GetMapping("/billing-terms")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.PARTY_VIEW})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
+    public ResponseEntity<List<BillingTermsRef>> listBillingTerms() {
+        return ResponseEntity.ok(BILLING_TERMS);
+    }
 }

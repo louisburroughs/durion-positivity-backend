@@ -6,7 +6,7 @@ package com.positivity.inventory.internal.exception;
  */
 public class InvalidParamCombinationException extends RuntimeException {
 
-  public InvalidParamCombinationException(String message) {
-    super(message);
-  }
+    public InvalidParamCombinationException(String message) {
+        super(message);
+    }
 }

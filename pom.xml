@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.positivity</groupId>
 	<artifactId>positivity</artifactId>
-	<version>0.1.0-SNAPSHOT</version>
+	<version>${revision}</version>
 	<packaging>pom</packaging>
 	<name>positivity</name>
 	<description>Demo POS</description>
@@ -27,16 +27,22 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- Internal Positivity BOM (for internal com.positivity:* artifacts) -->
+			<!-- Internal Positivity artifacts -->
 			<dependency>
 				<groupId>com.positivity</groupId>
-				<artifactId>pos-dependencies</artifactId>
+				<artifactId>pos-security-common</artifactId>
 				<version>${project.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
 			</dependency>
-
-			<!-- Shared DTOs -->
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-events</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-document-helper</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>com.positivity</groupId>
 				<artifactId>pos-shared-dtos</artifactId>
@@ -46,6 +52,13 @@
 				<groupId>com.positivity</groupId>
 				<artifactId>pos-tax-common</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-archunit</artifactId>
+				<version>${project.version}</version>
+				<scope>test</scope>
 			</dependency>
 
 			<!-- TEST DEPENDENCIES - JUnit managed by Spring Boot -->
@@ -78,6 +91,29 @@
 				<artifactId>rest-assured</artifactId>
 				<version>${rest-assured.version}</version>
 				<scope>test</scope>
+			</dependency>
+
+			<!--
+				CVE mitigations: force patched versions of vulnerable transitive dependencies
+				that Spring Cloud / Netflix Eureka / Archaius pull in.
+				commons-configuration-1.10 (CVE-2025-46392) has no 1.x fix release and is
+				suppressed in build-tools/owasp-suppressions.xml pending Spring Cloud dropping Archaius 1.x.
+				swagger-ui-5.32.2 DOMPurify CVEs are also suppressed there pending a springdoc 3.x update.
+			-->
+			<dependency>
+				<groupId>org.apache.httpcomponents</groupId>
+				<artifactId>httpclient</artifactId>
+				<version>4.5.14</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mozilla</groupId>
+				<artifactId>rhino</artifactId>
+				<version>1.8.0</version>
+			</dependency>
+			<dependency>
+				<groupId>commons-jxpath</groupId>
+				<artifactId>commons-jxpath</artifactId>
+				<version>1.4.0</version>
 			</dependency>
 
 			<!-- UTILITY LIBRARIES -->
@@ -250,7 +286,7 @@
 		<module>pos-mcp-server</module>
 		<module>pos-coverage-aggregate</module>
 	</modules>
-	<url>https://your.project.url/</url>
+	<url>https://durionpos.org/</url>
 	<licenses>
 		<license>
 			<name>The Apache License, Version 2.0</name>
@@ -272,10 +308,13 @@
 		<url>https://github.com/louisburroughs/positivity</url>
 	</scm>
 	<properties>
+		<revision>0.1.0-SNAPSHOT</revision>
 		<java.version>25</java.version>
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 		<spring-cloud.version>2025.1.1</spring-cloud.version>
+		<!-- CVE-2026-42198: override Spring Boot BOM postgresql version -->
+		<postgresql.version>42.7.11</postgresql.version>
 		<archunit.version>1.4.2</archunit.version>
 		<!-- Test Dependencies - JUnit managed by Spring Boot -->
 		<mockito.version>5.20.0</mockito.version>
@@ -361,6 +400,22 @@
 					<groupId>org.sonarsource.scanner.maven</groupId>
 					<artifactId>sonar-maven-plugin</artifactId>
 					<version>${sonar-maven-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.owasp</groupId>
+					<artifactId>dependency-check-maven</artifactId>
+					<configuration>
+						<suppressionFile>${maven.multiModuleProjectDirectory}/build-tools/owasp-suppressions.xml</suppressionFile>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>flatten-maven-plugin</artifactId>
+					<version>1.7.0</version>
+					<configuration>
+						<updatePomFile>true</updatePomFile>
+						<flattenMode>resolveCiFriendliesOnly</flattenMode>
+					</configuration>
 				</plugin>
 			</plugins>
 		</pluginManagement>
@@ -476,6 +531,26 @@
 					<effort>Default</effort>
 					<xmlOutput>false</xmlOutput>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>flatten.clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

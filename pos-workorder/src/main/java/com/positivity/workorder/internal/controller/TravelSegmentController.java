@@ -27,59 +27,57 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Travel Segment API", description = "Endpoints for capturing mobile travel segments")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:labor:add" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"workorder:labor:add"})
 @RequestMapping("/v1/workorders/travelSegments")
 @RequiredArgsConstructor
 public class TravelSegmentController {
 
-        private final TravelSegmentService travelSegmentService;
+    private final TravelSegmentService travelSegmentService;
 
-        @PostMapping("/start")
-        @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_START", apiVersion = "1")
-        @PreAuthorize("hasAuthority('workorder:labor:add')")
-        @Operation(summary = "Start a travel segment")
-        @ApiResponse(responseCode = "201")
-        public ResponseEntity<TravelSegmentResponse> startTravelSegment(
-                        @Valid @RequestBody StartTravelSegmentRequest request) {
-                return ResponseEntity.status(HttpStatus.CREATED)
-                                .body(TravelSegmentMapper.toResponse(travelSegmentService.startTravelSegment(request)));
-        }
+    @PostMapping("/start")
+    @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_START", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Start a travel segment")
+    @ApiResponse(responseCode = "201")
+    public ResponseEntity<TravelSegmentResponse> startTravelSegment(
+            @Valid @RequestBody StartTravelSegmentRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(TravelSegmentMapper.toResponse(travelSegmentService.startTravelSegment(request)));
+    }
 
-        @PostMapping("/{travelSegmentId}/stop")
-        @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_STOP", apiVersion = "1")
-        @PreAuthorize("hasAuthority('workorder:labor:add')")
-        @Operation(summary = "Stop a travel segment")
-        @ApiResponse(responseCode = "200")
-        public ResponseEntity<TravelSegmentResponse> stopTravelSegment(
-                        @PathVariable UUID travelSegmentId, @Valid @RequestBody StopTravelSegmentRequest request) {
-                return ResponseEntity.ok(
-                                TravelSegmentMapper.toResponse(
-                                                travelSegmentService.stopTravelSegment(travelSegmentId, request)));
-        }
+    @PostMapping("/{travelSegmentId}/stop")
+    @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_STOP", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Stop a travel segment")
+    @ApiResponse(responseCode = "200")
+    public ResponseEntity<TravelSegmentResponse> stopTravelSegment(
+            @PathVariable UUID travelSegmentId, @Valid @RequestBody StopTravelSegmentRequest request) {
+        return ResponseEntity.ok(
+                TravelSegmentMapper.toResponse(travelSegmentService.stopTravelSegment(travelSegmentId, request)));
+    }
 
-        @PostMapping("/submit/{mobileWorkAssignmentId}")
-        @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_SUBMIT", apiVersion = "1")
-        @PreAuthorize("hasAuthority('workorder:labor:add')")
-        @Operation(summary = "Submit travel segments for a mobile work assignment")
-        @ApiResponse(responseCode = "200")
-        public ResponseEntity<List<TravelSegmentResponse>> submitTravelSegments(
-                        @PathVariable UUID mobileWorkAssignmentId,
-                        @Valid @RequestBody SubmitTravelSegmentsRequest request) {
-                return ResponseEntity.ok(
-                                TravelSegmentMapper.toResponses(
-                                                travelSegmentService.submitTravelSegments(mobileWorkAssignmentId)));
-        }
+    @PostMapping("/submit/{mobileWorkAssignmentId}")
+    @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_SUBMIT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Submit travel segments for a mobile work assignment")
+    @ApiResponse(responseCode = "200")
+    public ResponseEntity<List<TravelSegmentResponse>> submitTravelSegments(
+            @PathVariable UUID mobileWorkAssignmentId, @Valid @RequestBody SubmitTravelSegmentsRequest request) {
+        return ResponseEntity.ok(
+                TravelSegmentMapper.toResponses(travelSegmentService.submitTravelSegments(mobileWorkAssignmentId)));
+    }
 
-        @PostMapping("/{travelSegmentId}/adjustments")
-        @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT", apiVersion = "1")
-        @PreAuthorize("hasAuthority('workorder:labor:add')")
-        @Operation(summary = "Create a post-approval adjustment for a travel segment")
-        @ApiResponse(responseCode = "201")
-        public ResponseEntity<TravelSegmentAdjustmentResponse> createAdjustment(
-                        @PathVariable UUID travelSegmentId,
-                        @Valid @RequestBody CreateTravelSegmentAdjustmentRequest request) {
-                return ResponseEntity.status(HttpStatus.CREATED)
-                                .body(TravelSegmentMapper.toAdjustmentResponse(
-                                                travelSegmentService.createAdjustment(travelSegmentId, request)));
-        }
+    @PostMapping("/{travelSegmentId}/adjustments")
+    @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Create a post-approval adjustment for a travel segment")
+    @ApiResponse(responseCode = "201")
+    public ResponseEntity<TravelSegmentAdjustmentResponse> createAdjustment(
+            @PathVariable UUID travelSegmentId, @Valid @RequestBody CreateTravelSegmentAdjustmentRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(TravelSegmentMapper.toAdjustmentResponse(
+                        travelSegmentService.createAdjustment(travelSegmentId, request)));
+    }
 }

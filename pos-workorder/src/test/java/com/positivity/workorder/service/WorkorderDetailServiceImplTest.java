@@ -55,10 +55,10 @@ class WorkorderDetailServiceImplTest {
                 .build();
 
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId)).thenReturn(Optional.empty());
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .thenReturn(Optional.empty());
 
-        WorkorderDetailResponse response =
-                service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
+        WorkorderDetailResponse response = service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
 
         assertThat(response.getWorkorderId()).isEqualTo(workorderId);
         assertThat(response.getAssignedTechnicianId()).isNull();

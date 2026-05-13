@@ -6,21 +6,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class BulkLoadAuthorizationContext {
 
-  private final ThreadLocal<String> authorizationHeaderHolder = new ThreadLocal<>();
+    private final ThreadLocal<String> authorizationHeaderHolder = new ThreadLocal<>();
 
-  public void setAuthorizationHeader(@Nullable String authorizationHeader) {
-    if (authorizationHeader == null || authorizationHeader.isBlank()) {
-      authorizationHeaderHolder.remove();
-      return;
+    public void setAuthorizationHeader(@Nullable String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank()) {
+            authorizationHeaderHolder.remove();
+            return;
+        }
+        authorizationHeaderHolder.set(authorizationHeader);
     }
-    authorizationHeaderHolder.set(authorizationHeader);
-  }
 
-  public @Nullable String getAuthorizationHeader() {
-    return authorizationHeaderHolder.get();
-  }
+    public @Nullable String getAuthorizationHeader() {
+        return authorizationHeaderHolder.get();
+    }
 
-  public void clear() {
-    authorizationHeaderHolder.remove();
-  }
+    public void clear() {
+        authorizationHeaderHolder.remove();
+    }
 }

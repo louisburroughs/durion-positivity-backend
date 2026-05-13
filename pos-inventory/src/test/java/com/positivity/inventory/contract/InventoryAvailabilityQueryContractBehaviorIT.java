@@ -62,8 +62,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         seedAllocationCreated("SKU-TEST-1", LOC_ALPHA, 20);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
-                .param("productSku", "SKU-TEST-1")
-                .param("locationId", LOC_ALPHA.toString())))
+                        .param("productSku", "SKU-TEST-1")
+                        .param("locationId", LOC_ALPHA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-TEST-1"))
@@ -84,8 +84,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         seedGoodsReceipt("SKU-ZERO", LOC_OTHER, 50);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
-                .param("productSku", "SKU-ZERO")
-                .param("locationId", LOC_ZERO.toString())))
+                        .param("productSku", "SKU-ZERO")
+                        .param("locationId", LOC_ZERO.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-ZERO"))
@@ -101,8 +101,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @DisplayName("AC-3: queryAvailability_returns404_whenProductSkuNotFound")
     void queryAvailability_returns404_whenProductSkuNotFound() throws Exception {
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
-                .param("productSku", "NONEXISTENT-SKU")
-                .param("locationId", LOC_ANY.toString())))
+                        .param("productSku", "NONEXISTENT-SKU")
+                        .param("locationId", LOC_ANY.toString())))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
@@ -117,8 +117,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         seedGoodsReceipt("SKU-BETA", LOC_BETA, 60);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
-                .param("productSku", "SKU-BETA")
-                .param("locationId", LOC_BETA.toString())))
+                        .param("productSku", "SKU-BETA")
+                        .param("locationId", LOC_BETA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-BETA"))
@@ -142,8 +142,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
         // allocatedQuantity = 50 (ALLOCATION_CREATED) - 10 (ALLOCATION_RELEASED) = 40
         // ATP = 200 (onHand) - 40 (allocated) = 160
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
-                .param("productSku", "SKU-ATP")
-                .param("locationId", LOC_GAMMA.toString())))
+                        .param("productSku", "SKU-ATP")
+                        .param("locationId", LOC_GAMMA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.onHandQuantity").value(200))

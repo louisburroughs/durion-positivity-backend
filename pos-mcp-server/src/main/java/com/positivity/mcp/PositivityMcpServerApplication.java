@@ -12,7 +12,7 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
  * The actual MCP server is configured as a Spring bean so that
  * it can be accessed both by HTTP controllers and other services.
  */
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
 @EnableConfigurationProperties(StaticRagPreloadProperties.class)
 public class PositivityMcpServerApplication {
 

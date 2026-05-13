@@ -25,14 +25,14 @@ services:
     image: jaegertracing/all-in-one:1.54
     container_name: jaeger
     ports:
-      - "5775:5775/udp"  # Compact thrift protocol
-      - "6831:6831/udp"  # Compact thrift protocol
-      - "6832:6832/udp"  # Binary thrift protocol
-      - "5778:5778"      # Serve configs
-      - "16686:16686"    # Jaeger UI
-      - "14268:14268"    # Direct HTTP collector
-      - "14250:14250"    # gRPC for model.proto
-      - "9411:9411"      # Zipkin compatible endpoint
+      - "5775:5775/udp" # Compact thrift protocol
+      - "6831:6831/udp" # Compact thrift protocol
+      - "6832:6832/udp" # Binary thrift protocol
+      - "5778:5778" # Serve configs
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Direct HTTP collector
+      - "14250:14250" # gRPC for model.proto
+      - "9411:9411" # Zipkin compatible endpoint
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
       LOG_LEVEL: debug
@@ -50,11 +50,11 @@ services:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
     logging: *logging
     networks:
       - pos-network
@@ -83,13 +83,13 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.93.0
     container_name: otel-collector
-    command: ["--config=/etc/otel-collector-config.yml"]
+    command: [ "--config=/etc/otel-collector-config.yml" ]
     ports:
-      - "4317:4317"     # OTLP gRPC receiver
-      - "4318:4318"     # OTLP HTTP receiver
-      - "8888:8888"     # Prometheus metrics exposed by the collector
-      - "8889:8889"     # Prometheus exporter metrics
-      - "13133:13133"   # Health check extension
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8888:8888" # Prometheus metrics exposed by the collector
+      - "8889:8889" # Prometheus exporter metrics
+      - "13133:13133" # Health check extension
     volumes:
       - ./observability/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
     depends_on:
@@ -103,7 +103,7 @@ services:
   postgres:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: postgres-positivity
-    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
+    command: [ "postgres", "-c", "shared_preload_libraries=timescaledb" ]
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -116,7 +116,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -132,7 +132,12 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1 ||
+            exit 1",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -145,9 +150,10 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     command: >
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_HOST=http://ollama:11434 ollama pull
+      ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama
@@ -174,8 +180,9 @@ services:
     logging: *logging
     networks:
       - pos-network
-    healthcheck: # Optional but recommended for sequential startup
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+    healthcheck:
+      # Optional but recommended for sequential startup
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20 # Give it enough time to start
@@ -198,7 +205,7 @@ services:
       POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -209,7 +216,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -230,7 +237,7 @@ services:
       POS_PRICE_BASE_URL: http://pos-price:8080
       POS_VEHICLE_INVENTORY_BASE_URL: http://pos-vehicle-inventory:8080
       POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -241,7 +248,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -259,7 +266,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -270,7 +277,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -288,7 +295,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -301,7 +308,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -323,7 +330,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -336,7 +343,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -354,7 +361,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -365,7 +372,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -407,7 +414,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -418,7 +425,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -434,7 +441,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -445,7 +452,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -463,7 +470,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -474,7 +481,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -492,7 +499,7 @@ services:
       POS_MCP_DB_NAME: pos_mcp
       POS_MCP_DB_USER: ${SPRING_DATASOURCE_USERNAME}
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       # Chat runs against Ollama's hosted API. Embeddings stay local.
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
@@ -529,7 +536,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -573,7 +580,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -584,7 +591,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -600,7 +607,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -611,7 +618,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -634,7 +641,7 @@ services:
       SECURITY_REDIS_ENABLED: "false"
       MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -649,7 +656,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -667,7 +674,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -678,7 +685,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -724,7 +731,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -737,7 +744,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -812,7 +819,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -823,7 +830,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -837,19 +844,21 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
-      <<: [*pos-security-client-env, *pos-events-client-env]
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       eureka-server:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
     logging: *logging
     networks:
-      - pos-network
+      pos-network:
+        aliases:
+          - api-gateway
 
   pos-frontend:
     build:
@@ -864,12 +873,22 @@ services:
       NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
       OTEL_SERVICE_NAME: pos-frontend
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-group,deployment.environment=pre-production"
+      OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
+        roup,deployment.environment=pre-production"
     depends_on:
       pos-api-gateway:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>process.exit(1));"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const
+            s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.set\
+            Timeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>pr\
+            ocess.exit(1));",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20

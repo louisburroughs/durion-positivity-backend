@@ -47,7 +47,13 @@ eureka:
 pos:
   invoice:
     service:
-      url: http://pos-invoice:8085
+      url: http://api-gateway
+  customer:
+    service:
+      url: http://api-gateway
+  workorder:
+    service:
+      url: http://api-gateway
   # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
   # See RestClientConfig.java for timeout configuration
   accounting:
@@ -79,6 +85,12 @@ logging:
     com:
       positivity:
         accounting: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
     org:
       springframework:
         security: DEBUG

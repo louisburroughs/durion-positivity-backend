@@ -74,6 +74,18 @@ class ToolMetadataRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("findEnabledByWorkflow returns workflow-scoped tools from JdbcTemplate query")
+    @SuppressWarnings("unchecked")
+    void findEnabledByWorkflow_returnsMappedTools() {
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("IDLE"))).thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = repository.findEnabledByWorkflow("IDLE");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().domain()).isEqualTo("customer");
+    }
+
+    @Test
     @DisplayName("findTopKByEmbedding returns bounded list from JdbcTemplate query")
     @SuppressWarnings("unchecked")
     void findTopKByEmbedding_returnsBoundedList() {
@@ -85,5 +97,31 @@ class ToolMetadataRepositoryImplTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().handlerBean()).isEqualTo("customerFacadeTool");
+    }
+
+    @Test
+    @DisplayName("findAllRoleNames delegates to JdbcTemplate and returns role name list")
+    void findAllRoleNames_returnsList() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("ROLE_ADMIN", "ROLE_CASHIER", "ROLE_TECHNICIAN"));
+
+        List<String> result = repository.findAllRoleNames();
+
+        assertThat(result).containsExactly("ROLE_ADMIN", "ROLE_CASHIER", "ROLE_TECHNICIAN");
+    }
+
+    @Test
+    @DisplayName("findTopKByEmbeddingForRole delegates gated ANN query to JdbcTemplate")
+    @SuppressWarnings("unchecked")
+    void findTopKByEmbeddingForRole_returnsBoundedGatedList() {
+        float[] embedding = new float[768];
+        when(jdbcTemplate.query(
+                        anyString(), any(RowMapper.class), eq("ROLE_CASHIER"), eq("IDLE"), any(PGobject.class), eq(5)))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = repository.findTopKByEmbeddingForRole(embedding, 5, "ROLE_CASHIER", "IDLE");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo("customerFacadeTool");
     }
 }

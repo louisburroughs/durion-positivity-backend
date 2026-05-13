@@ -27,7 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
  * CAP:092 - Preferences & Billing Rules
  */
 @RestController
-@SecurityRequirement(name = "bearerAuth", scopes = { "invoice:billing-rules" })
+@SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"invoice:billing-rules"})
 @RequestMapping("/v1/billing/rules")
 @Tag(name = "Billing Rules", description = "Manage billing rules for commercial accounts")
 @PreAuthorize("hasAuthority('invoice:billing-rules')")
@@ -36,8 +38,8 @@ public class BillingRulesController {
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);
 
     // Pattern for valid UUID format to prevent injection attacks
-    private static final Pattern VALID_UUID_PATTERN = Pattern
-            .compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    private static final Pattern VALID_UUID_PATTERN =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final BillingRulesService billingRulesService;
 
@@ -47,7 +49,9 @@ public class BillingRulesController {
 
     @GetMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_GET", apiVersion = "1")
-    @Operation(summary = "Get billing rules for a party/customer", description = "Retrieve the current billing rules configuration for a commercial account")
+    @Operation(
+            summary = "Get billing rules for a party/customer",
+            description = "Retrieve the current billing rules configuration for a commercial account")
     @ApiResponse(responseCode = "200", description = "Billing rules found")
     @ApiResponse(responseCode = "404", description = "No billing rules configured for this party")
     public ResponseEntity<BillingRulesDTO> getBillingRules(@PathVariable @NonNull String partyId) {
@@ -67,7 +71,9 @@ public class BillingRulesController {
 
     @PutMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_UPSERT", apiVersion = "1")
-    @Operation(summary = "Create or update billing rules", description = "Idempotent upsert of billing rules for a commercial account")
+    @Operation(
+            summary = "Create or update billing rules",
+            description = "Idempotent upsert of billing rules for a commercial account")
     @ApiResponse(responseCode = "200", description = "Billing rules updated")
     @ApiResponse(responseCode = "201", description = "Billing rules created")
     @ApiResponse(responseCode = "400", description = "Invalid billing rules data")

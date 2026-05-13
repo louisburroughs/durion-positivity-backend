@@ -20,40 +20,57 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequestMapping("/v1/inventory/sites")
-@Tag(name = "Inventory Sites", description = "Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.")
+@Tag(
+        name = "Inventory Sites",
+        description =
+                "Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.")
 public class InventorySiteDefaultLocationsController {
 
-        @GetMapping("/{siteId}/defaultLocations")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:location:view" })
-        @PreAuthorize("hasAuthority('inventory:location:view')")
-        @Operation(summary = "Get site default locations", description = "Returns configured default locations for a site. Stub implementation.", tags = {
-                        "Inventory Sites" })
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Default locations returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UUID.class)))),
-                        @ApiResponse(responseCode = "501", description = "Not implemented")
-        })
-        public ResponseEntity<List<UUID>> getSiteDefaultLocations(
-                        @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId) {
-                log.info("GET /v1/inventory/sites/{}/defaultLocations", siteId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-        }
+    @GetMapping("/{siteId}/defaultLocations")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:view"})
+    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @Operation(
+            summary = "Get site default locations",
+            description = "Returns configured default locations for a site. Stub implementation.",
+            tags = {"Inventory Sites"})
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Default locations returned",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = UUID.class)))),
+                @ApiResponse(responseCode = "501", description = "Not implemented")
+            })
+    public ResponseEntity<List<UUID>> getSiteDefaultLocations(
+            @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId) {
+        log.info("GET /v1/inventory/sites/{}/defaultLocations", siteId);
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
 
-        @PutMapping("/{siteId}/defaultLocations")
-        @EmitEvent(id = "INVENTORY_SITE_DEFAULT_LOCATIONS_UPDATE", apiVersion = "1")
-        @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-                        "inventory:location:admin" })
-        @PreAuthorize("hasAuthority('inventory:location:admin')")
-        @Operation(summary = "Replace site default locations", description = "Replaces the configured default locations for a site. Stub implementation.", tags = {
-                        "Inventory Sites" })
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Default locations replaced"),
-                        @ApiResponse(responseCode = "501", description = "Not implemented")
-        })
-        public ResponseEntity<Void> putSiteDefaultLocations(
-                        @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId,
-                        @RequestBody(required = false) List<UUID> defaultLocationIds) {
-                log.info("PUT /v1/inventory/sites/{}/defaultLocations", siteId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-        }
+    @PutMapping("/{siteId}/defaultLocations")
+    @EmitEvent(id = "INVENTORY_SITE_DEFAULT_LOCATIONS_UPDATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:admin"})
+    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @Operation(
+            summary = "Replace site default locations",
+            description = "Replaces the configured default locations for a site. Stub implementation.",
+            tags = {"Inventory Sites"})
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Default locations replaced"),
+                @ApiResponse(responseCode = "501", description = "Not implemented")
+            })
+    public ResponseEntity<Void> putSiteDefaultLocations(
+            @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId,
+            @RequestBody(required = false) List<UUID> defaultLocationIds) {
+        log.info("PUT /v1/inventory/sites/{}/defaultLocations", siteId);
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
 }

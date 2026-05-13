@@ -16,7 +16,9 @@ public class PricingAdjustment {
     @Schema(description = "Adjustment type", example = "PROMOTION")
     private String type;
 
-    @Schema(description = "Source identifier that produced this adjustment", example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa")
+    @Schema(
+            description = "Source identifier that produced this adjustment",
+            example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa")
     private UUID sourceId;
 
     @Schema(description = "Human-readable adjustment label", example = "Summer Labor Discount")

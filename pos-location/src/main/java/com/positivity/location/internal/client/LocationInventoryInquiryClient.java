@@ -4,7 +4,9 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 /**
  * Client for reading location-level inventory facts from pos-inventory.
  */
+@Slf4j
 @Component
 public class LocationInventoryInquiryClient {
 
@@ -24,24 +27,32 @@ public class LocationInventoryInquiryClient {
     private final RestClient restClient;
 
     public LocationInventoryInquiryClient(
-            RestClient.Builder restClientBuilder, @Value("${gateway.url:http://localhost:8080}") String gatewayUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayUrl + "/inventory/v1/inventory/locations")
                 .build();
     }
 
     public int getOnHandQuantity(@NonNull UUID storageLocationId) {
-        LocationInventoryInquiryResponse response = restClient
-                .get()
-                .uri("/{storageLocationId}/inventory-inquiry", storageLocationId)
-                .header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())
-                .retrieve()
-                .body(LocationInventoryInquiryResponse.class);
+        try {
+            LocationInventoryInquiryResponse response = restClient
+                    .get()
+                    .uri("/{storageLocationId}/inventory-inquiry", storageLocationId)
+                    .header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())
+                    .retrieve()
+                    .body(LocationInventoryInquiryResponse.class);
 
-        if (response == null) {
-            throw new IllegalStateException("Inventory inquiry returned no payload");
+            if (response == null) {
+                throw new IllegalStateException("Inventory inquiry returned no payload");
+            }
+            return response.getOnHandQuantity();
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to fetch inventory for storage location {}", storageLocationId, e);
+            throw new IllegalStateException("Inventory inquiry failed for location " + storageLocationId, e);
         }
-        return response.getOnHandQuantity();
     }
 
     private String resolveAuthorizationHeader() {

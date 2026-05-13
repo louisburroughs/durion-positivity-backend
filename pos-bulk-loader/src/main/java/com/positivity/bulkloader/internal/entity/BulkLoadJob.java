@@ -1,8 +1,8 @@
 package com.positivity.bulkloader.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;

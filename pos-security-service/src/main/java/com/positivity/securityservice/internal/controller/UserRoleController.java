@@ -35,10 +35,13 @@ public class UserRoleController {
      */
     @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
     @PutMapping("/{userId}/roles/{roleId}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "security:role:assign" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Assign a role to a user", description = "Creates an effective role assignment linking the specified user to the specified role.")
+    @Operation(
+            summary = "Assign a role to a user",
+            description = "Creates an effective role assignment linking the specified user to the specified role.")
     public ResponseEntity<Void> assignRoleToUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.assignRoleToUser(userId, roleId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -49,10 +52,13 @@ public class UserRoleController {
      */
     @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
     @DeleteMapping("/{userId}/roles/{roleId}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "security:role:assign" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Revoke a role from a user", description = "Removes the effective assignment of the specified role from the specified user.")
+    @Operation(
+            summary = "Revoke a role from a user",
+            description = "Removes the effective assignment of the specified role from the specified user.")
     public ResponseEntity<Void> revokeRoleFromUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.revokeRoleFromUser(userId, roleId);
         return ResponseEntity.noContent().build();
@@ -62,8 +68,9 @@ public class UserRoleController {
      * Story #62 (CAP-141): Get all effective permissions for a user.
      */
     @GetMapping("/{userId}/permissions")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "security:permission:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:permission:view"})
     @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Get user permissions", description = "Returns all effective permissions for a user")
     public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {

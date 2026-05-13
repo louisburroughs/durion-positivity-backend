@@ -13,8 +13,7 @@ class SimpleChatClassifierTest {
     @Test
     @DisplayName("simple greetings are routed to the no-tool path")
     void isSimpleChat_withGreeting_returnsTrue() {
-        assertThat(classifier.isSimpleChat("Say hello in one short sentence."))
-                .isTrue();
+        assertThat(classifier.isSimpleChat("Say hello in one short sentence.")).isTrue();
         assertThat(classifier.isSimpleChat("hello")).isTrue();
         assertThat(classifier.isSimpleChat("bonjour")).isTrue();
         assertThat(classifier.isSimpleChat("salut!")).isTrue();
@@ -37,32 +36,24 @@ class SimpleChatClassifierTest {
     void isSimpleChat_withTaskRequest_returnsFalse() {
         assertThat(classifier.isSimpleChat("Hello, can you check stock for SKU ABC?"))
                 .isFalse();
-        assertThat(classifier.isSimpleChat("Find customer John Smith"))
-                .isFalse();
+        assertThat(classifier.isSimpleChat("Find customer John Smith")).isFalse();
         assertThat(classifier.isSimpleChat("thanks, can you summarize the invoice for order 123?"))
                 .isFalse();
         assertThat(classifier.isSimpleChat("bonjour, pouvez-vous explain the return policy?"))
                 .isFalse();
         assertThat(classifier.isSimpleChat("hola, por favor search for battery warranty details"))
                 .isFalse();
-        assertThat(classifier.isSimpleChat("trouver le client jean dupont"))
-                .isFalse();
-        assertThat(classifier.isSimpleChat("buscar cliente juan perez"))
-                .isFalse();
-        assertThat(classifier.isSimpleChat("rapport des ventes"))
-                .isFalse();
-        assertThat(classifier.isSimpleChat("informe de ventas"))
-                .isFalse();
-        assertThat(classifier.isSimpleChat("how many open orders do we have?"))
-                .isFalse();
+        assertThat(classifier.isSimpleChat("trouver le client jean dupont")).isFalse();
+        assertThat(classifier.isSimpleChat("buscar cliente juan perez")).isFalse();
+        assertThat(classifier.isSimpleChat("rapport des ventes")).isFalse();
+        assertThat(classifier.isSimpleChat("informe de ventas")).isFalse();
+        assertThat(classifier.isSimpleChat("how many open orders do we have?")).isFalse();
         assertThat(classifier.isSimpleChat("how much inventory is available for sku abc?"))
                 .isFalse();
         assertThat(classifier.isSimpleChat("combien de factures sont en attente ?"))
                 .isFalse();
-        assertThat(classifier.isSimpleChat("cuántos pedidos están abiertos?"))
-                .isFalse();
-        assertThat(classifier.isSimpleChat("cuánto stock tenemos?"))
-                .isFalse();
+        assertThat(classifier.isSimpleChat("cuántos pedidos están abiertos?")).isFalse();
+        assertThat(classifier.isSimpleChat("cuánto stock tenemos?")).isFalse();
         assertThat(classifier.isSimpleChat("explain the inventory valuation procedure"))
                 .isFalse();
     }

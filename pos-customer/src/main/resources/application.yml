@@ -14,7 +14,7 @@ spring:
     properties:
       "[hibernate.format_sql]": true
   kafka:
-    bootstrap-servers: 
+    bootstrap-servers:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: pos-customer-workorder-events
@@ -53,7 +53,13 @@ logging:
     com:
       positivity:
         customer: INFO
- 
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     enabled: true
@@ -69,4 +75,6 @@ pos:
       workorder-events-topic: workorder-events
       enabled: false
   people:
-    base-url: ${POS_PEOPLE_BASE_URL:http://localhost:8084}
+    base-url: ${POS_PEOPLE_BASE_URL:http://api-gateway}
+  vehicle-inventory:
+    base-url: ${POS_VEHICLE_INVENTORY_BASE_URL:http://api-gateway}

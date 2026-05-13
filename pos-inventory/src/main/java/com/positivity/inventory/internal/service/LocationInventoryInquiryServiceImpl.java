@@ -21,12 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocationInventoryInquiryServiceImpl implements LocationInventoryInquiryService {
 
     private static final List<InventoryLedgerEventType> ON_HAND_EVENT_TYPES = Arrays.stream(
-            InventoryLedgerEventType.values())
+                    InventoryLedgerEventType.values())
             .filter(InventoryLedgerEventType::affectsOnHand)
             .toList();
 
-    private static final List<InventoryLedgerEventType> ALLOCATION_EVENT_TYPES = List
-            .of(InventoryLedgerEventType.ALLOCATION_CREATED, InventoryLedgerEventType.ALLOCATION_RELEASED);
+    private static final List<InventoryLedgerEventType> ALLOCATION_EVENT_TYPES =
+            List.of(InventoryLedgerEventType.ALLOCATION_CREATED, InventoryLedgerEventType.ALLOCATION_RELEASED);
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
@@ -40,8 +40,8 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     public LocationInventoryInquiryResponse getLocationInventory(@NonNull UUID locationId, @Nullable String sku) {
         Integer onHandQuantity = sku == null || sku.isBlank()
                 ? inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(locationId, ON_HAND_EVENT_TYPES)
-                : inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(sku, locationId,
-                        ON_HAND_EVENT_TYPES);
+                : inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                        sku, locationId, ON_HAND_EVENT_TYPES);
 
         int resolvedOnHandQuantity = onHandQuantity == null ? 0 : onHandQuantity;
         int outstandingAllocations = calculateOutstandingAllocations(locationId, sku);
@@ -56,7 +56,8 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     private int calculateOutstandingAllocations(UUID locationId, @Nullable String sku) {
         List<InventoryLedgerEntry> allocationEntries = sku == null || sku.isBlank()
                 ? inventoryLedgerEntryRepository.findByLocationIdAndEventTypeIn(locationId, ALLOCATION_EVENT_TYPES)
-                : inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(sku, locationId)
+                : inventoryLedgerEntryRepository
+                        .findByStockItemIdAndLocationIdOrderByTimestampAsc(sku, locationId)
                         .stream()
                         .filter(entry -> entry.getEventType() == InventoryLedgerEventType.ALLOCATION_CREATED
                                 || entry.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)

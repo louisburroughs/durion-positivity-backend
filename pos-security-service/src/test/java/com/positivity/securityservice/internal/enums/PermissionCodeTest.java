@@ -74,8 +74,8 @@ class PermissionCodeTest {
     @Test
     @DisplayName("all code strings are unique")
     void allCodeStringsAreUnique() {
-        Set<String> codes = Arrays.stream(PermissionCode.values()).map(PermissionCode::code)
-                .collect(Collectors.toSet());
+        Set<String> codes =
+                Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
         assertThat(codes).hasSize(233);
     }

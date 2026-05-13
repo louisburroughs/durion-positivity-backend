@@ -55,8 +55,8 @@ public class TusUploadServiceImpl implements TusUploadService {
 
     @Override
     @Transactional
-    public Created createUpload(@NonNull UUID jobId, @NonNull String fileName, long totalSize,
-            @NonNull String operatorId) {
+    public Created createUpload(
+            @NonNull UUID jobId, @NonNull String fileName, long totalSize, @NonNull String operatorId) {
         TusUpload upload = new TusUpload();
         upload.setJobId(jobId);
         upload.setOperatorId(operatorId);
@@ -72,8 +72,12 @@ public class TusUploadServiceImpl implements TusUploadService {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to create TUS temp file for upload " + saved.getId(), e);
         }
-        log.info("TUS upload created: id={} jobId={} fileName={} totalSize={}", saved.getId(), jobId,
-                saved.getFileName(), totalSize);
+        log.info(
+                "TUS upload created: id={} jobId={} fileName={} totalSize={}",
+                saved.getId(),
+                jobId,
+                saved.getFileName(),
+                totalSize);
         return new Created(saved.getId(), saved.getExpiresAt());
     }
 
@@ -154,8 +158,12 @@ public class TusUploadServiceImpl implements TusUploadService {
         bulkLoadJobService.markUploadStored(upload.getJobId(), upload.getOperatorId(), storagePath);
         upload.setCompleted(true);
         tusUploadRepository.save(upload);
-        log.info("TUS upload finalized: id={} jobId={} size={} dest={}", upload.getId(), upload.getJobId(),
-                finalOffset, dest);
+        log.info(
+                "TUS upload finalized: id={} jobId={} size={} dest={}",
+                upload.getId(),
+                upload.getJobId(),
+                finalOffset,
+                dest);
     }
 
     private void deleteTempFile(UUID uploadId) {

@@ -3,35 +3,27 @@ package com.positivity.mcp.internal.orchestration;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
-import com.positivity.mcp.internal.domain.ToolMetadata;
-import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
-import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
-import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
-import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
-import com.positivity.mcp.internal.service.ToolAuditService;
-import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
+import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
+import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -40,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ClassUtils;
 
 @Component
 @Profile("alpha")
@@ -48,9 +39,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
     private static final String MEMORY_KEY_SEPARATOR = "::";
-    private static final String WORKFLOW_IDLE = "IDLE";
     private static final String FULL_TOOL_CACHE_KEY = "full";
-    private static final int MAX_LOG_PREVIEW_LENGTH = 160;
+    private static final int TIER2_EXPANDED_QUERY_LIMIT = 3;
+    private static final int TIER2_RETRIEVAL_CANDIDATES = 20;
+    private static final int TIER2_FINAL_TOP_K = 5;
 
     private final Cache<String, PosAssistant> roleAgentCache;
     private final Cache<String, ChatMemory> chatMemoryCache;
@@ -58,53 +50,51 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
     private final PgVectorEmbeddingStore embeddingStore;
-    private final ToolRegistry toolRegistry;
-    private final ExaWebSearchTool exaWebSearchTool;
-    private final InventoryFacadeTool inventoryFacadeTool;
-    private final OrderFacadeTool orderFacadeTool;
+    private final MasterAgentRegistry toolRegistry;
+    private final SharedOrchestrationSupport sharedOrchestrationSupport;
+    private final ToolSelectionEngine toolSelectionEngine;
+    private final ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
     @Nullable
-    private final ToolRegistryService toolRegistryService;
+    private final ToolExecutionAuditLogger toolExecutionAuditLogger;
 
     @Nullable
-    private final ToolAuditService toolAuditService;
+    private final SessionSummaryService sessionSummaryService;
+
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
 
     private final int memoryMaxMessages;
-    private final int candidateToolLimit;
     private final int rateLimitPerSession;
 
     public SessionAgentManager(
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
             @NonNull PgVectorEmbeddingStore embeddingStore,
-            @NonNull ToolRegistry toolRegistry,
-            @NonNull ExaWebSearchTool exaWebSearchTool,
-            @NonNull InventoryFacadeTool inventoryFacadeTool,
-            @NonNull OrderFacadeTool orderFacadeTool,
-            @Nullable ToolRegistryService toolRegistryService,
-            @Nullable ToolAuditService toolAuditService,
+            @NonNull MasterAgentRegistry toolRegistry,
+            @NonNull SharedOrchestrationSupport sharedOrchestrationSupport,
+            @NonNull ToolSelectionEngine toolSelectionEngine,
+            @NonNull ScopedContentRetrieverFactory scopedContentRetrieverFactory,
+            @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
+            @Nullable SessionSummaryService sessionSummaryService,
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
-            @Value("${mcp.agent.memory-max-messages:50}") int memoryMaxMessages,
-            @Value("${mcp.agent.candidate-tool-limit:2}") int candidateToolLimit,
+            @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
         this.toolRegistry = toolRegistry;
-        this.exaWebSearchTool = exaWebSearchTool;
-        this.inventoryFacadeTool = inventoryFacadeTool;
-        this.orderFacadeTool = orderFacadeTool;
-        this.toolRegistryService = toolRegistryService;
-        this.toolAuditService = toolAuditService;
+        this.sharedOrchestrationSupport = sharedOrchestrationSupport;
+        this.toolSelectionEngine = toolSelectionEngine;
+        this.scopedContentRetrieverFactory = scopedContentRetrieverFactory;
+        this.toolExecutionAuditLogger = toolExecutionAuditLogger;
+        this.sessionSummaryService = sessionSummaryService;
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
         this.memoryMaxMessages = memoryMaxMessages;
-        this.candidateToolLimit = Math.max(1, candidateToolLimit);
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
                 .maximumSize(Math.max(1, maxCachedAgents))
@@ -114,7 +104,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .maximumSize(Math.max(1, maxCachedAgents))
                 .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
-        this.roleAgentCache = Caffeine.newBuilder().maximumSize(Math.max(1, maxCachedAgents)).build();
+        this.roleAgentCache = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxCachedAgents))
+                .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
+                .build();
         prebuildRoleAgents();
     }
 
@@ -128,83 +121,88 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     @Override
-    public @NonNull String chat(@NonNull String userId, @NonNull String role, @NonNull String message) {
-        AtomicInteger requestCount = requestCountCache.get(userId, key -> new AtomicInteger(0));
+    public @NonNull String chat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+        String username = currentUserContext.username();
+        String role = currentUserContext.primaryRole();
+        AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
         if (requestCount.incrementAndGet() > rateLimitPerSession) {
             requestCount.decrementAndGet();
-            LOGGER.warn("Rate limit exceeded for userId: {}", userId);
+            LOGGER.warn("Rate limit exceeded for username={} userId={}", username, currentUserContext.userId());
             throw new RateLimitExceededException("Rate limit exceeded");
         }
 
         long startMs = System.currentTimeMillis();
-        String messagePreview = preview(message);
-        int tokenCount = tokenCount(message);
         try {
             boolean simpleChat = simpleChatClassifier.isSimpleChat(message);
-            LOGGER.debug(
-                    "MCP chat request received userId={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
-                    userId,
-                    role,
-                    simpleChat,
-                    message.length(),
-                    tokenCount,
-                    messagePreview);
+            if (LOGGER.isDebugEnabled()) {
+                String messagePreview = sharedOrchestrationSupport.preview(message);
+                int tokenCount = tokenCount(message);
+                LOGGER.debug(
+                        "MCP chat request received username={} role={} simpleChat={} chars={} tokens={} preview=\"{}\"",
+                        username,
+                        role,
+                        simpleChat,
+                        message.length(),
+                        tokenCount,
+                        messagePreview);
+            }
             if (simpleChat) {
-                LOGGER.debug("MCP simple chat dispatch userId={} role={} preview=\"{}\"", userId, role, messagePreview);
-                return simpleChat(userId, role, message, startMs);
+                String messagePreview = sharedOrchestrationSupport.preview(message);
+                LOGGER.debug(
+                        "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
+                return simpleChat(currentUserContext, message, startMs);
             }
 
-            ToolSelection selection = selectTools(role, message);
+            ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, message);
+            List<Object> selectedTools =
+                    sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
+            String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
             if (LOGGER.isDebugEnabled()) {
+                String messagePreview = sharedOrchestrationSupport.preview(message);
                 LOGGER.debug(
-                        "MCP tool selection for userId={} role={} selectedTools={} preview=\"{}\"",
-                        userId,
+                        "MCP tool selection for username={} role={} selectedTools={} preview=\"{}\"",
+                        username,
                         role,
-                        selection.toolCount(),
+                        selectedTools.size(),
                         messagePreview);
                 LOGGER.debug(
-                        "MCP agent chat dispatch userId={} role={} cacheKey={} roleTools={} fallbackTools={} preview=\"{}\"",
-                        userId,
+                        "MCP agent chat dispatch username={} role={} cacheKey={} roleTools={} fallbackTools={} preview=\"{}\"",
+                        username,
                         role,
-                        selection.cacheKey(),
-                        selection.roleToolNames(),
-                        selection.fallbackToolNames(),
+                        cacheKey,
+                        sharedOrchestrationSupport.toolNames(selection.roleTools()),
+                        sharedOrchestrationSupport.toolNames(selection.fallbackTools()),
                         messagePreview);
             }
-            PosAssistant agent = getOrCreateAgent(role, selection.cacheKey(), selection.roleTools(),
-                    selection.fallbackTools());
-            String roleContext = "Current user role: " + role;
+            PosAssistant agent = getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools());
             long agentStartNanos = System.nanoTime();
-            String response = agent.chat(memoryKey(userId, role), message, roleContext);
+            String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
             LOGGER.info(
                     "MCP agent chat completed role={} selectedTools={} modelElapsedMs={} totalElapsedMs={}",
                     role,
-                    selection.toolCount(),
+                    selectedTools.size(),
                     elapsedMs(agentStartNanos),
                     elapsedMs);
-            if (toolAuditService != null) {
-                toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
+            if (toolExecutionAuditLogger != null) {
+                toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
             }
             return response;
         } catch (RuntimeException exception) {
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
-            LOGGER.warn(
-                    "MCP chat failed role={} elapsedMs={} errorName={} ",
-                    role,
-                    elapsedMs,
-                    exception.getClass().getSimpleName(),
-                    exception);
-            if (toolAuditService != null) {
-                toolAuditService.logToolExecution(
+            if (toolExecutionAuditLogger != null) {
+                toolExecutionAuditLogger.logToolExecution(
                         null,
-                        userId,
+                        username,
                         false,
                         false,
                         elapsedMs,
                         exception.getClass().getSimpleName());
             }
-            throw exception;
+            throw new IllegalStateException(
+                    "MCP chat failed role=%s elapsedMs=%d errorName=%s"
+                            .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
+                    exception);
         }
     }
 
@@ -214,41 +212,57 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private PosAssistant buildAgent(@NonNull String role) {
-        return buildAgent(
-                role,
-                toolRegistry.resolveToolsForRole(role),
-                List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+        return buildAgent(role, toolRegistry.resolveDomainTools(role), toolSelectionEngine.fullFallbackTools());
     }
 
     private PosAssistant buildAgent(
             @NonNull String role, @NonNull Collection<Object> roleTools, @NonNull Collection<Object> fallbackTools) {
         long startNanos = System.nanoTime();
-        // 1. Resolve role-specific tools and append fallback tools without
-        // registering duplicate @Tool method names.
-        List<Object> tools = ToolSelectionSupport.mergeWithoutDuplicateToolNames(roleTools,
-                fallbackTools.toArray(Object[]::new));
+        List<Object> tools = sharedOrchestrationSupport.mergeTools(roleTools, fallbackTools);
+        String ragScope = toolRegistry.resolveRagScopeForTools(tools);
+        String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
 
-        // 2. Build RAG content retriever
-        ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
-                .embeddingStore(embeddingStore)
-                .embeddingModel(embeddingModel)
-                .maxResults(5)
-                .minScore(0.7)
-                .build();
-        ContentRetriever resilientContentRetriever = new ResilientContentRetriever(contentRetriever,
-                "embedding-store-content-retriever");
+        // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
+        ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
+        ContentRetriever broadSemanticRetriever =
+                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
+        ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
+                broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever hybridRetriever =
+                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        ContentRetriever resilientContentRetriever =
+                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
+
+        // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution
+        // at runtime)
+        // Note: RoleAwareMetadataFilter requires user roles from SecurityContext.
+        // Currently applied at chat boundary where user context is available.
 
         // 3. Assemble AiServices proxy. Chat memory remains per user+role through
         // the provider, so role-level agent prebuilds do not share conversations.
+        // Prompt resolution is deferred per-message via systemMessageProvider so that
+        // database updates to prompts are visible immediately without agent rebuild.
         PosAssistant agent = AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(role))
+                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(promptName))
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
-        LOGGER.debug("Built MCP role agent role={} toolNames={}", role, toolNames(tools));
-        LOGGER.info("Built MCP role agent role={} tools={} in {} ms", role, tools.size(), elapsedMs(startNanos));
+        LOGGER.debug(
+                "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
+                role,
+                promptName,
+                ragScope,
+                sharedOrchestrationSupport.toolNames(tools));
+        LOGGER.info(
+                "Built MCP role agent role={} promptName={} ragScope={} tools={} in {} ms",
+                role,
+                promptName,
+                ragScope,
+                tools.size(),
+                elapsedMs(startNanos));
         return agent;
     }
 
@@ -274,8 +288,17 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
-        for (String role : toolRegistry.preloadableRoles()) {
+        for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
+                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
+                List<Object> selectedTools =
+                        sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
+                String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
+                roleAgentCache.put(
+                        role + MEMORY_KEY_SEPARATOR + warmCacheKey,
+                        buildAgent(role, selection.roleTools(), selection.fallbackTools()));
+
+                // Keep the legacy full key warm for direct role-level access paths.
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
                 prebuilt++;
             } catch (RuntimeException exception) {
@@ -286,14 +309,20 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
+        // Tier 3: Replace MessageWindowChatMemory with SemanticChatMemoryStore
+        // for persistent semantic memory and session summarization
         return chatMemoryCache.get(
-                String.valueOf(memoryId), ignored -> MessageWindowChatMemory.withMaxMessages(memoryMaxMessages));
+                String.valueOf(memoryId),
+                ignored -> new SemanticChatMemoryStore(
+                        memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummaryService));
     }
 
     private @NonNull String simpleChat(
-            @NonNull String userId, @NonNull String role, @NonNull String message, long requestStartMs) {
+            @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
-        String prompt = rolePromptResolver.resolvePrompt(role);
+        String prompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
+                + System.lineSeparator()
+                + formatUserContext(currentUserContext);
         String response = chatModel
                 .chat(List.of(SystemMessage.from(prompt), UserMessage.from(message)))
                 .aiMessage()
@@ -301,109 +330,29 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
         LOGGER.info(
                 "MCP simple chat completed role={} modelElapsedMs={} totalElapsedMs={}",
-                role,
+                currentUserContext.primaryRole(),
                 elapsedMs(simpleStartNanos),
                 elapsedMs);
-        if (toolAuditService != null) {
-            toolAuditService.logToolExecution(null, userId, true, false, elapsedMs, null);
+        if (toolExecutionAuditLogger != null) {
+            toolExecutionAuditLogger.logToolExecution(
+                    null, currentUserContext.username(), true, false, elapsedMs, null);
         }
         return response;
     }
 
-    private @NonNull ToolSelection selectTools(@NonNull String role, @NonNull String message) {
-        List<Object> roleTools = roleToolsForMessage(role, message);
-        List<Object> fallbackTools = fallbackToolsForMessage(message);
-        return new ToolSelection(roleTools, fallbackTools);
-    }
-
-    private @NonNull List<Object> roleToolsForMessage(@NonNull String role, @NonNull String message) {
-        List<Object> fullRoleTools = toolRegistry.resolveToolsForRole(role);
-        if (toolRegistryService == null) {
-            LOGGER.debug("MCP tool selector unavailable role={} resolvedRoleTools={}", role, toolNames(fullRoleTools));
-            return fullRoleTools;
-        }
-        try {
-            List<String> selectedNames = toolRegistryService
-                    .resolveCandidateTools(new ToolSelectionContext(message, role, WORKFLOW_IDLE), candidateToolLimit)
-                    .stream()
-                    .map(ToolMetadata::name)
-                    .toList();
-            if (selectedNames.isEmpty()) {
-                LOGGER.debug(
-                        "MCP tool selector returned no candidates role={} fullRoleTools={}; using full role tool set",
-                        role,
-                        toolNames(fullRoleTools));
-                return fullRoleTools;
-            }
-            List<Object> resolvedTools = toolRegistry.resolveToolsForRole(role, selectedNames);
-            if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
-                LOGGER.debug(
-                        "MCP tool candidates resolved to zero role tools role={} candidateNames={} fullRoleTools={}; using full role tool set",
-                        role,
-                        selectedNames,
-                        toolNames(fullRoleTools));
-                return fullRoleTools;
-            }
-            LOGGER.debug(
-                    "MCP tool candidates role={} candidateNames={} resolvedRoleTools={}",
-                    role,
-                    selectedNames,
-                    toolNames(resolvedTools));
-            return resolvedTools;
-        } catch (RuntimeException exception) {
-            LOGGER.warn(
-                    "MCP tool selection failed role={} error={}; using full role tool set",
-                    role,
-                    exception.getClass().getSimpleName(),
-                    exception);
-            return fullRoleTools;
-        }
-    }
-
-    private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
-        String text = message.toLowerCase(Locale.ROOT);
-        List<Object> selected = new ArrayList<>();
-        if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
-            selected.add(exaWebSearchTool);
-        }
-        if (containsAny(
-                text, Set.of("availability", "inventory", "location", "part", "product", "sku", "stock", "store"))) {
-            selected.add(inventoryFacadeTool);
-        }
-        if (containsAny(text, Set.of("order", "po", "purchase", "sale", "sales"))) {
-            selected.add(orderFacadeTool);
-        }
-        LOGGER.debug("MCP fallback tool matches tools={}", toolNames(selected));
-        return selected;
-    }
-
-    private static @NonNull String preview(@NonNull String text) {
-        String normalized = text.replaceAll("\\s+", " ").trim();
-        if (normalized.length() <= MAX_LOG_PREVIEW_LENGTH) {
-            return normalized;
-        }
-        return normalized.substring(0, MAX_LOG_PREVIEW_LENGTH - 3) + "...";
+    private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
+        return "Authenticated user context: username=" + currentUserContext.username()
+                + ", userId=" + currentUserContext.userId()
+                + ", primaryRole=" + currentUserContext.primaryRole()
+                + ", roles=" + currentUserContext.roles()
+                + ", authorityCount=" + currentUserContext.authorities().size()
+                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
+                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }
 
     private static int tokenCount(@NonNull String text) {
-        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text)).size();
-    }
-
-    private static @NonNull List<String> toolNames(@NonNull Collection<Object> tools) {
-        return tools.stream().map(SessionAgentManager::toolName).toList();
-    }
-
-    private static @NonNull String toolName(@NonNull Object tool) {
-        return ClassUtils.getUserClass(tool).getSimpleName();
-    }
-
-    private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
-        for (String token : tokens) {
-            if (text.matches(".*\\b" + token + "\\b.*")) {
-                return true;
-            }
-        }
-        return false;
+        return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text))
+                .size();
     }
 
     private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
@@ -412,31 +361,5 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-    }
-
-    private record ToolSelection(
-            @NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {
-
-        int toolCount() {
-            return roleTools.size() + fallbackTools.size();
-        }
-
-        @NonNull
-        String cacheKey() {
-            TreeSet<String> names = new TreeSet<>(Comparator.naturalOrder());
-            roleTools.forEach(tool -> names.add(toolName(tool)));
-            fallbackTools.forEach(tool -> names.add(toolName(tool)));
-            return names.isEmpty() ? "none" : String.join("+", names);
-        }
-
-        @NonNull
-        List<String> roleToolNames() {
-            return toolNames(roleTools);
-        }
-
-        @NonNull
-        List<String> fallbackToolNames() {
-            return toolNames(fallbackTools);
-        }
     }
 }

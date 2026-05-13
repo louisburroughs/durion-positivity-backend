@@ -21,9 +21,7 @@ public interface TusUploadRepository extends JpaRepository<TusUpload, UUID> {
     @Query("UPDATE TusUpload t SET t.uploadOffset = :newOffset "
             + "WHERE t.id = :id AND t.uploadOffset = :expectedOffset AND t.completed = false")
     int advanceOffset(
-            @Param("id") UUID id,
-            @Param("expectedOffset") long expectedOffset,
-            @Param("newOffset") long newOffset);
+            @Param("id") UUID id, @Param("expectedOffset") long expectedOffset, @Param("newOffset") long newOffset);
 
     List<TusUpload> findByExpiresAtBeforeAndCompletedFalse(Instant threshold);
 }

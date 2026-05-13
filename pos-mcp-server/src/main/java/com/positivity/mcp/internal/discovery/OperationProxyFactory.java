@@ -45,6 +45,20 @@ public class OperationProxyFactory {
             Map<String, Object> headers = asMap(arguments.get("headers"));
             Object body = arguments.get("body");
 
+            // LoadBalancerClient.choose() is used here because the service ID is dynamic —
+            // resolved at
+            // runtime from the OpenAPI discovery registry. A static @LoadBalanced
+            // RestClient base URL
+            // cannot be pre-built at construction time when the target service ID is
+            // unknown until the
+            // request arrives. Facade tools (e.g. AccountingFacadeTool, CatalogFacadeTool)
+            // use
+            // @LoadBalanced RestClient.Builder instead because their service ID and base
+            // URL are static
+            // and known at startup. Rule: prefer @LoadBalanced RestClient for new
+            // static-target clients;
+            // use LoadBalancerClient.choose() only when the service ID must be resolved
+            // dynamically per request.
             ServiceInstance instance = loadBalancerClient.choose(serviceId);
             if (instance == null) {
                 return Mono.just(errorResult("No instance available for service " + serviceId));

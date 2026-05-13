@@ -259,12 +259,7 @@ class SecurityGatewayConfigTest {
     void canonicalToken_withRoles_forwardsRolesHeader() {
         String permBits = encodePermBits(226);
         String token = buildCanonicalTokenWithRoles(
-                "admin.alpha",
-                "u1",
-                null,
-                permBits,
-                GatewayPermissionCatalog.CATALOG_VERSION,
-                "ROLE_ADMIN");
+                "admin.alpha", "u1", null, permBits, GatewayPermissionCatalog.CATALOG_VERSION, "ROLE_ADMIN");
 
         GlobalFilter filter = new SecurityGatewayConfig(
                         TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())

@@ -45,7 +45,9 @@ public class InvoiceController {
     @EmitEvent(id = "INVOICE_CREATE", apiVersion = "1")
     @Operation(summary = "Create invoice", description = "Create invoice draft from completed workorder data")
     @ApiResponse(responseCode = "201", description = "Invoice created")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "invoice:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:manage"})
     public ResponseEntity<InvoiceGenerationResponse> createInvoice(
             @Valid @RequestBody @NonNull InvoiceCreationRequest request) {
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -56,16 +58,22 @@ public class InvoiceController {
     @EmitEvent(id = "INVOICE_GET", apiVersion = "1")
     @Operation(summary = "Get invoice", description = "Get invoice details")
     @ApiResponse(responseCode = "200", description = "Invoice found")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "invoice:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:manage"})
     public ResponseEntity<InvoiceDetailsResponse> getInvoice(@PathVariable @NonNull UUID invoiceId) {
         return ResponseEntity.ok(invoiceService.getInvoice(invoiceId));
     }
 
     @PostMapping("/{invoiceId}/adjustments")
     @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")
-    @Operation(summary = "Apply invoice adjustment", description = "Apply discount, fee, or correction to a draft invoice")
+    @Operation(
+            summary = "Apply invoice adjustment",
+            description = "Apply discount, fee, or correction to a draft invoice")
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "invoice:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:manage"})
     public ResponseEntity<InvoiceDetailsResponse> applyAdjustment(
             @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull AdjustmentRequest request) {
         return ResponseEntity.ok(invoiceService.applyAdjustment(invoiceId, request));
@@ -73,9 +81,14 @@ public class InvoiceController {
 
     @PostMapping("/{invoiceId}/finalize")
     @EmitEvent(id = "INVOICE_FINALIZED", apiVersion = "1")
-    @Operation(summary = "Finalize invoice", description = "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
+    @Operation(
+            summary = "Finalize invoice",
+            description =
+                    "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "invoice:finalize" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:finalize"})
     @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
             @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull FinalizationRequest request) {
@@ -84,9 +97,14 @@ public class InvoiceController {
 
     @PostMapping("/{invoiceId}/revert")
     @EmitEvent(id = "INVOICE_DRAFT_REVERT", apiVersion = "1")
-    @Operation(summary = "Revert finalized invoice", description = "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
+    @Operation(
+            summary = "Revert finalized invoice",
+            description =
+                    "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
     @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "invoice:finalize" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:finalize"})
     @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> revertInvoice(
             @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull RevertRequest request) {

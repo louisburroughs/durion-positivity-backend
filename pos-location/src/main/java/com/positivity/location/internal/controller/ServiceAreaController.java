@@ -39,7 +39,9 @@ public class ServiceAreaController {
     @ApiResponse(responseCode = "201", description = "Service area created")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:service-area:manage')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:service-area:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:service-area:manage"})
     @PostMapping
     public ResponseEntity<ServiceAreaResponse> create(@RequestBody ServiceAreaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(serviceAreaService.create(request));
@@ -48,7 +50,9 @@ public class ServiceAreaController {
     @Operation(summary = "List service areas")
     @ApiResponse(responseCode = "200", description = "Service areas listed")
     @PreAuthorize("hasAuthority('location:service-area:read')")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:service-area:read" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:service-area:read"})
     @GetMapping
     public ResponseEntity<List<ServiceAreaResponse>> list() {
         return ResponseEntity.ok(serviceAreaService.list());
@@ -60,7 +64,9 @@ public class ServiceAreaController {
     @ApiResponse(responseCode = "404", description = "Service area not found")
     @PreAuthorize("hasAuthority('location:service-area:manage')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_PATCH", apiVersion = "1")
-    @SecurityRequirement(name = "bearerAuth", scopes = { "location:service-area:manage" })
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:service-area:manage"})
     @PatchMapping("/{id}")
     public ResponseEntity<ServiceAreaResponse> patch(@PathVariable String id, @RequestBody Map<String, Object> patch) {
         return ResponseEntity.ok(serviceAreaService.patch(id, patch));

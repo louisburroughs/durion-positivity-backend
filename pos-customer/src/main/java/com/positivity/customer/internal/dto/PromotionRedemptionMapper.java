@@ -23,6 +23,8 @@ public final class PromotionRedemptionMapper {
                 redemption.getRecordedOverLimit(),
                 redemption.getStatus(),
                 redemption.getRedemptionTimestamp(),
-                redemption.getCreatedAt() != null ? LocalDateTime.ofInstant(redemption.getCreatedAt(), ZoneOffset.UTC) : null);
+                redemption.getCreatedAt() != null
+                        ? LocalDateTime.ofInstant(redemption.getCreatedAt(), ZoneOffset.UTC)
+                        : null);
     }
 }

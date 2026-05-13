@@ -14,8 +14,8 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,13 +24,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-        "bulkImport:upload:execute" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"bulkImport:upload:execute"})
 @RequestMapping("/v1/bulk-jobs")
 @RequiredArgsConstructor
 @Slf4j
@@ -45,9 +46,11 @@ public class FileUploadController {
     @PostMapping("/{jobId}/upload")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_FILE_UPLOAD", apiVersion = "1")
-    @Operation(summary = "Upload a file for a bulk load job", description = "Uploads a file for the specified bulk load job. The file is stored and associated with the job for later processing. "
-            +
-            "The job must be in CREATED or UPLOADING state. Multiple files can be uploaded, but only the latest file will be processed.")
+    @Operation(
+            summary = "Upload a file for a bulk load job",
+            description =
+                    "Uploads a file for the specified bulk load job. The file is stored and associated with the job for later processing. "
+                            + "The job must be in CREATED or UPLOADING state. Multiple files can be uploaded, but only the latest file will be processed.")
     @ApiResponse(responseCode = "200", description = "File uploaded and content detected")
     @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<FileUploadResponse> uploadFile(
@@ -75,8 +78,11 @@ public class FileUploadController {
     @PostMapping("/{jobId}/process")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
-    @Operation(summary = "Launch a bulk load job for processing", description = "Starts Spring Batch execution for the specified bulk load job and transitions it to PROCESSING. "
-            + "The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state and must already have a persisted upload and locationId.")
+    @Operation(
+            summary = "Launch a bulk load job for processing",
+            description =
+                    "Starts Spring Batch execution for the specified bulk load job and transitions it to PROCESSING. "
+                            + "The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state and must already have a persisted upload and locationId.")
     @ApiResponse(responseCode = "200", description = "Job transitioned to PROCESSING")
     @ApiResponse(responseCode = "404", description = "Job not found")
     @ApiResponse(responseCode = "409", description = "Invalid state transition")
@@ -112,8 +118,6 @@ public class FileUploadController {
             return null;
         }
 
-        return gatewayTokenHeader.startsWith(BEARER_PREFIX)
-                ? gatewayTokenHeader
-                : BEARER_PREFIX + gatewayTokenHeader;
+        return gatewayTokenHeader.startsWith(BEARER_PREFIX) ? gatewayTokenHeader : BEARER_PREFIX + gatewayTokenHeader;
     }
 }

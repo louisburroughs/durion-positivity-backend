@@ -67,11 +67,16 @@ public class CrmPersonController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"crm:person:create"})
     @PreAuthorize("hasAuthority('crm:person:create')")
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
     @Operation(summary = "Create a new person", description = "Creates an individual person record in the CRM system")
-    @ApiResponse(responseCode = "201", description = "Person created successfully", content = @Content(schema = @Schema(implementation = CreatePersonResponse.class)))
+    @ApiResponse(
+            responseCode = "201",
+            description = "Person created successfully",
+            content = @Content(schema = @Schema(implementation = CreatePersonResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request - validation failed")
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
@@ -97,11 +102,18 @@ public class CrmPersonController {
      * @return the person details
      */
     @GetMapping("/{personId}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:read" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"crm:person:read"})
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_GET", apiVersion = "1")
-    @Operation(summary = "Get a person by ID", description = "Retrieves an individual person record by their unique identifier")
-    @ApiResponse(responseCode = "200", description = "Person found", content = @Content(schema = @Schema(implementation = GetPersonResponse.class)))
+    @Operation(
+            summary = "Get a person by ID",
+            description = "Retrieves an individual person record by their unique identifier")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Person found",
+            content = @Content(schema = @Schema(implementation = GetPersonResponse.class)))
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
@@ -125,7 +137,9 @@ public class CrmPersonController {
      * @return list of matching persons
      */
     @GetMapping
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "crm:person:read" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"crm:person:read"})
     @PreAuthorize("hasAuthority('crm:person:read')")
     @EmitEvent(id = "CRM_PERSON_SEARCH", apiVersion = "1")
     @Operation(summary = "Search persons", description = "Searches for persons matching the specified criteria")

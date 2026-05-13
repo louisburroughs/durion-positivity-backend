@@ -86,9 +86,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         // When: Assign a technician to the workorder
         Map<String, Object> assignRequest = Map.of(
-                "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID,
-                "notes", "Assigned to senior tech for brake system work");
+                "technicianId",
+                testTechnicianId1.toString(),
+                "assignedByUserId",
+                SYSTEM_USER_ID,
+                "notes",
+                "Assigned to senior tech for brake system work");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -238,9 +241,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         // When: Attempt to assign a technician
         Map<String, Object> assignRequest = Map.of(
-                "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID,
-                "notes", "Attempting to assign to completed workorder");
+                "technicianId",
+                testTechnicianId1.toString(),
+                "assignedByUserId",
+                SYSTEM_USER_ID,
+                "notes",
+                "Attempting to assign to completed workorder");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -271,9 +277,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         // When: Attempt to reassign
         Map<String, Object> reassignRequest = Map.of(
-                "newTechnicianId", testTechnicianId1.toString(),
-                "reassignedByUserId", SYSTEM_USER_ID,
-                "reason", "Attempting reassignment without existing assignment");
+                "newTechnicianId",
+                testTechnicianId1.toString(),
+                "reassignedByUserId",
+                SYSTEM_USER_ID,
+                "reason",
+                "Attempting reassignment without existing assignment");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

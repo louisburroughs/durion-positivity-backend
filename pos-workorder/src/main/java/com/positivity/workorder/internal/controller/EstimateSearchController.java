@@ -21,23 +21,30 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "workorder:estimate:view" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"workorder:estimate:view"})
 @RequestMapping("/v1/workexec/estimates")
 @Tag(name = "Estimate Search", description = "Estimate search and retrieval")
 @RequiredArgsConstructor
 public class EstimateSearchController {
 
-        private final EstimateService estimateService;
+    private final EstimateService estimateService;
 
-        @Operation(summary = "Search estimates", description = "Paginated search for estimates filtered by optional customerId and/or vehicleId.")
-        @ApiResponse(responseCode = "200", description = "Page of estimate summaries returned.")
-        @GetMapping("/search")
-        @PreAuthorize("hasAuthority('workorder:estimate:view')")
-        @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH", apiVersion = "1")
-        public Page<EstimateSummaryResponse> searchEstimates(
-                        @Parameter(description = "Filter by customer UUID (optional)") @RequestParam(required = false) @Nullable UUID customerId,
-                        @Parameter(description = "Filter by vehicle UUID (optional)") @RequestParam(required = false) @Nullable UUID vehicleId,
-                        @Parameter(schema = @Schema(implementation = Pageable.class)) @PageableDefault(size = 25) Pageable pageable) {
-                return estimateService.searchEstimates(customerId, vehicleId, pageable);
-        }
+    @Operation(
+            summary = "Search estimates",
+            description = "Paginated search for estimates filtered by optional customerId and/or vehicleId.")
+    @ApiResponse(responseCode = "200", description = "Page of estimate summaries returned.")
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH", apiVersion = "1")
+    public Page<EstimateSummaryResponse> searchEstimates(
+            @Parameter(description = "Filter by customer UUID (optional)") @RequestParam(required = false) @Nullable
+                    UUID customerId,
+            @Parameter(description = "Filter by vehicle UUID (optional)") @RequestParam(required = false) @Nullable
+                    UUID vehicleId,
+            @Parameter(schema = @Schema(implementation = Pageable.class)) @PageableDefault(size = 25)
+                    Pageable pageable) {
+        return estimateService.searchEstimates(customerId, vehicleId, pageable);
+    }
 }

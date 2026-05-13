@@ -16,8 +16,7 @@ final class ToolRestClientSupport {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRestClientSupport.class);
     private static final String TOOL_PACKAGE = "com.positivity.mcp.internal.orchestration.tools.";
-    private static final StackWalker STACK_WALKER =
-            StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
     private ToolRestClientSupport() {}
 
@@ -33,18 +32,12 @@ final class ToolRestClientSupport {
 
         @Override
         public @NonNull ClientHttpResponse intercept(
-                @NonNull HttpRequest request,
-                byte @NonNull [] body,
-                @NonNull ClientHttpRequestExecution execution)
+                @NonNull HttpRequest request, byte @NonNull [] body, @NonNull ClientHttpRequestExecution execution)
                 throws IOException {
             String toolInvocation = currentToolInvocation().orElse("unknown-tool");
             URI uri = request.getURI();
             long startNanos = System.nanoTime();
-            LOGGER.debug(
-                    "MCP tool http start tool={} method={} uri={}",
-                    toolInvocation,
-                    request.getMethod(),
-                    uri);
+            LOGGER.debug("MCP tool http start tool={} method={} uri={}", toolInvocation, request.getMethod(), uri);
             try {
                 ClientHttpResponse response = execution.execute(request, body);
                 LOGGER.info(
@@ -78,8 +71,8 @@ final class ToolRestClientSupport {
     }
 
     private static @NonNull Optional<String> currentToolInvocation() {
-        return STACK_WALKER.walk(frames -> frames
-                .filter(frame -> frame.getClassName().startsWith(TOOL_PACKAGE))
+        return STACK_WALKER.walk(frames -> frames.filter(
+                        frame -> frame.getClassName().startsWith(TOOL_PACKAGE))
                 .filter(frame -> !frame.getClassName().equals(ToolRestClientSupport.class.getName()))
                 .filter(frame -> !frame.getMethodName().startsWith("lambda$"))
                 .map(frame -> frame.getDeclaringClass().getSimpleName() + "." + frame.getMethodName())

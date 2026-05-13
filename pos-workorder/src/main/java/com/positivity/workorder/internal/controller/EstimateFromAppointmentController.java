@@ -30,7 +30,10 @@ public class EstimateFromAppointmentController {
     @PostMapping("/from-appointment")
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Create draft estimate from appointment", description = "Creates a new DRAFT estimate from an appointment. Idempotent: returns existing estimate if appointmentId already has one.")
+    @Operation(
+            summary = "Create draft estimate from appointment",
+            description =
+                    "Creates a new DRAFT estimate from an appointment. Idempotent: returns existing estimate if appointmentId already has one.")
     @ApiResponse(responseCode = "201", description = "Estimate created")
     @ApiResponse(responseCode = "200", description = "Existing estimate returned (idempotent)")
     @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")

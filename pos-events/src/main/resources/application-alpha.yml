@@ -1,1 +1,11 @@
 # Alpha runtime inherits base configuration for this internal service.
+
+logging:
+  level:
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

@@ -36,7 +36,7 @@ public class BillingRulesClientServiceImpl implements BillingRulesClientService 
 
             BillingRulesDTO rules = invoiceServiceRestClient
                     .get()
-                    .uri("/v1/billing/rules/{partyId}", partyId)
+                    .uri("/invoice/v1/billing/rules/{partyId}", partyId)
                     .retrieve()
                     .body(BillingRulesDTO.class);
 

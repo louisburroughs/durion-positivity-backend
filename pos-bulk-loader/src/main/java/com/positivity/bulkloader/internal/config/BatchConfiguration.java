@@ -1,14 +1,14 @@
 package com.positivity.bulkloader.internal.config;
 
 import com.positivity.bulkingest.BulkIngestRequest;
+import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
-import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
-import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
@@ -159,15 +159,15 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(catalogBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam,
-                    chunk.size());
+            JobContext context =
+                    resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<CatalogProductRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<CatalogProductRecord> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -175,7 +175,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "catalog:product:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -261,15 +262,15 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(customerBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam,
-                    chunk.size());
+            JobContext context =
+                    resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<CustomerPersonRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<CustomerPersonRecord> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -277,7 +278,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "crm:party:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -369,8 +371,8 @@ public class BatchConfiguration {
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<PersonRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<PersonRecord> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -378,7 +380,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "people:employee:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -470,8 +473,8 @@ public class BatchConfiguration {
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
-            BulkIngestRequest<BasePriceRecord> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    new ArrayList<>(chunk.getItems()));
+            BulkIngestRequest<BasePriceRecord> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -479,7 +482,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "pricing:base_price:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -575,16 +579,16 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam,
-                    chunk.size());
+            JobContext context =
+                    resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
             List<VehicleWriterPayload> payloads = mapVehiclePayloads(chunk.getItems());
-            BulkIngestRequest<VehicleWriterPayload> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    payloads);
+            BulkIngestRequest<VehicleWriterPayload> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -592,7 +596,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "vehicle-inventory:registry:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -687,16 +692,16 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client = restClientBuilder.baseUrl(vehicleFitmentBaseUrl).build();
         return chunk -> {
-            JobContext context = resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam,
-                    chunk.size());
+            JobContext context =
+                    resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
             String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
 
             List<FitmentWriterPayload> payloads = mapFitmentPayloads(chunk.getItems());
-            BulkIngestRequest<FitmentWriterPayload> request = buildBulkIngestRequest(context, sanitizedOperatorId,
-                    payloads);
+            BulkIngestRequest<FitmentWriterPayload> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
 
             try {
                 RestClient.RequestBodySpec requestSpec = client.post()
@@ -704,7 +709,8 @@ public class BatchConfiguration {
                         .header(HEADER_AUTHORITIES, "vehicle-fitment:hint:create")
                         .header(HEADER_USER, sanitizedOperatorId);
                 applyRelayHeaders(requestSpec);
-                requestSpec.contentType(MediaType.APPLICATION_JSON)
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .toBodilessEntity();
@@ -757,9 +763,7 @@ public class BatchConfiguration {
         if (!StringUtils.hasText(gatewayTokenHeader)) {
             return null;
         }
-        return gatewayTokenHeader.startsWith(BEARER_PREFIX)
-                ? gatewayTokenHeader
-                : BEARER_PREFIX + gatewayTokenHeader;
+        return gatewayTokenHeader.startsWith(BEARER_PREFIX) ? gatewayTokenHeader : BEARER_PREFIX + gatewayTokenHeader;
     }
 
     private String extractTokenValue(String authorizationHeader) {
@@ -879,8 +883,7 @@ public class BatchConfiguration {
         }
     }
 
-    private record JobContext(UUID jobId, UUID locationId) {
-    }
+    private record JobContext(UUID jobId, UUID locationId) {}
 
     private record VehicleWriterPayload(
             UUID accountId,
@@ -892,8 +895,7 @@ public class BatchConfiguration {
             Integer year,
             String trim,
             String licensePlate,
-            String licensePlateJurisdiction) {
-    }
+            String licensePlateJurisdiction) {}
 
     private record FitmentWriterPayload(
             Long partNumberId,
@@ -904,6 +906,5 @@ public class BatchConfiguration {
             String vehicleYear,
             String engineType,
             String submodel,
-            String notes) {
-    }
+            String notes) {}
 }

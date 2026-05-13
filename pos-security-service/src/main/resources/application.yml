@@ -49,6 +49,12 @@ logging:
       positivity:
         security: INFO
 
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 springdoc:
   api-docs:
     enabled: true
@@ -58,6 +64,10 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  people:
+    base-url: ${POS_PEOPLE_BASE_URL:http://api-gateway}
+  customer:
+    base-url: ${POS_CUSTOMER_BASE_URL:http://api-gateway}
   security:
     lockout:
       max-attempts: 5

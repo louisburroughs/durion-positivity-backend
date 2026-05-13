@@ -175,7 +175,8 @@ class SystemPromptControllerTest {
     @WithMockUser(authorities = "mcp:system_prompt:create")
     @DisplayName("POST /v1/prompts with duplicate name → 400 ApiError")
     void create_withDuplicateName_returns400ApiError() throws Exception {
-        when(systemPromptService.create(any())).thenThrow(new IllegalArgumentException("Prompt with name already exists: default"));
+        when(systemPromptService.create(any()))
+                .thenThrow(new IllegalArgumentException("Prompt with name already exists: default"));
 
         SystemPromptRequest request = new SystemPromptRequest("default", "You are a helpful assistant.");
 
@@ -193,7 +194,8 @@ class SystemPromptControllerTest {
     @WithMockUser(authorities = "mcp:system_prompt:view")
     @DisplayName("GET /v1/prompts/{id} missing prompt → 404 ApiError")
     void get_whenPromptMissing_returns404ApiError() throws Exception {
-        when(systemPromptService.get(PROMPT_ID)).thenThrow(new NoSuchElementException("Prompt not found: " + PROMPT_ID));
+        when(systemPromptService.get(PROMPT_ID))
+                .thenThrow(new NoSuchElementException("Prompt not found: " + PROMPT_ID));
 
         mockMvc.perform(get("/v1/prompts/{id}", PROMPT_ID))
                 .andExpect(status().isNotFound())

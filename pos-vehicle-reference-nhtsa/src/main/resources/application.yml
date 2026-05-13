@@ -42,3 +42,10 @@ logging:
     com:
       positivity:
         nhtsa: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

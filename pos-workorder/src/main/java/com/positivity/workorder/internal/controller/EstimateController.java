@@ -67,8 +67,9 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_ESTIMATE_LIST", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getAllEstimates() {
         return estimateService.getAllEstimates();
@@ -78,11 +79,14 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateResponse> getEstimateById(
-            @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         return estimateService
                 .getEstimateById(estimateId)
                 .map(ResponseEntity::ok)
@@ -93,11 +97,14 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/customer/{customerId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByCustomer(
-            @Parameter(description = "ID of the customer", example = "550e8400-e29b-41d4-a716-446655440010") @PathVariable UUID customerId) {
+            @Parameter(description = "ID of the customer", example = "550e8400-e29b-41d4-a716-446655440010")
+                    @PathVariable
+                    UUID customerId) {
         return estimateService.getEstimatesByCustomer(customerId);
     }
 
@@ -105,11 +112,13 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/shop/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByShop(
-            @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable
+                    UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId);
     }
 
@@ -117,31 +126,54 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/location/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByLocation(
-            @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020")
+                    @PathVariable
+                    UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId);
     }
 
-    @Operation(summary = "Create a new draft estimate", description = "Create a new estimate in DRAFT status for a customer and vehicle. "
-            + "Requires ESTIMATE_CREATE permission. System will generate a unique estimate number "
-            + "and apply default values for location, currency, and tax region if not provided.")
+    @Operation(
+            summary = "Create a new draft estimate",
+            description = "Create a new estimate in DRAFT status for a customer and vehicle. "
+                    + "Requires ESTIMATE_CREATE permission. System will generate a unique estimate number "
+                    + "and apply default values for location, currency, and tax region if not provided.")
     @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
     @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
-    @ApiResponse(responseCode = "409", description = "Conflict - estimate could not be created due to state or integrity constraints.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict - estimate could not be created due to state or integrity constraints.")
     @ApiResponse(responseCode = "500", description = "Internal server error - unexpected estimate creation failure.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Estimate creation request with customer and vehicle IDs", required = true, content = @Content(schema = @Schema(implementation = CreateEstimateRequest.class), examples = @ExampleObject(name = "createEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"vehicleId\":\"550e8400-e29b-41d4-a716-446655440011\",\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Estimate creation request with customer and vehicle IDs",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = CreateEstimateRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "createEstimate",
+                                            value =
+                                                    "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"vehicleId\":\"550e8400-e29b-41d4-a716-446655440011\",\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\"}")))
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:create"})
     @PreAuthorize("hasAuthority('workorder:estimate:create')")
     public ResponseEntity<Object> createEstimate(
-            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
-            @Parameter(description = "Optional idempotency key for safe retries", example = "estimate-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody
+                    CreateEstimateRequest request,
+            @Parameter(
+                            description = "Optional idempotency key for safe retries",
+                            example = "estimate-create-550e8400-e29b-41d4-a716-446655440000")
+                    @RequestHeader(value = "Idempotency-Key", required = false)
+                    String idempotencyKey) {
 
         try {
             log.info(
@@ -155,9 +187,10 @@ public class EstimateController {
                 if (existingEstimateId.isPresent()) {
                     return estimateService
                             .getEstimateById(existingEstimateId.get())
-                            .<ResponseEntity<Object>>map(
-                                    existing -> ResponseEntity.status(HttpStatus.CREATED).body(existing))
-                            .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT)));
+                            .<ResponseEntity<Object>>map(existing ->
+                                    ResponseEntity.status(HttpStatus.CREATED).body(existing))
+                            .orElseGet(() ->
+                                    ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT)));
                 }
             }
 
@@ -202,8 +235,9 @@ public class EstimateController {
 
     @PatchMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PATCH", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:edit" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:edit"})
     @PreAuthorize("hasAuthority('workorder:estimate:edit')")
     public ResponseEntity<Object> patchEstimateStatus(
             @PathVariable UUID estimateId, @RequestBody Map<String, Object> patchRequest) {
@@ -232,18 +266,26 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Decline an estimate", description = "Transition estimate to declined state. Estimate can be declined from DRAFT or APPROVED status.")
+    @Operation(
+            summary = "Decline an estimate",
+            description =
+                    "Transition estimate to declined state. Estimate can be declined from DRAFT or APPROVED status.")
     @ApiResponse(responseCode = "200", description = "Estimate declined successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be declined in current state.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:decline" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:decline"})
     @PreAuthorize("hasAuthority('workorder:estimate:decline')")
     public ResponseEntity<EstimateResponse> declineEstimate(
-            @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Reason for decline", example = "Customer declined additional work") @RequestParam(required = false) String reason) {
+            @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(description = "Reason for decline", example = "Customer declined additional work")
+                    @RequestParam(required = false)
+                    String reason) {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
@@ -252,17 +294,23 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Reopen a declined estimate", description = "Transition a declined estimate back to DRAFT state. Can only be done within the configured expiry period.")
+    @Operation(
+            summary = "Reopen a declined estimate",
+            description =
+                    "Transition a declined estimate back to DRAFT state. Can only be done within the configured expiry period.")
     @ApiResponse(responseCode = "200", description = "Estimate reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be reopened (not declined or expired).")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:reopen" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:reopen"})
     @PreAuthorize("hasAuthority('workorder:estimate:reopen')")
     public ResponseEntity<EstimateResponse> reopenEstimate(
-            @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         try {
             EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
@@ -271,22 +319,46 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Approve an estimate with customer signature", description = "Transition estimate to approved state with customer signature capture. "
-            + "Estimate can be approved from DRAFT status. Requires customer ID validation "
-            + "and signature data (base64-encoded image). For commercial accounts with PO enforcement "
-            + "enabled, a purchase order number must be provided (CAP:092 Story #98).")
+    @Operation(
+            summary = "Approve an estimate with customer signature",
+            description = "Transition estimate to approved state with customer signature capture. "
+                    + "Estimate can be approved from DRAFT status. Requires customer ID validation "
+                    + "and signature data (base64-encoded image). For commercial accounts with PO enforcement "
+                    + "enabled, a purchase order number must be provided (CAP:092 Story #98).")
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.")
+    @ApiResponse(
+            responseCode = "400",
+            description =
+                    "Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID, signature capture, and optional selective line item approvals", required = true, content = @Content(schema = @Schema(implementation = ApproveEstimateRequest.class), examples = @ExampleObject(name = "approveEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved estimate\",\"purchaseOrderNumber\":\"PO-12345\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description =
+                    "Approval request with customer ID, signature capture, and optional selective line item approvals",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = ApproveEstimateRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "approveEstimate",
+                                            value =
+                                                    "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved estimate\",\"purchaseOrderNumber\":\"PO-12345\"}")))
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:approve" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:approve"})
     @PreAuthorize("hasAuthority('workorder:estimate:approve')")
     public ResponseEntity<EstimateResponse> approveEstimate(
-            @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Approval request with customer ID, signature capture, and optional selective line item approvals") @Valid @RequestBody ApproveEstimateRequest request) {
+            @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(
+                            description =
+                                    "Approval request with customer ID, signature capture, and optional selective line item approvals")
+                    @Valid
+                    @RequestBody
+                    ApproveEstimateRequest request) {
         try {
             EstimateResponse approved = estimateService.approveEstimate(
                     estimateId,
@@ -307,24 +379,36 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Promote approved estimate to workorder", description = "Promote an approved estimate to a workorder. "
-            + "Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. "
-            + "Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). "
-            + "CAP:004 Story #26 - Create a workorder from approved estimate.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Workorder created successfully from estimate"),
-            @ApiResponse(responseCode = "400", description = "Validation error - estimate not in correct state"),
-            @ApiResponse(responseCode = "404", description = "Estimate not found"),
-            @ApiResponse(responseCode = "409", description = "Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired")
-    })
+    @Operation(
+            summary = "Promote approved estimate to workorder",
+            description = "Promote an approved estimate to a workorder. "
+                    + "Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. "
+                    + "Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). "
+                    + "CAP:004 Story #26 - Create a workorder from approved estimate.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Workorder created successfully from estimate"),
+                @ApiResponse(responseCode = "400", description = "Validation error - estimate not in correct state"),
+                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired")
+            })
     @PostMapping("/{estimateId}/promote")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PROMOTE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:promote" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:promote"})
     @PreAuthorize("hasAuthority('workorder:estimate:promote')")
     public ResponseEntity<WorkorderResponse> promoteEstimateToWorkorder(
-            @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Idempotency-Key header for safe retries", example = "estimate-promote-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(
+                            description = "Idempotency-Key header for safe retries",
+                            example = "estimate-promote-550e8400-e29b-41d4-a716-446655440000")
+                    @RequestHeader(value = "Idempotency-Key", required = false)
+                    String idempotencyKey) {
         try {
             log.info(
                     "Promoting estimate(mask) {} to workorder (idempotencyKey(mask)={})",
@@ -339,8 +423,8 @@ public class EstimateController {
             var workorder = workorderService.createWorkorder(estimateId, null);
             WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
 
-            ResponseEntity<WorkorderResponse> raceConditionResponse = registerIdempotencyKeyAndHandleRaceCondition(
-                    idempotencyKey, response);
+            ResponseEntity<WorkorderResponse> raceConditionResponse =
+                    registerIdempotencyKeyAndHandleRaceCondition(idempotencyKey, response);
             if (raceConditionResponse != null) {
                 return raceConditionResponse;
             }
@@ -380,8 +464,8 @@ public class EstimateController {
             return null;
         }
 
-        var existingWorkorderId = idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
-                idempotencyKey);
+        var existingWorkorderId =
+                idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE, idempotencyKey);
         if (existingWorkorderId.isEmpty()) {
             return null;
         }
@@ -411,8 +495,8 @@ public class EstimateController {
                     IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE, idempotencyKey, currentResponse.getId());
             return null;
         } catch (DataIntegrityViolationException _) {
-            var existingWorkorderId = idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
-                    idempotencyKey);
+            var existingWorkorderId =
+                    idempotencyService.getExistingWorkorderId(IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE, idempotencyKey);
             if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(currentResponse.getId())) {
                 UUID workorderId = existingWorkorderId.get();
                 log.warn(
@@ -458,19 +542,25 @@ public class EstimateController {
         return idempotencyKey != null && !idempotencyKey.isBlank();
     }
 
-    @Operation(summary = "Submit estimate for customer approval", description = "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. "
-            + "Validates completeness (has customer, vehicle, line items, calculated totals). "
-            + "CAP:003 Issue #168 - Submit Estimate for Customer Approval")
+    @Operation(
+            summary = "Submit estimate for customer approval",
+            description =
+                    "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. "
+                            + "Validates completeness (has customer, vehicle, line items, calculated totals). "
+                            + "CAP:003 Issue #168 - Submit Estimate for Customer Approval")
     @ApiResponse(responseCode = "200", description = "Estimate submitted for approval successfully")
     @ApiResponse(responseCode = "400", description = "Estimate is incomplete or not in DRAFT state")
     @ApiResponse(responseCode = "404", description = "Estimate not found")
     @PostMapping("/{estimateId}/submit-for-approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:submit" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:submit"})
     @PreAuthorize("hasAuthority('workorder:estimate:submit')")
     public ResponseEntity<EstimateResponse> submitForApproval(
-            @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         try {
             // Get authenticated username from security context
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
@@ -490,11 +580,14 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:delete" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:delete"})
     @PreAuthorize("hasAuthority('workorder:estimate:delete')")
     public ResponseEntity<Void> deleteEstimate(
-            @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         estimateService.deleteEstimate(estimateId);
         return ResponseEntity.noContent().build();
     }
@@ -502,23 +595,41 @@ public class EstimateController {
     // ==================== ESTIMATE ITEM MANAGEMENT (CAP:002 Stories #14, #15, #17)
     // ====================
 
-    @Operation(summary = "Add line item to estimate", description = "Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. "
-            + "For PART items, provide productId or description. For LABOR items, provide serviceId or description.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Line item added successfully"),
-            @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
-            @ApiResponse(responseCode = "404", description = "Estimate not found"),
-            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
-    })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Line item details", required = true, content = @Content(schema = @Schema(implementation = AddEstimateItemRequest.class), examples = @ExampleObject(name = "addEstimateItem", value = "{\"itemType\":\"LABOR\",\"description\":\"Brake inspection\",\"quantity\":1,\"unitPrice\":129.99,\"taxCode\":\"LABOR_STANDARD\"}")))
+    @Operation(
+            summary = "Add line item to estimate",
+            description =
+                    "Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. "
+                            + "For PART items, provide productId or description. For LABOR items, provide serviceId or description.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Line item added successfully"),
+                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+            })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Line item details",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = AddEstimateItemRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "addEstimateItem",
+                                            value =
+                                                    "{\"itemType\":\"LABOR\",\"description\":\"Brake inspection\",\"quantity\":1,\"unitPrice\":129.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PostMapping("/{estimateId}/items")
     @EmitEvent(id = "ESTIMATE_ITEM_ADD", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate_item:add" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate_item:add"})
     @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
     public ResponseEntity<EstimateItemResponse> addEstimateItem(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(description = "Line item details", required = true) @Valid @RequestBody
+                    AddEstimateItemRequest request) {
         try {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateItemResponse item = estimateService.addEstimateItem(estimateId, request, username);
@@ -545,24 +656,43 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Update line item", description = "Update an existing line item on a draft estimate. Estimate must be in DRAFT status. "
-            + "Only provided fields will be updated.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
-            @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
-            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
-    })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated item fields", required = true, content = @Content(schema = @Schema(implementation = UpdateEstimateItemRequest.class), examples = @ExampleObject(name = "updateEstimateItem", value = "{\"description\":\"Brake inspection and adjustment\",\"quantity\":1,\"unitPrice\":149.99,\"taxCode\":\"LABOR_STANDARD\"}")))
+    @Operation(
+            summary = "Update line item",
+            description = "Update an existing line item on a draft estimate. Estimate must be in DRAFT status. "
+                    + "Only provided fields will be updated.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
+                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+            })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Updated item fields",
+            required = true,
+            content =
+                    @Content(
+                            schema = @Schema(implementation = UpdateEstimateItemRequest.class),
+                            examples =
+                                    @ExampleObject(
+                                            name = "updateEstimateItem",
+                                            value =
+                                                    "{\"description\":\"Brake inspection and adjustment\",\"quantity\":1,\"unitPrice\":149.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PatchMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_UPDATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate_item:edit" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate_item:edit"})
     @PreAuthorize("hasAuthority('workorder:estimate_item:edit')")
     public ResponseEntity<EstimateItemResponse> updateEstimateItem(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId,
-            @Parameter(description = "Updated item fields", required = true) @Valid @RequestBody UpdateEstimateItemRequest request) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001")
+                    @PathVariable
+                    UUID itemId,
+            @Parameter(description = "Updated item fields", required = true) @Valid @RequestBody
+                    UpdateEstimateItemRequest request) {
         try {
             EstimateItemResponse item = estimateService.updateEstimateItem(estimateId, itemId, request);
             return ResponseEntity.ok(item);
@@ -578,20 +708,28 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Remove line item", description = "Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Line item removed successfully"),
-            @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
-            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
-    })
+    @Operation(
+            summary = "Remove line item",
+            description = "Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "204", description = "Line item removed successfully"),
+                @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+            })
     @DeleteMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate_item:delete" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate_item:delete"})
     @PreAuthorize("hasAuthority('workorder:estimate_item:delete')")
     public ResponseEntity<Void> deleteEstimateItem(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001")
+                    @PathVariable
+                    UUID itemId) {
         try {
             estimateService.deleteEstimateItem(estimateId, itemId);
             return ResponseEntity.noContent().build();
@@ -606,21 +744,27 @@ public class EstimateController {
 
     // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
 
-    @Operation(summary = "Calculate taxes and totals", description = "Calculate subtotal, tax amount, and total for an estimate based on its line items. "
-            + "Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending "
-            + "pos-accounting integration.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Totals calculated successfully"),
-            @ApiResponse(responseCode = "404", description = "Estimate not found"),
-            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
-    })
+    @Operation(
+            summary = "Calculate taxes and totals",
+            description = "Calculate subtotal, tax amount, and total for an estimate based on its line items. "
+                    + "Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending "
+                    + "pos-accounting integration.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Totals calculated successfully"),
+                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+            })
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:calculate" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:calculate"})
     @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
     public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         try {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, username);
@@ -642,19 +786,25 @@ public class EstimateController {
     // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
     // ====================
 
-    @Operation(summary = "Get estimate summary (customer-facing)", description = "Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) "
-            + "and financial breakdown. Use the /{estimateId}/pdf endpoint to generate a PDF document.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
-            @ApiResponse(responseCode = "404", description = "Estimate not found")
-    })
+    @Operation(
+            summary = "Get estimate summary (customer-facing)",
+            description = "Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) "
+                    + "and financial breakdown. Use the /{estimateId}/pdf endpoint to generate a PDF document.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
+                @ApiResponse(responseCode = "404", description = "Estimate not found")
+            })
     @GetMapping("/{estimateId}/summary")
     @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         try {
             EstimateSummaryResponse summary = estimateService.getEstimateSummary(estimateId);
             return ResponseEntity.ok(summary);
@@ -664,21 +814,33 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Generate estimate PDF", description = "Generate a PDF document for an estimate containing header details, "
-            + "line items grouped by type (parts and labor), and financial totals. "
-            + "Rendered via pos-documents service.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "PDF generated successfully", content = @Content(mediaType = "application/pdf")),
-            @ApiResponse(responseCode = "404", description = "Estimate not found"),
-            @ApiResponse(responseCode = "502", description = "Document service unavailable")
-    })
+    @Operation(
+            summary = "Generate estimate PDF",
+            description = "Generate a PDF document for an estimate containing header details, "
+                    + "line items grouped by type (parts and labor), and financial totals. "
+                    + "Rendered via pos-documents service.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "PDF generated successfully",
+                        content =
+                                @Content(
+                                        mediaType = "application/pdf",
+                                        schema = @Schema(type = "string", format = "byte"))),
+                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(responseCode = "502", description = "Document service unavailable")
+            })
     @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
     @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate:view" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<byte[]> generateEstimatePdf(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId) {
         try {
             byte[] pdfBytes = estimateService.generateEstimatePdf(estimateId);
             return ResponseEntity.ok()
@@ -694,21 +856,32 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Create historical snapshot", description = "Capture an immutable snapshot of the estimate's complete state (estimate + all line items) "
-            + "for audit trail and version history purposes.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Snapshot created successfully"),
-            @ApiResponse(responseCode = "404", description = "Estimate not found"),
-            @ApiResponse(responseCode = "409", description = "Snapshot creation failed")
-    })
+    @Operation(
+            summary = "Create historical snapshot",
+            description = "Capture an immutable snapshot of the estimate's complete state (estimate + all line items) "
+                    + "for audit trail and version history purposes.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(responseCode = "200", description = "Snapshot created successfully"),
+                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(responseCode = "409", description = "Snapshot creation failed")
+            })
     @PostMapping("/{estimateId}/snapshots")
     @EmitEvent(id = "ESTIMATE_SNAPSHOT_CREATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {
-            "workorder:estimate_snapshot:create" })
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate_snapshot:create"})
     @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Optional notes about why snapshot was created", example = "Snapshot captured before approval") @RequestParam(required = false) @Nullable String notes) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    UUID estimateId,
+            @Parameter(
+                            description = "Optional notes about why snapshot was created",
+                            example = "Snapshot captured before approval")
+                    @RequestParam(required = false)
+                    @Nullable
+                    String notes) {
         try {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
@@ -726,7 +899,8 @@ public class EstimateController {
         if (value == null) {
             return "null";
         }
-        String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
         int length = sanitized.length();
         if (length <= 4) {
             return "****";

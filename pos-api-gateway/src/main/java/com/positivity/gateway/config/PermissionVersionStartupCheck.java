@@ -1,5 +1,6 @@
 package com.positivity.gateway.config;
 
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,8 +9,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-
-import java.time.Duration;
 
 /**
  * Verifies that GatewayPermissionCatalog.CATALOG_VERSION matches the version
@@ -40,7 +39,8 @@ public class PermissionVersionStartupCheck {
     public void checkPermissionVersion() {
         int localVersion = GatewayPermissionCatalog.CATALOG_VERSION;
         try {
-            CatalogVersionDto remote = webClient.get()
+            CatalogVersionDto remote = webClient
+                    .get()
                     .uri(CATALOG_VERSION_PATH)
                     .retrieve()
                     .bodyToMono(CatalogVersionDto.class)
@@ -59,8 +59,10 @@ public class PermissionVersionStartupCheck {
                         localVersion, remote.version()));
             }
 
-            LOG.info("Permission catalog version check passed: version={} permissions={}",
-                    remote.version(), remote.permissionCount());
+            LOG.info(
+                    "Permission catalog version check passed: version={} permissions={}",
+                    remote.version(),
+                    remote.permissionCount());
 
         } catch (WebClientResponseException e) {
             // 4xx means the endpoint exists but something is wrong with the request —
@@ -70,11 +72,14 @@ public class PermissionVersionStartupCheck {
                         "Permission catalog version check failed with client error: " + e.getStatusCode(), e);
             }
             // 5xx / 503 means the security service is temporarily unavailable.
-            LOG.warn("Permission catalog version check skipped — security-service returned HTTP {} (service may still be starting): {}",
-                    e.getStatusCode(), e.getMessage());
+            LOG.warn(
+                    "Permission catalog version check skipped — security-service returned HTTP {} (service may still be starting): {}",
+                    e.getStatusCode(),
+                    e.getMessage());
         } catch (Exception e) {
             // Connection refused, timeout, etc. — service hasn't started yet.
-            LOG.warn("Permission catalog version check skipped — security-service unreachable at startup: {}",
+            LOG.warn(
+                    "Permission catalog version check skipped — security-service unreachable at startup: {}",
                     e.getMessage());
         }
     }

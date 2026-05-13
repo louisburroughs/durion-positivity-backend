@@ -2,15 +2,13 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.internal.service.CurrentUserContextResolver;
+import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +16,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,19 +24,28 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "mcp:chat:stream" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"mcp:chat:stream"})
 @RequestMapping("/v1/mcp")
 public class McpStreamingChatController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(McpStreamingChatController.class);
 
     private final StreamingAgentOrchestrationService streamingSessionAgentManager;
+    private final CurrentUserContextResolver currentUserContextResolver;
 
-    public McpStreamingChatController(@NonNull StreamingAgentOrchestrationService streamingSessionAgentManager) {
+    public McpStreamingChatController(
+            @NonNull StreamingAgentOrchestrationService streamingSessionAgentManager,
+            @NonNull CurrentUserContextResolver currentUserContextResolver) {
         this.streamingSessionAgentManager = streamingSessionAgentManager;
+        this.currentUserContextResolver = currentUserContextResolver;
     }
 
-    @Operation(summary = "Execute MCP streaming chat - returns SSE token stream")
+    @Operation(
+            summary = "Execute MCP streaming chat - returns SSE token stream",
+            description =
+                    "Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.")
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
     @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")
@@ -47,40 +53,25 @@ public class McpStreamingChatController {
             @RequestBody @Valid @NonNull StreamChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
-        @NonNull
-        String userId = authentication.getName();
-        @NonNull
-        String role = extractPrimaryRole(authentication);
+        CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);
+        LOGGER.debug(
+                "MCP streaming selected userContext username={} userId={} selectedRole={} roleCount={} authorityCount={} fallback={}",
+                currentUserContext.username(),
+                currentUserContext.userId(),
+                currentUserContext.primaryRole(),
+                currentUserContext.roles().size(),
+                currentUserContext.authorities().size(),
+                "ROLE_USER".equals(currentUserContext.primaryRole()));
 
         return streamingSessionAgentManager
-                .streamChat(userId, role, request.message())
-                .map(token -> ServerSentEvent.<String>builder(token).event("chat").build());
+                .streamChat(currentUserContext, request.message())
+                .map(token ->
+                        ServerSentEvent.<String>builder(token).event("chat").build());
     }
 
-    private static final List<String> ROLE_PRIORITY = List.of(
-            "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_SERVICE_WRITER",
-            "ROLE_CASHIER", "ROLE_SUPPLIER", "ROLE_TECHNICIAN");
-
-    private @NonNull String extractPrimaryRole(@NonNull Authentication auth) {
-        Set<String> userRoles = auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .filter(Objects::nonNull)
-                .filter(a -> a.startsWith("ROLE_"))
-                .collect(Collectors.toSet());
-        String resolvedRole = ROLE_PRIORITY.stream()
-                .filter(userRoles::contains)
-                .findFirst()
-                .orElse("ROLE_USER");
-        LOGGER.debug(
-                "MCP streaming role resolution principal={} roleAuthorities={} selectedRole={} fallback={}",
-                auth.getName(),
-                userRoles,
-                resolvedRole,
-                "ROLE_USER".equals(resolvedRole));
-        return resolvedRole;
-    }
-
-    @Schema(name = "StreamChatRequest", description = "Streaming chat request payload", example = "{\"message\":\"Hello\"}")
-    public record StreamChatRequest(@NotBlank @NonNull String message) {
-    }
+    @Schema(
+            name = "StreamChatRequest",
+            description = "Streaming chat request payload",
+            example = "{\"message\":\"Hello\"}")
+    public record StreamChatRequest(@NotBlank @NonNull String message) {}
 }

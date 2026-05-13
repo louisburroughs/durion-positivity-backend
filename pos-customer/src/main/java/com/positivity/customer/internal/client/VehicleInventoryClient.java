@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -20,11 +21,13 @@ import org.springframework.web.client.RestClient;
 @Component
 public class VehicleInventoryClient {
 
+    private static final String VEHICLE_BY_ID_PATH = "/vehicle-inventory/v1/vehicles/{vehicleId}";
+
     private final RestClient restClient;
 
     public VehicleInventoryClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.vehicle-inventory.base-url:http://localhost:8086}") String vehicleInventoryBaseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.vehicle-inventory.base-url:http://api-gateway}") String vehicleInventoryBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
         log.info("VehicleInventoryClient initialized with baseUrl: {}", vehicleInventoryBaseUrl);
     }
@@ -38,7 +41,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .post()
-                    .uri("/v1/vehicles")
+                    .uri("/vehicle-inventory/v1/vehicles")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -61,7 +64,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .get()
-                    .uri("/v1/vehicles/{vehicleId}", vehicleId)
+                    .uri(VEHICLE_BY_ID_PATH, vehicleId)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -86,7 +89,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .get()
-                    .uri("/v1/vehicles/vin/{vin}", vin)
+                    .uri("/vehicle-inventory/v1/vehicles/vin/{vin}", vin)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -111,7 +114,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .put()
-                    .uri("/v1/vehicles/{vehicleId}", vehicleId)
+                    .uri(VEHICLE_BY_ID_PATH, vehicleId)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -132,11 +135,7 @@ public class VehicleInventoryClient {
         log.debug("Deleting vehicle with ID: {}", vehicleId);
 
         try {
-            restClient
-                    .delete()
-                    .uri("/v1/vehicles/{vehicleId}", vehicleId)
-                    .retrieve()
-                    .toBodilessEntity();
+            restClient.delete().uri(VEHICLE_BY_ID_PATH, vehicleId).retrieve().toBodilessEntity();
 
             log.info("Successfully deleted vehicle: {}", vehicleId);
         } catch (Exception e) {

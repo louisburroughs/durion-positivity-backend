@@ -15,9 +15,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReturnSubmitRequest {
-  @NotNull
-  private UUID workorderId;
-  @Valid
-  @NotEmpty
-  private List<ReturnLineDto> lines;
+    @NotNull
+    private UUID workorderId;
+
+    @Valid
+    @NotEmpty
+    private List<ReturnLineDto> lines;
 }

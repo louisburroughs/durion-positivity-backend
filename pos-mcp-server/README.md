@@ -17,10 +17,12 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion Positivi
 - `AgentOrchestrationService` — coordinates per-user LangChain4j chat agents with tool narrowing
 - `StreamingAgentOrchestrationService` — streaming SSE variant of the agent orchestration path
 - `ToolRegistrationService` — loads tool metadata from DB and wires facade tool beans
+- `ToolRegistryService` — per-request semantic tool selection using pgvector ANN gated by role and workflow state
+- `McpRoleResolver` — extracts the primary Spring Security role from an `Authentication` using a priority-ordered list (ADMIN > MANAGER > SERVICE_WRITER > CASHIER > SUPPLIER > TECHNICIAN > ROLE_USER fallback)
 - `DocumentIngestionService` — asynchronous RAG document ingestion with chunking and embedding
 - `IntentParserService` — classifies inbound messages to route direct vs. agent paths
 - `SystemPromptService` — manages named system prompts stored in PostgreSQL
-- `RolePromptResolver` — resolves the active system prompt for a given role (role → "default" → built-in fallback)
+- `RolePromptResolver` — resolves the active system prompt for a given role (role → "default" → built-in fallback; warns when falling back)
 - `StaticRagPreloadService` — preloads configured static classpath documents into the RAG store on startup (alpha profile)
 
 ## API Endpoints
@@ -36,15 +38,25 @@ AI orchestration and MCP (Model Context Protocol) server for the Durion Positivi
 
 ## Configuration
 
-| Property                                        | Default            | Description                               |
-| ----------------------------------------------- | ------------------ | ----------------------------------------- |
-| `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`      | Ollama chat model                         |
-| `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text` | Embedding model for RAG                   |
-| `mcp.agent.cache-ttl-minutes`                   | `30`               | Per-user session agent cache TTL          |
-| `mcp.rag.chunking.enabled`                      | `true`             | Enable document chunking before embedding |
-| `mcp.rag.preload.docs`                          | `[]`               | Static classpath documents to preload     |
-| `mcp.tuning.enabled`                            | `true`             | Enable adaptive tool priority tuning      |
-| `mcp.tuning.cron`                               | `0 0 2 * * ?`      | Tuning schedule (daily at 02:00)          |
+| Property                                        | Default            | Description                                       |
+| ----------------------------------------------- | ------------------ | ------------------------------------------------- |
+| `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`      | Ollama chat model                                 |
+| `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text` | Embedding model for RAG                           |
+| `mcp.agent.cache-ttl-minutes`                   | `30`               | Agent cache TTL (role agents + sessions)          |
+| `mcp.agent.candidate-tool-limit`                | `8`                | Max tools from semantic selector per chat request |
+| `mcp.rag.chunking.enabled`                      | `true`             | Enable document chunking before embedding         |
+| `mcp.rag.preload.docs`                          | `[]`               | Static classpath documents to preload             |
+| `mcp.tuning.enabled`                            | `true`             | Enable adaptive tool priority tuning              |
+| `mcp.tuning.cron`                               | `0 0 2 * * ?`      | Tuning schedule (daily at 02:00)                  |
+
+### Tier 2 RAG Retrieval Pipeline
+
+Both session managers use a Tier 2 retrieval chain to improve recall and precision:
+
+1. Baseline semantic retriever (`maxResults=10`, `minScore=0.6`)
+2. Query-expanded retriever (`maxResults=20`, `minScore=0.55`) using deterministic paraphrases
+3. Hybrid merge and de-duplication across both retrievers
+4. Final lexical-aware re-ranking to top-5 contexts before prompt injection
 
 ## Dependencies
 
@@ -66,7 +78,7 @@ Three ApplicationRunner beans execute on startup (in addition to tool and event-
 
 | Runner                             | Profile | Behaviour                                                                                                                                                                                                                                              |
 | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SystemPromptSeedRunner`           | `!test` | Seeds `default`, `ROLE_CASHIER`, `ROLE_MANAGER`, `ROLE_ADMIN`, `ROLE_TECHNICIAN` system prompts if not already present. Best-effort — per-entry failures are logged and skipped.                                                                       |
+| `SystemPromptSeedRunner`           | `!test` | Upserts `default` and SQL-aligned `ROLE_*` prompts from code (create missing, overwrite changed content). Best-effort — per-entry failures are logged and skipped.                                                                                     |
 | `RagPreloadRunner`                 | `alpha` | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
 | `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run.                                                                                                                                                                              |
 
@@ -74,11 +86,25 @@ Three ApplicationRunner beans execute on startup (in addition to tool and event-
 
 The system prompt used for each chat session is resolved per-role by `RolePromptResolver`:
 
-1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_CASHIER`).
-2. If not found, look up the prompt named `default`.
-3. If not found, use the built-in hardcoded fallback prompt.
+1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_SERVICE_ADVISOR`).
+2. If not found, log a WARN and look up the prompt named `default`.
+3. If not found, log a WARN and use the built-in hardcoded fallback prompt.
 
 Prompts are managed via the `/v1/prompts` CRUD API (requires `mcp:system_prompt:*` permission).
+
+### Semantic Per-Request Tool Selection
+
+On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the active tool set using pgvector ANN (`<=>` cosine distance) gated by role, while workflow-state routing beyond `IDLE` is intentionally deferred (current managers evaluate with `WORKFLOW_IDLE` only):
+
+> **TODO (AC8):** Derive workflow state from session context and pass it into `ToolSelectionContext` so non-IDLE states (`CREATING_PO`, `PROCESSING_RETURN`, etc.) activate their respective tool sets. Requires persisting workflow state on `NltiSession` and threading it through both `SessionAgentManager` and `StreamingSessionAgentManager`. `ToolRegistryLoader` will also need to preload tools for active workflow states beyond `IDLE`.
+
+1. `ToolMetadataRepository.findTopKByEmbeddingForRole()` executes an ANN query that JOINs `mcp_tool`, `mcp_role`, `mcp_tool_role`, and `mcp_workflow_state` — only tools authorized for the user's role and the current workflow state enter the scoring window.
+2. `ToolScorer` ranks candidates using a weighted combination of semantic similarity and normalized priority (`Math.clamp(priority, 0.0, 1.0)`).
+3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
+4. The streaming manager (`StreamingSessionAgentManager`) applies the same selection per message and caches the resulting agent keyed by `role::toolCacheKey` (sorted tool names joined with `+`).
+5. Role agents expire after `mcp.agent.cache-ttl-minutes` (default 30 min) so prompt edits and semantic tool-selection rankings in the database become effective without a service restart; changes to the role-tool fallback mapping (ToolRegistry) require a service restart.
+
+Roles are loaded dynamically from the `mcp_role` table (`ToolRegistryLoader`). `McpRoleResolver` resolves the primary role from `Authentication` in priority order: ADMIN > MANAGER > SERVICE_WRITER > CASHIER > SUPPLIER > TECHNICIAN > ROLE_USER fallback.
 
 ### Static RAG Preload Configuration
 

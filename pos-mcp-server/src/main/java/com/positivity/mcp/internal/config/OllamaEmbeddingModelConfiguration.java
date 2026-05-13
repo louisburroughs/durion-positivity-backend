@@ -29,10 +29,15 @@ public class OllamaEmbeddingModelConfiguration {
     @Primary
     public @NonNull EmbeddingModel embeddingModel(
             RestClient.Builder restClientBuilder,
-            @Value("${langchain4j.ollama.embedding-model.base-url:${OLLAMA_EMBEDDING_BASE_URL:http://localhost:11434}}") @NonNull String baseUrl,
-            @Value("${langchain4j.ollama.embedding-model.model-name:${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}}") @NonNull String modelName,
+            @Value("${langchain4j.ollama.embedding-model.base-url:${OLLAMA_EMBEDDING_BASE_URL:http://localhost:11434}}")
+                    @NonNull
+                    String baseUrl,
+            @Value("${langchain4j.ollama.embedding-model.model-name:${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}}")
+                    @NonNull
+                    String modelName,
             @Value("${mcp.rag.dimension:768}") int dimensions,
-            @Value("${langchain4j.ollama.embedding-model.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull Duration timeout,
+            @Value("${langchain4j.ollama.embedding-model.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull
+                    Duration timeout,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {
         return new HostedOllamaEmbeddingModel(restClientBuilder, baseUrl, modelName, dimensions, timeout, apiKey);
     }
@@ -77,7 +82,8 @@ public class OllamaEmbeddingModelConfiguration {
             body.put("input", inputs);
             body.put("dimensions", knownDimension());
 
-            EmbedResponse response = restClient.post()
+            EmbedResponse response = restClient
+                    .post()
                     .uri("/api/embed")
                     .headers(headers -> {
                         if (!apiKey.isBlank()) {
@@ -93,18 +99,16 @@ public class OllamaEmbeddingModelConfiguration {
                 throw new IllegalStateException("Ollama embedding API returned no embeddings");
             }
             if (response.embeddings().size() != textSegments.size()) {
-                throw new IllegalStateException(
-                        "Embedding count does not match input count: embeddings=%d inputs=%d"
-                                .formatted(response.embeddings().size(), textSegments.size()));
+                throw new IllegalStateException("Embedding count does not match input count: embeddings=%d inputs=%d"
+                        .formatted(response.embeddings().size(), textSegments.size()));
             }
 
             List<Embedding> embeddings = new ArrayList<>(response.embeddings().size());
             for (List<Float> vector : response.embeddings()) {
                 Embedding embedding = Embedding.from(vector);
                 if (knownDimension() != null && embedding.dimension() != knownDimension()) {
-                    throw new IllegalStateException(
-                            "Embedding dimension mismatch: expected=%d actual=%d model=%s"
-                                    .formatted(knownDimension(), embedding.dimension(), modelName));
+                    throw new IllegalStateException("Embedding dimension mismatch: expected=%d actual=%d model=%s"
+                            .formatted(knownDimension(), embedding.dimension(), modelName));
                 }
                 embeddings.add(embedding);
             }
@@ -117,5 +121,6 @@ public class OllamaEmbeddingModelConfiguration {
         }
     }
 
-    private record EmbedResponse(@NonNull String model, @NonNull List<List<Float>> embeddings) {}
+    private record EmbedResponse(
+            @NonNull String model, @NonNull List<List<Float>> embeddings) {}
 }

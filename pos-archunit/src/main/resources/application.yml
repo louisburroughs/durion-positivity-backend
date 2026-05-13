@@ -20,6 +20,12 @@ logging:
         modulith: DEBUG
     com:
       positivity: DEBUG
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
 management:
   server:
     port: 0

@@ -34,7 +34,7 @@ public class PeopleLocationClient {
         try {
             PrimaryLocationResponse response = peopleServiceRestClient
                     .get()
-                    .uri("/v1/people/me/primary-location")
+                    .uri("/people/v1/people/me/primary-location")
                     .retrieve()
                     .body(PrimaryLocationResponse.class);
 

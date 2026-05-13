@@ -3,6 +3,8 @@ security:
     secret: ${SECURITY_JWT_SECRET}
 
 eureka:
+  instance:
+    appname: api-gateway
   client:
     serviceUrl:
       defaultZone: ${EUREKA_SERVER_URL}

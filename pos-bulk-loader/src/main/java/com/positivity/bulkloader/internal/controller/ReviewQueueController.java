@@ -33,8 +33,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = { "bulkImport:upload:execute",
-        "bulkImport:status:read" })
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = "bearerAuth",
+        scopes = {"bulkImport:upload:execute", "bulkImport:status:read"})
 @RequestMapping("/v1/bulk-jobs")
 @RequiredArgsConstructor
 @Slf4j
@@ -46,7 +47,10 @@ public class ReviewQueueController {
 
     @GetMapping("/{jobId}/audit")
     @PreAuthorize("hasAuthority('bulkImport:status:read')")
-    @Operation(summary = "Get audit records for a bulk load job", description = "Returns a list of audit records for the specified bulk load job, including review status and details for each record.")
+    @Operation(
+            summary = "Get audit records for a bulk load job",
+            description =
+                    "Returns a list of audit records for the specified bulk load job, including review status and details for each record.")
     @ApiResponse(responseCode = "200", description = "Audit records returned")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<List<AuditRecordResponse>> getAuditRecords(@PathVariable @NonNull UUID jobId) {
@@ -56,7 +60,10 @@ public class ReviewQueueController {
 
     @GetMapping("/{jobId}/error-report")
     @PreAuthorize("hasAuthority('bulkImport:status:read')")
-    @Operation(summary = "Download error report as CSV for a bulk load job", description = "Generates and downloads a CSV file containing all error records for the specified bulk load job.")
+    @Operation(
+            summary = "Download error report as CSV for a bulk load job",
+            description =
+                    "Generates and downloads a CSV file containing all error records for the specified bulk load job.")
     @ApiResponse(responseCode = "200", description = "CSV error report downloaded")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     public ResponseEntity<Resource> downloadErrorReport(@PathVariable @NonNull UUID jobId) {
@@ -71,15 +78,17 @@ public class ReviewQueueController {
     @PostMapping("/{jobId}/corrections")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")
-    @Operation(summary = "Submit corrected records for a bulk load job", description = "Submits corrected data for one or more error records from a bulk import audit. The job must be in FAILED state to accept corrections. Returns 409 if the job is not in a correctable state.")
+    @Operation(
+            summary = "Submit corrected records for a bulk load job",
+            description =
+                    "Submits corrected data for one or more error records from a bulk import audit. The job must be in FAILED state to accept corrections. Returns 409 if the job is not in a correctable state.")
     @ApiResponse(responseCode = "201", description = "Corrections submitted successfully")
     @ApiResponse(responseCode = "400", description = "Invalid correction request")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
     @ApiResponse(responseCode = "409", description = "Job is not in a state that accepts corrections")
     public ResponseEntity<BulkCorrectionResponse> submitCorrections(
-            @PathVariable @NonNull UUID jobId,
-            @Valid @RequestBody @NonNull BulkCorrectionRequest request) {
+            @PathVariable @NonNull UUID jobId, @Valid @RequestBody @NonNull BulkCorrectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(reviewQueueService.submitCorrections(jobId, request, currentOperatorId()));
     }
@@ -87,14 +96,28 @@ public class ReviewQueueController {
     @PostMapping("/{jobId}/corrections/single")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT_SINGLE", apiVersion = "1")
-    @Operation(operationId = "submitSingleCorrection", summary = "Submit a single correction record", description = "Submits a corrected data record for a single failed audit entry from a bulk import job. The job must be in FAILED state. Returns the acceptance or rejection status for the submitted record.")
-    @ApiResponse(responseCode = "201", description = "Correction processed", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = CorrectionResultDto.class)))
+    @Operation(
+            operationId = "submitSingleCorrection",
+            summary = "Submit a single correction record",
+            description =
+                    "Submits a corrected data record for a single failed audit entry from a bulk import job. The job must be in FAILED state. Returns the acceptance or rejection status for the submitted record.")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Correction processed",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema =
+                                    @io.swagger.v3.oas.annotations.media.Schema(
+                                            implementation = CorrectionResultDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid correction request")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
     @ApiResponse(responseCode = "409", description = "Job is not in a state that accepts corrections")
     public ResponseEntity<CorrectionResultDto> submitSingleCorrection(
-            @io.swagger.v3.oas.annotations.Parameter(description = "ID of the bulk load job", required = true) @PathVariable @NonNull UUID jobId,
+            @io.swagger.v3.oas.annotations.Parameter(description = "ID of the bulk load job", required = true)
+                    @PathVariable
+                    @NonNull
+                    UUID jobId,
             @Valid @RequestBody @NonNull BulkCorrectionItem item) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(reviewQueueService.submitSingleCorrection(jobId, item, currentOperatorId()));

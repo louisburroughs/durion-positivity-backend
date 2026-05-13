@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
  */
 class InvoiceFacadeToolTest {
 
-    private static final String BASE_URL = "http://pos-invoice/v1/invoices";
+    private static final String BASE_URL = "http://api-gateway";
 
     private MockRestServiceServer mockServer;
     private InvoiceFacadeTool tool;
@@ -27,14 +27,19 @@ class InvoiceFacadeToolTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        tool = new InvoiceFacadeTool(builder, BASE_URL);
+        tool = new InvoiceFacadeTool(
+                builder,
+                BASE_URL,
+                "/invoice/v1/invoices/{invoiceId}",
+                "/invoice/v1/invoices/search?q={query}",
+                "/invoice/v1/invoices/customer/{customerId}");
     }
 
     @Test
     @DisplayName("getInvoice sends GET /{invoiceId} and returns body")
     void getInvoice_sendsGetToInvoiceEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/INV-001"))
+                .expect(requestTo(BASE_URL + "/invoice/v1/invoices/INV-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"id\":\"INV-001\"}", MediaType.APPLICATION_JSON));
 
@@ -48,7 +53,7 @@ class InvoiceFacadeToolTest {
     @DisplayName("searchInvoices sends GET /search?q={query} and returns body")
     void searchInvoices_sendsGetToSearchEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/search?q=PAID"))
+                .expect(requestTo(BASE_URL + "/invoice/v1/invoices/search?q=PAID"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -62,7 +67,7 @@ class InvoiceFacadeToolTest {
     @DisplayName("getInvoicesByCustomer sends GET /customer/{customerId} and returns body")
     void getInvoicesByCustomer_sendsGetToCustomerInvoicesEndpoint() {
         mockServer
-                .expect(requestTo(BASE_URL + "/customer/CUST-001"))
+                .expect(requestTo(BASE_URL + "/invoice/v1/invoices/customer/CUST-001"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"invoices\":[]}", MediaType.APPLICATION_JSON));
 

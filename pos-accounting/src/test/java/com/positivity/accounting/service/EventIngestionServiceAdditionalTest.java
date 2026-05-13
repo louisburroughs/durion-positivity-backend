@@ -496,8 +496,8 @@ class EventIngestionServiceAdditionalTest {
     @DisplayName("submitEvent should apply default sourceSystem when blank")
     void submitEvent_BlankSourceSystem_UsesDefault() {
         AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
-        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ",
-                LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap =
+                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ", LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
@@ -526,8 +526,8 @@ class EventIngestionServiceAdditionalTest {
     @Test
     @DisplayName("submitEvent should throw DuplicateEventException when duplicate event detected")
     void submitEvent_DuplicateEvent() {
-        Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB",
-                LocalDateTime.now(TEST_CLOCK));
+        Map<String, Object> eventMap =
+                buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", LocalDateTime.now(TEST_CLOCK));
 
         when(idempotencyService.isKeyProcessed(any())).thenReturn(true);
 

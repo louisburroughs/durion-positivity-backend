@@ -19,44 +19,46 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class BulkLoadJobExecutionListener implements JobExecutionListener {
 
-  private final BulkLoadJobRepository bulkLoadJobRepository;
+    private final BulkLoadJobRepository bulkLoadJobRepository;
 
-  @Override
-  public void afterJob(JobExecution jobExecution) {
-    String jobIdValue = jobExecution.getJobParameters().getString("jobId");
-    if (jobIdValue == null || jobIdValue.isBlank()) {
-      log.warn("Spring Batch execution {} completed without a bulk-load jobId parameter", jobExecution.getId());
-      return;
+    @Override
+    public void afterJob(JobExecution jobExecution) {
+        String jobIdValue = jobExecution.getJobParameters().getString("jobId");
+        if (jobIdValue == null || jobIdValue.isBlank()) {
+            log.warn("Spring Batch execution {} completed without a bulk-load jobId parameter", jobExecution.getId());
+            return;
+        }
+
+        UUID jobId = parseJobId(jobIdValue);
+        BulkLoadJob bulkLoadJob = bulkLoadJobRepository
+                .findById(jobId)
+                .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
+
+        long processedRows = 0L;
+        long successCount = 0L;
+        long failureCount = 0L;
+        for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
+            processedRows += stepExecution.getReadCount();
+            successCount += stepExecution.getWriteCount();
+            failureCount += stepExecution.getProcessSkipCount()
+                    + stepExecution.getWriteSkipCount()
+                    + stepExecution.getReadSkipCount();
+        }
+
+        bulkLoadJob.setProcessedRows(processedRows);
+        bulkLoadJob.setSuccessCount(successCount);
+        bulkLoadJob.setFailureCount(failureCount);
+        bulkLoadJob.setCompletedAt(Instant.now());
+        bulkLoadJob.setStatus(
+                jobExecution.getStatus() == BatchStatus.COMPLETED ? JobStatus.COMPLETED : JobStatus.FAILED);
+        bulkLoadJobRepository.save(bulkLoadJob);
     }
 
-    UUID jobId = parseJobId(jobIdValue);
-    BulkLoadJob bulkLoadJob = bulkLoadJobRepository.findById(jobId)
-        .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
-
-    long processedRows = 0L;
-    long successCount = 0L;
-    long failureCount = 0L;
-    for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-      processedRows += stepExecution.getReadCount();
-      successCount += stepExecution.getWriteCount();
-      failureCount += stepExecution.getProcessSkipCount()
-          + stepExecution.getWriteSkipCount()
-          + stepExecution.getReadSkipCount();
+    private UUID parseJobId(String jobIdValue) {
+        try {
+            return UUID.fromString(jobIdValue);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("Invalid bulk-load jobId in Spring Batch parameters: " + jobIdValue, ex);
+        }
     }
-
-    bulkLoadJob.setProcessedRows(processedRows);
-    bulkLoadJob.setSuccessCount(successCount);
-    bulkLoadJob.setFailureCount(failureCount);
-    bulkLoadJob.setCompletedAt(Instant.now());
-    bulkLoadJob.setStatus(jobExecution.getStatus() == BatchStatus.COMPLETED ? JobStatus.COMPLETED : JobStatus.FAILED);
-    bulkLoadJobRepository.save(bulkLoadJob);
-  }
-
-  private UUID parseJobId(String jobIdValue) {
-    try {
-      return UUID.fromString(jobIdValue);
-    } catch (IllegalArgumentException ex) {
-      throw new IllegalStateException("Invalid bulk-load jobId in Spring Batch parameters: " + jobIdValue, ex);
-    }
-  }
 }

@@ -28,7 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     private static final List<JobStatus> ACTIVE_STATUSES = List.of(
-            JobStatus.CREATED, JobStatus.UPLOADING, JobStatus.DETECTING, JobStatus.MAPPING_REVIEW, JobStatus.DEDUP,
+            JobStatus.CREATED,
+            JobStatus.UPLOADING,
+            JobStatus.DETECTING,
+            JobStatus.MAPPING_REVIEW,
+            JobStatus.DEDUP,
             JobStatus.PROCESSING);
 
     private final BulkLoadJobRepository jobRepository;
@@ -74,7 +78,8 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() == JobStatus.CANCELLED || job.getStatus() == JobStatus.COMPLETED
+        if (job.getStatus() == JobStatus.CANCELLED
+                || job.getStatus() == JobStatus.COMPLETED
                 || job.getStatus() == JobStatus.FAILED) {
             throw new IllegalStateException("Job cannot accept uploads in terminal state: " + job.getStatus());
         }
@@ -105,7 +110,8 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() == JobStatus.COMPLETED || job.getStatus() == JobStatus.CANCELLED
+        if (job.getStatus() == JobStatus.COMPLETED
+                || job.getStatus() == JobStatus.CANCELLED
                 || job.getStatus() == JobStatus.FAILED) {
             throw new IllegalStateException("Job is already in terminal state: " + job.getStatus());
         }
@@ -148,10 +154,10 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() != JobStatus.CREATED && job.getStatus() != JobStatus.UPLOADING
+        if (job.getStatus() != JobStatus.CREATED
+                && job.getStatus() != JobStatus.UPLOADING
                 && job.getStatus() != JobStatus.MAPPING_REVIEW) {
-            throw new IllegalStateException(
-                    "Job cannot be transitioned to PROCESSING from state: " + job.getStatus());
+            throw new IllegalStateException("Job cannot be transitioned to PROCESSING from state: " + job.getStatus());
         }
         if (job.getOriginalFilePath() == null || job.getOriginalFilePath().isBlank()) {
             throw new IllegalStateException("Job cannot be processed before an uploaded file is persisted");

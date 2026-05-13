@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,8 +15,8 @@ public class PeopleClientConfig {
 
     @Bean
     public RestClient peopleServiceRestClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.people.base-url:http://pos-people:8084}") String peopleServiceBaseUrl) {
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.people.base-url:http://api-gateway}") String peopleServiceBaseUrl) {
         return restClientBuilder.baseUrl(peopleServiceBaseUrl).build();
     }
 }

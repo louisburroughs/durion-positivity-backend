@@ -34,56 +34,71 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/vehicles/search")
 public class VehicleSearchController {
 
-        private final VehicleSearchService searchService;
+    private final VehicleSearchService searchService;
 
-        @Operation(summary = "Search vehicles", description = "Search for vehicles by VIN, license plate, unit number, or description. "
-                        + "Results are ranked by relevance: exact match > prefix match > contains match.")
-        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
-        @ApiResponse(responseCode = "400", description = "Invalid search query")
-        @PostMapping
-        @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
-        public ResponseEntity<SearchVehiclesResponse> search(@RequestBody SearchVehiclesRequest request) {
+    @Operation(
+            summary = "Search vehicles",
+            description = "Search for vehicles by VIN, license plate, unit number, or description. "
+                    + "Results are ranked by relevance: exact match > prefix match > contains match.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Search results returned",
+            content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @PostMapping
+    @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
+    public ResponseEntity<SearchVehiclesResponse> search(@RequestBody SearchVehiclesRequest request) {
 
-                log.info(
-                                "POST /v1/vehicles/search - query(mask)='{}', limit={}",
-                                maskForLog(request != null ? request.getQuery() : null),
-                                request != null ? request.getLimit() : null);
+        log.info(
+                "POST /v1/vehicles/search - query(mask)='{}', limit={}",
+                maskForLog(request != null ? request.getQuery() : null),
+                request != null ? request.getLimit() : null);
 
-                var results = searchService.search(request);
-                return ResponseEntity.ok(results);
+        var results = searchService.search(request);
+        return ResponseEntity.ok(results);
+    }
+
+    @Operation(
+            summary = "Search vehicles (query parameter)",
+            description = "Alternative search endpoint using query parameters. Useful for browser-based queries.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Search results returned",
+            content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @GetMapping
+    @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
+    public ResponseEntity<SearchVehiclesResponse> searchByQuery(
+            @Parameter(description = "Search query (VIN, license plate, unit number, or description)") @RequestParam
+                    String q,
+            @Parameter(description = "Result limit (default 25, max 50)")
+                    @RequestParam(required = false, defaultValue = "25")
+                    Integer limit,
+            @Parameter(description = "Enable contains matching (default false)")
+                    @RequestParam(required = false, defaultValue = "false")
+                    Boolean enableContains) {
+
+        log.info("GET /v1/vehicles/search?q(mask)='{}' - limit={}", maskForLog(q), limit);
+
+        var request = SearchVehiclesRequest.builder()
+                .query(q)
+                .limit(limit)
+                .enableContainsMatching(enableContains)
+                .build();
+
+        var results = searchService.search(request);
+        return ResponseEntity.ok(results);
+    }
+
+    private String maskForLog(String value) {
+        if (value == null) {
+            return "null";
         }
-
-        @Operation(summary = "Search vehicles (query parameter)", description = "Alternative search endpoint using query parameters. Useful for browser-based queries.")
-        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
-        @ApiResponse(responseCode = "400", description = "Invalid search query")
-        @GetMapping
-        @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
-        public ResponseEntity<SearchVehiclesResponse> searchByQuery(
-                        @Parameter(description = "Search query (VIN, license plate, unit number, or description)") @RequestParam String q,
-                        @Parameter(description = "Result limit (default 25, max 50)") @RequestParam(required = false, defaultValue = "25") Integer limit,
-                        @Parameter(description = "Enable contains matching (default false)") @RequestParam(required = false, defaultValue = "false") Boolean enableContains) {
-
-                log.info("GET /v1/vehicles/search?q(mask)='{}' - limit={}", maskForLog(q), limit);
-
-                var request = SearchVehiclesRequest.builder()
-                                .query(q)
-                                .limit(limit)
-                                .enableContainsMatching(enableContains)
-                                .build();
-
-                var results = searchService.search(request);
-                return ResponseEntity.ok(results);
+        String sanitized = value.replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
         }
-
-        private String maskForLog(String value) {
-                if (value == null) {
-                        return "null";
-                }
-                String sanitized = value.replace('\r', '_').replace('\n', '_').replace('\t', '_');
-                int length = sanitized.length();
-                if (length <= 4) {
-                        return "****";
-                }
-                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
-        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+    }
 }

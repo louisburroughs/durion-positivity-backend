@@ -8,9 +8,9 @@ import org.jspecify.annotations.NonNull;
 
 public interface InventoryLedgerService {
 
-  @NonNull
-  LedgerPage<InventoryLedgerEntryDto> listLedgerEntries(@NonNull InventoryLedgerFilterParams params);
+    @NonNull
+    LedgerPage<InventoryLedgerEntryDto> listLedgerEntries(@NonNull InventoryLedgerFilterParams params);
 
-  @NonNull
-  InventoryLedgerEntryDto getLedgerEntry(@NonNull UUID entryId);
+    @NonNull
+    InventoryLedgerEntryDto getLedgerEntry(@NonNull UUID entryId);
 }
