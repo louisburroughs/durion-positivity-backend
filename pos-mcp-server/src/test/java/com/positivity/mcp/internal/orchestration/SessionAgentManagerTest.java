@@ -166,7 +166,7 @@ class SessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 null,
-                null, // sessionSummaryService
+                null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
                 30,
@@ -320,7 +320,7 @@ class SessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 null,
-                null, // sessionSummaryService
+                null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
                 0,
