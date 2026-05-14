@@ -13,7 +13,10 @@ mcp:
     open-api-path: /v3/api-docs
     discovery-timeout: 5s
     aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://localhost:8080/v3/api-docs}
-    excluded-path-fragments: []
+    excluded-path-fragments:
+      - /admin/
+      - /actuator/
+      - /internal/
     included-services:
       - event-receiver
     included-path-prefixes:

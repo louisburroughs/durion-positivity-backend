@@ -50,7 +50,10 @@ langchain4j:
 mcp:
   server:
     aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://pos-api-gateway/v3/api-docs}
-    excluded-path-fragments: ${MCP_EXCLUDED_PATH_FRAGMENTS:}
+    excluded-path-fragments:
+      - /admin/
+      - /actuator/
+      - /internal/
   rag:
     table-name: mcp_document_embedding
     dimension: 768

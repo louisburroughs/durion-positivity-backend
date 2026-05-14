@@ -2,14 +2,17 @@ package com.positivity.mcp.internal.discovery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.McpServerProperties;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -76,9 +79,68 @@ class OpenApiDocumentFetcherTest {
         assertThat(result).isNull();
     }
 
+    @Test
+    @DisplayName("fetchAggregateSpec resolves path-only URL against gateway service from discovery")
+    void fetchAggregateSpec_resolvesPathAgainstGatewayFromDiscovery_whenConfigIsPathOnly() {
+        String yaml = loadClasspathResource("openapi/aggregate/minimal-aggregate.yaml");
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        ServiceInstance gatewayInstance = mock(ServiceInstance.class);
+        when(gatewayInstance.getUri()).thenReturn(URI.create("http://gateway.local:8080"));
+        when(discoveryClient.getInstances("pos-api-gateway")).thenReturn(List.of(gatewayInstance));
+
+        List<URI> requestedUris = new ArrayList<>();
+        WebClient trackingClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    requestedUris.add(request.url());
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                })
+                .build();
+
+        OpenApiDocumentFetcher fetcher = fetcherWith(discoveryClient, trackingClient, "/v3/api-docs");
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.baseUri()).isEqualTo(URI.create("http://gateway.local:8080"));
+        assertThat(requestedUris).hasSize(1);
+        assertThat(requestedUris.getFirst().toString())
+                .isEqualTo("http://gateway.local:8080/v3/api-docs");
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec falls back to http://localhost:8080 when path-only and gateway not discoverable")
+    void fetchAggregateSpec_resolvesPathAgainstLocalDefault_whenConfigIsPathOnlyAndGatewayNotDiscoverable() {
+        String yaml = loadClasspathResource("openapi/aggregate/minimal-aggregate.yaml");
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        when(discoveryClient.getInstances("pos-api-gateway")).thenReturn(List.of());
+
+        List<URI> requestedUris = new ArrayList<>();
+        WebClient trackingClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    requestedUris.add(request.url());
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                })
+                .build();
+
+        OpenApiDocumentFetcher fetcher = fetcherWith(discoveryClient, trackingClient, "/v3/api-docs");
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.baseUri()).isEqualTo(URI.create("http://localhost:8080"));
+        assertThat(requestedUris.getFirst().toString()).isEqualTo("http://localhost:8080/v3/api-docs");
+    }
+
     // --- helpers ---
 
     private static OpenApiDocumentFetcher fetcherWith(WebClient webClient, String aggregateSpecUrl) {
+        return fetcherWith(mock(DiscoveryClient.class), webClient, aggregateSpecUrl);
+    }
+
+    private static OpenApiDocumentFetcher fetcherWith(
+            DiscoveryClient discoveryClient, WebClient webClient, String aggregateSpecUrl) {
         McpServerProperties props = new McpServerProperties(
                 "http://localhost:8086",
                 "/mcp/message",
@@ -89,7 +151,7 @@ class OpenApiDocumentFetcherTest {
                 List.of(),
                 aggregateSpecUrl,
                 List.of());
-        return new OpenApiDocumentFetcher(mock(DiscoveryClient.class), webClient, props);
+        return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
     }
 
     private static WebClient webClientReturning(String body) {

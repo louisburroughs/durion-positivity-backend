@@ -20,6 +20,8 @@ import reactor.core.publisher.Mono;
 public class OpenApiDocumentFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocumentFetcher.class);
+    private static final String GATEWAY_SERVICE_ID = "pos-api-gateway";
+    private static final URI LOCAL_GATEWAY_FALLBACK = URI.create("http://localhost:8080");
 
     private final DiscoveryClient discoveryClient;
     private final WebClient webClient;
@@ -40,9 +42,24 @@ public class OpenApiDocumentFetcher {
             return Mono.empty();
         }
         URI specUri = URI.create(specUrl);
+        if (!specUri.isAbsolute()) {
+            URI gatewayBase = resolveGatewayBase();
+            return fetchAggregateSpecFrom(gatewayBase.resolve(specUri), gatewayBase);
+        }
         URI baseUri = URI.create(specUri.getScheme() + "://" + specUri.getAuthority());
-        long fetchStartNanos = System.nanoTime();
+        return fetchAggregateSpecFrom(specUri, baseUri);
+    }
 
+    private URI resolveGatewayBase() {
+        var instances = discoveryClient.getInstances(GATEWAY_SERVICE_ID);
+        if (!instances.isEmpty()) {
+            return instances.getFirst().getUri();
+        }
+        return LOCAL_GATEWAY_FALLBACK;
+    }
+
+    private Mono<DiscoveredOpenApi> fetchAggregateSpecFrom(URI specUri, URI baseUri) {
+        long fetchStartNanos = System.nanoTime();
         return webClient
                 .get()
                 .uri(specUri)
