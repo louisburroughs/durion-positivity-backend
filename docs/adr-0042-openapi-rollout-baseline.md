@@ -30,6 +30,11 @@ It exists to support the cross-module rollout tied to issue #645, where the gate
 - Module-level specs must be attributable back to the source module when validation fails.
 - The aggregate spec must remain usable for downstream discovery consumers, especially `pos-mcp-server`.
 
+### Validation ownership
+
+- Shared validation is owned by `pos-openapi-validation`, which evaluates generated module specs and the aggregate spec using the committed module policy in `pos-openapi-validation/src/test/resources/openapi/module-inventory.yaml`.
+- `scripts/generate-openapi.sh` remains the generation entrypoint, while Maven validation tests in `pos-openapi-validation` own `report` and `strict` enforcement.
+
 ## Module Inventory and Rollout Waves
 
 ### Wave 1: MCP-critical modules

@@ -1,0 +1,19 @@
+openapi: "3.0.3"
+info:
+  title: pos-aggregate
+  version: "1.0"
+paths:
+  /v1/items:
+    get:
+      summary: List items
+      description: Returns items.
+      responses:
+        "200":
+          description: OK
+  /v1/items:
+    get:
+      summary: Duplicate path
+      description: This is a duplicate path entry.
+      responses:
+        "200":
+          description: OK

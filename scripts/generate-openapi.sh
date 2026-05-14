@@ -13,6 +13,7 @@ MODULE_TIMEOUT_SECONDS=420
 DRY_RUN=false
 AGGREGATE_OPENAPI=true
 AGGREGATE_OUTPUT="pos-api-gateway/docs/openapi-aggregate.yaml"
+VALIDATION_MODE="${OPENAPI_VALIDATION_MODE:-report}"
 
 usage() {
   cat <<'EOF'
@@ -30,6 +31,9 @@ Options:
                      Aggregate OpenAPI output path relative to repo root
                      (default: pos-api-gateway/docs/openapi-aggregate.yaml)
   --no-aggregate     Skip aggregate OpenAPI generation step
+  --validation-mode <mode>
+                     OpenAPI validation mode: off, report, or strict
+                     (default: report)
   --run-tests        Do not skip tests
   --dry-run          Print commands without executing
   -h, --help         Show this help
@@ -67,6 +71,10 @@ while [[ $# -gt 0 ]]; do
     --no-aggregate)
       AGGREGATE_OPENAPI=false
       shift
+      ;;
+    --validation-mode)
+      VALIDATION_MODE="$2"
+      shift 2
       ;;
     --dry-run)
       DRY_RUN=true
@@ -244,6 +252,7 @@ if [[ "$AGGREGATE_OPENAPI" == true ]]; then
 else
   echo "Aggregate output: disabled"
 fi
+echo "Validation mode: $VALIDATION_MODE"
 echo
 
 JMX_PORT=9119
@@ -360,6 +369,28 @@ if [[ "$AGGREGATE_OPENAPI" == true ]]; then
   if ! generate_aggregate_openapi "$AGGREGATE_OUTPUT" "${MODULES[@]}"; then
     echo "ERROR: Failed to generate aggregate OpenAPI file." >&2
     exit 1
+  fi
+fi
+
+if [[ "${VALIDATION_MODE,,}" != "off" ]]; then
+  mvn_validation_mode="report"
+  if [[ "${VALIDATION_MODE,,}" == "strict" ]]; then
+    mvn_validation_mode="strict"
+  fi
+  validation_cmd=(
+    "$MVNW"
+    -q
+    -pl
+    pos-openapi-validation
+    -DskipTests=false
+    -Dopenapi.validation.mode="$mvn_validation_mode"
+    -Dtest=OpenApiRepositoryValidationTest
+    test
+  )
+  echo "Running Maven OpenAPI validation (${mvn_validation_mode})..."
+  echo "${validation_cmd[*]}"
+  if [[ "$DRY_RUN" == false ]]; then
+    "${validation_cmd[@]}"
   fi
 fi
 

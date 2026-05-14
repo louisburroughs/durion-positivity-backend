@@ -1,0 +1,12 @@
+openapi: "3.0.3"
+info:
+  title: pos-documents
+  version: "1.0"
+paths:
+  /v1/documents:
+    get:
+      summary: List documents
+      description: Returns a paginated list of documents.
+      responses:
+        "200":
+          description: OK
