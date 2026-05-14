@@ -6,7 +6,7 @@ ADR-0042 needs machine-checkable enforcement for generated OpenAPI metadata acro
 
 ## Proposed Approach
 
-Introduce a dedicated Maven module, `pos-openapi-validation`, that owns ADR-0042 policy enforcement in Java. Existing generation scripts remain available to produce `openapi.yaml` files, but build pass/fail behavior moves into Maven tests so validation is deterministic in local development and CI.
+Introduce a dedicated Maven module, `pos-openapi-validation`, that owns ADR-0042 policy enforcement in Java. Existing generation scripts remain available to produce `openapi.yaml` files, but build pass/fail behavior moves into Maven tests so validation is deterministic in local development and CI. Reusable validator and policy code should live in `src/main/java`; repository-wide enforcement remains in tests.
 
 ## Architecture
 
@@ -17,6 +17,7 @@ Create `pos-openapi-validation` as a lightweight validation module whose respons
 - It should not host runtime application behavior.
 - It should parse generated module specs and the aggregate spec from disk.
 - It should fail with source-attributed, operation-specific messages.
+- It should keep reusable validation logic out of `src/test/java` so the code has normal source boundaries and can be tested as production code.
 
 This keeps repository policy out of runtime gateway and MCP code, and it avoids overloading `pos-coverage-aggregate`, which is already dedicated to coverage aggregation.
 
@@ -28,6 +29,7 @@ This keeps repository policy out of runtime gateway and MCP code, and it avoids 
 - OpenAPI parsing and validation logic
 - aggregate-spec validation against source-module expectations
 - fixture-driven tests for policy behavior
+- repository-wide enforcement tests that exercise the production validator classes against the real worktree layout
 
 Existing tooling keeps its narrower responsibilities:
 
@@ -38,11 +40,11 @@ Existing tooling keeps its narrower responsibilities:
 
 1. Each module continues generating `openapi.yaml` through its existing `openapi` Maven profile.
 2. The aggregate spec continues to be written to `pos-api-gateway/docs/openapi-aggregate.yaml`.
-3. `pos-openapi-validation` runs after generation and reads a committed inventory describing which modules are:
+3. A repository validation test in `pos-openapi-validation` loads a committed inventory describing which modules are:
    - required producers
    - documented exceptions
    - excluded from the current enforcement scope
-4. The validator parses each required module spec, records concrete failures, and then validates the aggregate spec against that module inventory.
+4. Production validator classes in `src/main/java` parse each required module spec, record concrete failures, and then validate the aggregate spec against that module inventory.
 5. Validation output stays attributable to the source module even when the aggregate spec is the artifact being checked.
 
 ## Failure Behavior
@@ -63,6 +65,12 @@ Failure messages should include the module, HTTP method, and path whenever appli
 
 If rollout staging is needed, it should be expressed in committed validation policy rather than ad hoc script behavior so `report` versus `strict` remains reproducible in Maven and CI.
 
+The mode split should remain policy-driven:
+
+- `STRICT` modules always block on findings.
+- `REPORT_ONLY` modules are reported in report mode and promoted to blocking in strict mode.
+- `EXCEPTION` and `EXCLUDED` modules are skipped according to committed inventory rules, with exceptions requiring documented reasons.
+
 ## Testing Strategy
 
 ### Fixture-driven validator tests
@@ -77,11 +85,11 @@ Add focused tests under `pos-openapi-validation` using small YAML fixtures for:
 - broken aggregate `$ref` targets
 - source-attribution message formatting
 
-These tests should exercise validator rules without starting services.
+These tests should exercise validator rules without starting services. The validators under test should come from `src/main/java`, with test fixtures and assertions staying in `src/test/java`.
 
 ### Repository integration coverage
 
-Add integration-style tests that validate generated repository specs already present in the worktree or produced in a preparatory Maven step. The validator itself should remain file-based and should not boot services.
+Add integration-style tests that validate generated repository specs already present in the worktree or produced in a preparatory Maven step. The validator itself should remain file-based and should not boot services. These tests are the repository enforcement layer and should be the primary pass/fail entrypoint used by developers and CI.
 
 The target command surface becomes:
 
@@ -94,6 +102,7 @@ Generation remains a separate preparatory step using the existing OpenAPI genera
 - This design is intentionally focused on validation tooling and enforcement, not on remediating individual modules yet.
 - `pos-api-gateway` remains the aggregate artifact producer, not the enforcement owner.
 - `pos-mcp-server` remains a consumer of aggregate output and should benefit from stronger upstream guarantees rather than embedding repository policy.
+- The implementation target is the validation module itself: move reusable code into main sources, keep enforcement in tests, and avoid adding a new runtime CLI or service surface unless a later requirement demands it.
 
 ## Success Criteria
 
