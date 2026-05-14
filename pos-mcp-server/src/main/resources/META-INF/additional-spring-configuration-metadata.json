@@ -39,6 +39,17 @@
       "description": "Optional allowlist of API path prefixes to include as MCP tools."
     },
     {
+      "name": "mcp.server.aggregate-spec-url",
+      "type": "java.lang.String",
+      "description": "URL of the API gateway aggregate OpenAPI spec used for aggregate-first discovery.",
+      "defaultValue": "http://localhost:8080/v3/api-docs"
+    },
+    {
+      "name": "mcp.server.excluded-path-fragments",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Path fragment substrings that exclude matching API paths from aggregate MCP tool discovery."
+    },
+    {
       "name": "mcp.security.permit-all-transport",
       "type": "java.lang.Boolean",
       "description": "Allow all MCP transport requests without authentication when enabled.",

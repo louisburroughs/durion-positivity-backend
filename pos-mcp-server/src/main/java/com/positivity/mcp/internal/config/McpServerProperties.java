@@ -14,7 +14,9 @@ public record McpServerProperties(
         @NonNull String openApiPath,
         Duration discoveryTimeout,
         @NonNull List<String> includedServices,
-        @NonNull List<String> includedPathPrefixes) {
+        @NonNull List<String> includedPathPrefixes,
+        String aggregateSpecUrl,
+        @NonNull List<String> excludedPathFragments) {
     public McpServerProperties {
         if (baseUrl == null) {
             baseUrl = "http://localhost:8080";
@@ -37,6 +39,9 @@ public record McpServerProperties(
         if (includedPathPrefixes == null) {
             includedPathPrefixes = List.of();
         }
+        if (excludedPathFragments == null) {
+            excludedPathFragments = List.of();
+        }
     }
 
     public boolean includesService(@NonNull String serviceId) {
@@ -51,5 +56,9 @@ public record McpServerProperties(
             return true;
         }
         return includedPathPrefixes.stream().anyMatch(path::startsWith);
+    }
+
+    public boolean excludesPath(@NonNull String path) {
+        return excludedPathFragments.stream().anyMatch(path::contains);
     }
 }

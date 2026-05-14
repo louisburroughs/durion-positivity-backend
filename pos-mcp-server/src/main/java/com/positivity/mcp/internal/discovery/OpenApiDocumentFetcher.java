@@ -34,6 +34,41 @@ public class OpenApiDocumentFetcher {
         this.properties = properties;
     }
 
+    public @NonNull Mono<DiscoveredOpenApi> fetchAggregateSpec() {
+        String specUrl = properties.aggregateSpecUrl();
+        if (specUrl == null || specUrl.isBlank()) {
+            return Mono.empty();
+        }
+        URI specUri = URI.create(specUrl);
+        URI baseUri = URI.create(specUri.getScheme() + "://" + specUri.getAuthority());
+        long fetchStartNanos = System.nanoTime();
+
+        return webClient
+                .get()
+                .uri(specUri)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(properties.discoveryTimeout())
+                .doOnNext(raw -> log.info(
+                        "Fetched aggregate OpenAPI from {} in {} ms ({} bytes)",
+                        specUri,
+                        elapsedMs(fetchStartNanos),
+                        raw.length()))
+                .map(raw -> deserialize("aggregate", raw))
+                .flatMap(result -> {
+                    OpenAPI openAPI = result.getOpenAPI();
+                    if (openAPI == null) {
+                        log.warn("Failed to parse aggregate OpenAPI from {}: {}", specUri, result.getMessages());
+                        return Mono.<DiscoveredOpenApi>empty();
+                    }
+                    return Mono.just(new DiscoveredOpenApi("aggregate", baseUri, openAPI));
+                })
+                .onErrorResume(ex -> {
+                    log.warn("Could not fetch aggregate OpenAPI from {}: {}", specUri, ex.getMessage());
+                    return Mono.empty();
+                });
+    }
+
     public @NonNull Mono<DiscoveredOpenApi> fetchForService(@NonNull String serviceId) {
         var instance = pickInstance(serviceId);
         if (instance.isEmpty()) {
