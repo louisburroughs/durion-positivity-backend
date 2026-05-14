@@ -39,7 +39,9 @@ public class ItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "inventory.cost.standard.update"})
-    @Operation(summary = "Update standard item cost")
+    @Operation(
+            summary = "Update standard item cost",
+            description = "Updates the standard cost for the specified item and returns the refreshed item cost values.")
     @ApiResponse(
             responseCode = "200",
             description = "Updated",
@@ -57,7 +59,9 @@ public class ItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CATALOG_VIEW"})
-    @Operation(summary = "Get current item costs")
+    @Operation(
+            summary = "Get current item costs",
+            description = "Returns the current standard, average, and last known cost values for the specified item.")
     @ApiResponse(
             responseCode = "200",
             description = "Found",
@@ -71,7 +75,9 @@ public class ItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CATALOG_VIEW"})
-    @Operation(summary = "Get item cost audit history")
+    @Operation(
+            summary = "Get item cost audit history",
+            description = "Returns the recorded audit history entries for item cost changes on the specified item.")
     @ApiResponse(
             responseCode = "200",
             description = "Found",

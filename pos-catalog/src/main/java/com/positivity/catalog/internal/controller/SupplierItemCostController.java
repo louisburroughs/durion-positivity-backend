@@ -41,7 +41,9 @@ public class SupplierItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:supplier_cost:write"})
-    @Operation(summary = "Create supplier cost structure")
+    @Operation(
+            summary = "Create supplier cost structure",
+            description = "Creates a supplier-specific item cost structure with the submitted supplier, item, and tier details.")
     @ApiResponse(
             responseCode = "201",
             description = "Created",
@@ -62,7 +64,9 @@ public class SupplierItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:supplier_cost:read"})
-    @Operation(summary = "Get supplier cost structure")
+    @Operation(
+            summary = "Get supplier cost structure",
+            description = "Returns the supplier item cost structure identified by the supplied cost structure ID.")
     @ApiResponse(
             responseCode = "200",
             description = "Found",
@@ -80,7 +84,9 @@ public class SupplierItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:supplier_cost:write"})
-    @Operation(summary = "Update supplier cost structure")
+    @Operation(
+            summary = "Update supplier cost structure",
+            description = "Updates the supplier item cost structure identified by the supplied cost structure ID.")
     @ApiResponse(
             responseCode = "200",
             description = "Updated",
@@ -101,7 +107,9 @@ public class SupplierItemCostController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:supplier_cost:write"})
-    @Operation(summary = "Delete supplier cost structure")
+    @Operation(
+            summary = "Delete supplier cost structure",
+            description = "Deletes the supplier item cost structure identified by the supplied cost structure ID.")
     @ApiResponse(responseCode = "204", description = "Deleted")
     @ApiResponse(responseCode = "404", description = "Not found")
     @EmitEvent(id = "CATALOG_SUPPLIER_COST_DELETE", apiVersion = "1")

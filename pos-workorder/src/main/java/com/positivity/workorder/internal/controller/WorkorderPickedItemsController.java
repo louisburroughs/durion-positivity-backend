@@ -44,7 +44,9 @@ public class WorkorderPickedItemsController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(summary = "Get picked items for workorder")
+    @Operation(
+            summary = "Get picked items for workorder",
+            description = "Retrieve the items already picked for a workorder before they are consumed")
     @ApiResponse(
             responseCode = "200",
             description = "Picked items retrieved successfully",
@@ -72,7 +74,9 @@ public class WorkorderPickedItemsController {
             scopes = {"workorder:parts:consume"})
     @PreAuthorize("hasAuthority('workorder:parts:consume')")
     @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
-    @Operation(summary = "Consume picked items into workorder")
+    @Operation(
+            summary = "Consume picked items into workorder",
+            description = "Consume the picked items for a workorder so parts usage is recorded against the job")
     @ApiResponse(
             responseCode = "200",
             description = "Picked items consumed successfully",

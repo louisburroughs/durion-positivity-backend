@@ -28,7 +28,9 @@ public class TimeEntryController {
             name = "bearerAuth",
             scopes = {"TimeEntry:Approve"})
     @PreAuthorize("hasAuthority('TimeEntry:Approve')")
-    @Operation(summary = "Approve a time entry in SUBMITTED state")
+    @Operation(
+            summary = "Approve a time entry in SUBMITTED state",
+            description = "Approve a submitted time entry so it can move forward in the workorder timekeeping workflow")
     public ResponseEntity<TimeEntryResponse> approveTimeEntry(@PathVariable UUID timeEntryId) {
         return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.approveTimeEntry(timeEntryId)));
     }
@@ -39,7 +41,9 @@ public class TimeEntryController {
             name = "bearerAuth",
             scopes = {"TimeEntry:Reject"})
     @PreAuthorize("hasAuthority('TimeEntry:Reject')")
-    @Operation(summary = "Reject a time entry in SUBMITTED state")
+    @Operation(
+            summary = "Reject a time entry in SUBMITTED state",
+            description = "Reject a submitted time entry and record the rejection details for follow-up")
     public ResponseEntity<TimeEntryResponse> rejectTimeEntry(
             @PathVariable UUID timeEntryId, @Valid @RequestBody RejectTimeEntryRequest request) {
         return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.rejectTimeEntry(timeEntryId, request)));

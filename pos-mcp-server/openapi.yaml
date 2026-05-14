@@ -6,6 +6,8 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: System Prompts
+  description: Operations for managing MCP system prompts
 - name: LLM API Configuration
   description: LLM provider API configuration management
 - name: Document Ingestion
@@ -18,7 +20,9 @@ paths:
   /v1/prompts/{id}:
     get:
       tags:
-      - system-prompt-controller
+      - System Prompts
+      summary: Get system prompt
+      description: Retrieve a single MCP system prompt by its identifier
       operationId: get
       parameters:
       - name: id
@@ -28,18 +32,27 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
-          description: OK
+        "200":
+          description: System prompt returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: "#/components/schemas/SystemPromptResponse"
+        "404":
+          description: System prompt not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
       security:
       - bearerAuth:
         - mcp:system_prompt:view
     put:
       tags:
-      - system-prompt-controller
+      - System Prompts
+      summary: Update system prompt
+      description: Update an existing MCP system prompt by replacing its editable
+        fields
       operationId: update
       parameters:
       - name: id
@@ -52,21 +65,30 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SystemPromptRequest'
+              $ref: "#/components/schemas/SystemPromptRequest"
         required: true
       responses:
-        '200':
-          description: OK
+        "200":
+          description: System prompt updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: "#/components/schemas/SystemPromptResponse"
+        "404":
+          description: System prompt not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
       security:
       - bearerAuth:
         - mcp:system_prompt:update
     delete:
       tags:
-      - system-prompt-controller
+      - System Prompts
+      summary: Delete system prompt
+      description: Delete an MCP system prompt so it can no longer be selected for
+        agent sessions
       operationId: delete
       parameters:
       - name: id
@@ -76,8 +98,10 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
-          description: OK
+        "204":
+          description: System prompt deleted
+        "404":
+          description: System prompt not found
       security:
       - bearerAuth:
         - mcp:system_prompt:delete
@@ -96,12 +120,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LlmApiConfigResponse'
+                $ref: "#/components/schemas/LlmApiConfigResponse"
       security:
       - bearerAuth:
         - mcp:llm_api:view
@@ -122,15 +146,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LlmApiConfigRequest'
+              $ref: "#/components/schemas/LlmApiConfigRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LlmApiConfigResponse'
+                $ref: "#/components/schemas/LlmApiConfigResponse"
       security:
       - bearerAuth:
         - mcp:llm_api:update
@@ -148,7 +172,7 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: OK
       security:
       - bearerAuth:
@@ -156,37 +180,48 @@ paths:
   /v1/prompts:
     get:
       tags:
-      - system-prompt-controller
+      - System Prompts
+      summary: List system prompts
+      description: List all configured MCP system prompts that can be assigned to
+        agents
       operationId: list
       responses:
-        '200':
-          description: OK
+        "200":
+          description: System prompts returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/SystemPromptResponse'
+                  $ref: "#/components/schemas/SystemPromptResponse"
       security:
       - bearerAuth:
         - mcp:system_prompt:view
     post:
       tags:
-      - system-prompt-controller
+      - System Prompts
+      summary: Create system prompt
+      description: Create a new MCP system prompt that can be used during agent orchestration
       operationId: create
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SystemPromptRequest'
+              $ref: "#/components/schemas/SystemPromptRequest"
         required: true
       responses:
-        '200':
-          description: OK
+        "201":
+          description: System prompt created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: "#/components/schemas/SystemPromptResponse"
+        "400":
+          description: System prompt request is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
       security:
       - bearerAuth:
         - mcp:system_prompt:create
@@ -195,6 +230,8 @@ paths:
       tags:
       - NLTI
       summary: Submit a natural language task request
+      description: Submit a natural language task request for asynchronous MCP processing
+        and correlation tracking
       operationId: submitRequest
       parameters:
       - name: X-Correlation-Id
@@ -206,15 +243,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NltiRequestDTO'
+              $ref: "#/components/schemas/NltiRequestDTO"
         required: true
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NltiResponseV1'
+                $ref: "#/components/schemas/NltiResponseV1"
       security:
       - bearerAuth:
         - nlti:request:submit
@@ -223,21 +260,23 @@ paths:
       tags:
       - Document Ingestion
       summary: Queue a document for ingestion into the RAG vector store
-      description: Submit a document for asynchronous ingestion into the RAG vector store. The request includes the document content and optional metadata. The response returns a job ID that can be used to track the ingestion status.
+      description: Submit a document for asynchronous ingestion into the RAG vector
+        store. The request includes the document content and optional metadata. The
+        response returns a job ID that can be used to track the ingestion status.
       operationId: ingestDocument
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DocumentIngestionRequest'
+              $ref: "#/components/schemas/DocumentIngestionRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+                $ref: "#/components/schemas/DocumentIngestionJobResponse"
       security:
       - bearerAuth:
         - mcp:document:ingest
@@ -246,20 +285,23 @@ paths:
       tags:
       - mcp-chat-controller
       summary: Execute MCP chat message
+      description: "Executes a chat message and returns the full response once complete.\
+        \ For streaming responses, use the /chat/stream endpoint which returns tokens\
+        \ as they are generated."
       operationId: chat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatRequest'
+              $ref: "#/components/schemas/ChatRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatResponse'
+                $ref: "#/components/schemas/ChatResponse"
       security:
       - bearerAuth:
         - mcp:chat:execute
@@ -268,22 +310,25 @@ paths:
       tags:
       - mcp-streaming-chat-controller
       summary: Execute MCP streaming chat - returns SSE token stream
+      description: Executes a streaming chat message and returns a stream of tokens
+        as Server-Sent Events (SSE). Each token is sent as an individual SSE with
+        event type 'chat'.
       operationId: streamChat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StreamChatRequest'
+              $ref: "#/components/schemas/StreamChatRequest"
         required: true
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Stream of SSE chat tokens
           content:
             text/event-stream:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ServerSentEventString'
+                  $ref: "#/components/schemas/ServerSentEventString"
       security:
       - bearerAuth:
         - mcp:chat:stream
@@ -292,17 +337,18 @@ paths:
       tags:
       - LLM API Configuration
       summary: List LLM API configurations
-      description: Retrieve all configured LLM API provider definitions that are available to the MCP server.
+      description: Retrieve all configured LLM API provider definitions that are available
+        to the MCP server.
       operationId: list_1
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LlmApiConfigResponse'
+                  $ref: "#/components/schemas/LlmApiConfigResponse"
       security:
       - bearerAuth:
         - mcp:llm_api:view
@@ -310,21 +356,22 @@ paths:
       tags:
       - LLM API Configuration
       summary: Create an LLM API configuration
-      description: Create a new LLM API provider configuration for use by the MCP server.
+      description: Create a new LLM API provider configuration for use by the MCP
+        server.
       operationId: create_1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LlmApiConfigRequest'
+              $ref: "#/components/schemas/LlmApiConfigRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LlmApiConfigResponse'
+                $ref: "#/components/schemas/LlmApiConfigResponse"
       security:
       - bearerAuth:
         - mcp:llm_api:create
@@ -333,7 +380,8 @@ paths:
       tags:
       - NLTI Audit
       summary: Query the NLTI audit ledger
-      description: Query the NLTI audit ledger with optional filters for correlation ID, time range, and event type. Results are paginated.
+      description: "Query the NLTI audit ledger with optional filters for correlation\
+        \ ID, time range, and event type. Results are paginated."
       operationId: queryAudit
       parameters:
       - name: correlationId
@@ -377,21 +425,22 @@ paths:
           minimum: 1
       - name: sort
         in: query
-        description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
         required: false
         schema:
           type: array
           default:
-          - timestamp,ASC
+          - "timestamp,ASC"
           items:
             type: string
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageAuditEventResponse'
+                $ref: "#/components/schemas/PageAuditEventResponse"
       security:
       - bearerAuth:
         - nlti:audit:read
@@ -400,7 +449,9 @@ paths:
       tags:
       - Document Ingestion
       summary: Get RAG document ingestion job status
-      description: Retrieve the status and details of an asynchronous document ingestion job using its job ID. The response includes the current status, timestamps, and any error messages if applicable.
+      description: "Retrieve the status and details of an asynchronous document ingestion\
+        \ job using its job ID. The response includes the current status, timestamps,\
+        \ and any error messages if applicable."
       operationId: getIngestionJob
       parameters:
       - name: jobId
@@ -410,12 +461,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+                $ref: "#/components/schemas/DocumentIngestionJobResponse"
       security:
       - bearerAuth:
         - mcp:document:ingest
@@ -508,6 +559,7 @@ components:
           format: uuid
         clientContext:
           type: object
+          additionalProperties: {}
       required:
       - prompt
     NltiResponseV1:
@@ -524,8 +576,10 @@ components:
           format: uuid
         status:
           type: string
+        result: {}
         meta:
           type: object
+          additionalProperties: {}
     DocumentIngestionRequest:
       type: object
       description: Document ingestion payload
@@ -540,6 +594,7 @@ components:
           minLength: 1
         metadata:
           type: object
+          additionalProperties: {}
           description: Optional key-value metadata for the document
       required:
       - content
@@ -654,7 +709,7 @@ components:
         content:
           type: array
           items:
-            $ref: '#/components/schemas/AuditEventResponse'
+            $ref: "#/components/schemas/AuditEventResponse"
         number:
           type: integer
           format: int32
@@ -666,9 +721,9 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         empty:
           type: boolean
     PageableObject:
@@ -686,7 +741,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
     SortObject:

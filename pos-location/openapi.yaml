@@ -1,7 +1,8 @@
 openapi: 3.1.0
 info:
   title: Positivity Location API
-  description: API documentation for the Shop Location service, accessible via the API Gateway. Shop locations are Maintenance Bays and Mobile Shops.
+  description: "API documentation for the Shop Location service, accessible via the\
+    \ API Gateway. Shop locations are Maintenance Bays and Mobile Shops."
   contact:
     name: Durion Support Services
     email: louis.burroughs@gmail.com
@@ -10,6 +11,8 @@ servers:
 - url: http://api-gateway.local/v1/location
   description: API Gateway
 tags:
+- name: Storage Location API
+  description: Operations for managing storage locations within a site
 - name: Mobile Unit API
   description: Operations for managing mobile units within locations
 - name: Travel Buffer Policy API
@@ -40,14 +43,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: Coverage rules returned.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CoverageRuleResponse'
+                  $ref: "#/components/schemas/CoverageRuleResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:read
@@ -71,24 +74,25 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: {}
         required: true
       responses:
-        '200':
+        "200":
           description: Coverage rules replaced successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CoverageRuleResponse'
-        '404':
+                  $ref: "#/components/schemas/CoverageRuleResponse"
+        "404":
           description: Mobile unit not found.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CoverageRuleResponse'
+                  $ref: "#/components/schemas/CoverageRuleResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -111,18 +115,18 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        '200':
+        "200":
           description: Location found and returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
-        '404':
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "404":
           description: Location not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -147,21 +151,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationRequestDTO'
+              $ref: "#/components/schemas/LocationRequestDTO"
         required: true
       responses:
-        '200':
+        "200":
           description: Location updated successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
-        '404':
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "404":
           description: Location not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:write
@@ -183,9 +187,9 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        '204':
+        "204":
           description: Location deleted successfully.
-        '404':
+        "404":
           description: Location not found.
       security:
       - bearerAuth:
@@ -211,21 +215,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationPatchRequest'
+              $ref: "#/components/schemas/LocationPatchRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Location patched successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
-        '404':
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "404":
           description: Location not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:write
@@ -247,24 +251,24 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: Site defaults returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-        '403':
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-        '404':
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "404":
           description: Location not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: "#/components/schemas/SiteDefaultsResponse"
       security:
       - bearerAuth:
         - location:read
@@ -288,33 +292,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SiteDefaultsRequest'
+              $ref: "#/components/schemas/SiteDefaultsRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Site defaults configured
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-        '400':
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "400":
           description: Invalid request payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-        '403':
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-        '404':
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "404":
           description: Location not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: "#/components/schemas/SiteDefaultsResponse"
       security:
       - bearerAuth:
         - location:write
@@ -325,16 +329,18 @@ paths:
       tags:
       - Travel Buffer Policy API
       summary: List travel buffer policies
+      description: List configured travel buffer policies available for routing and
+        scheduling decisions
       operationId: list
       responses:
-        '200':
+        "200":
           description: Travel buffer policies listed
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                  $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
       - bearerAuth:
         - location:travel-buffer-policy:read
@@ -344,20 +350,22 @@ paths:
       tags:
       - Travel Buffer Policy API
       summary: Create travel buffer policy
+      description: Create a travel buffer policy that defines extra travel time handling
+        rules
       operationId: create
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TravelBufferPolicyRequest'
+              $ref: "#/components/schemas/TravelBufferPolicyRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Travel buffer policy created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
       - bearerAuth:
         - location:travel-buffer-policy:manage
@@ -368,16 +376,18 @@ paths:
       tags:
       - Service Area API
       summary: List service areas
+      description: List configured service areas available for dispatching and coverage
+        management
       operationId: list_1
       responses:
-        '200':
+        "200":
           description: Service areas listed
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ServiceAreaResponse'
+                  $ref: "#/components/schemas/ServiceAreaResponse"
       security:
       - bearerAuth:
         - location:service-area:read
@@ -387,20 +397,22 @@ paths:
       tags:
       - Service Area API
       summary: Create service area
+      description: Create a service area that defines where a location can provide
+        service coverage
       operationId: create_1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ServiceAreaRequest'
+              $ref: "#/components/schemas/ServiceAreaRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Service area created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: "#/components/schemas/ServiceAreaResponse"
       security:
       - bearerAuth:
         - location:service-area:manage
@@ -429,12 +441,12 @@ paths:
           format: int32
           default: 20
       responses:
-        '200':
+        "200":
           description: Mobile units retrieved successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageMobileUnitResponse'
+                $ref: "#/components/schemas/PageMobileUnitResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:read
@@ -450,15 +462,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MobileUnitRequest'
+              $ref: "#/components/schemas/MobileUnitRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Mobile unit created successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: "#/components/schemas/MobileUnitResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -472,14 +484,14 @@ paths:
       description: Retrieve a list of all locations.
       operationId: getAllLocations
       responses:
-        '200':
+        "200":
           description: List of locations returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LocationResponseDTO'
+                  $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -495,15 +507,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationRequestDTO'
+              $ref: "#/components/schemas/LocationRequestDTO"
         required: true
       responses:
-        '201':
+        "201":
           description: Location created successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:write
@@ -512,7 +524,10 @@ paths:
   /v1/locations/{siteId}/storage-locations:
     get:
       tags:
-      - storage-location-controller
+      - Storage Location API
+      summary: List storage locations
+      description: List storage locations for a site with optional type and status
+        filtering
       operationId: list_2
       parameters:
       - name: siteId
@@ -546,14 +561,14 @@ paths:
         in: query
         required: true
         schema:
-          $ref: '#/components/schemas/Pageable'
+          $ref: "#/components/schemas/Pageable"
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Storage locations listed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageStorageLocationResponse'
+                $ref: "#/components/schemas/PageStorageLocationResponse"
       security:
       - bearerAuth:
         - location:read
@@ -561,7 +576,10 @@ paths:
       - location:read
     post:
       tags:
-      - storage-location-controller
+      - Storage Location API
+      summary: Create storage location
+      description: Create a storage location within a site using the provided topology
+        and status details
       operationId: create_2
       parameters:
       - name: siteId
@@ -574,15 +592,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StorageLocationRequest'
+              $ref: "#/components/schemas/StorageLocationRequest"
         required: true
       responses:
-        '201':
-          description: Created
+        "201":
+          description: Storage location created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: "#/components/schemas/StorageLocationResponse"
       security:
       - bearerAuth:
         - location:write
@@ -627,12 +645,12 @@ paths:
           format: int32
           default: 20
       responses:
-        '200':
+        "200":
           description: Bays retrieved successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageBayResponse'
+                $ref: "#/components/schemas/PageBayResponse"
       security:
       - bearerAuth:
         - location:bay:read
@@ -656,15 +674,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BayRequest'
+              $ref: "#/components/schemas/BayRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Bay created successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: "#/components/schemas/BayResponse"
       security:
       - bearerAuth:
         - location:bay:manage
@@ -701,12 +719,12 @@ paths:
         schema:
           type: string
       responses:
-        '200':
+        "200":
           description: Parent relationship added successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationParentResponseDTO'
+                $ref: "#/components/schemas/LocationParentResponseDTO"
       security:
       - bearerAuth:
         - location:write
@@ -717,27 +735,28 @@ paths:
       tags:
       - Location Bulk Ingest API
       summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
       operationId: bulkIngest
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BulkIngestRequestLocationBulkIngestRecord'
+              $ref: "#/components/schemas/BulkIngestRequestLocationBulkIngestRecord"
         required: true
       responses:
-        '200':
+        "200":
           description: Batch processed (check per-record success/failure in response)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-        '400':
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "400":
           description: Invalid request payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
       security:
       - bearerAuth:
         - location:write
@@ -748,6 +767,8 @@ paths:
       tags:
       - Travel Buffer Policy API
       summary: Patch travel buffer policy
+      description: Patch an existing travel buffer policy using the provided partial
+        field updates
       operationId: patch
       parameters:
       - name: id
@@ -760,26 +781,27 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: {}
         required: true
       responses:
-        '200':
+        "200":
           description: Travel buffer policy patched
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
-        '400':
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+        "400":
           description: Invalid travel buffer policy id
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
-        '404':
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+        "404":
           description: Travel buffer policy not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
       security:
       - bearerAuth:
         - location:travel-buffer-policy:manage
@@ -790,6 +812,8 @@ paths:
       tags:
       - Service Area API
       summary: Patch service area
+      description: Patch an existing service area using the provided partial field
+        updates
       operationId: patch_1
       parameters:
       - name: id
@@ -802,26 +826,27 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: {}
         required: true
       responses:
-        '200':
+        "200":
           description: Service area patched
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
-        '400':
+                $ref: "#/components/schemas/ServiceAreaResponse"
+        "400":
           description: Invalid service area id
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
-        '404':
+                $ref: "#/components/schemas/ServiceAreaResponse"
+        "404":
           description: Service area not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: "#/components/schemas/ServiceAreaResponse"
       security:
       - bearerAuth:
         - location:service-area:manage
@@ -843,18 +868,18 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: Mobile unit returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
-        '404':
+                $ref: "#/components/schemas/MobileUnitResponse"
+        "404":
           description: Mobile unit not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: "#/components/schemas/MobileUnitResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:read
@@ -878,14 +903,15 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: {}
         required: true
       responses:
-        '200':
+        "200":
           description: Mobile units managed successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: "#/components/schemas/MobileUnitResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -894,7 +920,10 @@ paths:
   /v1/locations/{siteId}/storage-locations/{storageLocationId}:
     get:
       tags:
-      - storage-location-controller
+      - Storage Location API
+      summary: Get storage location
+      description: Retrieve a single storage location for a site by its storage location
+        identifier
       operationId: get
       parameters:
       - name: siteId
@@ -910,12 +939,18 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Storage location returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: "#/components/schemas/StorageLocationResponse"
+        "404":
+          description: Storage location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageLocationResponse"
       security:
       - bearerAuth:
         - location:read
@@ -923,7 +958,10 @@ paths:
       - location:read
     patch:
       tags:
-      - storage-location-controller
+      - Storage Location API
+      summary: Patch storage location
+      description: Patch an existing storage location for a site using the provided
+        partial updates
       operationId: patch_2
       parameters:
       - name: siteId
@@ -942,15 +980,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StorageLocationPatchRequest'
+              $ref: "#/components/schemas/StorageLocationPatchRequest"
         required: true
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Storage location updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: "#/components/schemas/StorageLocationResponse"
+        "404":
+          description: Storage location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageLocationResponse"
       security:
       - bearerAuth:
         - location:write
@@ -977,18 +1021,18 @@ paths:
         schema:
           type: string
       responses:
-        '200':
+        "200":
           description: Bay retrieved successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
-        '404':
+                $ref: "#/components/schemas/BayResponse"
+        "404":
           description: Bay not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: "#/components/schemas/BayResponse"
       security:
       - bearerAuth:
         - location:bay:read
@@ -1015,15 +1059,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BayPatchRequest'
+              $ref: "#/components/schemas/BayPatchRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Bay updated successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: "#/components/schemas/BayResponse"
       security:
       - bearerAuth:
         - location:bay:manage
@@ -1034,7 +1078,8 @@ paths:
       tags:
       - storage-location-validation-controller
       summary: Validate storage location reference
-      description: Returns existence, active status, and site ownership for a storage location ID.
+      description: "Returns existence, active status, and site ownership for a storage\
+        \ location ID."
       operationId: validateStorageLocation
       parameters:
       - name: storageLocationId
@@ -1045,24 +1090,24 @@ paths:
           type: string
           format: uuid
       responses:
-        '200':
+        "200":
           description: Validation payload returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationValidationResponseDTO'
-        '400':
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
+        "400":
           description: Invalid storageLocationId format
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationValidationResponseDTO'
-        '403':
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
+        "403":
           description: Forbidden - missing location:read authority
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationValidationResponseDTO'
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -1093,14 +1138,14 @@ paths:
           type: string
           format: date-time
       responses:
-        '200':
+        "200":
           description: Eligible mobile units returned.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/EligibleMobileUnitResponse'
+                  $ref: "#/components/schemas/EligibleMobileUnitResponse"
       security:
       - bearerAuth:
         - location:mobile-unit:read
@@ -1123,12 +1168,12 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        '200':
+        "200":
           description: Validation result returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationValidationResponseDTO'
+                $ref: "#/components/schemas/LocationValidationResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -1151,18 +1196,18 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        '200':
+        "200":
           description: Responsible person found and returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PersonDTO'
-        '404':
+                $ref: "#/components/schemas/PersonDTO"
+        "404":
           description: Responsible person not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PersonDTO'
+                $ref: "#/components/schemas/PersonDTO"
       security:
       - bearerAuth:
         - location:read
@@ -1191,14 +1236,14 @@ paths:
         schema:
           type: string
       responses:
-        '200':
+        "200":
           description: List of child locations returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LocationResponseDTO'
+                  $ref: "#/components/schemas/LocationResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -1226,19 +1271,19 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01 00:00:00+00:00
+        example: 2026-01-01T00:00:00Z
       - name: pageable
         in: query
         required: true
         schema:
-          $ref: '#/components/schemas/Pageable'
+          $ref: "#/components/schemas/Pageable"
       responses:
-        '200':
+        "200":
           description: Location roster returned successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageLocationRef'
+                $ref: "#/components/schemas/PageLocationRef"
       security:
       - bearerAuth:
         - location:read
@@ -1252,14 +1297,14 @@ paths:
       description: Retrieve all parent relationships for locations.
       operationId: getAllParents
       responses:
-        '200':
+        "200":
           description: List of location parents returned successfully.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LocationParentResponseDTO'
+                  $ref: "#/components/schemas/LocationParentResponseDTO"
       security:
       - bearerAuth:
         - location:read
@@ -1337,11 +1382,11 @@ components:
         operatingHours:
           type: array
           items:
-            $ref: '#/components/schemas/OperatingHoursRequest'
+            $ref: "#/components/schemas/OperatingHoursRequest"
         holidayClosures:
           type: array
           items:
-            $ref: '#/components/schemas/HolidayClosureRequest'
+            $ref: "#/components/schemas/HolidayClosureRequest"
         checkInBufferMinutes:
           type: integer
           format: int32
@@ -1349,9 +1394,10 @@ components:
           type: integer
           format: int32
         type:
-          $ref: '#/components/schemas/LocationTypeDTO'
+          $ref: "#/components/schemas/LocationTypeDTO"
         parents:
           type: object
+          additionalProperties: {}
       required:
       - code
       - name
@@ -1408,7 +1454,7 @@ components:
           type: integer
           format: int64
         type:
-          $ref: '#/components/schemas/LocationTypeDTO'
+          $ref: "#/components/schemas/LocationTypeDTO"
     SiteDefaultsRequest:
       type: object
       properties:
@@ -1480,7 +1526,7 @@ components:
         postalCodes:
           type: array
           items:
-            $ref: '#/components/schemas/PostalCodeEntry'
+            $ref: "#/components/schemas/PostalCodeEntry"
     ServiceAreaResponse:
       type: object
       properties:
@@ -1496,7 +1542,7 @@ components:
         postalCodes:
           type: array
           items:
-            $ref: '#/components/schemas/PostalCodeEntry'
+            $ref: "#/components/schemas/PostalCodeEntry"
         createdAt:
           type: string
           format: date-time
@@ -1545,7 +1591,7 @@ components:
         coverageRules:
           type: array
           items:
-            $ref: '#/components/schemas/CoverageRuleRequest'
+            $ref: "#/components/schemas/CoverageRuleRequest"
     MobileUnitResponse:
       type: object
       properties:
@@ -1594,8 +1640,10 @@ components:
           format: uuid
         capacity:
           type: object
+          additionalProperties: {}
         temperature:
           type: object
+          additionalProperties: {}
     StorageLocationResponse:
       type: object
       properties:
@@ -1624,8 +1672,10 @@ components:
           format: uuid
         capacity:
           type: object
+          additionalProperties: {}
         temperature:
           type: object
+          additionalProperties: {}
         inventoryCount:
           type: integer
           format: int32
@@ -1649,7 +1699,7 @@ components:
           type: string
           minLength: 1
         capacity:
-          $ref: '#/components/schemas/BayCapacityRequest'
+          $ref: "#/components/schemas/BayCapacityRequest"
         maxConcurrentVehicles:
           type: integer
           format: int32
@@ -1725,7 +1775,7 @@ components:
         records:
           type: array
           items:
-            $ref: '#/components/schemas/LocationBulkIngestRecord'
+            $ref: "#/components/schemas/LocationBulkIngestRecord"
           minItems: 1
         operatorId:
           type: string
@@ -1778,7 +1828,7 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/BulkIngestResult'
+            $ref: "#/components/schemas/BulkIngestResult"
     BulkIngestResult:
       type: object
       properties:
@@ -1816,8 +1866,10 @@ components:
           format: uuid
         capacity:
           type: object
+          additionalProperties: {}
         temperature:
           type: object
+          additionalProperties: {}
     LocationPatchRequest:
       type: object
       description: Partial location payload
@@ -1831,11 +1883,11 @@ components:
         operatingHours:
           type: array
           items:
-            $ref: '#/components/schemas/OperatingHoursRequest'
+            $ref: "#/components/schemas/OperatingHoursRequest"
         holidayClosures:
           type: array
           items:
-            $ref: '#/components/schemas/HolidayClosureRequest'
+            $ref: "#/components/schemas/HolidayClosureRequest"
         checkInBufferMinutes:
           type: integer
           format: int32
@@ -1855,7 +1907,7 @@ components:
           type: integer
           format: int32
         capacity:
-          $ref: '#/components/schemas/BayCapacityRequest'
+          $ref: "#/components/schemas/BayCapacityRequest"
         serviceCapabilityIds:
           type: array
           items:
@@ -1883,26 +1935,26 @@ components:
     PageMobileUnitResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: '#/components/schemas/MobileUnitResponse'
+            $ref: "#/components/schemas/MobileUnitResponse"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -1927,7 +1979,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
     SortObject:
@@ -1971,26 +2023,26 @@ components:
     PageStorageLocationResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: '#/components/schemas/StorageLocationResponse'
+            $ref: "#/components/schemas/StorageLocationResponse"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -2033,26 +2085,26 @@ components:
     PageBayResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: '#/components/schemas/BayResponse'
+            $ref: "#/components/schemas/BayResponse"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -2082,26 +2134,26 @@ components:
     PageLocationRef:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
         content:
           type: array
           items:
-            $ref: '#/components/schemas/LocationRef'
+            $ref: "#/components/schemas/LocationRef"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:

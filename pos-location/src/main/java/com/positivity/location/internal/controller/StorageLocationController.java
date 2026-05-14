@@ -7,7 +7,10 @@ import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/locations/{siteId}/storage-locations")
 @RequiredArgsConstructor
+@Tag(name = "Storage Location API", description = "Operations for managing storage locations within a site")
 public class StorageLocationController {
 
     private final StorageLocationService storageLocationService;
@@ -40,6 +44,10 @@ public class StorageLocationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_CREATE", apiVersion = "1")
+    @Operation(
+            summary = "Create storage location",
+            description = "Create a storage location within a site using the provided topology and status details")
+    @ApiResponse(responseCode = "201", description = "Storage location created")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})
@@ -50,6 +58,10 @@ public class StorageLocationController {
     @GetMapping
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_LIST", apiVersion = "1")
+    @Operation(
+            summary = "List storage locations",
+            description = "List storage locations for a site with optional type and status filtering")
+    @ApiResponse(responseCode = "200", description = "Storage locations listed")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -64,6 +76,11 @@ public class StorageLocationController {
     @GetMapping("/{storageLocationId}")
     @PreAuthorize("hasAuthority('location:read')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_GET", apiVersion = "1")
+    @Operation(
+            summary = "Get storage location",
+            description = "Retrieve a single storage location for a site by its storage location identifier")
+    @ApiResponse(responseCode = "200", description = "Storage location returned")
+    @ApiResponse(responseCode = "404", description = "Storage location not found")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -74,6 +91,11 @@ public class StorageLocationController {
     @PatchMapping("/{storageLocationId}")
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_UPDATE", apiVersion = "1")
+    @Operation(
+            summary = "Patch storage location",
+            description = "Patch an existing storage location for a site using the provided partial updates")
+    @ApiResponse(responseCode = "200", description = "Storage location updated")
+    @ApiResponse(responseCode = "404", description = "Storage location not found")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})

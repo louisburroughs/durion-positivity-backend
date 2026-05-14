@@ -5,6 +5,9 @@ import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
 import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
 import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.service.SubstituteLinkService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
+@Tag(name = "Substitute Link API", description = "Operations for product substitute links and workorder substitute suggestions")
 public class SubstituteLinkController {
 
     private final SubstituteLinkService substituteLinkService;
@@ -76,6 +80,10 @@ public class SubstituteLinkController {
 
     @PostMapping("/workorders/{workorderId}/suggestSubstitutes")
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_SUGGEST", apiVersion = "1")
+    @Operation(
+            summary = "Suggest workorder substitutes",
+            description = "Suggest substitute parts for a workorder based on the parts currently required")
+    @ApiResponse(responseCode = "200", description = "Substitute suggestions returned")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SubstituteLinkResponse>> suggestSubstitutes(@PathVariable UUID workorderId) {

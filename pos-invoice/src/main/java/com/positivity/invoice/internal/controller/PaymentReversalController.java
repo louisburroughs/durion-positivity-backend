@@ -38,7 +38,9 @@ public class PaymentReversalController {
 
     @PostMapping("/{invoiceId}/payments/{paymentId}/void")
     @EmitEvent(id = "INVOICE_PAYMENT_VOID", apiVersion = "1")
-    @Operation(summary = "Void authorized payment")
+    @Operation(
+            summary = "Void authorized payment",
+            description = "Void a previously authorized invoice payment before it is captured")
     @ApiResponse(responseCode = "200", description = "Payment voided")
     @ApiResponse(responseCode = "404", description = "Payment intent not found")
     @ApiResponse(responseCode = "409", description = "Invalid payment state")
@@ -53,7 +55,9 @@ public class PaymentReversalController {
 
     @PostMapping("/{invoiceId}/payments/{paymentId}/refunds")
     @EmitEvent(id = "INVOICE_PAYMENT_REFUND", apiVersion = "1")
-    @Operation(summary = "Refund captured payment")
+    @Operation(
+            summary = "Refund captured payment",
+            description = "Create a refund for a captured invoice payment and record the refund details")
     @ApiResponse(responseCode = "201", description = "Refund created")
     @ApiResponse(responseCode = "404", description = "Payment intent not found")
     @ApiResponse(responseCode = "409", description = "Invalid payment state")

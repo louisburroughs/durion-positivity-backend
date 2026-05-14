@@ -235,6 +235,12 @@ public class EstimateController {
 
     @PatchMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PATCH", apiVersion = "1")
+    @Operation(
+            summary = "Patch estimate status",
+            description = "Patch the status of an estimate by applying an allowed workflow transition")
+    @ApiResponse(responseCode = "200", description = "Estimate status updated")
+    @ApiResponse(responseCode = "400", description = "Estimate patch request is invalid")
+    @ApiResponse(responseCode = "409", description = "Estimate transition is not allowed")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:edit"})

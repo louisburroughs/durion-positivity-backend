@@ -1,16 +1,24 @@
 openapi: 3.1.0
 info:
-  title: POS Documents Service API
-  description: Document rendering service with multi-format PDF output
-  version: '1.0'
+  title: Positivity Documents API
+  description: API documentation for document rendering and format conversion
+  contact:
+    name: Durion Support Services
+    email: louis.burroughs@gmail.com
+  version: v1
 servers:
 - url: http://localhost:8086
   description: Generated server url
+tags:
+- name: Document Render API
+  description: Render source content into PDF output
 paths:
-  /api/documents/render:
+  /v1/documents/render:
     post:
       tags:
-      - document-render-controller
+      - Document Render API
+      summary: Render document to PDF
+      description: Renders input content and template context into a PDF document.
       operationId: renderDocument
       requestBody:
         content:
@@ -20,12 +28,32 @@ paths:
         required: true
       responses:
         '200':
-          description: OK
+          description: PDF rendered successfully
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+                additionalProperties: {}
+        '400':
+          description: Invalid render request
           content:
             application/pdf:
               schema:
                 type: string
                 format: byte
+        '403':
+          description: Forbidden
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
+      security:
+      - bearerAuth:
+        - documents:render
+      x-required-permissions:
+      - documents:render
 components:
   schemas:
     RenderRequest:
@@ -43,6 +71,12 @@ components:
           type: string
         content:
           type: string
+          minLength: 1
       required:
       - content
       - format
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

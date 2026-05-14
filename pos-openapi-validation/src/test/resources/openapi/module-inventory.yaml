@@ -4,29 +4,23 @@ modules:
   pos-order:
     mode: STRICT
   pos-workorder:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-inventory:
     mode: STRICT
   pos-price:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-customer:
     mode: STRICT
   pos-location:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-people:
     mode: STRICT
   pos-catalog:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-shop-manager:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-invoice:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-bulk-loader:
     mode: STRICT
   pos-vehicle-inventory:
@@ -38,16 +32,14 @@ modules:
   pos-image:
     mode: STRICT
   pos-documents:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-security-service:
     mode: STRICT
   pos-api-gateway:
     mode: EXCEPTION
     reason: aggregate producer without module paths
   pos-mcp-server:
-    mode: REPORT_ONLY
-    reason: baseline metadata gap
+    mode: STRICT
   pos-inquiry:
     mode: EXCEPTION
     reason: stub module with no REST producer surface

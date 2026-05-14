@@ -35,7 +35,9 @@ public class TravelBufferPolicyController {
 
     private final TravelBufferPolicyService travelBufferPolicyService;
 
-    @Operation(summary = "Create travel buffer policy")
+    @Operation(
+            summary = "Create travel buffer policy",
+            description = "Create a travel buffer policy that defines extra travel time handling rules")
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:travel-buffer-policy:manage')")
@@ -47,7 +49,9 @@ public class TravelBufferPolicyController {
         return ResponseEntity.status(HttpStatus.CREATED).body(travelBufferPolicyService.create(request));
     }
 
-    @Operation(summary = "List travel buffer policies")
+    @Operation(
+            summary = "List travel buffer policies",
+            description = "List configured travel buffer policies available for routing and scheduling decisions")
     @ApiResponse(responseCode = "200", description = "Travel buffer policies listed")
     @PreAuthorize("hasAuthority('location:travel-buffer-policy:read')")
     @SecurityRequirement(
@@ -58,7 +62,9 @@ public class TravelBufferPolicyController {
         return ResponseEntity.ok(travelBufferPolicyService.list());
     }
 
-    @Operation(summary = "Patch travel buffer policy")
+    @Operation(
+            summary = "Patch travel buffer policy",
+            description = "Patch an existing travel buffer policy using the provided partial field updates")
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
     @ApiResponse(responseCode = "400", description = "Invalid travel buffer policy id")
     @ApiResponse(responseCode = "404", description = "Travel buffer policy not found")
