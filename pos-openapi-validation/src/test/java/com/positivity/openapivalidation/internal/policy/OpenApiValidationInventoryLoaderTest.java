@@ -1,7 +1,6 @@
 package com.positivity.openapivalidation.internal.policy;
 
 import static com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy.Mode.EXCEPTION;
-import static com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy.Mode.REPORT_ONLY;
 import static com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy.Mode.STRICT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,7 +16,7 @@ class OpenApiValidationInventoryLoaderTest {
                 OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
 
         assertThat(inventory.policyFor("pos-accounting").mode()).isEqualTo(STRICT);
-        assertThat(inventory.policyFor("pos-location").mode()).isEqualTo(REPORT_ONLY);
+        assertThat(inventory.policyFor("pos-location").mode()).isEqualTo(STRICT);
         assertThat(inventory.policyFor("pos-api-gateway").mode()).isEqualTo(EXCEPTION);
     }
 
