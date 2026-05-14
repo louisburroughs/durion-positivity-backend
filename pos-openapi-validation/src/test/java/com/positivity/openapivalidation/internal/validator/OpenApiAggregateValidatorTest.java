@@ -42,6 +42,22 @@ class OpenApiAggregateValidatorTest {
     }
 
     @Test
+    void relativeAggregatePathWithNullParent_doesNotThrowNullPointerException() {
+        // Fixture lives at the module root; Path.of with only a filename has getParent() == null
+        var path = Path.of("broken-ref-aggregate.yaml");
+        assertThat(path.getParent()).isNull();
+
+        // Before fix: NullPointerException wrapped in IllegalStateException
+        // After fix: returns an unresolved-ref issue without any exception
+        var issues = validator.validate(path);
+
+        assertThat(issues).singleElement()
+                .extracting(OpenApiValidationIssue::message)
+                .asString()
+                .contains("unresolved ref");
+    }
+
+    @Test
     void unexpectedFailures_areWrapped() {
         Path aggregatePath = Path.of("src/test/resources/openapi/fixtures/aggregate/does-not-exist.yaml");
 

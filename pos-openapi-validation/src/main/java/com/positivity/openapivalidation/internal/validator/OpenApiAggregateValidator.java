@@ -89,7 +89,10 @@ public class OpenApiAggregateValidator {
 
         Object targetRoot = root;
         if (!filePart.isBlank()) {
-            Path referencedPath = aggregatePath.getParent().resolve(filePart).normalize();
+            Path baseDir = aggregatePath.getParent() != null
+                    ? aggregatePath.getParent()
+                    : aggregatePath.toAbsolutePath().getParent();
+            Path referencedPath = baseDir.resolve(filePart).normalize();
             if (!Files.exists(referencedPath)) {
                 issues.add(unresolvedRefIssue(currentPath, ref));
                 return;
