@@ -2,7 +2,7 @@
 
 `pos-openapi-validation` is the repository's OpenAPI policy module. It does not provide runtime behavior; it packages validator code and tests that read generated OpenAPI files from the worktree and fail Maven when the repository violates the ADR-0042 rules.
 
-Most of the real logic lives under `src/test/java`. The module is meant to be run as tests, not started as an application.
+The reusable validator and policy classes live under `src/main/java`. The Maven test phase remains the enforcement entrypoint — the module is not started as an application.
 
 ## How it works
 
@@ -11,7 +11,7 @@ The repository validation flow is:
 1. Each producer module writes its generated spec to `<module>/openapi.yaml`.
 2. The gateway aggregate spec is written to `pos-api-gateway/docs/openapi-aggregate.yaml`.
 3. `OpenApiRepositoryValidationTest` loads the committed policy inventory from `src/test/resources/openapi/module-inventory.yaml`.
-4. `OpenApiRepositoryValidator` validates each module in scope with `OpenApiModuleValidator`, then validates the aggregate spec with `OpenApiAggregateValidator`.
+4. `OpenApiRepositoryValidator` (in `src/main/java`) orchestrates `OpenApiModuleValidator` and `OpenApiAggregateValidator` to validate each module in scope and the aggregate spec.
 
 ### What is checked
 
