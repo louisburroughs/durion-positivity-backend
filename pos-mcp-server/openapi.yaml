@@ -595,6 +595,21 @@ components:
       properties:
         response:
           type: string
+    ServerSentEventString:
+      type: object
+      description: A Server-Sent Event carrying a string data payload
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        data:
+          type: string
+        retry:
+          type: integer
+          format: int64
+        comment:
+          type: string
     StreamChatRequest:
       type: object
       description: Streaming chat request payload
