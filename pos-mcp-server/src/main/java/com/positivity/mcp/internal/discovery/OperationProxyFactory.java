@@ -64,38 +64,60 @@ public class OperationProxyFactory {
                 return Mono.just(errorResult("No instance available for service " + serviceId));
             }
 
-            URI targetUri = buildUri(instance, pathTemplate, pathParams, queryParams);
-            var requestSpec = webClient.method(method).uri(targetUri);
-            headers.forEach((key, value) -> requestSpec.header(key, String.valueOf(value)));
-            if (body != null) {
-                requestSpec.contentType(MediaType.APPLICATION_JSON);
-            }
-
-            return requestSpec
-                    .body(body != null ? BodyInserters.fromValue(body) : BodyInserters.empty())
-                    .retrieve()
-                    .toEntity(String.class)
-                    .map(responseEntity -> successResult(responseEntity.getBody()))
-                    .onErrorResume(ex -> {
-                        log.warn(
-                                "Tool proxy failed for service {} {} {}: {}",
-                                serviceId,
-                                method,
-                                targetUri,
-                                ex.getMessage());
-                        return Mono.just(errorResult(ex.getMessage()));
-                    });
+            URI targetUri = buildUriFromBase(instance.getUri(), pathTemplate, pathParams, queryParams);
+            return executeRequest(method, targetUri, headers, body, serviceId + " " + pathTemplate);
         };
     }
 
-    private URI buildUri(
-            @NonNull ServiceInstance instance,
+    /**
+     * Returns a handler that invokes the given gateway base URI directly, bypassing load-balancer
+     * resolution. Used for aggregate-discovered tools where the gateway base URI is known at
+     * mapping time and does not need per-request service lookup.
+     */
+    @NonNull
+    BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handlerForBaseUri(
+            @NonNull URI baseUri, @NonNull HttpMethod method, @NonNull String pathTemplate) {
+        return (exchange, request) -> {
+            var arguments = Optional.ofNullable(request.arguments()).orElse(Map.of());
+            Map<String, Object> pathParams = asMap(arguments.get("pathParams"));
+            Map<String, Object> queryParams = asMap(arguments.get("queryParams"));
+            Map<String, Object> headers = asMap(arguments.get("headers"));
+            Object body = arguments.get("body");
+
+            URI targetUri = buildUriFromBase(baseUri, pathTemplate, pathParams, queryParams);
+            return executeRequest(method, targetUri, headers, body, baseUri + " " + pathTemplate);
+        };
+    }
+
+    private Mono<McpSchema.CallToolResult> executeRequest(
+            @NonNull HttpMethod method,
+            @NonNull URI targetUri,
+            @NonNull Map<String, Object> headers,
+            Object body,
+            @NonNull String logContext) {
+        var requestSpec = webClient.method(method).uri(targetUri);
+        headers.forEach((key, value) -> requestSpec.header(key, String.valueOf(value)));
+        if (body != null) {
+            requestSpec.contentType(MediaType.APPLICATION_JSON);
+        }
+        return requestSpec
+                .body(body != null ? BodyInserters.fromValue(body) : BodyInserters.empty())
+                .retrieve()
+                .toEntity(String.class)
+                .map(responseEntity -> successResult(responseEntity.getBody()))
+                .onErrorResume(ex -> {
+                    log.warn("Tool proxy failed for {} {}: {}", logContext, targetUri, ex.getMessage());
+                    return Mono.just(errorResult(ex.getMessage()));
+                });
+    }
+
+    private URI buildUriFromBase(
+            @NonNull URI baseUri,
             @NonNull String pathTemplate,
             @NonNull Map<String, Object> pathParams,
             @NonNull Map<String, Object> queryParams) {
         String resolvedPath = resolvePath(pathTemplate, pathParams);
-        UriComponentsBuilder builder =
-                UriComponentsBuilder.fromUri(instance.getUri()).path(resolvedPath);
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(baseUri).path(resolvedPath);
         queryParams.forEach((key, value) -> {
             if (value instanceof List<?> list) {
                 list.forEach(item -> builder.queryParam(key, item));
