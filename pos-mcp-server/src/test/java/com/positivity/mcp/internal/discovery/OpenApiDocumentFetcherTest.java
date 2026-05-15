@@ -134,6 +134,35 @@ class OpenApiDocumentFetcherTest {
     }
 
     @Test
+    @DisplayName("fetchAggregateSpec preserves discovered gateway context path for relative aggregate URL")
+    void fetchAggregateSpec_preservesGatewayContextPath_whenConfigIsRelativeAndGatewayHasContextPath() {
+        String yaml = loadClasspathResource("openapi/aggregate/minimal-aggregate.yaml");
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        ServiceInstance gatewayInstance = mock(ServiceInstance.class);
+        when(gatewayInstance.getUri()).thenReturn(URI.create("http://gateway.local:8080/mcp"));
+        when(discoveryClient.getInstances("pos-api-gateway")).thenReturn(List.of(gatewayInstance));
+
+        List<URI> requestedUris = new ArrayList<>();
+        WebClient trackingClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    requestedUris.add(request.url());
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                })
+                .build();
+
+        OpenApiDocumentFetcher fetcher = fetcherWith(discoveryClient, trackingClient, "/v3/api-docs");
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.baseUri()).isEqualTo(URI.create("http://gateway.local:8080/mcp"));
+        assertThat(requestedUris).hasSize(1);
+        assertThat(requestedUris.getFirst().toString())
+                .isEqualTo("http://gateway.local:8080/mcp/v3/api-docs");
+    }
+
+    @Test
     @DisplayName("fetchAggregateSpec falls back to http://localhost:8080 when path-only and gateway not discoverable")
     void fetchAggregateSpec_resolvesPathAgainstLocalDefault_whenConfigIsPathOnlyAndGatewayNotDiscoverable() {
         String yaml = loadClasspathResource("openapi/aggregate/minimal-aggregate.yaml");

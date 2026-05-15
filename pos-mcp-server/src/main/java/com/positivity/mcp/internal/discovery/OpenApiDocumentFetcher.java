@@ -51,7 +51,7 @@ public class OpenApiDocumentFetcher {
         }
         if (!specUri.isAbsolute()) {
             URI gatewayBase = resolveGatewayBase();
-            return fetchAggregateSpecFrom(gatewayBase.resolve(specUri), gatewayBase);
+            return fetchAggregateSpecFrom(resolveRelativeSpecUri(gatewayBase, specUri), gatewayBase);
         }
         URI baseUri = deriveBaseUri(specUri);
         return fetchAggregateSpecFrom(specUri, baseUri);
@@ -93,6 +93,41 @@ public class OpenApiDocumentFetcher {
             return instances.getFirst().getUri();
         }
         return LOCAL_GATEWAY_FALLBACK;
+    }
+
+    private URI resolveRelativeSpecUri(URI gatewayBase, URI relativeSpecUri) {
+        String gatewayPath = normalizeBasePath(gatewayBase.getPath());
+        String specPath = normalizeSpecPath(relativeSpecUri.getPath());
+        String resolvedPath = gatewayPath + specPath;
+        if (resolvedPath.isEmpty()) {
+            resolvedPath = "/";
+        }
+        try {
+            return new URI(
+                    gatewayBase.getScheme(),
+                    gatewayBase.getUserInfo(),
+                    gatewayBase.getHost(),
+                    gatewayBase.getPort(),
+                    resolvedPath,
+                    relativeSpecUri.getQuery(),
+                    relativeSpecUri.getFragment());
+        } catch (java.net.URISyntaxException ex) {
+            throw new IllegalArgumentException("Invalid aggregate spec URI path: " + relativeSpecUri, ex);
+        }
+    }
+
+    private String normalizeBasePath(String gatewayPath) {
+        if (gatewayPath == null || gatewayPath.isBlank() || "/".equals(gatewayPath)) {
+            return "";
+        }
+        return gatewayPath.endsWith("/") ? gatewayPath.substring(0, gatewayPath.length() - 1) : gatewayPath;
+    }
+
+    private String normalizeSpecPath(String specPath) {
+        if (specPath == null || specPath.isBlank()) {
+            return "";
+        }
+        return specPath.startsWith("/") ? specPath : "/" + specPath;
     }
 
     private Mono<DiscoveredOpenApi> fetchAggregateSpecFrom(URI specUri, URI baseUri) {
