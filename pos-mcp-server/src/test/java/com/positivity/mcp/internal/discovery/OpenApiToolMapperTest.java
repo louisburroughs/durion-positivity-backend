@@ -90,6 +90,25 @@ class OpenApiToolMapperTest {
         assertThat(specs).isEmpty();
     }
 
+    @Test
+    @DisplayName("toAggregateToolSpecifications excludes paths not matching configured included-path-prefixes allowlist")
+    void toAggregateToolSpecifications_excludesPaths_whenNotInAllowlist() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        when(mockFactory.handlerForBaseUri(any(), any(), any())).thenReturn((ex, req) -> Mono.empty());
+
+        McpServerProperties props = propertiesWithPrefixesAndExclusions(List.of("/v1/accounting/"), List.of());
+        OpenApiToolMapper mapper = new OpenApiToolMapper(props, mockFactory);
+        OpenAPI openApi = openApiWith(Map.of(
+                "/v1/accounting/invoices", getItem("listInvoices", "List invoices"),
+                "/v1/orders/items", getItem("listItems", "List items")));
+
+        List<McpServerFeatures.AsyncToolSpecification> specs =
+                mapper.toAggregateToolSpecifications(GATEWAY_URI, openApi);
+
+        assertThat(specs).hasSize(1);
+        assertThat(specs.getFirst().tool().name()).isEqualTo("accounting_listinvoices");
+    }
+
     // --- helpers ---
 
     private static McpServerProperties propertiesWithExclusions(List<String> excludedFragments) {
@@ -101,6 +120,20 @@ class OpenApiToolMapperTest {
                 Duration.ofSeconds(5),
                 List.of(),
                 List.of(),
+                null,
+                excludedFragments);
+    }
+
+    private static McpServerProperties propertiesWithPrefixesAndExclusions(
+            List<String> includedPrefixes, List<String> excludedFragments) {
+        return new McpServerProperties(
+                "http://localhost:8086",
+                "/mcp/message",
+                "/mcp/sse",
+                "/v3/api-docs",
+                Duration.ofSeconds(5),
+                List.of(),
+                includedPrefixes,
                 null,
                 excludedFragments);
     }

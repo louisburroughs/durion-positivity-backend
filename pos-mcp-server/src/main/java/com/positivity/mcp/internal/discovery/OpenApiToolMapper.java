@@ -66,7 +66,7 @@ public class OpenApiToolMapper {
             return specs;
         }
         openApi.getPaths().forEach((path, pathItem) -> {
-            if (properties.excludesPath(path)) {
+            if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
             addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getGet(), HttpMethod.GET);
