@@ -41,13 +41,50 @@ public class OpenApiDocumentFetcher {
         if (specUrl == null || specUrl.isBlank()) {
             return Mono.empty();
         }
-        URI specUri = URI.create(specUrl);
+        URI specUri;
+        try {
+            specUri = URI.create(specUrl);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Malformed mcp.server.aggregate-spec-url '{}', skipping aggregate discovery: {}",
+                    specUrl, ex.getMessage());
+            return Mono.empty();
+        }
         if (!specUri.isAbsolute()) {
             URI gatewayBase = resolveGatewayBase();
             return fetchAggregateSpecFrom(gatewayBase.resolve(specUri), gatewayBase);
         }
-        URI baseUri = URI.create(specUri.getScheme() + "://" + specUri.getAuthority());
+        URI baseUri = deriveBaseUri(specUri);
         return fetchAggregateSpecFrom(specUri, baseUri);
+    }
+
+    /**
+     * Derives the routing base URI from an absolute spec URL by stripping the configured
+     * {@code openApiPath} suffix (e.g. {@code /v3/api-docs}) from the spec URL path. This
+     * preserves any context-path prefix the gateway may have.
+     *
+     * <p>Examples (with {@code openApiPath=/v3/api-docs}):
+     * <ul>
+     *   <li>{@code http://gateway.test/v3/api-docs} → {@code http://gateway.test}
+     *   <li>{@code https://gateway.example/mcp/v3/api-docs} → {@code https://gateway.example/mcp}
+     * </ul>
+     *
+     * <p>If the spec URL does not end with the configured {@code openApiPath}, the last path
+     * segment is stripped as a fallback.
+     */
+    private URI deriveBaseUri(URI specUri) {
+        String specPath = specUri.getPath();
+        String openApiPath = properties.openApiPath();
+        String basePath;
+        if (specPath != null && specPath.endsWith(openApiPath)) {
+            basePath = specPath.substring(0, specPath.length() - openApiPath.length());
+        } else {
+            int lastSlash = specPath != null ? specPath.lastIndexOf('/') : -1;
+            basePath = lastSlash > 0 ? specPath.substring(0, lastSlash) : "";
+        }
+        if (basePath.isEmpty() || basePath.equals("/")) {
+            return URI.create(specUri.getScheme() + "://" + specUri.getAuthority());
+        }
+        return URI.create(specUri.getScheme() + "://" + specUri.getAuthority() + basePath);
     }
 
     private URI resolveGatewayBase() {

@@ -6,6 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 @ExtendWith(MockitoExtension.class)
@@ -104,6 +108,27 @@ class ToolRegistrationServiceImplTest {
         verify(mcpAsyncServer, never()).notifyToolsListChanged();
     }
 
+    @Test
+    @DisplayName("registerDiscoveredTools logs a WARN when included-services is configured in aggregate-first mode")
+    void registerDiscoveredTools_logsWarning_whenIncludedServicesConfiguredInAggregateFirstMode() {
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.empty());
+
+        ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+        try {
+            ToolRegistrationServiceImpl service = serviceWithIncludedServices(List.of("event-receiver"));
+            service.registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+            boolean hasDeprecationWarning = logAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .anyMatch(e -> e.getFormattedMessage().contains("included-services"));
+            assertThat(hasDeprecationWarning)
+                    .as("Expected a WARN log mentioning 'included-services' when it is set in aggregate-first mode")
+                    .isTrue();
+        } finally {
+            detachLogAppender(logAppender);
+        }
+    }
+
     // --- helpers ---
 
     private ToolRegistrationServiceImpl serviceUnderTest() {
@@ -119,6 +144,36 @@ class ToolRegistrationServiceImplTest {
                 List.of());
         return new ToolRegistrationServiceImpl(
                 properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+    }
+
+    private ToolRegistrationServiceImpl serviceWithIncludedServices(List<String> includedServices) {
+        McpServerProperties properties = new McpServerProperties(
+                "http://localhost:8086",
+                "/mcp/message",
+                "/mcp/sse",
+                "/v3/api-docs",
+                Duration.ofSeconds(5),
+                includedServices,
+                List.of(),
+                "http://gateway.test/v3/api-docs",
+                List.of());
+        return new ToolRegistrationServiceImpl(
+                properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+    }
+
+    private static ListAppender<ILoggingEvent> attachLogAppender() {
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachLogAppender(ListAppender<ILoggingEvent> appender) {
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
+        logger.detachAppender(appender);
     }
 
     private static McpServerFeatures.AsyncToolSpecification toolSpec(String name) {

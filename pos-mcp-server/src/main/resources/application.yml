@@ -17,8 +17,6 @@ mcp:
       - /admin/
       - /actuator/
       - /internal/
-    included-services:
-      - event-receiver
     included-path-prefixes:
       - /v1/events/summary
   security:

@@ -69,6 +69,31 @@ class OpenApiDocumentFetcherTest {
     }
 
     @Test
+    @DisplayName("fetchAggregateSpec derives context-path-aware base URI when absolute URL includes a context path")
+    void fetchAggregateSpec_derivesContextPathAwareBaseUri_whenSpecUrlIncludesContextPath() {
+        String yaml = loadClasspathResource("openapi/aggregate/minimal-aggregate.yaml");
+        String specUrlWithContextPath = "http://gateway.example/mcp/v3/api-docs";
+        OpenApiDocumentFetcher fetcher = fetcherWith(webClientReturning(yaml), specUrlWithContextPath);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.baseUri()).isEqualTo(URI.create("http://gateway.example/mcp"));
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec returns empty Mono when aggregateSpecUrl is malformed")
+    void fetchAggregateSpec_returnsEmpty_whenAggregateSpecUrlIsMalformed() {
+        OpenApiDocumentFetcher fetcher = fetcherWith(webClientReturning("irrelevant"), "not a valid url {}");
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNull();
+    }
+
+    @Test
     @DisplayName("fetchAggregateSpec returns empty Mono when aggregateSpecUrl is not configured")
     void fetchAggregateSpec_returnsEmpty_whenAggregateSpecUrlIsBlank() {
         OpenApiDocumentFetcher fetcher = fetcherWith(webClientReturning("irrelevant"), null);

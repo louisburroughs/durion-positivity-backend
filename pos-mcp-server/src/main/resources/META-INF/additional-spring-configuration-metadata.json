@@ -31,7 +31,11 @@
     {
       "name": "mcp.server.included-services",
       "type": "java.util.List<java.lang.String>",
-      "description": "Optional allowlist of services to include as MCP tools."
+      "description": "Deprecated. This property has no effect in aggregate-first discovery mode (when mcp.server.aggregate-spec-url is set). Use mcp.server.included-path-prefixes to filter which API paths are exposed as MCP tools.",
+      "deprecation": {
+        "reason": "Has no effect in aggregate-first discovery mode. Use included-path-prefixes instead.",
+        "replacement": "mcp.server.included-path-prefixes"
+      }
     },
     {
       "name": "mcp.server.included-path-prefixes",
@@ -648,7 +652,7 @@
     {
       "name": "langchain4j.ollama.chat-model.temperature",
       "type": "java.lang.Double",
-      "description": "Sampling temperature for the Ollama chat model (0.0–1.0).",
+      "description": "Sampling temperature for the Ollama chat model (0.0\u20131.0).",
       "defaultValue": 0.2
     },
     {
@@ -700,7 +704,7 @@
     {
       "name": "langchain4j.ollama.streaming-chat-model.temperature",
       "type": "java.lang.Double",
-      "description": "Sampling temperature for the Ollama streaming chat model (0.0–1.0).",
+      "description": "Sampling temperature for the Ollama streaming chat model (0.0\u20131.0).",
       "defaultValue": 0.2
     },
     {

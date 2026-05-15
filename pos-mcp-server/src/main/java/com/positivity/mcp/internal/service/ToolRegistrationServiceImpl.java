@@ -38,6 +38,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     @Override
     public @NonNull Mono<Void> registerDiscoveredTools() {
         long totalStartNanos = System.nanoTime();
+        warnIfIncludedServicesDeprecated();
         return openApiDocumentFetcher
                 .fetchAggregateSpec()
                 .switchIfEmpty(Mono.fromRunnable(() -> log.warn(
@@ -72,6 +73,17 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             ex.getMessage());
                     return Mono.empty();
                 });
+    }
+
+    private void warnIfIncludedServicesDeprecated() {
+        if (!properties.includedServices().isEmpty()
+                && properties.aggregateSpecUrl() != null
+                && !properties.aggregateSpecUrl().isBlank()) {
+            log.warn(
+                    "mcp.server.included-services is configured but has no effect in aggregate-first discovery mode "
+                            + "(aggregate-spec-url is set). included-services is deprecated for aggregate-first "
+                            + "discovery; use mcp.server.included-path-prefixes instead.");
+        }
     }
 
     private @NonNull Mono<Void> addToolWithTiming(McpServerFeatures.AsyncToolSpecification specification) {
