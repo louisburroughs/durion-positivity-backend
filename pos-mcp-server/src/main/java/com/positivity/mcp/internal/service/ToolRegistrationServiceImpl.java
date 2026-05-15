@@ -41,8 +41,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         warnIfIncludedServicesDeprecated();
         return openApiDocumentFetcher
                 .fetchAggregateSpec()
-                .switchIfEmpty(Mono.fromRunnable(() -> log.warn(
-                        "Aggregate OpenAPI spec unavailable — skipping auto-discovered tool registration")))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("Aggregate OpenAPI spec unavailable — skipping auto-discovered tool registration");
+                    return Mono.empty();
+                }))
                 .flatMap(discovered -> {
                     var specifications =
                             openApiToolMapper.toAggregateToolSpecifications(discovered.baseUri(), discovered.openApi());
