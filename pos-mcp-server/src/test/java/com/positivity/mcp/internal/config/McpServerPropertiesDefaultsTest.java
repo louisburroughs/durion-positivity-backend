@@ -24,23 +24,49 @@ class McpServerPropertiesDefaultsTest {
     @DisplayName("excluded-path-fragments defaults in application.yml include /admin/, /actuator/, /internal/")
     void excludedPathFragments_defaultToAdminActuatorInternal() {
         new ApplicationContextRunner()
-                .withInitializer(ctx -> {
-                    YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-                    try {
-                        List<PropertySource<?>> sources =
-                                loader.load("application", new ClassPathResource("application.yml"));
-                        for (PropertySource<?> source : sources) {
-                            ctx.getEnvironment().getPropertySources().addLast(source);
-                        }
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                })
+                .withInitializer(loadYaml("application.yml"))
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
                     assertThat(props.excludedPathFragments())
                             .containsExactlyInAnyOrder("/admin/", "/actuator/", "/internal/");
                 });
+    }
+
+    @Test
+    @DisplayName("application.yml raises Tomcat request header limit for gateway-expanded auth headers")
+    void applicationYml_setsMaxHttpRequestHeaderSize() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml"))
+                .run(ctx -> assertThat(ctx.getEnvironment().getProperty("server.max-http-request-header-size"))
+                        .isEqualTo("32KB"));
+    }
+
+    @Test
+    @DisplayName("application-alpha.yml points aggregate OpenAPI discovery at the gateway's internal port")
+    void applicationAlphaYml_pointsAggregateDiscoveryAtGatewayInternalPort() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application-alpha.yml"))
+                .withUserConfiguration(Config.class)
+                .run(ctx -> {
+                    McpServerProperties props = ctx.getBean(McpServerProperties.class);
+                    assertThat(props.aggregateSpecUrl()).isEqualTo("http://pos-api-gateway:8080/v3/api-docs");
+                });
+    }
+
+    private static org.springframework.context.ApplicationContextInitializer<
+                    org.springframework.context.ConfigurableApplicationContext>
+            loadYaml(String resourcePath) {
+        return ctx -> {
+            YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+            try {
+                List<PropertySource<?>> sources = loader.load("application", new ClassPathResource(resourcePath));
+                for (PropertySource<?> source : sources) {
+                    ctx.getEnvironment().getPropertySources().addLast(source);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        };
     }
 }

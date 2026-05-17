@@ -49,7 +49,7 @@ langchain4j:
 
 mcp:
   server:
-    aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://pos-api-gateway/v3/api-docs}
+    aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://pos-api-gateway:8080/v3/api-docs}
     excluded-path-fragments:
       - /admin/
       - /actuator/

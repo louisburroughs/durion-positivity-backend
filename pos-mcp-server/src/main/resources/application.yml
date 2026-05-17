@@ -87,6 +87,7 @@ exa:
 
 server:
   port: 8086
+  max-http-request-header-size: 32KB
   servlet:
     context-path: /
 
