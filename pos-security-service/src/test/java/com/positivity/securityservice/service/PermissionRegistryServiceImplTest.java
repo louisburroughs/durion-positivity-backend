@@ -76,6 +76,8 @@ class PermissionRegistryServiceImplTest {
 
         assertThat(permissionRegistryService.isValidPermissionName("pricing:price_book:view"))
                 .isTrue();
+        assertThat(permissionRegistryService.isValidPermissionName("people:userLink:view"))
+                .isTrue();
         assertThat(permissionRegistryService.isValidPermissionName("INVALID")).isFalse();
         assertThat(permissionRegistryService.getPermissionsByDomain("pricing")).hasSize(1);
         assertThat(permissionRegistryService.getAllPermissions()).hasSize(1);
@@ -83,6 +85,26 @@ class PermissionRegistryServiceImplTest {
                 .isTrue();
         assertThat(permissionRegistryService.getPermissionByName("pricing:price_book:view"))
                 .isPresent();
+    }
+
+    @Test
+    void registerPermissions_acceptsCamelCasePermissionSegments() {
+        PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                "people",
+                "pos-people",
+                List.of(new PermissionRegistrationRequest.PermissionDefinition("people:userLink:view", "desc")),
+                "1.0");
+
+        when(permissionRepository.findByName("people:userLink:view"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
+        when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+        assertThat(response.getRegisteredPermissions()).isEqualTo(1);
+        assertThat(response.getSkippedPermissions()).isZero();
+        assertThat(response.getErrors()).isEmpty();
     }
 
     @Test
