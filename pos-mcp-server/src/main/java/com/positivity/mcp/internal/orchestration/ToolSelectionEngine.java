@@ -187,16 +187,28 @@ public class ToolSelectionEngine {
 
     private @NonNull String deriveWorkflowState(@NonNull String message) {
         String lower = message.toLowerCase(Locale.ROOT);
-        if (containsAny(lower, Set.of("save", "create", "add", "new", "submit", "approve", "post"))) {
-            return "CREATE";
-        } else if (containsAny(lower, Set.of("delete", "remove", "cancel", "void", "purge"))) {
-            return "DELETE";
-        } else if (containsAny(lower, Set.of("update", "edit", "modify", "change", "put", "patch"))) {
-            return "UPDATE";
-        } else if (containsAny(lower, Set.of("list", "find", "search", "show", "get", "view", "retrieve", "fetch"))) {
-            return "READ";
-        } else if (containsAny(lower, Set.of("export", "report", "download", "extract", "backup"))) {
-            return "EXPORT";
+        if (containsAny(lower, Set.of("purchase order", "create po", "new po", "po for vendor"))) {
+            return "CREATING_PO";
+        } else if (containsAny(
+                lower,
+                Set.of(
+                        "receiving asn",
+                        "receive asn",
+                        "receive shipment",
+                        "receive order",
+                        "receiving shipment",
+                        "advanced shipment notice",
+                        "asn"))) {
+            return "RECEIVING_ASN";
+        } else if (containsAny(
+                lower,
+                Set.of(
+                        "inventory recon",
+                        "inventory reconciliation",
+                        "reconcile inventory",
+                        "stock reconciliation",
+                        "cycle count"))) {
+            return "INVENTORY_RECON";
         }
         return "IDLE";
     }
@@ -222,7 +234,11 @@ public class ToolSelectionEngine {
 
     private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
         for (String token : tokens) {
-            if (text.matches(".*\\b" + token + "\\b.*")) {
+            if (token.contains(" ")) {
+                if (text.contains(token)) {
+                    return true;
+                }
+            } else if (text.matches(".*\\b" + token + "\\b.*")) {
                 return true;
             }
         }

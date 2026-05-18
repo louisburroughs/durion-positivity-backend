@@ -125,6 +125,17 @@ class MasterAgentRegistryTest {
     }
 
     @Test
+    void resolveDomainToolsNormalizesSecurityRolesToRegistryRoles() {
+        Object inventoryTool = new InventoryFacadeToolStub();
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(),
+                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
+                java.util.Map.of("ROLE_SERVICE_WRITER", List.of(inventoryTool)));
+
+        assertThat(registry.resolveDomainTools("ROLE_SERVICE_ADVISOR")).containsExactly(inventoryTool);
+    }
+
+    @Test
     void resolveRagScopeForToolsReturnsMasterWhenSharedAndDomainToolsMixed() {
         Object sharedTool = new SharedToolStub();
         Object inventoryTool = new InventoryFacadeToolStub();

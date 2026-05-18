@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
@@ -190,5 +191,24 @@ class ToolRegistryServiceTest {
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
 
         assertThat(result).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("resolveCandidateTools normalizes security roles to seeded registry roles before querying")
+    void resolveCandidateTools_normalizesSecurityRolesBeforeQuerying() {
+        ToolSelectionContext context =
+                new ToolSelectionContext("show active workorders", "ROLE_SERVICE_ADVISOR", "IDLE");
+        float[] vector = new float[] {0.2f, 0.4f};
+
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_SERVICE_WRITER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(repository.findTopKByEmbeddingForRole(eq(vector), anyInt(), eq("ROLE_SERVICE_WRITER"), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(SAMPLE_TOOL);
+        verify(repository).findEnabledByRoleAndWorkflow("ROLE_SERVICE_WRITER", "IDLE");
+        verify(repository).findTopKByEmbeddingForRole(vector, 10, "ROLE_SERVICE_WRITER", "IDLE");
     }
 }

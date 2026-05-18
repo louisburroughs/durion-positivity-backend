@@ -54,15 +54,39 @@ class McpServerPropertiesDefaultsTest {
                 });
     }
 
+    @Test
+    @DisplayName("application and alpha profiles do not retain the legacy aggregate allowlist prefix")
+    void applicationAndAlphaProfiles_doNotRetainLegacyAggregateAllowlistPrefix() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
+                .withUserConfiguration(Config.class)
+                .run(ctx -> {
+                    McpServerProperties props = ctx.getBean(McpServerProperties.class);
+                    assertThat(props.includedPathPrefixes()).isEmpty();
+                });
+    }
+
+    @Test
+    @DisplayName("application-alpha.yml increases candidate tool limit for role agents")
+    void applicationAlphaYml_increasesCandidateToolLimit() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
+                .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.agent.candidate-tool-limit"))
+                        .isEqualTo("8"));
+    }
+
     private static org.springframework.context.ApplicationContextInitializer<
                     org.springframework.context.ConfigurableApplicationContext>
-            loadYaml(String resourcePath) {
+            loadYaml(String... resourcePaths) {
         return ctx -> {
             YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
             try {
-                List<PropertySource<?>> sources = loader.load("application", new ClassPathResource(resourcePath));
-                for (PropertySource<?> source : sources) {
-                    ctx.getEnvironment().getPropertySources().addLast(source);
+                for (int i = 0; i < resourcePaths.length; i++) {
+                    List<PropertySource<?>> sources =
+                            loader.load("application-" + i, new ClassPathResource(resourcePaths[i]));
+                    for (PropertySource<?> source : sources) {
+                        ctx.getEnvironment().getPropertySources().addLast(source);
+                    }
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

@@ -17,8 +17,6 @@ mcp:
       - /admin/
       - /actuator/
       - /internal/
-    included-path-prefixes:
-      - /v1/events/summary
   security:
     permit-all-transport: false
   rag:
