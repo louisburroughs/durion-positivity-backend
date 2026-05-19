@@ -40,6 +40,7 @@
 ### Task 1: Promote validator support code into `src/main/java`
 
 **Files:**
+
 - Modify: `pos-openapi-validation/pom.xml`
 - Create: `pos-openapi-validation/src/main/java/com/positivity/openapivalidation/internal/policy/OpenApiModulePolicy.java`
 - Create: `pos-openapi-validation/src/main/java/com/positivity/openapivalidation/internal/policy/OpenApiValidationInventory.java`
@@ -552,6 +553,7 @@ git commit -m "refactor: move openapi validators into main sources" \
 ### Task 2: Delete duplicate test-source implementations
 
 **Files:**
+
 - Create: `pos-openapi-validation/src/test/java/com/positivity/openapivalidation/TestSourceDuplicateGuardTest.java`
 - Modify: `pos-openapi-validation/src/test/java/com/positivity/openapivalidation/internal/policy/OpenApiValidationInventoryLoaderTest.java`
 - Delete: `pos-openapi-validation/src/test/java/com/positivity/openapivalidation/internal/policy/OpenApiModulePolicy.java`
@@ -667,6 +669,7 @@ git commit -m "test: remove duplicate openapi validator test helpers" \
 ### Task 3: Refresh module documentation and run the full module suite
 
 **Files:**
+
 - Modify: `pos-openapi-validation/README.md`
 - Test: `pos-openapi-validation/README.md`
 

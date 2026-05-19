@@ -180,11 +180,17 @@ jobs:
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Restore reactor build cache
+        id: restore-reactor-cache
         uses: actions/cache/restore@v5
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-          fail-on-cache-miss: true
+
+      - name: Bootstrap local Maven repo on cache miss
+        if: steps.restore-reactor-cache.outputs.cache-hit != 'true'
+        run: |
+          ./mvnw install -DskipTests -DskipITs -T 1C -B -q
+          ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
 
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
@@ -251,11 +257,17 @@ jobs:
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Restore reactor build cache
+        id: restore-reactor-cache
         uses: actions/cache/restore@v5
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-          fail-on-cache-miss: true
+
+      - name: Bootstrap local Maven repo on cache miss
+        if: steps.restore-reactor-cache.outputs.cache-hit != 'true'
+        run: |
+          ./mvnw install -DskipTests -DskipITs -T 1C -B -q
+          ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
 
       - name: Run integration tests
         run: ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
@@ -478,7 +490,6 @@ jobs:
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-          fail-on-cache-miss: true
 
       - name: Run Checkstyle
         if: github.event_name != 'pull_request'
