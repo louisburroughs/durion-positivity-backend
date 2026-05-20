@@ -771,6 +771,12 @@ ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index =
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
 VALUES ('601fa041-cb50-ab3b-2127-9fc70ceb15c0'::uuid, 'workorder:workorder:view', 'View workorders', 'workorder', 'workorder', 'view', NOW(), 'pos-workorder', '1.0', 176) 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
+INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
+VALUES ('c3a19e74-1f2d-4b8c-9e0a-6d5f7b3a2c41'::uuid, 'bulkImport:upload:execute', 'Submit bulk import jobs, upload files, and trigger processing', 'bulk-import', 'upload', 'execute', NOW(), 'pos-bulk-loader', '1.0', 239)
+ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
+INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
+VALUES ('e7b4a283-5c91-4d6e-8f0b-2a3c1d9e7f85'::uuid, 'bulkImport:status:read', 'View bulk import jobs, column mappings, and review queue', 'bulk-import', 'status', 'read', NOW(), 'pos-bulk-loader', '1.0', 240)
+ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 
 -- Role assignments
 INSERT INTO role_assignments (id, user_id, role_id, scope_type, effective_start_date, created_at, created_by)
