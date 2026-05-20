@@ -112,7 +112,7 @@ public class MasterAgentRegistryLoader {
     }
 
     private static @NonNull String normalizeRoleName(@NonNull String roleName) {
-        return roleName.trim();
+        return ToolRegistryRoleMapper.normalize(roleName);
     }
 
     private static @NonNull Map<String, List<Object>> immutableCopy(@NonNull Map<String, List<Object>> source) {

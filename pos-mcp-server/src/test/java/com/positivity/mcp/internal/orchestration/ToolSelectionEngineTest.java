@@ -67,8 +67,8 @@ class ToolSelectionEngineTest {
     }
 
     @Test
-    @DisplayName("selectRoleTools derives read workflow and narrows role tools")
-    void selectRoleTools_derivesReadWorkflowAndNarrowsRoleTools() {
+    @DisplayName("selectRoleTools keeps general lookup queries on the seeded IDLE workflow")
+    void selectRoleTools_keepsGeneralLookupQueriesOnIdleWorkflowAndNarrowsRoleTools() {
         ToolMetadata inventoryTool = new ToolMetadata(
                 UUID.randomUUID(),
                 "inventoryFacadeTool",
@@ -95,7 +95,22 @@ class ToolSelectionEngineTest {
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
-        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
+    }
+
+    @Test
+    @DisplayName("selectRoleTools derives seeded purchase-order workflow when query is explicitly PO creation")
+    void selectRoleTools_derivesCreatingPoWorkflow() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of());
+
+        toolSelectionEngine.selectRoleTools("ROLE_ADMIN", "create PO for vendor NAPA with two line items");
+
+        ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("CREATING_PO");
     }
 
     @Test

@@ -472,22 +472,22 @@ INSERT INTO permissions (id, name, description, domain, resource, action, regist
 VALUES ('4cac458c-ee84-1ffe-2e77-d13b72f858c2'::uuid, 'people:skill:view', 'View employee skills', 'people', 'skill', 'view', NOW(), 'pos-people', '1.0', 123) 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-  VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid, 'people:person:view', 'View person records', 'people', 'person', 'view', NOW(), 'pos-people', '1.0', 233)
+VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid, 'people:person:view', 'View person records', 'people', 'person', 'view', NOW(), 'pos-people', '1.0', 233)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-  VALUES ('b2c3d4e5-f6a7-8901-bcde-f12345678901'::uuid, 'people:person:create', 'Create person records', 'people', 'person', 'create', NOW(), 'pos-people', '1.0', 234)
+VALUES ('b2c3d4e5-f6a7-8901-bcde-f12345678901'::uuid, 'people:person:create', 'Create person records', 'people', 'person', 'create', NOW(), 'pos-people', '1.0', 234)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-  VALUES ('c3d4e5f6-a7b8-9012-cdef-123456789012'::uuid, 'people:person:edit', 'Edit person records', 'people', 'person', 'edit', NOW(), 'pos-people', '1.0', 235)
+VALUES ('c3d4e5f6-a7b8-9012-cdef-123456789012'::uuid, 'people:person:edit', 'Edit person records', 'people', 'person', 'edit', NOW(), 'pos-people', '1.0', 235)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-  VALUES ('d4e5f6a7-b8c9-0123-def0-234567890123'::uuid, 'people:person:delete', 'Delete person records', 'people', 'person', 'delete', NOW(), 'pos-people', '1.0', 236)
+VALUES ('d4e5f6a7-b8c9-0123-def0-234567890123'::uuid, 'people:person:delete', 'Delete person records', 'people', 'person', 'delete', NOW(), 'pos-people', '1.0', 236)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-VALUES ('e5f6a7b8-c9d0-1234-ef01-345678901234'::uuid, 'people:userLink:view', 'View user-person links', 'people', 'userLink', 'view', NOW(), 'pos-people', '1.0', 225)
+VALUES ('e5f6a7b8-c9d0-1234-ef01-345678901234'::uuid, 'people:userLink:view', 'View user-person links', 'people', 'userLink', 'view', NOW(), 'pos-people', '1.0', 237)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-VALUES ('f6a7b8c9-d0e1-2345-f012-456789012345'::uuid, 'people:userLink:write', 'Manage user-person links', 'people', 'userLink', 'write', NOW(), 'pos-people', '1.0', 226)
+VALUES ('f6a7b8c9-d0e1-2345-f012-456789012345'::uuid, 'people:userLink:write', 'Manage user-person links', 'people', 'userLink', 'write', NOW(), 'pos-people', '1.0', 238)
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
 VALUES ('00ae2ed7-7122-2369-b258-62bba298135a'::uuid, 'pricing:normalization:edit', 'Edit price normalization rules', 'pricing', 'normalization', 'edit', NOW(), 'pos-price', '1.0', 131) 

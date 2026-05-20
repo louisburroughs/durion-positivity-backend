@@ -6,10 +6,14 @@ import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -45,7 +49,22 @@ public class McpStreamingChatController {
     @Operation(
             summary = "Execute MCP streaming chat - returns SSE token stream",
             description =
-                    "Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.")
+                    "Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Stream of SSE chat tokens",
+                        content =
+                                @Content(
+                                        mediaType = MediaType.TEXT_EVENT_STREAM_VALUE,
+                                        array =
+                                                @ArraySchema(
+                                                        schema =
+                                                                @Schema(
+                                                                        implementation =
+                                                                                ServerSentEventString
+                                                                                        .class))))
+            })
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
     @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")
@@ -74,4 +93,14 @@ public class McpStreamingChatController {
             description = "Streaming chat request payload",
             example = "{\"message\":\"Hello\"}")
     public record StreamChatRequest(@NotBlank @NonNull String message) {}
+
+    @Schema(
+            name = "ServerSentEventString",
+            description = "A Server-Sent Event carrying a string data payload")
+    public record ServerSentEventString(
+            @Nullable String id,
+            @Nullable String event,
+            @Nullable String data,
+            @Nullable Long retry,
+            @Nullable String comment) {}
 }

@@ -37,7 +37,9 @@ public class RestrictionRuleController {
         this.restrictionRuleService = restrictionRuleService;
     }
 
-    @Operation(summary = "Create a restriction rule")
+    @Operation(
+            summary = "Create a restriction rule",
+            description = "Creates a price restriction rule for a product, location tag, and service tag combination.")
     @ApiResponse(responseCode = "201", description = "Restriction rule created.")
     @ApiResponse(responseCode = "400", description = "Invalid request.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
@@ -55,7 +57,9 @@ public class RestrictionRuleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Get a restriction rule by ID")
+    @Operation(
+            summary = "Get a restriction rule by ID",
+            description = "Returns the active or inactive restriction rule identified by the supplied rule ID.")
     @ApiResponse(responseCode = "200", description = "Restriction rule found.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
@@ -68,7 +72,9 @@ public class RestrictionRuleController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "List all active restriction rules")
+    @Operation(
+            summary = "List all active restriction rules",
+            description = "Returns all currently active price restriction rules that can affect pricing decisions.")
     @ApiResponse(responseCode = "200", description = "List of restriction rules.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -80,7 +86,9 @@ public class RestrictionRuleController {
         return ResponseEntity.ok(rules);
     }
 
-    @Operation(summary = "Deactivate a restriction rule")
+    @Operation(
+            summary = "Deactivate a restriction rule",
+            description = "Deactivates the specified restriction rule so it no longer participates in price restriction evaluation.")
     @ApiResponse(responseCode = "200", description = "Restriction rule deactivated.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions.")

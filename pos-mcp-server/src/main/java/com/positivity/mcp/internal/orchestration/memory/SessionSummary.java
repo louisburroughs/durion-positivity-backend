@@ -36,9 +36,9 @@ import org.slf4j.LoggerFactory;
  * <li>Falls back gracefully if summarization or embedding fails
  * </ul>
  */
-public class SessionSummaryService {
+public class SessionSummary {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SessionSummaryService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SessionSummary.class);
     private static final String SUMMARIZATION_PROMPT_TEMPLATE = """
       Summarize the following conversation concisely, highlighting key decisions, questions, and outcomes.
       Focus on what the user wanted to accomplish and what was concluded.
@@ -55,7 +55,7 @@ public class SessionSummaryService {
     private final @Nullable PgVectorEmbeddingStore embeddingStore;
     private final @Nullable ContentRetriever summaryRetriever;
 
-    public SessionSummaryService(
+    public SessionSummary(
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
             @Nullable PgVectorEmbeddingStore embeddingStore,

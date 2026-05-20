@@ -52,6 +52,72 @@ public class OpenApiToolMapper {
         return specs;
     }
 
+    /**
+     * Maps aggregate OpenAPI operations to tool specifications using the gateway base URI directly.
+     * Tool names are derived as {@code {domain}_{operationId}} where the domain is the first
+     * non-version path segment (e.g. {@code /v1/accounting/invoices} → {@code accounting}).
+     * Paths matching any configured {@code excludedPathFragments} are skipped.
+     */
+    @NonNull
+    public List<McpServerFeatures.AsyncToolSpecification> toAggregateToolSpecifications(
+            @NonNull URI gatewayBaseUri, @NonNull OpenAPI openApi) {
+        var specs = new ArrayList<McpServerFeatures.AsyncToolSpecification>();
+        if (openApi.getPaths() == null) {
+            return specs;
+        }
+        openApi.getPaths().forEach((path, pathItem) -> {
+            if (!properties.includesPath(path) || properties.excludesPath(path)) {
+                return;
+            }
+            addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getGet(), HttpMethod.GET);
+            addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getPost(), HttpMethod.POST);
+            addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getPut(), HttpMethod.PUT);
+            addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getDelete(), HttpMethod.DELETE);
+            addAggregateOperation(specs, gatewayBaseUri, path, pathItem.getPatch(), HttpMethod.PATCH);
+        });
+        return specs;
+    }
+
+    private void addAggregateOperation(
+            @NonNull List<McpServerFeatures.AsyncToolSpecification> specs,
+            @NonNull URI gatewayBaseUri,
+            @NonNull String path,
+            Operation operation,
+            @NonNull HttpMethod method) {
+        if (operation == null) {
+            return;
+        }
+        String domain = extractDomain(path);
+        String operationId = buildOperationId(operation);
+        String toolName = sanitizeName(domain + "_" + operationId);
+        String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
+        String description = Optional.ofNullable(operation.getDescription()).orElse(title);
+
+        var inputSchema = buildInputSchema(method, path, operation);
+        var tool = McpSchema.Tool.builder()
+                .name(toolName)
+                .title(title)
+                .description(description)
+                .inputSchema(inputSchema)
+                .build();
+
+        var handler = proxyFactory.handlerForBaseUri(gatewayBaseUri, method, path);
+        specs.add(McpServerFeatures.AsyncToolSpecification.builder()
+                .tool(tool)
+                .callHandler(handler)
+                .build());
+    }
+
+    static String extractDomain(@NonNull String path) {
+        for (String segment : path.split("/")) {
+            if (segment.isBlank() || segment.matches("v\\d+")) {
+                continue;
+            }
+            return segment;
+        }
+        return "unknown";
+    }
+
     private void addOperation(
             @NonNull List<McpServerFeatures.AsyncToolSpecification> specs,
             @NonNull String serviceId,

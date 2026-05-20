@@ -327,8 +327,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1promotions~1redemptions
   /v1/promotions/redemptions/by-customer/{customerId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1promotions~1redemptions~1by-customer~1{customerId}
-  /api/documents/render:
-    $ref: ../../pos-documents/openapi.yaml#/paths/~1api~1documents~1render
+  /v1/documents/render:
+    $ref: ../../pos-documents/openapi.yaml#/paths/~1v1~1documents~1render
   /v1/eventTypes:
     $ref: ../../pos-event-receiver/openapi.yaml#/paths/~1v1~1eventTypes
   /v1/eventTypes/active:
@@ -1090,6 +1090,8 @@ paths:
 tags:
 - name: pos-accounting
   description: Operations served by pos-accounting
+- name: pos-api-gateway
+  description: Operations served by pos-api-gateway
 - name: pos-bulk-loader
   description: Operations served by pos-bulk-loader
 - name: pos-catalog
@@ -1132,6 +1134,7 @@ tags:
   description: Operations served by pos-workorder
 x-aggregated-modules:
 - pos-accounting
+- pos-api-gateway
 - pos-bulk-loader
 - pos-catalog
 - pos-customer

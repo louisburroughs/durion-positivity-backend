@@ -60,11 +60,13 @@ public class ToolRegistryService {
     }
 
     public @NonNull List<ToolMetadata> resolveCandidateTools(@NonNull ToolSelectionContext context, int topK) {
+        String registryRole = ToolRegistryRoleMapper.normalize(context.role());
         if (topK <= 0) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup skipped role={} workflow={} topK={} reason=non-positive-topk queryPreview=\"{}\"",
+                        "MCP tool lookup skipped role={} registryRole={} workflow={} topK={} reason=non-positive-topk queryPreview=\"{}\"",
                         context.role(),
+                        registryRole,
                         context.workflowState(),
                         topK,
                         preview(context.userInput()));
@@ -72,13 +74,13 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools =
-                repository.findEnabledByRoleAndWorkflow(context.role(), context.workflowState());
+        List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(registryRole, context.workflowState());
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool lookup start role={} workflow={} topK={} gatedToolCount={} gatedTools={} queryPreview=\"{}\"",
+                    "MCP tool lookup start role={} registryRole={} workflow={} topK={} gatedToolCount={} gatedTools={} queryPreview=\"{}\"",
                     context.role(),
+                    registryRole,
                     context.workflowState(),
                     topK,
                     gatedTools.size(),
@@ -89,8 +91,9 @@ public class ToolRegistryService {
         if (gatedTools.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup no gated tools role={} workflow={} queryPreview=\"{}\"",
+                        "MCP tool lookup no gated tools role={} registryRole={} workflow={} queryPreview=\"{}\"",
                         context.role(),
+                        registryRole,
                         context.workflowState(),
                         preview(context.userInput()));
             }
@@ -101,8 +104,9 @@ public class ToolRegistryService {
         if (!adminFastPathSelection.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup fast-path result role={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                        "MCP tool lookup fast-path result role={} registryRole={} workflow={} selectedTools={} queryPreview=\"{}\"",
                         context.role(),
+                        registryRole,
                         context.workflowState(),
                         toolNames(adminFastPathSelection),
                         preview(context.userInput()));
@@ -117,14 +121,15 @@ public class ToolRegistryService {
         // the
         // ranking window. Unauthorized tools can never displace authorized ones.
         List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForRole(
-                embedding, semanticLimit, context.role(), context.workflowState());
+                embedding, semanticLimit, registryRole, context.workflowState());
 
         if (semanticCandidates.isEmpty()) {
             // Fallback: tools have no embeddings yet; return highest-priority gated tools
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool scoring no-embedding fallback role={} workflow={} returning top-{} by priority",
+                        "MCP tool scoring no-embedding fallback role={} registryRole={} workflow={} returning top-{} by priority",
                         context.role(),
+                        registryRole,
                         context.workflowState(),
                         topK);
             }
@@ -148,8 +153,9 @@ public class ToolRegistryService {
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool scoring role={} workflow={} topK={} gatedTools={} semanticCandidates={} scoredCandidates={}",
+                    "MCP tool scoring role={} registryRole={} workflow={} topK={} gatedTools={} semanticCandidates={} scoredCandidates={}",
                     context.role(),
+                    registryRole,
                     context.workflowState(),
                     topK,
                     toolNames(gatedTools),
@@ -161,8 +167,9 @@ public class ToolRegistryService {
                 scoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool lookup result role={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                    "MCP tool lookup result role={} registryRole={} workflow={} selectedTools={} queryPreview=\"{}\"",
                     context.role(),
+                    registryRole,
                     context.workflowState(),
                     toolNames(selectedTools),
                     preview(context.userInput()));

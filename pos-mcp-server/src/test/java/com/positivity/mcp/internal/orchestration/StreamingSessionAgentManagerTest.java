@@ -248,7 +248,7 @@ class StreamingSessionAgentManagerTest {
         assertThat(result).isNotNull();
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
-        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool");
     }
 

@@ -12,10 +12,11 @@ mcp:
     sse-endpoint: /mcp/sse
     open-api-path: /v3/api-docs
     discovery-timeout: 5s
-    included-services:
-      - event-receiver
-    included-path-prefixes:
-      - /v1/events/summary
+    aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://localhost:8080/v3/api-docs}
+    excluded-path-fragments:
+      - /admin/
+      - /actuator/
+      - /internal/
   security:
     permit-all-transport: false
   rag:
@@ -84,6 +85,7 @@ exa:
 
 server:
   port: 8086
+  max-http-request-header-size: 32KB
   servlet:
     context-path: /
 

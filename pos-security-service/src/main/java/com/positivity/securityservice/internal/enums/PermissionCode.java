@@ -291,11 +291,13 @@ public enum PermissionCode {
     CATALOG__PRICE_BOOK__READ(231, "catalog:price_book:read"),
     CATALOG__PRICE_BOOK__WRITE(232, "catalog:price_book:write"),
 
-    // ── People (person) ───────────────────────────────────────────────────────
+    // ── People (batch 3) ─────────────────────────────────────────────────────
     PEOPLE__PERSON__VIEW(233, "people:person:view"),
     PEOPLE__PERSON__CREATE(234, "people:person:create"),
     PEOPLE__PERSON__EDIT(235, "people:person:edit"),
-    PEOPLE__PERSON__DELETE(236, "people:person:delete");
+    PEOPLE__PERSON__DELETE(236, "people:person:delete"),
+    PEOPLE__USER_LINK__VIEW(237, "people:userLink:view"),
+    PEOPLE__USER_LINK__WRITE(238, "people:userLink:write");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new

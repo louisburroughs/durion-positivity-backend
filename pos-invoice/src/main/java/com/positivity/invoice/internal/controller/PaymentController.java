@@ -79,7 +79,9 @@ public class PaymentController {
      */
     @PostMapping("/{invoiceId}/payments/{paymentId}/capture")
     @EmitEvent(id = "INVOICE_PAYMENT_CAPTURE", apiVersion = "1")
-    @Operation(summary = "Capture authorized payment hold")
+    @Operation(
+            summary = "Capture authorized payment hold",
+            description = "Capture all or part of a previously authorized invoice payment hold")
     @ApiResponse(responseCode = "200", description = "Payment captured")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Payment intent not found")

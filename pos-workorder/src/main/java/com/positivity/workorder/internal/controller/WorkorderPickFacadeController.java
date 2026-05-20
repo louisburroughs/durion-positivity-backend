@@ -47,7 +47,9 @@ public class WorkorderPickFacadeController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(summary = "Get pick list for workorder")
+    @Operation(
+            summary = "Get pick list for workorder",
+            description = "Retrieve the pick list for a workorder so parts can be staged and fulfilled")
     @ApiResponse(
             responseCode = "200",
             description = "Pick list retrieved successfully",
@@ -75,7 +77,9 @@ public class WorkorderPickFacadeController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(summary = "Get pick tasks for workorder")
+    @Operation(
+            summary = "Get pick tasks for workorder",
+            description = "Retrieve the pick tasks for a workorder to guide pick-list execution")
     @ApiResponse(
             responseCode = "200",
             description = "Pick tasks retrieved successfully",
@@ -107,7 +111,9 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_RESOLVE_SCAN", apiVersion = "1")
-    @Operation(summary = "Resolve scan for pick task")
+    @Operation(
+            summary = "Resolve scan for pick task",
+            description = "Resolve a scanned item for a workorder pick task before confirming fulfillment")
     @ApiResponse(
             responseCode = "200",
             description = "Scan resolved successfully",
@@ -150,7 +156,9 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_CONFIRM_LINE", apiVersion = "1")
-    @Operation(summary = "Confirm pick line quantity")
+    @Operation(
+            summary = "Confirm pick line quantity",
+            description = "Confirm the picked quantity for a workorder pick line after scan resolution")
     @ApiResponse(
             responseCode = "200",
             description = "Pick line confirmed successfully",
@@ -202,7 +210,9 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
-    @Operation(summary = "Complete pick task")
+    @Operation(
+            summary = "Complete pick task",
+            description = "Complete a workorder pick task after all of its pick lines are confirmed")
     @ApiResponse(
             responseCode = "200",
             description = "Pick task completed successfully",

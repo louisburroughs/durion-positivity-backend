@@ -1,7 +1,8 @@
 openapi: 3.1.0
 info:
   title: Positivity Product API
-  description: API documentation for the Product service, accessible via the API Gateway.
+  description: "API documentation for the Product service, accessible via the API\
+    \ Gateway."
   contact:
     name: Durion Support Services
     email: louis.burroughs@gmail.com
@@ -15,9 +16,9 @@ tags:
 - name: Catalog Bulk Ingest API
   description: Bulk import catalog products
 - name: Products API
-  description: API for products, lifecycle, and pricing
+  description: "API for products, lifecycle, and pricing"
 - name: Item Cost API
-  description: Manage standard, last, and average item costs
+  description: "Manage standard, last, and average item costs"
 - name: Supplier Item Cost API
   description: Manage supplier item costs with volume tiers
 - name: Product MSRP API
@@ -25,7 +26,7 @@ tags:
 - name: Catalog API
   description: API for managing catalogs
 - name: Price Book API
-  description: Manage price books, pricing rules, and resolution
+  description: "Manage price books, pricing rules, and resolution"
 - name: Catalog Items API
   description: API for managing catalog items by type
 - name: Supplier Item Cost List API
@@ -45,19 +46,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved product
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '404':
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: "#/components/schemas/ProductDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -78,37 +83,41 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductUpdateRequestDto'
+              $ref: "#/components/schemas/ProductUpdateRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Product updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '400':
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '404':
+                $ref: "#/components/schemas/ProductDto"
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '409':
+                $ref: "#/components/schemas/ProductDto"
+        "409":
           description: Business conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: "#/components/schemas/ProductDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -129,48 +138,53 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: msrpId
         in: path
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateMsrpRequestDto'
+              $ref: "#/components/schemas/UpdateMsrpRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: MSRP updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '400':
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '403':
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '404':
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "404":
           description: MSRP record not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '409':
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
           description: Temporal overlap or optimistic locking conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: "#/components/schemas/ProductMsrpDto"
       security:
       - bearerAuth:
         - catalog:msrp:write
@@ -190,19 +204,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved lifecycle state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
-        '404':
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: "#/components/schemas/ProductLifecycleResponse"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -216,7 +234,8 @@ paths:
       tags:
       - Products API
       summary: Set product lifecycle state
-      description: Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.
+      description: "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with\
+        \ effective date semantics."
       operationId: setLifecycleState
       parameters:
       - name: productId
@@ -225,43 +244,47 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductLifecycleUpdateRequest'
+              $ref: "#/components/schemas/ProductLifecycleUpdateRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Lifecycle state updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
-        '400':
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
-        '403':
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "403":
           description: Missing override permission
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
-        '404':
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
-        '409':
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "409":
           description: Lifecycle business rule conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: "#/components/schemas/ProductLifecycleResponse"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -285,19 +308,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Conversion found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
-        '404':
+                $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Conversion not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: "#/components/schemas/UomConversionDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -309,7 +336,8 @@ paths:
       tags:
       - UOM Conversion API
       summary: Update conversion factor
-      description: Updates the conversion factor and mutable fields for an existing conversion.
+      description: Updates the conversion factor and mutable fields for an existing
+        conversion.
       operationId: updateUomConversion
       parameters:
       - name: id
@@ -318,31 +346,35 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UomConversionUpdateRequestDto'
+              $ref: "#/components/schemas/UomConversionUpdateRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Conversion updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
-        '400':
+                $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
-        '404':
+                $ref: "#/components/schemas/UomConversionDto"
+        "404":
           description: Conversion not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: "#/components/schemas/UomConversionDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -354,7 +386,8 @@ paths:
       tags:
       - UOM Conversion API
       summary: Deactivate conversion
-      description: Deactivates a conversion so it is excluded from active conversion results.
+      description: Deactivates a conversion so it is excluded from active conversion
+        results.
       operationId: deactivateUomConversion
       parameters:
       - name: id
@@ -363,10 +396,11 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '204':
+        "204":
           description: Conversion deactivated
-        '404':
+        "404":
           description: Conversion not found
       security:
       - bearerAuth:
@@ -380,6 +414,8 @@ paths:
       tags:
       - Supplier Item Cost API
       summary: Get supplier cost structure
+      description: Returns the supplier item cost structure identified by the supplied
+        cost structure ID.
       operationId: getCostStructure
       parameters:
       - name: id
@@ -387,19 +423,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '404':
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
+                $ref: "#/components/schemas/SupplierItemCostDto"
       security:
       - bearerAuth:
         - catalog:supplier_cost:read
@@ -409,6 +449,8 @@ paths:
       tags:
       - Supplier Item Cost API
       summary: Update supplier cost structure
+      description: Updates the supplier item cost structure identified by the supplied
+        cost structure ID.
       operationId: updateCostStructure
       parameters:
       - name: id
@@ -416,25 +458,29 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SupplierItemCostUpdateRequestDto'
+              $ref: "#/components/schemas/SupplierItemCostUpdateRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '404':
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
+                $ref: "#/components/schemas/SupplierItemCostDto"
       security:
       - bearerAuth:
         - catalog:supplier_cost:write
@@ -444,6 +490,8 @@ paths:
       tags:
       - Supplier Item Cost API
       summary: Delete supplier cost structure
+      description: Deletes the supplier item cost structure identified by the supplied
+        cost structure ID.
       operationId: deleteCostStructure
       parameters:
       - name: id
@@ -451,10 +499,11 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '204':
+        "204":
           description: Deleted
-        '404':
+        "404":
           description: Not found
       security:
       - bearerAuth:
@@ -466,7 +515,7 @@ paths:
       tags:
       - Price Book API
       summary: Get price book
-      description: Retrieves a price book by ID, including its configuration metadata.
+      description: "Retrieves a price book by ID, including its configuration metadata."
       operationId: getPriceBook
       parameters:
       - name: priceBookId
@@ -474,19 +523,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Price book returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
-        '404':
+                $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Price book not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: "#/components/schemas/PriceBookDto"
       security:
       - bearerAuth:
         - catalog:price_book:read
@@ -504,25 +557,29 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PriceBookCreateRequestDto'
+              $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Price book updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
-        '404':
+                $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Price book not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: "#/components/schemas/PriceBookDto"
       security:
       - bearerAuth:
         - catalog:price_book:write
@@ -541,30 +598,35 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: ruleId
         in: path
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PriceBookRuleCreateRequestDto'
+              $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Price book rule updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
-        '409':
+                $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "409":
           description: Rule conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                $ref: "#/components/schemas/PriceBookRuleDto"
       security:
       - bearerAuth:
         - catalog:price_book:write
@@ -574,7 +636,8 @@ paths:
       tags:
       - Price Book API
       summary: Deactivate price book rule
-      description: Deactivates a price book rule so it is no longer considered in price resolution.
+      description: Deactivates a price book rule so it is no longer considered in
+        price resolution.
       operationId: deactivateRule
       parameters:
       - name: priceBookId
@@ -582,13 +645,15 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: ruleId
         in: path
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '204':
+        "204":
           description: Rule deactivated
       security:
       - bearerAuth:
@@ -600,6 +665,8 @@ paths:
       tags:
       - Item Cost API
       summary: Update standard item cost
+      description: Updates the standard cost for the specified item and returns the
+        refreshed item cost values.
       operationId: updateStandardCost
       parameters:
       - name: itemId
@@ -607,25 +674,29 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateStandardCostRequestDto'
+              $ref: "#/components/schemas/UpdateStandardCostRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostsDto'
-        '400':
+                $ref: "#/components/schemas/ItemCostsDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostsDto'
+                $ref: "#/components/schemas/ItemCostsDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -649,19 +720,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved catalog
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
-        '404':
+                $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Catalog not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: "#/components/schemas/CatalogDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -682,32 +757,39 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         description: Updated catalog object
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CatalogDto'
+              $ref: "#/components/schemas/CatalogDto"
+              additionalProperties:
+                default: ""
+              default: ""
         required: true
       responses:
-        '200':
+        "200":
           description: Catalog updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
-        '400':
+                $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
-        '404':
+                $ref: "#/components/schemas/CatalogDto"
+        "404":
           description: Catalog not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: "#/components/schemas/CatalogDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -728,10 +810,11 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '204':
+        "204":
           description: Catalog deleted successfully
-        '404':
+        "404":
           description: Catalog not found
       security:
       - bearerAuth:
@@ -745,46 +828,52 @@ paths:
       tags:
       - Catalog Items API
       summary: Update an existing catalog item
-      description: Updates an existing product, service, or non-inventory product in the catalog.
+      description: "Updates an existing product, service, or non-inventory product\
+        \ in the catalog."
       operationId: updateCatalogItem
       parameters:
       - name: type
         in: path
-        description: Type of catalog item (product, service, noninventory)
+        description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
           type: string
+          default: ""
       - name: catalogId
         in: path
         description: ID of the catalog item to update
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CatalogItemRequestDto'
+              $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Catalog item updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
-        '400':
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid item type or request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
-        '404':
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "404":
           description: Catalog item not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
+                $ref: "#/components/schemas/CatalogItemResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -796,27 +885,30 @@ paths:
       tags:
       - Catalog Items API
       summary: Delete a catalog item
-      description: Deletes a product, service, or non-inventory product from the catalog by its ID.
+      description: "Deletes a product, service, or non-inventory product from the\
+        \ catalog by its ID."
       operationId: deleteCatalogItem
       parameters:
       - name: type
         in: path
-        description: Type of catalog item (product, service, noninventory)
+        description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
           type: string
+          default: ""
       - name: catalogId
         in: path
         description: ID of the catalog item to delete
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '204':
+        "204":
           description: Catalog item deleted successfully
-        '400':
+        "400":
           description: Invalid item type
-        '404':
+        "404":
           description: Catalog item not found
       security:
       - bearerAuth:
@@ -830,33 +922,37 @@ paths:
       tags:
       - Products API
       summary: Create product master record
-      description: Creates a product master record with immutable SKU and uniqueness checks.
+      description: Creates a product master record with immutable SKU and uniqueness
+        checks.
       operationId: createProduct
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductCreateRequestDto'
+              $ref: "#/components/schemas/ProductCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Product created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '400':
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '409':
+                $ref: "#/components/schemas/ProductDto"
+        "409":
           description: Business conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: "#/components/schemas/ProductDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -878,15 +974,16 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Replacements listed
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ReplacementOption'
+                  $ref: "#/components/schemas/ReplacementOption"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -909,31 +1006,32 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductReplacementRequest'
+              $ref: "#/components/schemas/ProductReplacementRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Replacement added successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplacementOption'
-        '400':
+                $ref: "#/components/schemas/ReplacementOption"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplacementOption'
-        '404':
+                $ref: "#/components/schemas/ReplacementOption"
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplacementOption'
+                $ref: "#/components/schemas/ReplacementOption"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -956,13 +1054,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: MSRP records returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - catalog:msrp:read
@@ -980,37 +1082,41 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateMsrpRequestDto'
+              $ref: "#/components/schemas/CreateMsrpRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: MSRP created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '400':
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '403':
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '409':
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
           description: Temporal overlap conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: "#/components/schemas/ProductMsrpDto"
       security:
       - bearerAuth:
         - catalog:msrp:write
@@ -1024,14 +1130,21 @@ paths:
       description: Returns all active unit-of-measure conversion records.
       operationId: listUomConversions
       responses:
-        '200':
+        "200":
           description: Conversions listed
           content:
             application/json:
               schema:
                 type: array
+                additionalProperties:
+                  default: ""
+                contains:
+                  default: ""
                 items:
-                  $ref: '#/components/schemas/UomConversionDto'
+                  $ref: "#/components/schemas/UomConversionDto"
+                  default: ""
+                unevaluatedItems:
+                  default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1049,21 +1162,24 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UomConversionCreateRequestDto'
+              $ref: "#/components/schemas/UomConversionCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Conversion created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
-        '400':
+                $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: "#/components/schemas/UomConversionDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1076,32 +1192,37 @@ paths:
       tags:
       - Supplier Item Cost API
       summary: Create supplier cost structure
+      description: "Creates a supplier-specific item cost structure with the submitted\
+        \ supplier, item, and tier details."
       operationId: createCostStructure
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SupplierItemCostCreateRequestDto'
+              $ref: "#/components/schemas/SupplierItemCostCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '400':
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '409':
+                $ref: "#/components/schemas/SupplierItemCostDto"
+        "409":
           description: Duplicate supplier and item combination
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
+                $ref: "#/components/schemas/SupplierItemCostDto"
       security:
       - bearerAuth:
         - catalog:supplier_cost:write
@@ -1112,33 +1233,37 @@ paths:
       tags:
       - Products API
       summary: Create location price override
-      description: Creates a location-specific price override and enforces guardrails for margin and discount limits.
+      description: Creates a location-specific price override and enforces guardrails
+        for margin and discount limits.
       operationId: createLocationPriceOverride
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationPriceOverrideCreateRequestDto'
+              $ref: "#/components/schemas/LocationPriceOverrideCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Override created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '400':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Guardrail validation failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '403':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1151,7 +1276,8 @@ paths:
       tags:
       - Products API
       summary: Reject pending location price override
-      description: Rejects a pending override, persists rejection metadata, and marks the request as terminal.
+      description: "Rejects a pending override, persists rejection metadata, and marks\
+        \ the request as terminal."
       operationId: rejectLocationPriceOverride
       parameters:
       - name: overrideId
@@ -1160,37 +1286,41 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationPriceOverrideDecisionRequestDto'
+              $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Override rejected
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '400':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid rejection request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '404':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "404":
           description: Override or approval request not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '409':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "409":
           description: Version conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1203,7 +1333,8 @@ paths:
       tags:
       - Products API
       summary: Approve pending location price override
-      description: Approves a pending override and activates it as the effective location price.
+      description: Approves a pending override and activates it as the effective location
+        price.
       operationId: approveLocationPriceOverride
       parameters:
       - name: overrideId
@@ -1212,37 +1343,41 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationPriceOverrideDecisionRequestDto'
+              $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Override approved
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '400':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid approval request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '404':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "404":
           description: Override or approval request not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '409':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "409":
           description: Version conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1255,27 +1390,31 @@ paths:
       tags:
       - Products API
       summary: Upsert location guardrail policy
-      description: Creates or updates the active LOCATION guardrail policy used by price overrides.
+      description: Creates or updates the active LOCATION guardrail policy used by
+        price overrides.
       operationId: upsertLocationGuardrailPolicy
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GuardrailPolicyUpsertRequestDto'
+              $ref: "#/components/schemas/GuardrailPolicyUpsertRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Guardrail policy upserted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-        '400':
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid policy payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1294,21 +1433,24 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PriceBookCreateRequestDto'
+              $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Price book created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
-        '400':
+                $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: "#/components/schemas/PriceBookDto"
       security:
       - bearerAuth:
         - catalog:price_book:write
@@ -1327,13 +1469,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Rule list returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - catalog:price_book:read
@@ -1351,25 +1497,29 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PriceBookRuleCreateRequestDto'
+              $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Price book rule created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
-        '409':
+                $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "409":
           description: Rule conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                $ref: "#/components/schemas/PriceBookRuleDto"
       security:
       - bearerAuth:
         - catalog:price_book:write
@@ -1380,21 +1530,25 @@ paths:
       tags:
       - Price Book API
       summary: Resolve effective product price
-      description: Calculates the effective price for a product using applicable price books and rules.
+      description: Calculates the effective price for a product using applicable price
+        books and rules.
       operationId: resolvePrice
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResolvePriceRequestDto'
+              $ref: "#/components/schemas/ResolvePriceRequestDto"
         required: true
       responses:
-        '200':
+        "200":
           description: Resolved price returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ResolvePriceResponseDto'
+                $ref: "#/components/schemas/ResolvePriceResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - catalog:price_book:read
@@ -1412,21 +1566,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CatalogDto'
+              $ref: "#/components/schemas/CatalogDto"
+              additionalProperties:
+                default: ""
+              default: ""
         required: true
       responses:
-        '201':
+        "201":
           description: Catalog created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
-        '400':
+                $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: "#/components/schemas/CatalogDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1439,27 +1599,28 @@ paths:
       tags:
       - Catalog Bulk Ingest API
       summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
+      description: Accepts a batch of domain records for bulk import. Returns per-record
+        results.
       operationId: bulkIngest
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BulkIngestRequestCatalogBulkIngestRecord'
+              $ref: "#/components/schemas/BulkIngestRequestCatalogBulkIngestRecord"
         required: true
       responses:
-        '200':
+        "200":
           description: Batch processed (check per-record success/failure in response)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-        '400':
+                $ref: "#/components/schemas/BulkIngestResponse"
+        "400":
           description: Invalid request payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
       security:
       - bearerAuth:
         - catalog:product:create
@@ -1470,34 +1631,38 @@ paths:
       tags:
       - Catalog Items API
       summary: Add a new catalog item
-      description: Adds a new product, service, or non-inventory product to the catalog.
+      description: "Adds a new product, service, or non-inventory product to the catalog."
       operationId: addCatalogItem
       parameters:
       - name: type
         in: path
-        description: Type of catalog item (product, service, noninventory)
+        description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
           type: string
+          default: ""
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CatalogItemRequestDto'
+              $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        '201':
+        "201":
           description: Catalog item created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
-        '400':
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid item type or request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
+                $ref: "#/components/schemas/CatalogItemResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1519,21 +1684,25 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Substitute parts returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
-        '404':
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProductDto'
+                  $ref: "#/components/schemas/ProductDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1554,6 +1723,7 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: asOf
         in: query
         required: false
@@ -1561,18 +1731,21 @@ paths:
           type: string
           format: date
       responses:
-        '200':
+        "200":
           description: Active MSRP returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
-        '404':
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: No active MSRP for date
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: "#/components/schemas/ProductMsrpDto"
       security:
       - bearerAuth:
         - catalog:msrp:read
@@ -1583,7 +1756,9 @@ paths:
       tags:
       - Products API
       summary: Get product details with pricing and availability
-      description: Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.
+      description: "Retrieves a consolidated view of product information including\
+        \ catalog data, location-specific pricing, and availability. Implements graceful\
+        \ degradation and returns partial data when non-critical services are unavailable."
       operationId: getProductDetailView
       parameters:
       - name: productId
@@ -1592,37 +1767,43 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: location_id
         in: query
         description: Location/store ID for location-specific data
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
-          description: Successfully retrieved product details (may be partial if some services unavailable)
+        "200":
+          description: Successfully retrieved product details (may be partial if some
+            services unavailable)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
-        '400':
+                $ref: "#/components/schemas/ProductDetailView"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: Invalid location ID
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
-        '404':
+                $ref: "#/components/schemas/ProductDetailView"
+        "404":
           description: Product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
-        '500':
+                $ref: "#/components/schemas/ProductDetailView"
+        "500":
           description: Unexpected server error while retrieving product details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
+                $ref: "#/components/schemas/ProductDetailView"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1644,19 +1825,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved service
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceDto'
-        '404':
+                $ref: "#/components/schemas/ServiceDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Service not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceDto'
+                $ref: "#/components/schemas/ServiceDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1678,13 +1863,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved services
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceDto'
+                $ref: "#/components/schemas/ServiceDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1697,7 +1886,8 @@ paths:
       tags:
       - Products API
       summary: Search catalog products
-      description: Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.
+      description: "Cursor-based product search with optional free-text query and\
+        \ exact filters for brand, category, and SKU."
       operationId: searchProducts
       parameters:
       - name: q
@@ -1706,49 +1896,58 @@ paths:
         required: false
         schema:
           type: string
+          default: ""
       - name: brand
         in: query
-        description: Filter by manufacturer brand (exact, case-insensitive)
+        description: "Filter by manufacturer brand (exact, case-insensitive)"
         required: false
         schema:
           type: string
+          default: ""
       - name: category
         in: query
-        description: Filter by category name (exact, case-insensitive)
+        description: "Filter by category name (exact, case-insensitive)"
         required: false
         schema:
           type: string
+          default: ""
       - name: sku
         in: query
-        description: Filter by SKU (exact match, case-insensitive)
+        description: "Filter by SKU (exact match, case-insensitive)"
         required: false
         schema:
           type: string
+          default: ""
       - name: cursor
         in: query
         description: Pagination cursor from previous response
         required: false
         schema:
           type: string
+          default: ""
       - name: limit
         in: query
         description: Maximum number of results (1–100)
         required: false
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Search results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogSearchResultDto'
-        '400':
-          description: Invalid request parameter (e.g., non-numeric limit)
+                $ref: "#/components/schemas/CatalogSearchResultDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
+          description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogSearchResultDto'
+                $ref: "#/components/schemas/CatalogSearchResultDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1761,7 +1960,8 @@ paths:
       tags:
       - Products API
       summary: Get effective location price
-      description: 'Resolves effective price using precedence: ACTIVE override first, otherwise base price.'
+      description: "Resolves effective price using precedence: ACTIVE override first,\
+        \ otherwise base price."
       operationId: getEffectiveLocationPrice
       parameters:
       - name: locationId
@@ -1770,25 +1970,30 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       - name: productId
         in: path
         description: Product ID
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Effective price returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EffectiveLocationPriceResponseDto'
-        '404':
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: No pricing context found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EffectiveLocationPriceResponseDto'
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1810,19 +2015,23 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved non-inventory product
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NonInventoryProductDto'
-        '404':
+                $ref: "#/components/schemas/NonInventoryProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "404":
           description: Non-inventory product not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NonInventoryProductDto'
+                $ref: "#/components/schemas/NonInventoryProductDto"
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1844,13 +2053,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved non-inventory products
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NonInventoryProductDto'
+                $ref: "#/components/schemas/NonInventoryProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1872,13 +2085,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved products
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1891,6 +2108,8 @@ paths:
       tags:
       - Item Cost API
       summary: Get current item costs
+      description: "Returns the current standard, average, and last known cost values\
+        \ for the specified item."
       operationId: getItemCosts
       parameters:
       - name: itemId
@@ -1898,13 +2117,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostsDto'
+                $ref: "#/components/schemas/ItemCostsDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1919,6 +2142,8 @@ paths:
       tags:
       - Item Cost API
       summary: Get item cost audit history
+      description: Returns the recorded audit history entries for item cost changes
+        on the specified item.
       operationId: getAuditHistory
       parameters:
       - name: itemId
@@ -1926,13 +2151,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostAuditDto'
+                $ref: "#/components/schemas/ItemCostAuditDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1956,13 +2185,17 @@ paths:
         required: true
         schema:
           type: string
+          default: ""
       responses:
-        '200':
+        "200":
           description: Successfully retrieved catalogs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: ""
+                default: ""
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1975,7 +2208,8 @@ paths:
       tags:
       - Supplier Item Cost List API
       summary: List supplier cost structures
-      description: Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.
+      description: Returns a paginated list of supplier cost structures. At least
+        one of itemId or supplierId must be provided.
       operationId: listCostStructures
       parameters:
       - name: itemId
@@ -1984,48 +2218,53 @@ paths:
         required: false
         schema:
           type: string
+          default: ""
       - name: supplierId
         in: query
         description: Filter by supplier ID
         required: false
         schema:
           type: string
+          default: ""
       - name: pageable
         in: query
         required: true
         schema:
-          $ref: '#/components/schemas/Pageable'
+          $ref: "#/components/schemas/Pageable"
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '400':
+                $ref: "#/components/schemas/Page"
+                additionalProperties:
+                  default: ""
+                default: ""
+        "400":
           description: At least one filter is required
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '401':
+                $ref: "#/components/schemas/PageSupplierItemCostDto"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '403':
+                $ref: "#/components/schemas/PageSupplierItemCostDto"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '500':
+                $ref: "#/components/schemas/PageSupplierItemCostDto"
+        "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
+                $ref: "#/components/schemas/PageSupplierItemCostDto"
       security:
       - bearerAuth:
         - catalog:supplier_cost:read
@@ -2035,6 +2274,7 @@ components:
   schemas:
     ProductUpdateRequestDto:
       type: object
+      default: null
       description: Update product request
       properties:
         name:
@@ -2061,6 +2301,7 @@ components:
           type: string
         attributes:
           type: string
+          default: ""
           description: JSON object represented as string
       required:
       - description
@@ -2069,28 +2310,34 @@ components:
       - unitOfMeasure
     CategoryDto:
       type: object
+      default: null
       description: Product category
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Category identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Category name
           example: Tools
     DimensionDto:
       type: object
+      default: null
       description: Product dimension detail
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Dimension identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         dimensionType:
           type: string
+          default: ""
           description: Dimension type
           enum:
           - LENGTH
@@ -2117,119 +2364,154 @@ components:
           - RESISTANCE
         description:
           type: string
+          default: ""
           description: Dimension description
           example: Length
         unitOfMeasure:
           type: string
+          default: ""
           description: Unit of measure
           example: in
         dimensionValue:
           type: number
           format: double
+          default: ""
           description: Dimension value
           example: 12.5
     ProductDto:
       type: object
+      default: null
       description: Catalog product
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Product identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Product name
           example: Heavy Duty Wrench
         shortDescription:
           type: string
+          default: ""
           description: Short product description
         longDescription:
           type: string
+          default: ""
           description: Long product description
         description:
           type: string
+          default: ""
           description: Product description
         images:
           type: array
+          default: ""
           description: Product image URLs
           items:
             type: string
         manufacturerPartNumber:
           type: string
+          default: ""
           description: Manufacturer part number
         manufacturerId:
           type: string
           format: uuid
+          default: ""
           description: Manufacturer identifier
         manufacturerName:
           type: string
+          default: ""
           description: Manufacturer name
         manufacturerWarranty:
           type: string
+          default: ""
           description: Manufacturer warranty
         manufacturerBrand:
           type: string
+          default: ""
           description: Manufacturer brand
         countryOfOrigin:
           type: string
+          default: ""
           description: Country of origin
         sku:
           type: string
+          default: ""
           description: SKU
         mpn:
           type: string
+          default: ""
           description: Manufacturer part number
         upc:
           type: string
+          default: ""
           description: UPC
         attributes:
           type: string
+          default: ""
           description: Attributes JSON
         unitOfMeasure:
           type: string
+          default: ""
           description: Unit of measure
         status:
           type: string
+          default: ""
           description: Operational status
           enum:
           - ACTIVE
           - INACTIVE
         productCode:
           type: string
+          default: ""
           description: Product code
         productCodeType:
           type: string
+          default: ""
           description: Product code type
           enum:
           - UPC
           - EAN
         category:
-          $ref: '#/components/schemas/CategoryDto'
+          $ref: "#/components/schemas/CategoryDto"
+          default: ""
+          description: Category detail
         subcategory:
-          $ref: '#/components/schemas/SubcategoryDto'
+          $ref: "#/components/schemas/SubcategoryDto"
+          default: ""
+          description: Subcategory detail
         type:
           type: string
+          default: ""
           description: Product type
         dimensions:
           type: array
+          default: ""
           description: Product dimensions
           items:
-            $ref: '#/components/schemas/DimensionDto'
+            $ref: "#/components/schemas/DimensionDto"
         material:
           type: string
+          default: ""
           description: Material
         color:
           type: string
+          default: ""
           description: Color
         warranty:
           type: string
+          default: ""
           description: Warranty
         specifications:
           type: string
+          default: ""
           description: Detailed specifications JSON
         lifecycleState:
           type: string
+          default: ""
           description: Lifecycle state
           enum:
           - ACTIVE
@@ -2238,37 +2520,46 @@ components:
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
+          default: ""
           description: Lifecycle state effective instant
         lastStateChangedBy:
           type: string
           format: uuid
+          default: ""
           description: User that last changed lifecycle state
         lastStateChangedAt:
           type: string
           format: date-time
+          default: ""
           description: Last lifecycle state change instant
         lifecycleOverrideReason:
           type: string
+          default: ""
           description: Lifecycle override reason
         createdAt:
           type: string
           format: date-time
+          default: ""
           description: Created timestamp
         updatedAt:
           type: string
           format: date-time
+          default: ""
           description: Updated timestamp
     SubcategoryDto:
       type: object
+      default: null
       description: Product subcategory
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Subcategory identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Subcategory name
           example: Hand Tools
     UpdateMsrpRequestDto:
@@ -2328,10 +2619,12 @@ components:
           format: int64
     ProductLifecycleUpdateRequest:
       type: object
+      default: null
       description: Product lifecycle update request
       properties:
         lifecycleState:
           type: string
+          default: ""
           description: Target lifecycle state
           enum:
           - ACTIVE
@@ -2340,29 +2633,36 @@ components:
         effectiveAt:
           type: string
           format: date-time
+          default: ""
           description: Effective instant for lifecycle change
         effectiveDate:
           type: string
           format: date
+          default: ""
           description: Effective date for lifecycle change (date-only)
         changedBy:
           type: string
+          default: ""
           description: Username performing the lifecycle change
           example: jane.doe
         overrideReason:
           type: string
+          default: ""
           description: Reason for lifecycle override
     ProductLifecycleResponse:
       type: object
+      default: null
       description: Product lifecycle details and replacement options
       properties:
         productId:
           type: string
           format: uuid
+          default: ""
           description: Product identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         lifecycleState:
           type: string
+          default: ""
           description: Current lifecycle state
           enum:
           - ACTIVE
@@ -2371,49 +2671,60 @@ components:
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
+          default: ""
           description: Lifecycle state effective instant
         lastStateChangedBy:
           type: string
           format: uuid
+          default: ""
           description: User that last changed lifecycle state
           example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         lastStateChangedAt:
           type: string
           format: date-time
+          default: ""
           description: Last lifecycle state change instant
         lifecycleOverrideReason:
           type: string
+          default: ""
           description: Lifecycle override reason
         replacementOptions:
           type: array
+          default: ""
           description: Replacement options for this product lifecycle state
           items:
-            $ref: '#/components/schemas/ReplacementOption'
+            $ref: "#/components/schemas/ReplacementOption"
     ReplacementOption:
       type: object
+      default: null
       description: Replacement option details
       properties:
         replacementId:
           type: string
           format: uuid
+          default: ""
           description: Replacement option identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         replacementProductId:
           type: string
           format: uuid
+          default: ""
           description: Replacement product identifier
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         priorityOrder:
           type: integer
           format: int32
+          default: ""
           description: Display priority order
           example: 1
         notes:
           type: string
+          default: ""
           description: Replacement notes
         effectiveAt:
           type: string
           format: date-time
+          default: ""
           description: Replacement option effective instant
     UomConversionUpdateRequestDto:
       type: object
@@ -2446,23 +2757,27 @@ components:
           type: string
     CostTierDto:
       type: object
+      default: null
       description: Supplier item cost tier
       properties:
         minQuantity:
           type: integer
           format: int32
+          default: ""
           description: Inclusive minimum quantity
           example: 1
           minimum: 1
         maxQuantity:
           type:
           - integer
-          - 'null'
+          - "null"
           format: int32
+          default: ""
           description: Inclusive maximum quantity; null means and above
           example: 10
         unitCost:
           type: number
+          default: ""
           description: Per-unit cost for this quantity range
           example: 5.0
       required:
@@ -2470,70 +2785,85 @@ components:
       - unitCost
     SupplierItemCostUpdateRequestDto:
       type: object
+      default: null
       description: Request payload for updating supplier-item cost tiers
       properties:
         supplierId:
           type: string
           format: uuid
+          default: ""
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: ""
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: ""
           description: ISO 4217 currency code
           example: USD
           minLength: 1
         baseCost:
           type: number
+          default: ""
           description: Optional fallback base cost when no tiers apply
           example: 6.25
         tiers:
           type: array
+          default: ""
           description: Ordered quantity-based cost tiers
           items:
-            $ref: '#/components/schemas/CostTierDto'
+            $ref: "#/components/schemas/CostTierDto"
       required:
       - currencyCode
       - itemId
       - supplierId
     SupplierItemCostDto:
       type: object
+      default: null
       description: Supplier-item cost structure with optional quantity-based tiers
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Supplier-item cost identifier
         supplierId:
           type: string
           format: uuid
+          default: ""
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: ""
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: ""
           description: ISO 4217 currency code
           example: USD
         baseCost:
           type: number
+          default: ""
           description: Optional fallback base cost
         createdAt:
           type: string
           format: date-time
+          default: ""
           description: Entity created timestamp
         updatedAt:
           type: string
           format: date-time
+          default: ""
           description: Entity updated timestamp
         tiers:
           type: array
+          default: ""
           description: Ordered quantity-based cost tiers
           items:
-            $ref: '#/components/schemas/CostTierDto'
+            $ref: "#/components/schemas/CostTierDto"
     PriceBookCreateRequestDto:
       type: object
       properties:
@@ -2690,13 +3020,16 @@ components:
           format: int64
     UpdateStandardCostRequestDto:
       type: object
+      default: null
       description: Request payload to update standard cost
       properties:
         newCost:
           type: number
+          default: ""
           description: New standard cost
         reasonCode:
           type: string
+          default: ""
           description: Reason code for manual change
           minLength: 1
       required:
@@ -2704,6 +3037,7 @@ components:
       - reasonCode
     ItemCostsDto:
       type: object
+      default: null
       description: Current item costs
       properties:
         itemId:
@@ -2717,120 +3051,152 @@ components:
           type: number
     CatalogDto:
       type: object
+      default: null
       description: Catalog container
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Catalog identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Catalog name
           example: Winter Catalog
         description:
           type: string
+          default: ""
           description: Catalog description
         productIds:
           type: array
+          default: ""
           description: Product IDs included in the catalog
           items:
             type: string
             format: uuid
         serviceIds:
           type: array
+          default: ""
           description: Service IDs included in the catalog
           items:
             type: string
             format: uuid
         nonInventoryProductIds:
           type: array
+          default: ""
           description: Non-inventory product IDs included in the catalog
           items:
             type: string
             format: uuid
     CatalogItemRequestDto:
       type: object
+      default: null
       description: Catalog item upsert request. Fields are type-dependent.
       properties:
         name:
           type: string
+          default: ""
           description: Item name
           example: Heavy Duty Wrench
         shortDescription:
           type: string
+          default: ""
           description: Short description
         longDescription:
           type: string
+          default: ""
           description: Long description
         images:
           type: array
+          default: ""
           description: Product image URLs for product type
           items:
             type: string
         manufacturerPartNumber:
           type: string
+          default: ""
           description: Manufacturer part number for product type
         manufacturerId:
           type: string
+          default: ""
           description: Manufacturer identifier for product type
         manufacturerName:
           type: string
+          default: ""
           description: Manufacturer name for product type
         manufacturerWarranty:
           type: string
+          default: ""
           description: Manufacturer warranty for product type
         manufacturerBrand:
           type: string
+          default: ""
           description: Manufacturer brand for product type
         countryOfOrigin:
           type: string
+          default: ""
           description: Country of origin for product type
         sku:
           type: string
+          default: ""
           description: SKU for product type
         productCode:
           type: string
+          default: ""
           description: Product code for product type
         type:
           type: string
+          default: ""
           description: Product type
           example: PHYSICAL
         material:
           type: string
+          default: ""
           description: Material for product type
         color:
           type: string
+          default: ""
           description: Color for product type
         warranty:
           type: string
+          default: ""
           description: Warranty for product type
         specifications:
           type: string
+          default: ""
           description: Detailed specifications JSON for product type
     CatalogItemResponseDto:
       type: object
+      default: null
       description: Catalog item response
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Item identifier
         itemType:
           type: string
+          default: ""
           description: Item type
           example: product
         name:
           type: string
+          default: ""
           description: Item name
         shortDescription:
           type: string
+          default: ""
           description: Short description
         longDescription:
           type: string
+          default: ""
           description: Long description
     ProductCreateRequestDto:
       type: object
+      default: null
       description: Create product request
       properties:
         name:
@@ -2858,6 +3224,7 @@ components:
           type: string
         attributes:
           type: string
+          default: ""
           description: JSON object represented as string
       required:
       - description
@@ -2867,24 +3234,29 @@ components:
       - unitOfMeasure
     ProductReplacementRequest:
       type: object
+      default: null
       description: Product replacement option request
       properties:
         replacementProductId:
           type: string
           format: uuid
+          default: ""
           description: Replacement product identifier
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         priorityOrder:
           type: integer
           format: int32
+          default: ""
           description: Display priority order
           example: 1
         notes:
           type: string
+          default: ""
           description: Replacement notes
         effectiveAt:
           type: string
           format: date-time
+          default: ""
           description: Replacement effective instant
     CreateMsrpRequestDto:
       type: object
@@ -2926,30 +3298,36 @@ components:
       - toUomCode
     SupplierItemCostCreateRequestDto:
       type: object
+      default: null
       description: Request payload for creating supplier-item cost tiers
       properties:
         supplierId:
           type: string
           format: uuid
+          default: ""
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: ""
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: ""
           description: ISO 4217 currency code
           example: USD
           minLength: 1
         baseCost:
           type: number
+          default: ""
           description: Optional fallback base cost when no tiers apply
           example: 6.25
         tiers:
           type: array
+          default: ""
           description: Ordered quantity-based cost tiers
           items:
-            $ref: '#/components/schemas/CostTierDto'
+            $ref: "#/components/schemas/CostTierDto"
       required:
       - currencyCode
       - itemId
@@ -3130,7 +3508,7 @@ components:
         records:
           type: array
           items:
-            $ref: '#/components/schemas/CatalogBulkIngestRecord'
+            $ref: "#/components/schemas/CatalogBulkIngestRecord"
           minItems: 1
         operatorId:
           type: string
@@ -3175,7 +3553,7 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/BulkIngestResult'
+            $ref: "#/components/schemas/BulkIngestResult"
     BulkIngestResult:
       type: object
       properties:
@@ -3193,22 +3571,28 @@ components:
           type: string
     AvailabilityInfo:
       type: object
+      default: null
       description: Availability information with status indicator
       properties:
         onHandQuantity:
           type: integer
           format: int32
+          default: ""
           description: On-hand quantity at location
           example: 15
         availableToPromiseQuantity:
           type: integer
           format: int32
+          default: ""
           description: Available to promise quantity
           example: 12
         leadTime:
-          $ref: '#/components/schemas/LeadTimeInfo'
+          $ref: "#/components/schemas/LeadTimeInfo"
+          default: ""
+          description: Lead time information
         status:
           type: string
+          default: ""
           description: Availability data status
           enum:
           - OK
@@ -3219,9 +3603,11 @@ components:
         asOf:
           type: string
           format: date-time
+          default: ""
           description: Timestamp of availability data
         confidence:
           type: string
+          default: ""
           description: Confidence level in availability data
           enum:
           - LOW
@@ -3230,10 +3616,12 @@ components:
           example: MEDIUM
     LeadTimeInfo:
       type: object
+      default: null
       description: Lead time information with source indicator
       properties:
         source:
           type: string
+          default: ""
           description: Source of lead time data
           enum:
           - CATALOG
@@ -3243,23 +3631,28 @@ components:
         minDays:
           type: integer
           format: int32
+          default: ""
           description: Minimum days for delivery
           example: 2
         maxDays:
           type: integer
           format: int32
+          default: ""
           description: Maximum days for delivery
           example: 5
         displayText:
           type: string
+          default: ""
           description: Human-readable lead time hint
           example: 3-5 business days
         asOf:
           type: string
           format: date-time
+          default: ""
           description: Timestamp of lead time data
         confidence:
           type: string
+          default: ""
           description: Confidence in lead time estimate
           enum:
           - LOW
@@ -3268,24 +3661,29 @@ components:
           example: LOW
     PricingInfo:
       type: object
+      default: null
       description: Pricing information with availability status
       properties:
         msrp:
           type: number
           format: double
+          default: ""
           description: Manufacturer's suggested retail price
           example: 99.99
         storePrice:
           type: number
           format: double
+          default: ""
           description: Store-specific price
           example: 89.99
         currency:
           type: string
+          default: ""
           description: Currency code
           example: USD
         status:
           type: string
+          default: ""
           description: Pricing data status
           enum:
           - OK
@@ -3296,9 +3694,11 @@ components:
         asOf:
           type: string
           format: date-time
+          default: ""
           description: Timestamp of pricing data
         confidence:
           type: string
+          default: ""
           description: Confidence level in pricing data
           enum:
           - LOW
@@ -3307,36 +3707,47 @@ components:
           example: HIGH
     ProductDetailView:
       type: object
+      default: null
       description: Consolidated product detail view with pricing and availability
       properties:
         productId:
           type: string
+          default: ""
           description: Unique product identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         description:
           type: string
+          default: ""
           description: Product description
           example: Heavy Duty Wrench
         specifications:
           type: array
+          default: ""
           description: Product specifications
           items:
-            $ref: '#/components/schemas/ProductSpecification'
+            $ref: "#/components/schemas/ProductSpecification"
         pricing:
-          $ref: '#/components/schemas/PricingInfo'
+          $ref: "#/components/schemas/PricingInfo"
+          default: ""
+          description: Pricing information with status indicator
         availability:
-          $ref: '#/components/schemas/AvailabilityInfo'
+          $ref: "#/components/schemas/AvailabilityInfo"
+          default: ""
+          description: Availability information with status indicator
         substitutions:
           type: array
+          default: ""
           description: Substitution product suggestions
           items:
-            $ref: '#/components/schemas/SubstitutionHint'
+            $ref: "#/components/schemas/SubstitutionHint"
         generatedAt:
           type: string
           format: date-time
+          default: ""
           description: Timestamp when this response was generated
         confidence:
           type: string
+          default: ""
           description: Overall confidence in the data completeness
           enum:
           - LOW
@@ -3345,89 +3756,111 @@ components:
           example: HIGH
     ProductSpecification:
       type: object
+      default: null
       description: Product specification entry
       properties:
         name:
           type: string
+          default: ""
           description: Specification name
           example: Material
         value:
           type: string
+          default: ""
           description: Specification value
           example: Steel
     SubstitutionHint:
       type: object
+      default: null
       description: Product substitution suggestion
       properties:
         productId:
           type: string
+          default: ""
           description: Substitute product ID
           example: 650e8400-e29b-41d4-a716-446655440001
         reason:
           type: string
+          default: ""
           description: Reason for substitution
           example: Newer Model
     ServiceDto:
       type: object
+      default: null
       description: Catalog service item
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Service identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Service name
           example: Standard installation
         longDescription:
           type: string
+          default: ""
           description: Long service description
         shortDescription:
           type: string
+          default: ""
           description: Short service description
     CatalogSearchResultDto:
       type: object
+      default: null
       description: Cursor-based catalog search result
       properties:
         data:
           type: array
+          default: ""
           description: Page of matching product summaries
           items:
-            $ref: '#/components/schemas/ProductSummary'
+            $ref: "#/components/schemas/ProductSummary"
         nextCursor:
           type: string
+          default: ""
           description: Opaque cursor for the next page; null if no more results
         limit:
           type: integer
           format: int32
+          default: ""
           description: Number of items requested (limit)
           example: 20
     ProductSummary:
       type: object
+      default: null
       description: Lightweight product summary for search results
       properties:
         productId:
           type: string
           format: uuid
+          default: ""
           description: Unique product identifier
         name:
           type: string
+          default: ""
           description: Product name
           example: Heavy Duty Wrench
         sku:
           type: string
+          default: ""
           description: Stock Keeping Unit
           example: SKU-12345
         category:
           type: string
+          default: ""
           description: Category name
           example: Hand Tools
         thumbnailUrl:
           type: string
+          default: ""
           description: URL of the primary product thumbnail image
         manufacturerBrand:
           type: string
+          default: ""
           description: Manufacturer brand name
           example: AcmePro
     EffectiveLocationPriceResponseDto:
@@ -3452,24 +3885,30 @@ components:
           - INACTIVE
     NonInventoryProductDto:
       type: object
+      default: null
       description: Non-inventory product
       properties:
         id:
           type: string
           format: uuid
+          default: ""
           description: Non-inventory identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: ""
           description: Name
         longDescription:
           type: string
+          default: ""
           description: Long description
         shortDescription:
           type: string
+          default: ""
           description: Short description
     ItemCostAuditDto:
       type: object
+      default: null
       description: Item cost audit event
       properties:
         auditId:
@@ -3531,13 +3970,14 @@ components:
           format: int32
         content:
           type: array
+          items: {}
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -3562,7 +4002,7 @@ components:
         paged:
           type: boolean
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
     SortObject:
@@ -3589,14 +4029,14 @@ components:
         content:
           type: array
           items:
-            $ref: '#/components/schemas/SupplierItemCostDto'
+            $ref: "#/components/schemas/SupplierItemCostDto"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:

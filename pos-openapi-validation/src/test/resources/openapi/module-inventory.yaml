@@ -1,0 +1,45 @@
+modules:
+  pos-accounting:
+    mode: STRICT
+  pos-order:
+    mode: STRICT
+  pos-workorder:
+    mode: STRICT
+  pos-inventory:
+    mode: STRICT
+  pos-price:
+    mode: STRICT
+  pos-customer:
+    mode: STRICT
+  pos-location:
+    mode: STRICT
+  pos-people:
+    mode: STRICT
+  pos-catalog:
+    mode: STRICT
+  pos-shop-manager:
+    mode: STRICT
+  pos-invoice:
+    mode: STRICT
+  pos-bulk-loader:
+    mode: STRICT
+  pos-vehicle-inventory:
+    mode: STRICT
+  pos-event-receiver:
+    mode: STRICT
+  pos-vehicle-fitment:
+    mode: STRICT
+  pos-image:
+    mode: STRICT
+  pos-documents:
+    mode: STRICT
+  pos-security-service:
+    mode: STRICT
+  pos-api-gateway:
+    mode: EXCEPTION
+    reason: aggregate producer without module paths
+  pos-mcp-server:
+    mode: STRICT
+  pos-inquiry:
+    mode: EXCEPTION
+    reason: stub module with no REST producer surface

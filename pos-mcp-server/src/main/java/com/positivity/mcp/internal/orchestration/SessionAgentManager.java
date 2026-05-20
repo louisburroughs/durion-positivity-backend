@@ -6,7 +6,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
-import com.positivity.mcp.internal.orchestration.memory.SessionSummaryService;
+import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.AgentOrchestrationService;
@@ -59,7 +59,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final ToolExecutionAuditLogger toolExecutionAuditLogger;
 
     @Nullable
-    private final SessionSummaryService sessionSummaryService;
+        private final SessionSummary sessionSummary;
 
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
@@ -76,7 +76,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull ToolSelectionEngine toolSelectionEngine,
             @NonNull ScopedContentRetrieverFactory scopedContentRetrieverFactory,
             @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
-            @Nullable SessionSummaryService sessionSummaryService,
+            @Nullable SessionSummary sessionSummary,
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
@@ -91,7 +91,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.toolSelectionEngine = toolSelectionEngine;
         this.scopedContentRetrieverFactory = scopedContentRetrieverFactory;
         this.toolExecutionAuditLogger = toolExecutionAuditLogger;
-        this.sessionSummaryService = sessionSummaryService;
+        this.sessionSummary = sessionSummary;
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
         this.memoryMaxMessages = memoryMaxMessages;
@@ -314,7 +314,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         return chatMemoryCache.get(
                 String.valueOf(memoryId),
                 ignored -> new SemanticChatMemoryStore(
-                        memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummaryService));
+                        memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummary));
     }
 
     private @NonNull String simpleChat(

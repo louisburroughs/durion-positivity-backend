@@ -1,0 +1,11 @@
+openapi: 3.0.3
+info:
+  title: Invalid OpenAPI Fixture
+  version: v1
+paths:
+  /v1/example/widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        '200':
+          description: OK

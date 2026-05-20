@@ -21,7 +21,7 @@ public class ToolBootstrapRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        log.info("Discovering services and registering MCP tools via Eureka");
+        log.info("Registering MCP tools from gateway aggregate OpenAPI spec");
         toolRegistrationService.registerDiscoveredTools().blockOptional();
     }
 }

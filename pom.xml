@@ -256,6 +256,7 @@
 		<module>pos-security-common</module>
 		<module>pos-tax-common</module>
 		<module>pos-archunit</module>
+		<module>pos-openapi-validation</module>
 		<module>pos-catalog</module>
 		<module>pos-customer</module>
 		<module>pos-invoice</module>

@@ -166,7 +166,7 @@ class SessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 null,
-                null, // sessionSummaryService
+                null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
                 30,
@@ -277,7 +277,7 @@ class SessionAgentManagerTest {
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
-        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("READ");
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool");
     }
 
@@ -320,7 +320,7 @@ class SessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 null,
-                null, // sessionSummaryService
+                null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
                 0,

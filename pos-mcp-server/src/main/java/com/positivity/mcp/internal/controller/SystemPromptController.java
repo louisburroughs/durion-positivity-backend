@@ -5,6 +5,9 @@ import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.SystemPromptService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/v1/prompts")
+@Tag(name = "System Prompts", description = "Operations for managing MCP system prompts")
 class SystemPromptController {
 
     private final SystemPromptService systemPromptService;
@@ -32,6 +36,10 @@ class SystemPromptController {
     }
 
     @GetMapping
+    @Operation(
+            summary = "List system prompts",
+            description = "List all configured MCP system prompts that can be assigned to agents")
+    @ApiResponse(responseCode = "200", description = "System prompts returned")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:view"})
@@ -41,6 +49,11 @@ class SystemPromptController {
     }
 
     @GetMapping("/{id}")
+    @Operation(
+            summary = "Get system prompt",
+            description = "Retrieve a single MCP system prompt by its identifier")
+    @ApiResponse(responseCode = "200", description = "System prompt returned")
+    @ApiResponse(responseCode = "404", description = "System prompt not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:view"})
@@ -50,6 +63,11 @@ class SystemPromptController {
     }
 
     @PostMapping
+    @Operation(
+            summary = "Create system prompt",
+            description = "Create a new MCP system prompt that can be used during agent orchestration")
+    @ApiResponse(responseCode = "201", description = "System prompt created")
+    @ApiResponse(responseCode = "400", description = "System prompt request is invalid")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:create"})
@@ -60,6 +78,11 @@ class SystemPromptController {
     }
 
     @PutMapping("/{id}")
+    @Operation(
+            summary = "Update system prompt",
+            description = "Update an existing MCP system prompt by replacing its editable fields")
+    @ApiResponse(responseCode = "200", description = "System prompt updated")
+    @ApiResponse(responseCode = "404", description = "System prompt not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:update"})
@@ -71,6 +94,11 @@ class SystemPromptController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Delete system prompt",
+            description = "Delete an MCP system prompt so it can no longer be selected for agent sessions")
+    @ApiResponse(responseCode = "204", description = "System prompt deleted")
+    @ApiResponse(responseCode = "404", description = "System prompt not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:delete"})

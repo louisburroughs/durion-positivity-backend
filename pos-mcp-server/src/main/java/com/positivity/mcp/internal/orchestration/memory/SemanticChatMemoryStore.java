@@ -52,7 +52,7 @@ public class SemanticChatMemoryStore implements ChatMemory {
     private final @NonNull ChatModel chatModel;
     private final @NonNull EmbeddingModel embeddingModel;
     private final @NonNull PgVectorEmbeddingStore embeddingStore;
-    private final @Nullable SessionSummaryService sessionSummaryService;
+    private final @Nullable SessionSummary sessionSummary;
     private final String sessionId;
     private final List<ChatMessage> messages;
     private final Map<String, Object> sessionMetadata;
@@ -63,12 +63,12 @@ public class SemanticChatMemoryStore implements ChatMemory {
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
             @NonNull PgVectorEmbeddingStore embeddingStore,
-            @Nullable SessionSummaryService sessionSummaryService) {
+            @Nullable SessionSummary sessionSummary) {
         this.maxMessages = Math.max(1, maxMessages);
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
-        this.sessionSummaryService = sessionSummaryService;
+        this.sessionSummary = sessionSummary;
         this.sessionId = UUID.randomUUID().toString();
         this.messages = Collections.synchronizedList(new ArrayList<>());
         this.sessionMetadata = new HashMap<>();
@@ -130,12 +130,12 @@ public class SemanticChatMemoryStore implements ChatMemory {
             return "";
         }
         try {
-            if (sessionSummaryService == null) {
+            if (sessionSummary == null) {
                 LOGGER.debug(
-                        "SessionSummaryService not available; skipping summary generation sessionId={}", sessionId);
+                        "SessionSummary not available; skipping summary generation sessionId={}", sessionId);
                 return "";
             }
-            String summary = sessionSummaryService.summarize(messages);
+            String summary = sessionSummary.summarize(messages);
             LOGGER.info("Generated session summary sessionId={} summaryLength={}", sessionId, summary.length());
             return summary;
         } catch (RuntimeException e) {
@@ -161,13 +161,13 @@ public class SemanticChatMemoryStore implements ChatMemory {
             return;
         }
         try {
-            if (sessionSummaryService == null) {
-                LOGGER.debug("SessionSummaryService not available; skipping archive for sessionId={}", sessionId);
+            if (sessionSummary == null) {
+                LOGGER.debug("SessionSummary not available; skipping archive for sessionId={}", sessionId);
                 return;
             }
             String summary = generateSummary();
             if (!summary.isEmpty()) {
-                sessionSummaryService.archiveSession(sessionId, summary, messages);
+                sessionSummary.archiveSession(sessionId, summary, messages);
                 LOGGER.info("Archived session with summary sessionId={}", sessionId);
             }
         } catch (RuntimeException e) {
@@ -191,11 +191,11 @@ public class SemanticChatMemoryStore implements ChatMemory {
      */
     @NonNull
     public List<String> retrieveRelevantContext(@NonNull String query, @NonNull String userId) {
-        if (sessionSummaryService == null) {
+        if (sessionSummary == null) {
             return Collections.emptyList();
         }
         try {
-            List<String> context = sessionSummaryService.retrieveRelevantContext(query, userId, 3);
+            List<String> context = sessionSummary.retrieveRelevantContext(query, userId, 3);
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
                         "Retrieved relevant context userId={} queryPreview=\"{}\" contextCount={}",

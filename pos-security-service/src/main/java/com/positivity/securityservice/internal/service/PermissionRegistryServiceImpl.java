@@ -37,10 +37,11 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
     /**
      * Pattern for validating permission names: domain:resource:action (3-segment)
      * or domain:action (2-segment legacy format).
-     * All lowercase, alphanumeric with underscores and hyphens.
+     * Segments must start lowercase and may then include mixed-case alphanumeric
+     * characters, underscores, and hyphens.
      */
     public static final Pattern PERMISSION_PATTERN =
-            Pattern.compile("^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)?$");
+            Pattern.compile("^[a-z][A-Za-z0-9_-]*:[a-z][A-Za-z0-9_-]*(:[a-z][A-Za-z0-9_-]*)?$");
 
     /**
      * Register or update permissions from a service manifest.
@@ -114,7 +115,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             ProcessingCounters counters) {
         errors.add(
                 "Invalid permission name format: " + permDef.getName()
-                        + " (must match lowercase 'domain:resource:action' or legacy 'domain:action' format; segments may include hyphens)");
+                        + " (must match 'domain:resource:action' or legacy 'domain:action' format; each segment must start lowercase and may include mixed-case letters, digits, underscores, and hyphens)");
         return incrementSkipped(counters);
     }
 

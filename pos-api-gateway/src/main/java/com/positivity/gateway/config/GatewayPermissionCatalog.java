@@ -242,7 +242,9 @@ public final class GatewayPermissionCatalog {
         "PERM_people:person:view",
         "PERM_people:person:create",
         "PERM_people:person:edit",
-        "PERM_people:person:delete"
+        "PERM_people:person:delete",
+        "PERM_people:userLink:view",
+        "PERM_people:userLink:write"
     };
 
     public static String authorityForBit(int bitIndex) {

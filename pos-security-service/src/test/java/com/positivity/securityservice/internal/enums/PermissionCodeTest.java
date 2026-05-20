@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test;
  * <p>
  * Verifies:
  * <ul>
- * <li>Catalog contains exactly 233 permissions matching
+ * <li>Catalog contains exactly 239 permissions matching
  * {@code scripts/permissions-aggregate.yaml}.</li>
- * <li>Each bit index in the range [0, 232] is assigned exactly once (no gaps,
+ * <li>Each bit index in the range [0, 238] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
- * <li>{@code CATALOG_VERSION = 4} constant is declared and accessible.</li>
+ * <li>{@code CATALOG_VERSION = 5} constant is declared and accessible.</li>
  * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
@@ -32,13 +32,13 @@ import org.junit.jupiter.api.Test;
 class PermissionCodeTest {
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 233 entries
+    // AC-1: Catalog size — 239 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 233 permissions")
-    void catalogContainsExactly233Permissions() {
-        assertThat(PermissionCode.values()).hasSize(233);
+    @DisplayName("catalog contains exactly 239 permissions")
+    void catalogContainsExactly239Permissions() {
+        assertThat(PermissionCode.values()).hasSize(239);
     }
 
     // -------------------------------------------------------------------------
@@ -52,17 +52,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(233);
+        assertThat(bitIndexes).hasSize(239);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 232 with no gaps")
-    void bitIndexesSpanFrom0To232WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 238 with no gaps")
+    void bitIndexesSpanFrom0To238WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..232 must be present
-        for (int i = 0; i < 233; i++) {
+        // Issue PERM-001: every index 0..238 must be present
+        for (int i = 0; i < 239; i++) {
             assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
     }
@@ -77,7 +77,7 @@ class PermissionCodeTest {
         Set<String> codes =
                 Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(233);
+        assertThat(codes).hasSize(239);
     }
 
     // -------------------------------------------------------------------------
@@ -85,9 +85,9 @@ class PermissionCodeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CATALOG_VERSION is 4")
-    void catalogVersionIsFour() {
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(4);
+    @DisplayName("CATALOG_VERSION is 5")
+    void catalogVersionIsFive() {
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(5);
     }
 
     // -------------------------------------------------------------------------
@@ -120,12 +120,18 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("known last permission 'catalog:price_book:write' has bit index 232")
-    void knownLastPermissionHasBitIndex232() {
-        // Issue PERM-001: catalog:price_book:write must be last entry assigned bit
-        // index 232
-        Optional<PermissionCode> perm = PermissionCode.fromCode("catalog:price_book:write");
+    @DisplayName("known last permission 'people:userLink:write' has bit index 238")
+    void knownLastPermissionHasBitIndex238() {
+        Optional<PermissionCode> perm = PermissionCode.fromCode("people:userLink:write");
         assertThat(perm).isPresent();
-        assertThat(perm.get().bitIndex()).isEqualTo(232);
+        assertThat(perm.get().bitIndex()).isEqualTo(238);
+    }
+
+    @Test
+    @DisplayName("people person delete permission is pinned to bit index 236")
+    void peoplePersonDeletePermissionHasBitIndex236() {
+        Optional<PermissionCode> perm = PermissionCode.fromCode("people:person:delete");
+        assertThat(perm).isPresent();
+        assertThat(perm.get().bitIndex()).isEqualTo(236);
     }
 }

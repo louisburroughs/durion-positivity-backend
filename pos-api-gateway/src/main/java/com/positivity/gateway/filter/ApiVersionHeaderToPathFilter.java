@@ -46,6 +46,17 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
         var req = exchange.getRequest();
         var rawPath = req.getURI().getRawPath();
 
+        // Strip /api prefix forwarded from the frontend Node.js server (its proxy
+        // mounts at /api but the gateway expects /service/v1/... paths without it).
+        // Defence-in-depth: the Node.js pathRewrite handles this for SSR traffic;
+        // this guard covers direct gateway access from other clients.
+        if (rawPath != null && rawPath.startsWith("/api/")) {
+            rawPath = rawPath.substring("/api".length());
+            final var normalizedPath = rawPath;
+            exchange = exchange.mutate().request(r -> r.path(normalizedPath)).build();
+            log.debug("Stripped /api prefix; effective path={}", rawPath);
+        }
+
         // Bypass public paths and auth bootstrap endpoints.
         if (shouldBypassVersioning(rawPath)) {
             return chain.filter(exchange);

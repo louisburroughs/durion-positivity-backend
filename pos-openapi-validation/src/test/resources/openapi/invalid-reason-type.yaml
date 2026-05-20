@@ -1,0 +1,4 @@
+modules:
+  pos-test:
+    mode: STRICT
+    reason: 42

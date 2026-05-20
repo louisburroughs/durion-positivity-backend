@@ -1,0 +1,4 @@
+this is not valid openapi yaml:
+  - missing required openapi version
+  - missing info block
+  broken: [unclosed bracket

@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.domain.RagScope;
+import com.positivity.mcp.internal.service.ToolRegistryRoleMapper;
 import java.beans.Introspector;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -69,7 +70,8 @@ public final class MasterAgentRegistry {
 
     public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
         List<Object> resolvedTools = new ArrayList<>();
-        List<Object> assignedTools = roleToolAssignments.get(agentName);
+        String normalizedAgentName = ToolRegistryRoleMapper.normalize(agentName);
+        List<Object> assignedTools = roleToolAssignments.get(normalizedAgentName);
         if (assignedTools != null) {
             resolvedTools.addAll(assignedTools);
         } else {
@@ -78,7 +80,7 @@ public final class MasterAgentRegistry {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP master registry resolve-all agentName={} sharedTools={} resolvedTools={}",
-                    agentName,
+                    normalizedAgentName,
                     sharedTools.stream()
                             .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
                             .toList(),

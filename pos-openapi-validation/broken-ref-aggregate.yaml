@@ -1,0 +1,7 @@
+openapi: "3.0.3"
+info:
+  title: pos-aggregate-relative
+  version: "1.0"
+paths:
+  /v1/items:
+    $ref: missing-module/openapi.yaml#/paths/~1v1~1items

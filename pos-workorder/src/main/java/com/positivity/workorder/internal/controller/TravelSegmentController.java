@@ -39,7 +39,9 @@ public class TravelSegmentController {
     @PostMapping("/start")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
-    @Operation(summary = "Start a travel segment")
+    @Operation(
+            summary = "Start a travel segment",
+            description = "Start a travel segment for a technician beginning travel related to work execution")
     @ApiResponse(responseCode = "201")
     public ResponseEntity<TravelSegmentResponse> startTravelSegment(
             @Valid @RequestBody StartTravelSegmentRequest request) {
@@ -50,7 +52,9 @@ public class TravelSegmentController {
     @PostMapping("/{travelSegmentId}/stop")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_STOP", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
-    @Operation(summary = "Stop a travel segment")
+    @Operation(
+            summary = "Stop a travel segment",
+            description = "Stop an active travel segment and record the final travel details")
     @ApiResponse(responseCode = "200")
     public ResponseEntity<TravelSegmentResponse> stopTravelSegment(
             @PathVariable UUID travelSegmentId, @Valid @RequestBody StopTravelSegmentRequest request) {
@@ -61,7 +65,9 @@ public class TravelSegmentController {
     @PostMapping("/submit/{mobileWorkAssignmentId}")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_SUBMIT", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
-    @Operation(summary = "Submit travel segments for a mobile work assignment")
+    @Operation(
+            summary = "Submit travel segments for a mobile work assignment",
+            description = "Submit recorded travel segments for a mobile work assignment for downstream processing")
     @ApiResponse(responseCode = "200")
     public ResponseEntity<List<TravelSegmentResponse>> submitTravelSegments(
             @PathVariable UUID mobileWorkAssignmentId, @Valid @RequestBody SubmitTravelSegmentsRequest request) {
@@ -72,7 +78,9 @@ public class TravelSegmentController {
     @PostMapping("/{travelSegmentId}/adjustments")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
-    @Operation(summary = "Create a post-approval adjustment for a travel segment")
+    @Operation(
+            summary = "Create a post-approval adjustment for a travel segment",
+            description = "Create an adjustment for a previously recorded travel segment after approval")
     @ApiResponse(responseCode = "201")
     public ResponseEntity<TravelSegmentAdjustmentResponse> createAdjustment(
             @PathVariable UUID travelSegmentId, @Valid @RequestBody CreateTravelSegmentAdjustmentRequest request) {

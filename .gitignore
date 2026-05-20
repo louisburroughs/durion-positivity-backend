@@ -78,3 +78,5 @@ PR-Review-Processing.md
 pos-mcp-server/src/main/resources/exa.prompt.md
 .worktrees/
 .superpowers/
+.flattened-pom.xml
+

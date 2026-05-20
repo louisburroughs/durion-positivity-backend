@@ -52,6 +52,7 @@ info:
 servers:
 - url: http://localhost:8080
   description: API Gateway - All services routed through this endpoint
+paths: {}
 components:
   parameters:
     X-API-Version:

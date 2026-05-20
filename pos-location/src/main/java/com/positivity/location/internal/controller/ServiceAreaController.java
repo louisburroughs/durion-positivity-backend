@@ -35,7 +35,9 @@ public class ServiceAreaController {
 
     private final ServiceAreaService serviceAreaService;
 
-    @Operation(summary = "Create service area")
+    @Operation(
+            summary = "Create service area",
+            description = "Create a service area that defines where a location can provide service coverage")
     @ApiResponse(responseCode = "201", description = "Service area created")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:service-area:manage')")
@@ -47,7 +49,9 @@ public class ServiceAreaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(serviceAreaService.create(request));
     }
 
-    @Operation(summary = "List service areas")
+    @Operation(
+            summary = "List service areas",
+            description = "List configured service areas available for dispatching and coverage management")
     @ApiResponse(responseCode = "200", description = "Service areas listed")
     @PreAuthorize("hasAuthority('location:service-area:read')")
     @SecurityRequirement(
@@ -58,7 +62,9 @@ public class ServiceAreaController {
         return ResponseEntity.ok(serviceAreaService.list());
     }
 
-    @Operation(summary = "Patch service area")
+    @Operation(
+            summary = "Patch service area",
+            description = "Patch an existing service area using the provided partial field updates")
     @ApiResponse(responseCode = "200", description = "Service area patched")
     @ApiResponse(responseCode = "400", description = "Invalid service area id")
     @ApiResponse(responseCode = "404", description = "Service area not found")

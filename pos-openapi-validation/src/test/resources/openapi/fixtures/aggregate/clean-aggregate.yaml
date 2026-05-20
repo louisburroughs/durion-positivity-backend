@@ -1,0 +1,12 @@
+openapi: "3.0.3"
+info:
+  title: pos-aggregate
+  version: "1.0"
+paths:
+  /v1/status:
+    get:
+      summary: Health check
+      description: Returns aggregate service health.
+      responses:
+        "200":
+          description: OK

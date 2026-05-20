@@ -256,6 +256,31 @@ class SecurityGatewayConfigTest {
     }
 
     @Test
+    void peoplePersonAndUserLinkPermBits_decodeToCorrectAuthorities() {
+        String permBits = encodePermBits(233, 238);
+        String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+        GatewayFilterChain chain = ex -> {
+            downstreamHeaders.set(ex.getRequest().getHeaders());
+            return Mono.empty();
+        };
+
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/persons")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        String authorities = downstreamHeaders.get().getFirst("X-Authorities");
+        assertThat(authorities).contains("PERM_people:person:view").contains("PERM_people:userLink:write");
+    }
+
+    @Test
     void canonicalToken_withRoles_forwardsRolesHeader() {
         String permBits = encodePermBits(226);
         String token = buildCanonicalTokenWithRoles(
@@ -1024,8 +1049,8 @@ class SecurityGatewayConfigTest {
 
         /** Catalog version stays aligned with the token perm_ver claim. */
         @Test
-        void catalogVersion_is4() {
-            assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(4);
+        void catalogVersion_is5() {
+            assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(5);
         }
 
         /** Bit 0 maps to PERM_accounting:je:view. */
@@ -1039,6 +1064,12 @@ class SecurityGatewayConfigTest {
         void authorityForBit_214_isWorkorderWipViewAllLocations() {
             assertThat(GatewayPermissionCatalog.authorityForBit(214))
                     .isEqualTo("PERM_workorder:wip:view_all_locations");
+        }
+
+        /** Bit 236 maps to PERM_people:person:delete. */
+        @Test
+        void authorityForBit_236_isPeoplePersonDelete() {
+            assertThat(GatewayPermissionCatalog.authorityForBit(236)).isEqualTo("PERM_people:person:delete");
         }
 
         /** Negative bit indexes are out of range and return null. */
