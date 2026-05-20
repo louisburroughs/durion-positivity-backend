@@ -297,13 +297,17 @@ public enum PermissionCode {
     PEOPLE__PERSON__EDIT(235, "people:person:edit"),
     PEOPLE__PERSON__DELETE(236, "people:person:delete"),
     PEOPLE__USER_LINK__VIEW(237, "people:userLink:view"),
-    PEOPLE__USER_LINK__WRITE(238, "people:userLink:write");
+    PEOPLE__USER_LINK__WRITE(238, "people:userLink:write"),
+
+    // ── Bulk Import ──────────────────────────────────────────────────────────
+    BULK_IMPORT__UPLOAD__EXECUTE(239, "bulkImport:upload:execute"),
+    BULK_IMPORT__STATUS__READ(240, "bulkImport:status:read");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 5;
+    public static final int CATALOG_VERSION = 6;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
