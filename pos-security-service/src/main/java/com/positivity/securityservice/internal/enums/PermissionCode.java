@@ -289,13 +289,19 @@ public enum PermissionCode {
     CATALOG__MSRP__READ(229, "catalog:msrp:read"),
     CATALOG__MSRP__WRITE(230, "catalog:msrp:write"),
     CATALOG__PRICE_BOOK__READ(231, "catalog:price_book:read"),
-    CATALOG__PRICE_BOOK__WRITE(232, "catalog:price_book:write");
+    CATALOG__PRICE_BOOK__WRITE(232, "catalog:price_book:write"),
+
+    // ── People (person) ───────────────────────────────────────────────────────
+    PEOPLE__PERSON__VIEW(233, "people:person:view"),
+    PEOPLE__PERSON__CREATE(234, "people:person:create"),
+    PEOPLE__PERSON__EDIT(235, "people:person:edit"),
+    PEOPLE__PERSON__DELETE(236, "people:person:delete");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 4;
+    public static final int CATALOG_VERSION = 5;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

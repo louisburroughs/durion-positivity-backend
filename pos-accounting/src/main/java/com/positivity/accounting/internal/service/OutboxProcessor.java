@@ -147,7 +147,7 @@ public class OutboxProcessor {
      * <p>
      * Runs daily at 2 AM. Deletes events published more than 30 days ago.
      */
-    @Scheduled(cron = "0 0 2 * * *")
+    @Scheduled(fixedRateString = "${pos.accounting.outbox.cleanup-rate-ms:86400000}")
     public void cleanupOldEvents() {
         try {
             Instant thirtyDaysAgo = Instant.now(clock).minus(Duration.ofDays(30));

@@ -1,0 +1,4 @@
+pos:
+  workorder:
+    approval:
+      expiration-job-rate-ms: 3600

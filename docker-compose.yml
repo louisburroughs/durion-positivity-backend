@@ -10,6 +10,7 @@ x-pos-security-client-env: &pos-security-client-env
   SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
   SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
   SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
+  SERVER_MAX_HTTP_REQUEST_HEADER_SIZE: 32768
 
 x-logging: &logging
   driver: json-file
@@ -576,6 +577,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
+      POS_LOCATION_SERVICE_BASE_URL: http://pos-location:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_people_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
@@ -860,41 +862,41 @@ services:
         aliases:
           - api-gateway
 
-  pos-frontend:
-    build:
-      context: ../durion-positivity-frontend
-      dockerfile: Dockerfile
-    ports:
-      - "4200:4000"
-    environment:
-      PORT: 4000
-      NODE_ENV: production
-      API_GATEWAY_URL: http://pos-api-gateway:8080
-      NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
-      OTEL_SERVICE_NAME: pos-frontend
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
-        roup,deployment.environment=pre-production"
-    depends_on:
-      pos-api-gateway:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "const net=require('net');const
-            s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.set\
-            Timeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>pr\
-            ocess.exit(1));",
-        ]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    logging: *logging
-    networks:
-      - pos-network
+  # pos-frontend:
+  #   build:
+  #     context: ../durion-positivity-frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "4200:4000"
+  #   environment:
+  #     PORT: 4000
+  #     NODE_ENV: production
+  #     API_GATEWAY_URL: http://pos-api-gateway:8080
+  #     NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
+  #     OTEL_SERVICE_NAME: pos-frontend
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
+  #       roup,deployment.environment=pre-production"
+  #   depends_on:
+  #     pos-api-gateway:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "node",
+  #         "-e",
+  #         "const net=require('net');const
+  #           s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.set\
+  #           Timeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>pr\
+  #           ocess.exit(1));",
+  #       ]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
+  #   logging: *logging
+  #   networks:
+  #     - pos-network
 
 # Docker Networks
 networks:

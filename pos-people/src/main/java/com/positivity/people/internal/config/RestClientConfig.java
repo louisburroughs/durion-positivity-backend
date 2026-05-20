@@ -28,7 +28,7 @@ public class RestClientConfig {
     @Bean
     public RestClient securityServiceRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.security-service.base-url:http://api-gateway}") String securityServiceBaseUrl,
+            @Value("${pos.security-service.base-url:http://pos-api-gateway}") String securityServiceBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -41,7 +41,7 @@ public class RestClientConfig {
     @Bean
     public RestClient workexecRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.workexec.base-url:http://api-gateway}") String workexecBaseUrl,
+            @Value("${pos.workexec.base-url:http://pos-api-gateway}") String workexecBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -53,8 +53,8 @@ public class RestClientConfig {
 
     @Bean
     public RestClient locationServiceRestClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.location-service.base-url:http://api-gateway}") String locationServiceBaseUrl,
+            @Qualifier("restClientBuilder") RestClient.Builder builder,
+            @Value("${pos.location-service.base-url:http://pos-location:8080}") String locationServiceBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

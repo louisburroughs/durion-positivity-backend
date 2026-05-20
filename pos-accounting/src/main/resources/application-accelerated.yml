@@ -1,0 +1,4 @@
+pos:
+  accounting:
+    outbox:
+      cleanup-rate-ms: 86400

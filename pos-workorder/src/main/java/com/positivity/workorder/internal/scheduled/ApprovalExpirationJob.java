@@ -27,7 +27,7 @@ public class ApprovalExpirationJob {
      * Check for expired pending approvals and mark them as expired.
      * Runs every hour at the top of the hour.
      */
-    @Scheduled(cron = "0 0 * * * *") // Every hour at :00
+    @Scheduled(fixedRateString = "${pos.workorder.approval.expiration-job-rate-ms:3600000}")
     public void expirePendingApprovals() {
         log.debug("Running approval expiration job");
         int expiredCount = estimateService.expirePendingApprovals();

@@ -1,0 +1,5 @@
+pos:
+  security:
+    jwt:
+      access-token-ttl-seconds: 36000
+      refresh-token-ttl-seconds: 36000
