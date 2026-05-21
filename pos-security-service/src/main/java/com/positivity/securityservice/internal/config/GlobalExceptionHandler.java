@@ -254,6 +254,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleBadRequestExceptions(Exception ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Request binding/validation error (correlationId={}): {}", correlationId, ex.getMessage());
+        if (ex instanceof MethodArgumentNotValidException mave) {
+            mave.getBindingResult().getFieldErrors().forEach(fe ->
+                    log.warn("  Field validation error: field={} rejected={} message={}",
+                            fe.getField(), fe.getRejectedValue(), fe.getDefaultMessage()));
+        }
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(errorResponse(

@@ -47,7 +47,7 @@ logging:
       springframework: INFO
     com:
       positivity:
-        security: INFO
+        securityservice: INFO
 
       netflix:
         discovery:

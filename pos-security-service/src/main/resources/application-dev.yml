@@ -49,4 +49,4 @@ logging:
                 TomcatWebServer: INFO
     com:
       positivity:
-        security: DEBUG
+        securityservice: DEBUG
