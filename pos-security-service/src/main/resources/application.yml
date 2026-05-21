@@ -20,6 +20,8 @@ spring:
 
 server:
   port: 8086
+  tomcat:
+    max-http-header-size: 65536
 
 management:
   # No separate management port - expose actuator on main server port for healthchecks

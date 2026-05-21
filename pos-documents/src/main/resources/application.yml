@@ -4,6 +4,8 @@ spring:
 
 server:
   port: 0
+  tomcat:
+    max-http-header-size: 65536
 
 documents:
   pdf:

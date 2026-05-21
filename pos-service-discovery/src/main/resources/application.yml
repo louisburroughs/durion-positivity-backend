@@ -1,5 +1,7 @@
 server:
   port: 8761
+  tomcat:
+    max-http-header-size: 65536
 spring:
   application:
     name: pos-service-discovery
