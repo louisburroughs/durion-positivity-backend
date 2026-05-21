@@ -208,6 +208,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -240,6 +242,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -269,6 +273,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -298,6 +304,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
       pos-vehicle-inventory:
@@ -364,6 +372,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -417,6 +427,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -444,6 +456,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -473,6 +487,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -583,6 +599,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -610,6 +628,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -677,6 +697,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -736,6 +758,8 @@ services:
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
       MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
@@ -822,6 +846,8 @@ services:
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
+      eureka-server:
+        condition: service_healthy
       pos-security-service:
         condition: service_healthy
     logging: *logging
