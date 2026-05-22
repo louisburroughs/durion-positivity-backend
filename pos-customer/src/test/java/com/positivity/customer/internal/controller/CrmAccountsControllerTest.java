@@ -29,6 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -162,7 +163,13 @@ class CrmAccountsControllerTest {
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
         assertEquals(20, pageableCaptor.getValue().getPageSize());
         assertTrue(pageableCaptor.getValue().getSort().isSorted());
-        assertEquals("legalName", pageableCaptor.getValue().getSort().iterator().next().getProperty());
+        var sortIterator = pageableCaptor.getValue().getSort().iterator();
+        var legalNameOrder = sortIterator.next();
+        assertEquals("legalName", legalNameOrder.getProperty());
+        assertEquals(Sort.Direction.ASC, legalNameOrder.getDirection());
+        var partyIdOrder = sortIterator.next();
+        assertEquals("partyId", partyIdOrder.getProperty());
+        assertEquals(Sort.Direction.ASC, partyIdOrder.getDirection());
     }
 
     @Test

@@ -191,11 +191,34 @@ public class CrmAccountsController {
 
     // --- Party Search and Merge (Issue #173) ---
 
+    @Operation(
+            summary = "Browse parties",
+            description =
+                    "Browse parties with paging and sorting. Default sort is legalName ascending, then partyId "
+                            + "ascending for stable tie-breaking; legalName sorting is case-insensitive.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Browse results returned",
+                        content = @Content(schema = @Schema(implementation = SearchPartiesResponse.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content)
+            })
     @GetMapping("/parties")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.PARTY_VIEW})
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_BROWSE", apiVersion = "1")
     public ResponseEntity<SearchPartiesResponse> browseParties(
-            @PageableDefault(size = 20, sort = "legalName") Pageable pageable) {
+            @Parameter(
+                            description = "Pagination parameters (page, size, sort). Default sort is legalName,asc "
+                                    + "then partyId,asc; legalName sorting is case-insensitive.")
+                    @PageableDefault(size = 20, sort = {"legalName", "partyId"})
+                    Pageable pageable) {
         log.info("browseParties pageable={}", pageable);
         return ResponseEntity.ok(partyService.browseParties(pageable));
     }

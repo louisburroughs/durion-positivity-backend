@@ -12,6 +12,10 @@ class EventTypesTest {
         assertThat(EventTypes.all())
                 .extracting(EventTypeRegistration::getTypeCode)
                 .contains("CUSTOMER_PARTY_BROWSE", "CUSTOMER_PARTY_SEARCH");
+        assertThat(EventTypes.all().stream()
+                        .filter(registration -> "CUSTOMER_PARTY_BROWSE".equals(registration.getTypeCode()))
+                        .count())
+                .isEqualTo(1);
 
         EventTypeRegistration browseRegistration = EventTypes.all().stream()
                 .filter(registration -> "CUSTOMER_PARTY_BROWSE".equals(registration.getTypeCode()))
