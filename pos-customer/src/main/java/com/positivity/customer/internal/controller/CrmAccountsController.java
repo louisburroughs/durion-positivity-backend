@@ -194,8 +194,9 @@ public class CrmAccountsController {
     @Operation(
             summary = "Browse parties",
             description =
-                    "Browse parties with paging and sorting. Default sort is legalName ascending, then partyId "
-                            + "ascending for stable tie-breaking; legalName sorting is case-insensitive.")
+                    "Browse parties with paging and sorting. Default sort is legalName ascending, and when "
+                            + "partyId is not explicitly supplied the service appends partyId ascending as a "
+                            + "stable tie-breaker; legalName sorting is case-insensitive.")
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -215,8 +216,9 @@ public class CrmAccountsController {
     @EmitEvent(id = "CUSTOMER_PARTY_BROWSE", apiVersion = "1")
     public ResponseEntity<SearchPartiesResponse> browseParties(
             @Parameter(
-                            description = "Pagination parameters (page, size, sort). Default sort is legalName,asc "
-                                    + "then partyId,asc; legalName sorting is case-insensitive.")
+                            description = "Pagination parameters (page, size, sort). If sort is omitted, the "
+                                    + "service uses legalName,asc and appends partyId,asc as a stable "
+                                    + "tie-breaker; legalName sorting is case-insensitive.")
                     @PageableDefault(size = 20, sort = {"legalName", "partyId"})
                     Pageable pageable) {
         log.info("browseParties pageable={}", pageable);

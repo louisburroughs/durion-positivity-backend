@@ -899,7 +899,7 @@ paths:
       tags:
       - CRM Accounts
       summary: Browse parties
-      description: Browse parties with paging and sorting. Default sort is legalName,asc then partyId,asc; legalName sorting is case-insensitive.
+      description: Browse parties with paging and sorting. If sort is omitted, the service uses legalName,asc and appends partyId,asc as a stable tie-breaker; legalName sorting is case-insensitive.
       operationId: browseParties
       parameters:
       - name: page
@@ -920,7 +920,7 @@ paths:
           default: 20
       - name: sort
         in: query
-        description: Repeat to override sorting. Defaults to legalName,asc and partyId,asc; legalName sorting is case-insensitive.
+        description: Repeat to override sorting. If omitted, the service uses legalName,asc and appends partyId,asc as a stable tie-breaker; legalName sorting is case-insensitive.
         schema:
           type: array
           items:
