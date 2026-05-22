@@ -2,7 +2,10 @@ package com.positivity.customer.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -20,11 +23,13 @@ import com.positivity.customer.service.PartyService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -136,14 +141,28 @@ class CrmAccountsControllerTest {
                 .pageSize(20)
                 .build();
 
-        when(partyService.browseParties(any())).thenReturn(response);
+        when(partyService.browseParties(any(Pageable.class))).thenReturn(response);
 
         mockMvc.perform(get("/v1/crm/accounts/parties").header("X-Authorities", "crm:party:view"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results").isArray())
+                .andExpect(jsonPath("$.results.length()").value(1))
                 .andExpect(jsonPath("$.results[0].partyId").value(PARTY_ID.toString()))
+                .andExpect(jsonPath("$.results[0].legalName").value("Acme Corp"))
+                .andExpect(jsonPath("$.results[0].displayName").value("Acme"))
+                .andExpect(jsonPath("$.results[0].partyType").value("COMMERCIAL"))
+                .andExpect(jsonPath("$.results[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.results[0].createdAt").value("2024-01-01T00:00:00Z"))
                 .andExpect(jsonPath("$.totalCount").value(1))
                 .andExpect(jsonPath("$.pageNumber").value(0))
                 .andExpect(jsonPath("$.pageSize").value(20));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(partyService).browseParties(pageableCaptor.capture());
+        assertEquals(0, pageableCaptor.getValue().getPageNumber());
+        assertEquals(20, pageableCaptor.getValue().getPageSize());
+        assertTrue(pageableCaptor.getValue().getSort().isSorted());
+        assertEquals("legalName", pageableCaptor.getValue().getSort().iterator().next().getProperty());
     }
 
     @Test

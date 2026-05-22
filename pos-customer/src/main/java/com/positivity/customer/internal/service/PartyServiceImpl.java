@@ -48,6 +48,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
@@ -205,6 +207,21 @@ public class PartyServiceImpl implements PartyService {
     private String buildContactName(Contact contact) {
         return (contact.getFirstName() != null ? contact.getFirstName() : "") + " "
                 + (contact.getLastName() != null ? contact.getLastName() : "");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
+        Sort.Order order = pageable.getSort().isSorted() ? pageable.getSort().iterator().next() : null;
+        SearchPartiesRequest request = SearchPartiesRequest.builder()
+                .pageNumber(pageable.getPageNumber() + 1)
+                .pageSize(pageable.getPageSize())
+                .sortField(order != null ? order.getProperty() : null)
+                .sortOrder(order != null ? (order.isDescending() ? Sort.Direction.DESC.name() : Sort.Direction.ASC.name())
+                        : null)
+                .build();
+        return searchParties(request);
     }
 
     @Override

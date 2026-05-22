@@ -35,9 +35,7 @@ public interface PartyService {
     GetContactsWithRolesResponse getContactsWithRoles(UUID partyId);
 
     @NonNull
-    default SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
-        throw new UnsupportedOperationException("browseParties is not implemented yet");
-    }
+    SearchPartiesResponse browseParties(@NonNull Pageable pageable);
 
     SearchPartiesResponse searchParties(SearchPartiesRequest request);
 
