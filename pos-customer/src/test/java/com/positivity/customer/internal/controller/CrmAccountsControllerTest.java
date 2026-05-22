@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.customer.config.WebMvcTestSecurityConfig;
 import com.positivity.customer.internal.config.CrmExceptionHandler;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
+import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.service.AccountTierService;
@@ -115,6 +116,40 @@ class CrmAccountsControllerTest {
     @DisplayName("B-21: GET duplicate-check without crm:party:search authority → 403")
     void checkPartyDuplicates_returns403_whenUnauthorized() throws Exception {
         mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check").param("legalName", "Acme"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("browseParties returns 200 with shared response when authorized")
+    void listParties_returns200WithSharedResponse_whenAuthorized() throws Exception {
+        SearchPartiesResponse response = SearchPartiesResponse.builder()
+                .results(List.of(SearchPartiesResponse.PartySummary.builder()
+                        .partyId(PARTY_ID.toString())
+                        .legalName("Acme Corp")
+                        .displayName("Acme")
+                        .partyType("COMMERCIAL")
+                        .status("ACTIVE")
+                        .createdAt("2024-01-01T00:00:00Z")
+                        .build()))
+                .totalCount(1)
+                .pageNumber(0)
+                .pageSize(20)
+                .build();
+
+        when(partyService.browseParties(any())).thenReturn(response);
+
+        mockMvc.perform(get("/v1/crm/accounts/parties").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].partyId").value(PARTY_ID.toString()))
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.pageNumber").value(0))
+                .andExpect(jsonPath("$.pageSize").value(20));
+    }
+
+    @Test
+    @DisplayName("browseParties returns 403 when unauthorized")
+    void listParties_returns403_whenUnauthorized() throws Exception {
+        mockMvc.perform(get("/v1/crm/accounts/parties"))
                 .andExpect(status().isForbidden());
     }
 
