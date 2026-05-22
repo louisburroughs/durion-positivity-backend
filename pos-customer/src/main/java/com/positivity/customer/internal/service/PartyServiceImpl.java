@@ -48,6 +48,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.cache.Cache;
@@ -213,15 +215,17 @@ public class PartyServiceImpl implements PartyService {
     @Transactional(readOnly = true)
     @NonNull
     public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
-        Sort.Order order = pageable.getSort().isSorted() ? pageable.getSort().iterator().next() : null;
-        SearchPartiesRequest request = SearchPartiesRequest.builder()
-                .pageNumber(pageable.getPageNumber() + 1)
-                .pageSize(pageable.getPageSize())
-                .sortField(order != null ? order.getProperty() : null)
-                .sortOrder(order != null ? (order.isDescending() ? Sort.Direction.DESC.name() : Sort.Direction.ASC.name())
-                        : null)
+        Pageable normalizedPageable = normalizeBrowsePageable(pageable);
+        Page<CommercialParty> page = partyRepository.findAll(normalizedPageable);
+        List<SearchPartiesResponse.PartySummary> summaries =
+                page.getContent().stream().map(this::mapToPartySummary).toList();
+
+        return SearchPartiesResponse.builder()
+                .results(summaries)
+                .totalCount(Math.toIntExact(page.getTotalElements()))
+                .pageNumber(normalizedPageable.getPageNumber())
+                .pageSize(normalizedPageable.getPageSize())
                 .build();
-        return searchParties(request);
     }
 
     @Override
@@ -452,6 +456,37 @@ public class PartyServiceImpl implements PartyService {
                 .status(party.getStatus().toString())
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
                 .build();
+    }
+
+    private Pageable normalizeBrowsePageable(@Nullable Pageable pageable) {
+        Sort normalizedSort = normalizeBrowseSort(pageable != null ? pageable.getSort() : Sort.unsorted());
+        if (pageable == null || pageable.isUnpaged()) {
+            return PageRequest.of(0, 20, normalizedSort);
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), normalizedSort);
+    }
+
+    private Sort normalizeBrowseSort(@NonNull Sort requestedSort) {
+        if (requestedSort.isUnsorted()) {
+            return Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId"));
+        }
+
+        List<Sort.Order> orders = new ArrayList<>();
+        requestedSort.forEach(order -> {
+            if ("legalName".equals(order.getProperty())) {
+                Sort.Order normalizedOrder = order.isDescending()
+                        ? Sort.Order.desc("legalName")
+                        : Sort.Order.asc("legalName");
+                orders.add(normalizedOrder.ignoreCase());
+            } else {
+                orders.add(order);
+            }
+        });
+        boolean hasPartyIdSort = orders.stream().anyMatch(order -> "partyId".equals(order.getProperty()));
+        if (!hasPartyIdSort) {
+            orders.add(Sort.Order.asc("partyId"));
+        }
+        return Sort.by(orders);
     }
 
     @Override

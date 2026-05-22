@@ -53,6 +53,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
@@ -491,6 +495,56 @@ class PartyServiceImplTest {
         assertThat(response.getTotalCount()).isEqualTo(1);
         assertThat(response.getResults()).hasSize(1);
         assertThat(response.getResults().getFirst().getLegalName()).isEqualTo("Acme Industrial");
+    }
+
+    @Test
+    void browseParties_usesDefaultPageAndSort_whenPageableIsUnpaged() {
+        CommercialParty first = party(UUID.fromString("00000000-0000-0000-0000-000000000101"));
+        first.setLegalName("Acme Corp");
+
+        PageRequest expectedPageable = PageRequest.of(
+                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+
+        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(first), expectedPageable, 1));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getPageNumber()).isEqualTo(0);
+        assertThat(response.getPageSize()).isEqualTo(20);
+        assertThat(response.getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getLegalName)
+                .containsExactly("Acme Corp");
+    }
+
+    @Test
+    void browseParties_returnsEmptyResultsWithPagingMetadata() {
+        PageRequest expectedPageable = PageRequest.of(
+                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+
+        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        assertThat(response.getResults()).isEmpty();
+        assertThat(response.getTotalCount()).isZero();
+        assertThat(response.getPageNumber()).isEqualTo(0);
+        assertThat(response.getPageSize()).isEqualTo(20);
+    }
+
+    @Test
+    void browseParties_normalizesControllerDefaultSortToIgnoreCaseAndStableTieBreaker() {
+        PageRequest requestedPageable = PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName")));
+        PageRequest expectedPageable = PageRequest.of(
+                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+
+        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
+
+        SearchPartiesResponse response = service.browseParties(requestedPageable);
+
+        assertThat(response.getResults()).isEmpty();
+        assertThat(response.getPageNumber()).isEqualTo(0);
+        assertThat(response.getPageSize()).isEqualTo(20);
     }
 
     @Test
