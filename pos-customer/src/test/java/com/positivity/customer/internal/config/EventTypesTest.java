@@ -3,26 +3,25 @@ package com.positivity.customer.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.events.EventTypeRegistration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class EventTypesTest {
 
     @Test
     void all_includesBrowseEventAsDistinctFastReadRegistration() {
-        assertThat(EventTypes.all())
+        List<EventTypeRegistration> registrations = EventTypes.all();
+        assertThat(registrations)
                 .extracting(EventTypeRegistration::getTypeCode)
+                .doesNotHaveDuplicates()
                 .contains("CUSTOMER_PARTY_BROWSE", "CUSTOMER_PARTY_SEARCH");
-        assertThat(EventTypes.all().stream()
-                        .filter(registration -> "CUSTOMER_PARTY_BROWSE".equals(registration.getTypeCode()))
-                        .count())
-                .isEqualTo(1);
 
-        EventTypeRegistration browseRegistration = EventTypes.all().stream()
+        EventTypeRegistration browseRegistration = registrations.stream()
                 .filter(registration -> "CUSTOMER_PARTY_BROWSE".equals(registration.getTypeCode()))
                 .findFirst()
                 .orElseThrow();
 
-        EventTypeRegistration searchRegistration = EventTypes.all().stream()
+        EventTypeRegistration searchRegistration = registrations.stream()
                 .filter(registration -> "CUSTOMER_PARTY_SEARCH".equals(registration.getTypeCode()))
                 .findFirst()
                 .orElseThrow();
