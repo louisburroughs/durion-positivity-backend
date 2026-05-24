@@ -222,10 +222,15 @@ public class PartyServiceImpl implements PartyService {
 
         return SearchPartiesResponse.builder()
                 .results(summaries)
-                .totalCount(Math.toIntExact(page.getTotalElements()))
+                .totalCount(safeTotalCount(page.getTotalElements()))
                 .pageNumber(normalizedPageable.getPageNumber())
                 .pageSize(normalizedPageable.getPageSize())
                 .build();
+    }
+
+    private int safeTotalCount(long totalElements) {
+        // Response schema exposes int32; cap large totals to avoid overflow exceptions.
+        return totalElements > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) totalElements;
     }
 
     @Override
