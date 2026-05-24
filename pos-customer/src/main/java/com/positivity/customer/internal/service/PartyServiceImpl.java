@@ -474,10 +474,7 @@ public class PartyServiceImpl implements PartyService {
         List<Sort.Order> orders = new ArrayList<>();
         requestedSort.forEach(order -> {
             if ("legalName".equals(order.getProperty())) {
-                Sort.Order normalizedOrder = order.isDescending()
-                        ? Sort.Order.desc("legalName")
-                        : Sort.Order.asc("legalName");
-                orders.add(normalizedOrder.ignoreCase());
+                orders.add(order.ignoreCase());
             } else {
                 orders.add(order);
             }
