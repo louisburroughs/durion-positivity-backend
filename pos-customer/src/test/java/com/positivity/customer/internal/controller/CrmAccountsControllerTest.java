@@ -2,7 +2,10 @@ package com.positivity.customer.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -12,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.customer.config.WebMvcTestSecurityConfig;
 import com.positivity.customer.internal.config.CrmExceptionHandler;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
+import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.service.AccountTierService;
@@ -19,11 +23,14 @@ import com.positivity.customer.service.PartyService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -115,6 +122,60 @@ class CrmAccountsControllerTest {
     @DisplayName("B-21: GET duplicate-check without crm:party:search authority → 403")
     void checkPartyDuplicates_returns403_whenUnauthorized() throws Exception {
         mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check").param("legalName", "Acme"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("browseParties returns 200 with shared response when authorized")
+    void listParties_returns200WithSharedResponse_whenAuthorized() throws Exception {
+        SearchPartiesResponse response = SearchPartiesResponse.builder()
+                .results(List.of(SearchPartiesResponse.PartySummary.builder()
+                        .partyId(PARTY_ID.toString())
+                        .legalName("Acme Corp")
+                        .displayName("Acme")
+                        .partyType("COMMERCIAL")
+                        .status("ACTIVE")
+                        .createdAt("2024-01-01T00:00:00Z")
+                        .build()))
+                .totalCount(1)
+                .pageNumber(0)
+                .pageSize(20)
+                .build();
+
+        when(partyService.browseParties(any(Pageable.class))).thenReturn(response);
+
+        mockMvc.perform(get("/v1/crm/accounts/parties").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results").isArray())
+                .andExpect(jsonPath("$.results.length()").value(1))
+                .andExpect(jsonPath("$.results[0].partyId").value(PARTY_ID.toString()))
+                .andExpect(jsonPath("$.results[0].legalName").value("Acme Corp"))
+                .andExpect(jsonPath("$.results[0].displayName").value("Acme"))
+                .andExpect(jsonPath("$.results[0].partyType").value("COMMERCIAL"))
+                .andExpect(jsonPath("$.results[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.results[0].createdAt").value("2024-01-01T00:00:00Z"))
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.pageNumber").value(0))
+                .andExpect(jsonPath("$.pageSize").value(20));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(partyService).browseParties(pageableCaptor.capture());
+        assertEquals(0, pageableCaptor.getValue().getPageNumber());
+        assertEquals(20, pageableCaptor.getValue().getPageSize());
+        assertTrue(pageableCaptor.getValue().getSort().isSorted());
+        var sortIterator = pageableCaptor.getValue().getSort().iterator();
+        var legalNameOrder = sortIterator.next();
+        assertEquals("legalName", legalNameOrder.getProperty());
+        assertEquals(Sort.Direction.ASC, legalNameOrder.getDirection());
+        var partyIdOrder = sortIterator.next();
+        assertEquals("partyId", partyIdOrder.getProperty());
+        assertEquals(Sort.Direction.ASC, partyIdOrder.getDirection());
+    }
+
+    @Test
+    @DisplayName("browseParties returns 403 when unauthorized")
+    void listParties_returns403_whenUnauthorized() throws Exception {
+        mockMvc.perform(get("/v1/crm/accounts/parties"))
                 .andExpect(status().isForbidden());
     }
 

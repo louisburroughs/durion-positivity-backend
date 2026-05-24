@@ -895,6 +895,55 @@ paths:
       x-required-permissions:
       - crm:party:view
   /v1/crm/accounts/parties:
+    get:
+      tags:
+      - CRM Accounts
+      summary: Browse parties
+      description: Browse parties with paging and sorting. The service sorts by legalName ascending by default, appends partyId ascending as a stable tie-breaker whenever the requested sort list does not explicitly include partyId, and applies case-insensitive legalName sorting.
+      operationId: browseParties
+      parameters:
+      - name: page
+        in: query
+        description: Zero-based page index
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 20
+      - name: sort
+        in: query
+        description: Repeat to override sorting. The service uses legalName,asc by default and appends partyId,asc as a stable tie-breaker whenever the requested sort list does not explicitly include partyId; legalName sorting is case-insensitive.
+        schema:
+          type: array
+          items:
+            type: string
+          default:
+          - legalName,asc
+          - partyId,asc
+        style: form
+        explode: true
+      responses:
+        '200':
+          description: Browse results returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchPartiesResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
     post:
       tags:
       - CRM Accounts

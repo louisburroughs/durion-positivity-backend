@@ -14,7 +14,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the customer module.
-     * Total: 35 event types.
+     * Total: 36 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -28,7 +28,7 @@ public final class EventTypes {
                 EventTypeRegistration.write("CUSTOMER_BULK_INGEST", "Bulk import customer records")
                         .build(),
 
-                // CrmAccountsController - 8 events
+                // CrmAccountsController - 11 events
                 EventTypeRegistration.fastRead(
                                 "CUSTOMER_ACCOUNT_TIER_GET", "Retrieve the tier level for a specific account")
                         .build(),
@@ -37,6 +37,8 @@ public final class EventTypes {
                                 "Resolve or compute the account tier based on business rules")
                         .build(),
                 EventTypeRegistration.write("CUSTOMER_PARTY_CREATE", "Create a new commercial party/account")
+                        .build(),
+                EventTypeRegistration.fastRead("CUSTOMER_PARTY_BROWSE", "Browse parties with paging and sorting")
                         .build(),
                 EventTypeRegistration.search("CUSTOMER_PARTY_SEARCH", "Search for parties based on various criteria")
                         .build(),
