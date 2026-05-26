@@ -1,0 +1,4 @@
+bulk-loader:
+  tus:
+    cleanup-interval-ms: 60000
+    expiry-hours: 1

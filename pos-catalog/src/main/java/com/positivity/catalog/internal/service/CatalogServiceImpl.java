@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CatalogServiceImpl implements CatalogService {
@@ -51,10 +52,12 @@ public class CatalogServiceImpl implements CatalogService {
         this.catalogRepository = catalogRepository;
     }
 
+    @Transactional(readOnly = true)
     public Optional<ProductDto> getProductById(UUID productId) {
         return productRepository.findById(productId).map(this::toProductDto);
     }
 
+    @Transactional(readOnly = true)
     public List<ProductDto> getProductsByName(String name) {
         return productRepository.findByName(name).stream()
                 .map(this::toProductDto)

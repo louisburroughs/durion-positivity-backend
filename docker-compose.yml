@@ -172,6 +172,7 @@ services:
       - "8761:8761"
     environment:
       # Configure Eureka to use its Docker Compose service name for registration
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
@@ -195,6 +196,7 @@ services:
     ports:
       - "9001:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
@@ -227,6 +229,7 @@ services:
       context: ./pos-bulk-loader
       dockerfile: Dockerfile
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_bulk_loader_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
@@ -261,6 +264,7 @@ services:
     ports:
       - "8081:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_catalog_db
@@ -290,6 +294,7 @@ services:
     ports:
       - "8082:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_customer_db
@@ -325,6 +330,7 @@ services:
       dockerfile: Dockerfile
     # No external ports exposed - internal service only, accessed via API gateway
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_event_receiver_db
@@ -356,6 +362,7 @@ services:
     ports:
       - "8083:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_image_db
@@ -409,6 +416,7 @@ services:
       context: ./pos-inventory
       dockerfile: Dockerfile
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_inventory_db
@@ -436,6 +444,7 @@ services:
       context: ./pos-invoice
       dockerfile: Dockerfile
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_invoice_db
@@ -465,6 +474,7 @@ services:
     ports:
       - "8084:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_location_db
@@ -494,7 +504,7 @@ services:
     ports:
       - "8094:8086"
     environment:
-      SPRING_PROFILES_ACTIVE: alpha
+      SPRING_PROFILES_ACTIVE: alpha,accelerated
       POS_MCP_DB_HOST: postgres
       POS_MCP_DB_PORT: 5432
       POS_MCP_DB_NAME: pos_mcp
@@ -575,6 +585,7 @@ services:
     ports:
       - "8085:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       POS_LOCATION_SERVICE_BASE_URL: http://pos-location:8080
@@ -603,6 +614,7 @@ services:
       context: ./pos-price
       dockerfile: Dockerfile
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_price_db
@@ -632,7 +644,7 @@ services:
     ports:
       - "8086:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: docker,accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_security_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
@@ -670,6 +682,7 @@ services:
     ports:
       - "8087:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_shop_manager_db
@@ -727,6 +740,7 @@ services:
     ports:
       - "8089:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_inventory_db
@@ -815,6 +829,7 @@ services:
     ports:
       - "8090:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_workorder_db
@@ -844,6 +859,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       <<: [ *pos-security-client-env, *pos-events-client-env ]

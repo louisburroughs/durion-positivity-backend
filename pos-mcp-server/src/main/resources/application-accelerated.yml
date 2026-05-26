@@ -1,0 +1,9 @@
+mcp:
+  agent:
+    cache-ttl-minutes: 1
+  tuning:
+    cron: "0 * * * * ?"
+pos:
+  nlti:
+    session:
+      ttl-hours: 1
