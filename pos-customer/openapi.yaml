@@ -902,34 +902,12 @@ paths:
       description: Browse parties with paging and sorting. The service sorts by legalName ascending by default, appends partyId ascending as a stable tie-breaker whenever the requested sort list does not explicitly include partyId, and applies case-insensitive legalName sorting.
       operationId: browseParties
       parameters:
-      - name: page
+      - name: pageable
         in: query
-        description: Zero-based page index
+        description: Pagination parameters (page, size, sort). The service uses legalName,asc by default and appends partyId,asc as a stable tie-breaker whenever the requested sort list does not explicitly include partyId; legalName sorting is case-insensitive.
+        required: true
         schema:
-          type: integer
-          format: int32
-          minimum: 0
-          default: 0
-      - name: size
-        in: query
-        description: Page size
-        schema:
-          type: integer
-          format: int32
-          minimum: 1
-          default: 20
-      - name: sort
-        in: query
-        description: Repeat to override sorting. The service uses legalName,asc by default and appends partyId,asc as a stable tie-breaker whenever the requested sort list does not explicitly include partyId; legalName sorting is case-insensitive.
-        schema:
-          type: array
-          items:
-            type: string
-          default:
-          - legalName,asc
-          - partyId,asc
-        style: form
-        explode: true
+          $ref: '#/components/schemas/Pageable'
       responses:
         '200':
           description: Browse results returned

@@ -17,7 +17,6 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.PurchaseOrderService;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -27,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -46,6 +46,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final String OCCURRED_AT = "occurredAt";
     private static final String ACTOR_ID = "actorId";
     private static final String EVENT_TYPE = "eventType";
+    private static final long MAX_PO_NUMBER_SEQUENCE = 2_821_109_907_455L;
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
@@ -121,8 +122,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (filter.getVendorId() != null && filter.getStatus() != null) {
             page = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus(), pageable);
             if (page == null) {
-                List<PurchaseOrderEntity> legacy =
-                        purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus());
+                List<PurchaseOrderEntity> legacy = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(),
+                        filter.getStatus());
                 page = new PageImpl<>(legacy, pageable, legacy.size());
             }
         } else if (filter.getVendorId() != null) {
@@ -140,12 +141,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         List<PurchaseOrderResponse> content = page.getContent().stream()
-                .filter(po ->
-                        filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
-                .filter(po ->
-                        filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
-                .filter(po ->
-                        filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
+                .filter(po -> filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
+                .filter(po -> filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
+                .filter(po -> filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
                 .map(this::toResponse)
                 .toList();
 
@@ -362,8 +360,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private void updateOpenQuantity(PurchaseOrderLineEntity line, BigDecimal quantityReceived) {
-        BigDecimal currentOpenQty =
-                line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal();
+        BigDecimal currentOpenQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
+                : line.getOpenQuantityDecimal();
         BigDecimal nextOpenQty = currentOpenQty.subtract(quantityReceived);
         line.setOpenQuantityDecimal(nextOpenQty.signum() < 0 ? BigDecimal.ZERO : nextOpenQty);
     }
@@ -545,8 +543,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private String generatePoNumber() {
-        return "PO-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase();
+        long sequence = purchaseOrderRepository.getNextPurchaseOrderSequence();
+        if (sequence < 1L || sequence > MAX_PO_NUMBER_SEQUENCE) {
+            throw new IllegalStateException("Purchase order sequence is out of range for 8-character codes");
+        }
+        return String.format(Locale.ROOT, "%8s", Long.toString(sequence, 36)).replace(' ', '0')
+                .toUpperCase(Locale.ROOT);
     }
 
-    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {}
+    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {
+    }
 }
