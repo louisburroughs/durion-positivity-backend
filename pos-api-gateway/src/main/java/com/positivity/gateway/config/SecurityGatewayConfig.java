@@ -439,6 +439,7 @@ public class SecurityGatewayConfig {
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
+                || path.equals("/system/time")
                 || isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
                 || isPathMatch(
                         path, authProperties.getStrippedAuthPathRoot(), authProperties.getStrippedAuthPathPrefix());

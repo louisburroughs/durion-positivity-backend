@@ -60,6 +60,12 @@
             <version>0.12.5</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- pos-events: provides Clock bean (ScaledClock) and TimeSource for /system/time endpoint -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-events</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
