@@ -85,6 +85,8 @@ exa:
 
 server:
   port: 8086
+  tomcat:
+    max-http-header-size: 65536
   max-http-request-header-size: 32KB
   servlet:
     context-path: /

@@ -137,6 +137,7 @@ public class SecurityGatewayConfig {
 
         Optional<String> token = extractBearerToken(context.request());
         if (token.isEmpty()) {
+            LOG.warn("Missing Authorization header; path={}", context.path());
             return unauthorized(context.exchange());
         }
 
@@ -213,6 +214,7 @@ public class SecurityGatewayConfig {
             return Optional.of(jwsClaims.getPayload());
         } catch (JwtException ex) {
             String reason = tokenValidationReason(ex);
+            LOG.warn("JWT parse failed path={} reason={} detail={}", context.path(), reason, ex.getMessage());
             rejectAuthentication(
                     context, METRIC_AUTH_TOKEN_VALIDATION_FAILURE, REJECTION_REASON_TAG, reason, reason, UNKNOWN_JTI);
             return Optional.empty();

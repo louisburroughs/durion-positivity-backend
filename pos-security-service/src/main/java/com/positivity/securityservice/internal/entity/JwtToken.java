@@ -45,10 +45,10 @@ public class JwtToken {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 512)
+    @Column(nullable = false, unique = true, columnDefinition = "TEXT")
     private String token;
 
-    @Column(nullable = false, unique = true, length = 512)
+    @Column(nullable = false, unique = true, columnDefinition = "TEXT")
     private String refreshToken;
 
     @Column(nullable = false)

@@ -297,13 +297,48 @@ public enum PermissionCode {
     PEOPLE__PERSON__EDIT(235, "people:person:edit"),
     PEOPLE__PERSON__DELETE(236, "people:person:delete"),
     PEOPLE__USER_LINK__VIEW(237, "people:userLink:view"),
-    PEOPLE__USER_LINK__WRITE(238, "people:userLink:write");
+    PEOPLE__USER_LINK__WRITE(238, "people:userLink:write"),
+
+    // ── Bulk Import ──────────────────────────────────────────────────────────
+    BULK_IMPORT__UPLOAD__EXECUTE(239, "bulkImport:upload:execute"),
+    BULK_IMPORT__STATUS__READ(240, "bulkImport:status:read"),
+
+    // ── Accounting (batch 2) ─────────────────────────────────────────────────
+    ACCOUNTING__EVENTS__REPROCESS(241, "accounting:events:reprocess"),
+    ACCOUNTING__EXPORT__REQUEST(242, "accounting:export:request"),
+    ACCOUNTING__EXPORT__VIEW(243, "accounting:export:view"),
+
+    // ── CRM (batch 2) ────────────────────────────────────────────────────────
+    CRM__BILLING_RULES__EDIT(244, "crm:billing_rules:edit"),
+
+    // ── Pricing (batch 2) ────────────────────────────────────────────────────
+    PRICING__BASE_PRICE__CREATE(245, "pricing:base_price:create"),
+
+    // ── Inventory (batch 2) ──────────────────────────────────────────────────
+    INVENTORY__LEDGER__VIEW(246, "inventory:ledger:view"),
+    INVENTORY__LOCATION__ADMIN(247, "inventory:location:admin"),
+    INVENTORY__LOCATION__VIEW(248, "inventory:location:view"),
+    INVENTORY__PICK_LIST__CREATE(249, "inventory:pick_list:create"),
+    INVENTORY__PICK_LIST__EXECUTE(250, "inventory:pick_list:execute"),
+    INVENTORY__PICK_LIST__VIEW(251, "inventory:pick_list:view"),
+    INVENTORY__PUTAWAY__CLAIM(252, "inventory:putaway:claim"),
+    INVENTORY__PUTAWAY__EXECUTE(253, "inventory:putaway:execute"),
+    INVENTORY__PUTAWAY__GENERATE(254, "inventory:putaway:generate"),
+    INVENTORY__PUTAWAY__VIEW(255, "inventory:putaway:view"),
+    INVENTORY__RETURN__VIEW(256, "inventory:return:view"),
+    INVENTORY__RETURN__WRITE(257, "inventory:return:write"),
+    INVENTORY__SHORTAGE__RESOLVE(258, "inventory:shortage:resolve"),
+    INVENTORY__SHORTAGE__VIEW(259, "inventory:shortage:view"),
+    INVENTORY__STOCK_MOVEMENT__CREATE(260, "inventory:stock_movement:create"),
+
+    // ── Workorder (batch 2) ──────────────────────────────────────────────────
+    WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 5;
+    public static final int CATALOG_VERSION = 7;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

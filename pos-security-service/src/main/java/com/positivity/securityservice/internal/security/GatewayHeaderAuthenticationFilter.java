@@ -21,6 +21,8 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String HEADER_AUTHORITIES = "X-Authorities";
     private static final String HEADER_USER = "X-User";
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(GatewayHeaderAuthenticationFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -36,6 +38,10 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(username, null, authorities);
             authentication.setDetails(Map.of("username", username));
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            log.debug("Gateway auth established; user={} authorities={} uri={}",
+                    username, authorities.size(), request.getRequestURI());
+        } else {
+            log.debug("No X-Authorities header; uri={}", request.getRequestURI());
         }
 
         filterChain.doFilter(request, response);

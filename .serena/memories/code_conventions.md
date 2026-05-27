@@ -1,0 +1,1 @@
+Only service packages are public APIs; all other code must live under com.positivity.<domain>.internal except the Spring Boot application class. Modules should have ArchUnit tests enforcing boundaries. Use @NonNull from org.jspecify.annotations for non-null service parameters/returns, and use pos-events @EmitEvent plus module event registration patterns for API event logging.

@@ -1,0 +1,1 @@
+Multi-module Maven backend for Durion POS. Each pos-* directory is a Spring Boot service. Tech stack is Java 25, Spring Boot 4.x, Maven wrapper, Docker for local stacks. Root app conventions and architecture rules are documented in AGENTS.md, including internal package encapsulation and ArchUnit enforcement.

@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.CredentialsExpiredException;
 import org.springframework.security.authentication.DisabledException;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
  * <p>
  * Issue: AUTH-009 (regression fix — authentication error response body)
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
@@ -62,6 +64,9 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
         if (correlationId == null) {
             correlationId = UUID.randomUUID().toString();
         }
+
+        log.warn("Authentication required (401); uri={} correlationId={} reason={}",
+                request.getRequestURI(), correlationId, code);
 
         ApiError body = new ApiError(
                 code,

@@ -14,6 +14,8 @@ spring:
 
 server:
   port: 0
+  tomcat:
+    max-http-header-size: 65536
 
 management:
   server:

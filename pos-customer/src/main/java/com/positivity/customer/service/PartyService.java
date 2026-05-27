@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Pageable;
 
 public interface PartyService {
 
@@ -32,6 +33,9 @@ public interface PartyService {
     GetPartyResponse getParty(UUID partyId);
 
     GetContactsWithRolesResponse getContactsWithRoles(UUID partyId);
+
+    @NonNull
+    SearchPartiesResponse browseParties(@NonNull Pageable pageable);
 
     SearchPartiesResponse searchParties(SearchPartiesRequest request);
 

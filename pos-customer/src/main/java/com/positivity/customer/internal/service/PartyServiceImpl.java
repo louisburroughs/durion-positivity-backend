@@ -48,6 +48,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
@@ -205,6 +209,28 @@ public class PartyServiceImpl implements PartyService {
     private String buildContactName(Contact contact) {
         return (contact.getFirstName() != null ? contact.getFirstName() : "") + " "
                 + (contact.getLastName() != null ? contact.getLastName() : "");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
+        Pageable normalizedPageable = normalizeBrowsePageable(pageable);
+        Page<CommercialParty> page = partyRepository.findAll(normalizedPageable);
+        List<SearchPartiesResponse.PartySummary> summaries =
+                page.getContent().stream().map(this::mapToPartySummary).toList();
+
+        return SearchPartiesResponse.builder()
+                .results(summaries)
+                .totalCount(safeTotalCount(page.getTotalElements()))
+                .pageNumber(normalizedPageable.getPageNumber())
+                .pageSize(normalizedPageable.getPageSize())
+                .build();
+    }
+
+    private int safeTotalCount(long totalElements) {
+        // Response schema exposes int32; cap large totals to avoid overflow exceptions.
+        return totalElements > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) totalElements;
     }
 
     @Override
@@ -435,6 +461,34 @@ public class PartyServiceImpl implements PartyService {
                 .status(party.getStatus().toString())
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
                 .build();
+    }
+
+    private Pageable normalizeBrowsePageable(@Nullable Pageable pageable) {
+        Sort normalizedSort = normalizeBrowseSort(pageable != null ? pageable.getSort() : Sort.unsorted());
+        if (pageable == null || pageable.isUnpaged()) {
+            return PageRequest.of(0, 20, normalizedSort);
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), normalizedSort);
+    }
+
+    private Sort normalizeBrowseSort(@NonNull Sort requestedSort) {
+        if (requestedSort.isUnsorted()) {
+            return Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId"));
+        }
+
+        List<Sort.Order> orders = new ArrayList<>();
+        requestedSort.forEach(order -> {
+            if ("legalName".equals(order.getProperty())) {
+                orders.add(order.ignoreCase());
+            } else {
+                orders.add(order);
+            }
+        });
+        boolean hasPartyIdSort = orders.stream().anyMatch(order -> "partyId".equals(order.getProperty()));
+        if (!hasPartyIdSort) {
+            orders.add(Sort.Order.asc("partyId"));
+        }
+        return Sort.by(orders);
     }
 
     @Override

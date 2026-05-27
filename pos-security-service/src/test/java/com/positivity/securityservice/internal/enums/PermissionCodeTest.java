@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test;
  * <p>
  * Verifies:
  * <ul>
- * <li>Catalog contains exactly 239 permissions matching
+ * <li>Catalog contains exactly 262 permissions matching
  * {@code scripts/permissions-aggregate.yaml}.</li>
- * <li>Each bit index in the range [0, 238] is assigned exactly once (no gaps,
+ * <li>Each bit index in the range [0, 261] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
- * <li>{@code CATALOG_VERSION = 5} constant is declared and accessible.</li>
+ * <li>{@code CATALOG_VERSION = 7} constant is declared and accessible.</li>
  * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
@@ -32,13 +32,13 @@ import org.junit.jupiter.api.Test;
 class PermissionCodeTest {
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 239 entries
+    // AC-1: Catalog size — 262 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 239 permissions")
-    void catalogContainsExactly239Permissions() {
-        assertThat(PermissionCode.values()).hasSize(239);
+    @DisplayName("catalog contains exactly 262 permissions")
+    void catalogContainsExactly262Permissions() {
+        assertThat(PermissionCode.values()).hasSize(262);
     }
 
     // -------------------------------------------------------------------------
@@ -52,17 +52,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(239);
+        assertThat(bitIndexes).hasSize(262);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 238 with no gaps")
-    void bitIndexesSpanFrom0To238WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 261 with no gaps")
+    void bitIndexesSpanFrom0To261WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..238 must be present
-        for (int i = 0; i < 239; i++) {
+        // Issue PERM-001: every index 0..261 must be present
+        for (int i = 0; i < 262; i++) {
             assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
     }
@@ -77,7 +77,7 @@ class PermissionCodeTest {
         Set<String> codes =
                 Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(239);
+        assertThat(codes).hasSize(262);
     }
 
     // -------------------------------------------------------------------------
@@ -85,9 +85,9 @@ class PermissionCodeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CATALOG_VERSION is 5")
-    void catalogVersionIsFive() {
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(5);
+    @DisplayName("CATALOG_VERSION is 7")
+    void catalogVersionIsSeven() {
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(7);
     }
 
     // -------------------------------------------------------------------------

@@ -9,6 +9,8 @@ spring:
 
 server:
   port: 8091
+  tomcat:
+    max-http-header-size: 65536
 
 eureka:
   client:

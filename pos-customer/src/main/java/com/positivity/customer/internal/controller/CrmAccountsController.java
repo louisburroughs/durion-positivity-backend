@@ -35,6 +35,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -188,6 +190,41 @@ public class CrmAccountsController {
     }
 
     // --- Party Search and Merge (Issue #173) ---
+
+    @Operation(
+            summary = "Browse parties",
+            description =
+                    "Browse parties with paging and sorting. The service sorts by legalName ascending by default, "
+                            + "appends partyId ascending as a stable tie-breaker whenever the requested sort list "
+                            + "does not explicitly include partyId, and applies case-insensitive legalName sorting.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Browse results returned",
+                        content = @Content(schema = @Schema(implementation = SearchPartiesResponse.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content)
+            })
+    @GetMapping("/parties")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.PARTY_VIEW})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
+    @EmitEvent(id = "CUSTOMER_PARTY_BROWSE", apiVersion = "1")
+    public ResponseEntity<SearchPartiesResponse> browseParties(
+            @Parameter(
+                            description = "Pagination parameters (page, size, sort). The service uses legalName,asc "
+                                    + "by default and appends partyId,asc as a stable tie-breaker whenever the "
+                                    + "requested sort list does not explicitly include partyId; legalName sorting "
+                                    + "is case-insensitive.")
+                    @PageableDefault(size = 20, sort = {"legalName", "partyId"})
+                    Pageable pageable) {
+        log.info("browseParties pageable={}", pageable);
+        return ResponseEntity.ok(partyService.browseParties(pageable));
+    }
 
     @Operation(summary = "Search parties", description = "Search for parties based on various criteria")
     @ApiResponses(
