@@ -602,6 +602,52 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.valid").value(false));
     }
 
+    /**
+     * Security: POST /v1/auth/token-pair must reject unauthenticated callers.
+     *
+     * **Scenario:** Unauthenticated request (no gateway auth headers) to token-pair
+     * **Expected:** 401 Unauthorized — endpoint is not public
+     * **Rationale:** Without this guard, any caller knowing a valid username can obtain
+     * a token pair with arbitrary roles.
+     */
+    @Test
+    @DisplayName("POST /v1/auth/token-pair requires authentication — unauthenticated call returns 401")
+    void tokenPairRequiresAuthentication() throws Exception {
+        // Blank X-Authorities overrides the defaultRequest gateway headers, leaving
+        // the security context anonymous. The body is valid so the only failure is auth.
+        mockMvc.perform(post("/v1/auth/token-pair")
+                        .header("X-Authorities", "")
+                        .header("X-User", "")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"subject":"john.doe","roles":["SHOP_MGR"]}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Security: POST /v1/auth/token-pair must reject callers without security:token:issue_internal.
+     *
+     * **Scenario:** Authenticated caller with MANAGER role (which grants security:role:view,
+     * security:role:assign, and mcp:chat:execute) but NOT security:token:issue_internal
+     * **Expected:** 403 Forbidden — insufficient authority to issue tokens
+     * **Rationale:** Token issuance is a sensitive operation that requires explicit authority.
+     */
+    @Test
+    @DisplayName("POST /v1/auth/token-pair returns 403 for authenticated caller without security:token:issue_internal")
+    void tokenPairWithoutIssuanceAuthorityReturnsForbidden() throws Exception {
+        // MANAGER role grants: security:role:view, security:role:assign, mcp:chat:execute
+        // but NOT security:token:issue_internal
+        mockMvc.perform(post("/v1/auth/token-pair")
+                        .header("X-Authorities", "ROLE_MANAGER,security:role:view,security:role:assign,mcp:chat:execute")
+                        .header("X-User", TEST_SUBJECT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"subject":"john.doe","roles":["SHOP_MGR"]}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
     // ========== USER MANAGEMENT TESTS ==========
 
     /**

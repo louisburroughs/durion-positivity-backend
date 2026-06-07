@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 6;
+    public static final int CATALOG_VERSION = 8;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -246,7 +246,55 @@ public final class GatewayPermissionCatalog {
         "PERM_people:userLink:view",
         "PERM_people:userLink:write",
         "PERM_bulkImport:upload:execute",
-        "PERM_bulkImport:status:read"
+        "PERM_bulkImport:status:read",
+
+        // ── Batch-2: previously missing from gateway (bits 241–261) ─────────────
+        "PERM_accounting:events:reprocess",           // 241
+        "PERM_accounting:export:request",             // 242
+        "PERM_accounting:export:view",                // 243
+        "PERM_crm:billing_rules:edit",                // 244
+        "PERM_pricing:base_price:create",             // 245
+        "PERM_inventory:ledger:view",                 // 246
+        "PERM_inventory:location:admin",              // 247
+        "PERM_inventory:location:view",               // 248
+        "PERM_inventory:pick_list:create",            // 249
+        "PERM_inventory:pick_list:execute",           // 250
+        "PERM_inventory:pick_list:view",              // 251
+        "PERM_inventory:putaway:claim",               // 252
+        "PERM_inventory:putaway:execute",             // 253
+        "PERM_inventory:putaway:generate",            // 254
+        "PERM_inventory:putaway:view",                // 255
+        "PERM_inventory:return:view",                 // 256
+        "PERM_inventory:return:write",                // 257
+        "PERM_inventory:shortage:resolve",            // 258
+        "PERM_inventory:shortage:view",               // 259
+        "PERM_inventory:stock_movement:create",       // 260
+        "PERM_workorder:parts:consume",               // 261
+
+        // ── Batch-3: dark permissions now in PermissionCode (bits 262–284) ───────
+        "PERM_accounting:ap:approve",                 // 262
+        "PERM_accounting:ap:reject",                  // 263
+        "PERM_accounting:coa:deactivate",             // 264
+        "PERM_accounting:je:reverse",                 // 265
+        "PERM_accounting:mapping:view",               // 266
+        "PERM_accounting:mapping:create",             // 267
+        "PERM_accounting:mapping:edit",               // 268
+        "PERM_accounting:mapping:deactivate",         // 269
+        "PERM_accounting:posting_rules:view",         // 270
+        "PERM_accounting:posting_rules:create",       // 271
+        "PERM_accounting:posting_rules:publish",      // 272
+        "PERM_accounting:posting_rules:archive",      // 273
+        "PERM_timekeeping:work_session:create",       // 274
+        "PERM_timekeeping:work_session:stop",         // 275
+        "PERM_timekeeping:work_session:break_start",  // 276
+        "PERM_timekeeping:work_session:break_stop",   // 277
+        "PERM_timekeeping:overlap_override",          // 278
+        "PERM_workorder:dashboard:view",              // 279
+        "PERM_workorder:estimate:submit",             // 280
+        "PERM_workorder:estimate:promote",            // 281
+        "PERM_workorder:workorder:assign-technician", // 282
+        "PERM_workorder:workorder:generate_invoice",  // 283
+        "PERM_workorder:start"                        // 284
     };
 
     public static String authorityForBit(int bitIndex) {

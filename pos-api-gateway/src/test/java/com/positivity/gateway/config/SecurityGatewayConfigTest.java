@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.crypto.SecretKey;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -1039,6 +1040,45 @@ class SecurityGatewayConfigTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // ── Task-2: new catalog version + extended array tests ───────────────────
+
+    @Test
+    @DisplayName("CATALOG_VERSION is 8")
+    void catalogVersionIsEight() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 284")
+    void authorityByBitCoversNewEntries() {
+        // batch-2: previously missing (bits 241-261)
+        assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
+        assertThat(GatewayPermissionCatalog.authorityForBit(242)).isEqualTo("PERM_accounting:export:request");
+        assertThat(GatewayPermissionCatalog.authorityForBit(243)).isEqualTo("PERM_accounting:export:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(244)).isEqualTo("PERM_crm:billing_rules:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(258)).isEqualTo("PERM_inventory:shortage:resolve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(261)).isEqualTo("PERM_workorder:parts:consume");
+        // batch-3: dark permissions (bits 262-284)
+        assertThat(GatewayPermissionCatalog.authorityForBit(262)).isEqualTo("PERM_accounting:ap:approve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(278)).isEqualTo("PERM_timekeeping:overlap_override");
+        assertThat(GatewayPermissionCatalog.authorityForBit(279)).isEqualTo("PERM_workorder:dashboard:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(284)).isEqualTo("PERM_workorder:start");
+        // beyond array must return null
+        assertThat(GatewayPermissionCatalog.authorityForBit(285)).isNull();
+    }
+
+    @Test
+    @DisplayName("every bit index in AUTHORITY_BY_BIT has a PERM_ prefixed entry")
+    void allAuthorityByBitEntriesHavePermPrefix() {
+        String[] entries = GatewayPermissionCatalog.AUTHORITY_BY_BIT;
+        for (int i = 0; i < entries.length; i++) {
+            int idx = i;
+            assertThat(entries[i])
+                    .as("AUTHORITY_BY_BIT[%d] must start with PERM_", idx)
+                    .startsWith("PERM_");
+        }
+    }
+
     // ── PERM-011 — GatewayPermissionCatalog unit tests ───────────────────────
 
     /**
@@ -1046,12 +1086,6 @@ class SecurityGatewayConfigTest {
      */
     @Nested
     class GatewayPermissionCatalogTests {
-
-        /** Catalog version stays aligned with the token perm_ver claim. */
-        @Test
-        void catalogVersion_is6() {
-            assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(6);
-        }
 
         /** Bit 0 maps to PERM_accounting:je:view. */
         @Test
