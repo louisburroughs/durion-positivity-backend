@@ -17,7 +17,7 @@ The original version explained the idea of compact permission-bitset tokens, but
 - the gateway's `perm_ver` enforcement rules
 - the temporary legacy `authorities` fallback path
 - the downstream `GatewayAuthoritiesFilter` behavior that expands `PERM_*` authorities
-- the current catalog-version drift between security service and gateway
+- the catalog-version drift that existed in earlier remediation snapshots
 
 ## What The Live Gateway Actually Does
 

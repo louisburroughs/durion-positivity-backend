@@ -80,6 +80,9 @@ Additional issuance endpoint:
 
 - `POST /security-service/v1/auth/token-pair`
 
+This is a privileged internal issuance endpoint. It requires an authenticated caller
+that has `security:token:issue_internal`.
+
 This endpoint does not accept username/password. It accepts:
 
 - `subject`
@@ -89,7 +92,9 @@ Example request:
 
 ```bash
 curl -X POST "http://localhost:8080/security-service/v1/auth/token-pair" \
+  -H "Authorization: Bearer <internal-issuer-token>" \
   -H "Content-Type: application/json" \
+  -H "X-Correlation-Id: 550e8400-e29b-41d4-a716-446655440003" \
   -d '{
     "subject": "advisor1",
     "roles": ["ADMIN"]

@@ -35,7 +35,6 @@ Do not treat labels such as "Admin" or "Manager" as the authoritative API contra
 
 - `POST /v1/auth/login`
 - `POST /v1/auth/self-register`
-- `POST /v1/auth/token-pair`
 - `POST /v1/auth/refresh`
 - `GET /v1/auth/validate`
 
@@ -55,6 +54,7 @@ Required permission:
 ### Internal token issuance
 
 - `POST /v1/auth/internal/token`
+- `POST /v1/auth/token-pair`
 
 Required permission:
 

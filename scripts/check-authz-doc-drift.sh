@@ -12,6 +12,32 @@ fi
 
 failures=0
 
+if command -v rg >/dev/null 2>&1; then
+  SEARCH_TOOL="rg"
+else
+  SEARCH_TOOL="grep"
+fi
+
+search_quiet() {
+  local pattern="$1"
+  shift
+  if [[ "${SEARCH_TOOL}" == "rg" ]]; then
+    rg -q --fixed-strings "${pattern}" "$@"
+  else
+    grep -Fq -- "${pattern}" "$@"
+  fi
+}
+
+search_with_lines() {
+  local pattern="$1"
+  shift
+  if [[ "${SEARCH_TOOL}" == "rg" ]]; then
+    rg -n --fixed-strings "${pattern}" "$@"
+  else
+    grep -Fn -- "${pattern}" "$@"
+  fi
+}
+
 check() {
   local description="$1"
   shift
@@ -27,16 +53,16 @@ require_match() {
   local description="$1"
   local pattern="$2"
   shift 2
-  check "${description}" rg -q --fixed-strings "${pattern}" "$@"
+  check "${description}" search_quiet "${pattern}" "$@"
 }
 
 reject_match() {
   local description="$1"
   local pattern="$2"
   shift 2
-  if rg -n --fixed-strings "${pattern}" "$@" >/dev/null; then
+  if search_with_lines "${pattern}" "$@" >/dev/null; then
     echo "FAIL: ${description}" >&2
-    rg -n --fixed-strings "${pattern}" "$@" >&2 || true
+    search_with_lines "${pattern}" "$@" >&2 || true
     failures=$((failures + 1))
   else
     echo "PASS: ${description}"

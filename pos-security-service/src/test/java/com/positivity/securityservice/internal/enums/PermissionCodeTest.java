@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * Verifies:
  * <ul>
  * <li>Catalog contains exactly 285 permissions matching
- * {@code scripts/permissions-aggregate.yaml}.</li>
+ * {@code pos-security-service/docs/permissions-aggregate.yaml}.</li>
  * <li>Each bit index in the range [0, 284] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
@@ -75,8 +75,8 @@ class PermissionCodeTest {
     @Test
     @DisplayName("all code strings are unique")
     void allCodeStringsAreUnique() {
-        Set<String> codes =
-                Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
+        Set<String> codes = Arrays.stream(PermissionCode.values()).map(PermissionCode::code)
+                .collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
         assertThat(codes).hasSize(285);
     }
@@ -167,14 +167,14 @@ class PermissionCodeTest {
                 "workorder:estimate:promote",
                 "workorder:workorder:assign-technician",
                 "workorder:workorder:generate_invoice",
-                "workorder:start"
-        );
+                "workorder:start");
 
         Set<String> knownCodes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::code)
                 .collect(Collectors.toSet());
 
         assertThat(darkPermissions)
+                .isNotEmpty()
                 .allSatisfy(perm -> assertThat(knownCodes)
                         .as("PermissionCode missing entry for '%s'", perm)
                         .contains(perm));
