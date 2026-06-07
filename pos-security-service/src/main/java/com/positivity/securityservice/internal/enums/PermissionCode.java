@@ -332,13 +332,42 @@ public enum PermissionCode {
     INVENTORY__STOCK_MOVEMENT__CREATE(260, "inventory:stock_movement:create"),
 
     // ── Workorder (batch 2) ──────────────────────────────────────────────────
-    WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume");
+    WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume"),
+
+    // ── Accounting (batch 3) ─────────────────────────────────────────────────
+    ACCOUNTING__AP__APPROVE(262, "accounting:ap:approve"),
+    ACCOUNTING__AP__REJECT(263, "accounting:ap:reject"),
+    ACCOUNTING__COA__DEACTIVATE(264, "accounting:coa:deactivate"),
+    ACCOUNTING__JE__REVERSE(265, "accounting:je:reverse"),
+    ACCOUNTING__MAPPING__VIEW(266, "accounting:mapping:view"),
+    ACCOUNTING__MAPPING__CREATE(267, "accounting:mapping:create"),
+    ACCOUNTING__MAPPING__EDIT(268, "accounting:mapping:edit"),
+    ACCOUNTING__MAPPING__DEACTIVATE(269, "accounting:mapping:deactivate"),
+    ACCOUNTING__POSTING_RULES__VIEW(270, "accounting:posting_rules:view"),
+    ACCOUNTING__POSTING_RULES__CREATE(271, "accounting:posting_rules:create"),
+    ACCOUNTING__POSTING_RULES__PUBLISH(272, "accounting:posting_rules:publish"),
+    ACCOUNTING__POSTING_RULES__ARCHIVE(273, "accounting:posting_rules:archive"),
+
+    // ── Timekeeping (batch 3) ─────────────────────────────────────────────────
+    TIMEKEEPING__WORK_SESSION__CREATE(274, "timekeeping:work_session:create"),
+    TIMEKEEPING__WORK_SESSION__STOP(275, "timekeeping:work_session:stop"),
+    TIMEKEEPING__WORK_SESSION__BREAK_START(276, "timekeeping:work_session:break_start"),
+    TIMEKEEPING__WORK_SESSION__BREAK_STOP(277, "timekeeping:work_session:break_stop"),
+    TIMEKEEPING__OVERLAP_OVERRIDE(278, "timekeeping:overlap_override"),
+
+    // ── Workorder (batch 3) ──────────────────────────────────────────────────
+    WORKORDER__DASHBOARD__VIEW(279, "workorder:dashboard:view"),
+    WORKORDER__ESTIMATE__SUBMIT(280, "workorder:estimate:submit"),
+    WORKORDER__ESTIMATE__PROMOTE(281, "workorder:estimate:promote"),
+    WORKORDER__WORKORDER__ASSIGN_TECHNICIAN(282, "workorder:workorder:assign-technician"),
+    WORKORDER__WORKORDER__GENERATE_INVOICE(283, "workorder:workorder:generate_invoice"),
+    WORKORDER__START(284, "workorder:start");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 7;
+    public static final int CATALOG_VERSION = 8;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
