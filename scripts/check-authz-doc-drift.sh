@@ -65,6 +65,24 @@ reject_match() {
   local description="$1"
   local pattern="$2"
   shift 2
+  local missing_files=()
+  local file
+
+  for file in "$@"; do
+    if [[ ! -e "${file}" ]]; then
+      missing_files+=("${file}")
+    fi
+  done
+
+  if (( ${#missing_files[@]} > 0 )); then
+    echo "FAIL: ${description}" >&2
+    for file in "${missing_files[@]}"; do
+      echo "  missing file: ${file}" >&2
+    done
+    failures=$((failures + 1))
+    return
+  fi
+
   if search_with_lines "${pattern}" "$@" >/dev/null; then
     echo "FAIL: ${description}" >&2
     search_with_lines "${pattern}" "$@" >&2 || true
