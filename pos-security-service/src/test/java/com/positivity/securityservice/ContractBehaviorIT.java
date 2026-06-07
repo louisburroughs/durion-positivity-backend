@@ -602,6 +602,29 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.valid").value(false));
     }
 
+    /**
+     * Security: POST /v1/auth/token-pair must reject unauthenticated callers.
+     *
+     * **Scenario:** Unauthenticated request (no gateway auth headers) to token-pair
+     * **Expected:** 401 Unauthorized — endpoint is not public
+     * **Rationale:** Without this guard, any caller knowing a valid username can obtain
+     * a token pair with arbitrary roles.
+     */
+    @Test
+    @DisplayName("POST /v1/auth/token-pair requires authentication — unauthenticated call returns 401")
+    void tokenPairRequiresAuthentication() throws Exception {
+        // Blank X-Authorities overrides the defaultRequest gateway headers, leaving
+        // the security context anonymous. The body is valid so the only failure is auth.
+        mockMvc.perform(post("/v1/auth/token-pair")
+                        .header("X-Authorities", "")
+                        .header("X-User", "")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"subject":"john.doe","roles":["SHOP_MGR"]}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
     // ========== USER MANAGEMENT TESTS ==========
 
     /**

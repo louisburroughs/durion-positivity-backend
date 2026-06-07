@@ -154,7 +154,7 @@ public class JwtController {
             description = "Internal server error",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
-    @PreAuthorize("permitAll()")
+    @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/token-pair")
     public ResponseEntity<TokenPairResponse> generateTokenPair(@Valid @RequestBody TokenPairRequest request) {
 
