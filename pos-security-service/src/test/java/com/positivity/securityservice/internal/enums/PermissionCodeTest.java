@@ -122,7 +122,7 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("known last permission 'people:userLink:write' has bit index 238")
+    @DisplayName("known permission 'people:userLink:write' has bit index 238")
     void knownLastPermissionHasBitIndex238() {
         Optional<PermissionCode> perm = PermissionCode.fromCode("people:userLink:write");
         assertThat(perm).isPresent();
