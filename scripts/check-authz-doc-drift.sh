@@ -12,7 +12,12 @@ fi
 
 failures=0
 
-if command -v rg >/dev/null 2>&1; then
+if [[ -n "${SEARCH_TOOL:-}" ]]; then
+  if [[ "${SEARCH_TOOL}" != "rg" && "${SEARCH_TOOL}" != "grep" ]]; then
+    echo "FAIL: SEARCH_TOOL must be 'rg' or 'grep' (was '${SEARCH_TOOL}')." >&2
+    exit 1
+  fi
+elif command -v rg >/dev/null 2>&1; then
   SEARCH_TOOL="rg"
 else
   SEARCH_TOOL="grep"
@@ -22,7 +27,7 @@ search_quiet() {
   local pattern="$1"
   shift
   if [[ "${SEARCH_TOOL}" == "rg" ]]; then
-    rg -q --fixed-strings "${pattern}" "$@"
+    rg -q --fixed-strings -- "${pattern}" "$@"
   else
     grep -Fq -- "${pattern}" "$@"
   fi
@@ -32,7 +37,7 @@ search_with_lines() {
   local pattern="$1"
   shift
   if [[ "${SEARCH_TOOL}" == "rg" ]]; then
-    rg -n --fixed-strings "${pattern}" "$@"
+    rg -n --fixed-strings -- "${pattern}" "$@"
   else
     grep -Fn -- "${pattern}" "$@"
   fi
@@ -91,10 +96,14 @@ ACTIVE_DOCS=(
 
 require_match "token guide documents POST /v1/auth/login" "POST /security-service/v1/auth/login" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 require_match "token guide documents POST /v1/auth/token-pair" "POST /security-service/v1/auth/token-pair" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
+require_match "token guide marks token-pair as privileged internal issuance" "This is a privileged internal issuance endpoint." "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
+require_match "token-pair curl example includes authorization header" "-H \"Authorization: Bearer <internal-issuer-token>\"" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 require_match "token guide documents GET /v1/auth/validate" "GET /security-service/v1/auth/validate" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 require_match "token guide documents DELETE /v1/auth/revoke" "DELETE /security-service/v1/auth/revoke" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 require_match "token guide documents accessToken response field" "\"accessToken\"" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 require_match "token guide documents refreshToken response field" "\"refreshToken\"" "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
+require_match "security guide keeps token-pair in internal issuance section" "### Internal token issuance" "${ROOT_DIR}/pos-security-service/docs/security-service-guide.md"
+require_match "security guide documents token-pair internal permission" '- `security:token:issue_internal`' "${ROOT_DIR}/pos-security-service/docs/security-service-guide.md"
 
 reject_match "active docs do not claim access tokens carry authorities arrays" "access tokens carry authorities" "${ACTIVE_DOCS[@]}"
 reject_match "active docs do not instruct POST validate" "POST /security-service/v1/auth/validate" "${ACTIVE_DOCS[@]}"
@@ -106,7 +115,7 @@ for doc in \
   "${DURION_DIR}/docs/architecture/AUTHORIZATION_MODEL.md" \
   "${ROOT_DIR}/pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md"
 do
-  if rg -q "perm_bits" "${doc}" && rg -q "roles" "${doc}"; then
+  if search_quiet "perm_bits" "${doc}" && search_quiet "roles" "${doc}"; then
     echo "PASS: $(basename "${doc}") mentions perm_bits and roles"
   else
     echo "FAIL: $(basename "${doc}") must mention perm_bits and roles together" >&2
