@@ -153,6 +153,9 @@ public class JwtController {
             responseCode = "500",
             description = "Internal server error",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:token:issue_internal"})
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
     @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/token-pair")
