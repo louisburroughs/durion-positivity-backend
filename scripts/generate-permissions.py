@@ -16,15 +16,16 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 # Matches single-quoted permission strings: 'a:b' or 'a:b:c'
-# Segments start with a lowercase letter and may contain letters (mixed case),
-# digits, underscores, and hyphens — e.g. 'workorder:operationalContext:override'.
+# Segments start with a letter and may contain mixed-case letters,
+# digits, underscores, and hyphens — e.g. 'bulkImport:upload:execute'.
 PERM_RE = re.compile(
-    r"'([a-z][a-zA-Z0-9_-]+:[a-z][a-zA-Z0-9_-]+(?::[a-z][a-zA-Z0-9_-]+)?)'"
+    r"'([A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_-]*(?::[A-Za-z][A-Za-z0-9_-]*)?)'"
 )
 ENUM_ENTRY_RE = re.compile(r'\((\d+),\s*"([^"]+)"\)')
 
@@ -59,6 +60,19 @@ def extract_preauthorize_blocks(text: str) -> list[str]:
     return blocks
 
 
+def normalize_domain_key(value: str) -> str:
+    """Normalize ownership keys for tolerant domain/prefix matching."""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def permission_belongs_to_domain(permission: str, domain: str) -> bool:
+    """Match ownership even when domain keys differ by case/word separators."""
+    if not domain or ":" not in permission:
+        return False
+    prefix = permission.split(":", 1)[0]
+    return normalize_domain_key(prefix) == normalize_domain_key(domain)
+
+
 def scan_module(module_path: Path, domain: str) -> tuple[set[str], set[str]]:
     """
     Scan all .java files under <module>/src/main/java.
@@ -76,7 +90,7 @@ def scan_module(module_path: Path, domain: str) -> tuple[set[str], set[str]]:
                 perm = m.group(1)
                 if perm.startswith("ROLE_"):
                     continue
-                if domain and perm.startswith(domain + ":"):
+                if permission_belongs_to_domain(perm, domain):
                     own.add(perm)
                 else:
                     cross.add(perm)
@@ -111,17 +125,21 @@ def write_permissions_yaml(
     version: str,
     permissions: list[dict],
 ) -> None:
+    def yaml_double_quoted(value: str) -> str:
+        # YAML accepts JSON-style quoted scalars; json.dumps safely escapes
+        # control characters such as newlines and tabs.
+        return json.dumps(value, ensure_ascii=True)
+
     lines = [
         f"domain: {domain}",
         f"serviceName: {service_name}",
-        f'version: "{version}"',
+        f"version: {yaml_double_quoted(version)}",
         "permissions:",
     ]
     for p in permissions:
         desc = p.get("description", "") or ""
-        desc = desc.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'  - name: "{p["name"]}"')
-        lines.append(f'    description: "{desc}"')
+        lines.append(f"  - name: {yaml_double_quoted(p['name'])}")
+        lines.append(f"    description: {yaml_double_quoted(desc)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

@@ -401,13 +401,17 @@ if [[ "${VALIDATION_MODE,,}" != "off" ]]; then
 fi
 
 if [[ "$GENERATE_PERMISSIONS" == true ]]; then
-  echo "Regenerating permissions.yaml files..."
-  if command -v python3 >/dev/null 2>&1; then
-    python3 "$SCRIPT_DIR/generate-permissions.py" "$ROOT_DIR" || {
-      echo "WARN: permissions.yaml regeneration reported errors; continuing." >&2
-    }
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "Skipping permissions.yaml regeneration in dry-run mode."
   else
-    echo "WARN: python3 not found; skipping permissions.yaml regeneration." >&2
+    echo "Regenerating permissions.yaml files..."
+    if command -v python3 >/dev/null 2>&1; then
+      python3 "$SCRIPT_DIR/generate-permissions.py" "$ROOT_DIR" || {
+        echo "WARN: permissions.yaml regeneration reported errors; continuing." >&2
+      }
+    else
+      echo "WARN: python3 not found; skipping permissions.yaml regeneration." >&2
+    fi
   fi
 fi
 
