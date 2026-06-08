@@ -14,6 +14,7 @@ DRY_RUN=false
 AGGREGATE_OPENAPI=true
 AGGREGATE_OUTPUT="pos-api-gateway/docs/openapi-aggregate.yaml"
 VALIDATION_MODE="${OPENAPI_VALIDATION_MODE:-report}"
+GENERATE_PERMISSIONS=true
 
 usage() {
   cat <<'EOF'
@@ -31,6 +32,7 @@ Options:
                      Aggregate OpenAPI output path relative to repo root
                      (default: pos-api-gateway/docs/openapi-aggregate.yaml)
   --no-aggregate     Skip aggregate OpenAPI generation step
+  --no-permissions   Skip permissions.yaml regeneration step
   --validation-mode <mode>
                      OpenAPI validation mode: off, report, or strict
                      (default: report)
@@ -70,6 +72,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-aggregate)
       AGGREGATE_OPENAPI=false
+      shift
+      ;;
+    --no-permissions)
+      GENERATE_PERMISSIONS=false
       shift
       ;;
     --validation-mode)
@@ -391,6 +397,21 @@ if [[ "${VALIDATION_MODE,,}" != "off" ]]; then
   echo "${validation_cmd[*]}"
   if [[ "$DRY_RUN" == false ]]; then
     "${validation_cmd[@]}"
+  fi
+fi
+
+if [[ "$GENERATE_PERMISSIONS" == true ]]; then
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "Skipping permissions.yaml regeneration in dry-run mode."
+  else
+    echo "Regenerating permissions.yaml files..."
+    if command -v python3 >/dev/null 2>&1; then
+      python3 "$SCRIPT_DIR/generate-permissions.py" "$ROOT_DIR" || {
+        echo "WARN: permissions.yaml regeneration reported errors; continuing." >&2
+      }
+    else
+      echo "WARN: python3 not found; skipping permissions.yaml regeneration." >&2
+    fi
   fi
 fi
 

@@ -3125,11 +3125,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickedItemResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3202,11 +3199,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3521,22 +3515,21 @@ paths:
             application/pdf:
               schema:
                 type: string
-                format: byte
-                additionalProperties: {}
+                format: binary
         '404':
           description: Estimate not found
           content:
             application/pdf:
               schema:
                 type: string
-                format: byte
+                format: binary
         '502':
           description: Document service unavailable
           content:
             application/pdf:
               schema:
                 type: string
-                format: byte
+                format: binary
       security:
       - bearerAuth:
         - workorder:estimate:view

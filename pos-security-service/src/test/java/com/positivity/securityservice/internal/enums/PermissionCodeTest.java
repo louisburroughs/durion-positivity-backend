@@ -32,14 +32,17 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
+    private static final int EXPECTED_PERMISSION_COUNT = 328;
+    private static final int EXPECTED_CATALOG_VERSION = 10;
+
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 285 entries (262 original + 23 dark permissions)
+    // AC-1: Catalog size — 328 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 285 permissions")
-    void catalogContainsExactly285Permissions() {
-        assertThat(PermissionCode.values()).hasSize(285);
+    @DisplayName("catalog contains exactly 328 permissions")
+    void catalogContainsExactly328Permissions() {
+        assertThat(PermissionCode.values()).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     // -------------------------------------------------------------------------
@@ -53,17 +56,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(285);
+        assertThat(bitIndexes).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 284 with no gaps")
-    void bitIndexesSpanFrom0To284WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 327 with no gaps")
+    void bitIndexesSpanFrom0To327WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..284 must be present
-        for (int i = 0; i < 285; i++) {
+        // Issue PERM-001: every index 0..327 must be present
+        for (int i = 0; i < EXPECTED_PERMISSION_COUNT; i++) {
             assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
     }
@@ -78,7 +81,7 @@ class PermissionCodeTest {
         Set<String> codes = Arrays.stream(PermissionCode.values()).map(PermissionCode::code)
                 .collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(285);
+        assertThat(codes).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     // -------------------------------------------------------------------------
@@ -88,8 +91,7 @@ class PermissionCodeTest {
     @Test
     @DisplayName("CATALOG_VERSION is declared and matches expected value")
     void catalogVersionIsCorrect() {
-        // Bumped from 7 to 8 when 23 dark permissions were added (PERM-002).
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(8);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(EXPECTED_CATALOG_VERSION);
     }
 
     // -------------------------------------------------------------------------

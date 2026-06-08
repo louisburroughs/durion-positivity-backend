@@ -34,7 +34,6 @@ paths:
               schema:
                 type: string
                 format: binary
-                additionalProperties: {}
         '400':
           description: Invalid render request
           content:

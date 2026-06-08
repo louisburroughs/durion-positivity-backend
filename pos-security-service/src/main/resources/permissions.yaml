@@ -2,37 +2,39 @@ domain: security
 serviceName: pos-security-service
 version: "1.0"
 permissions:
-  - name: security:role:view
-    description: View roles and their permissions
-  - name: security:role:create
-    description: Create new roles
-  - name: security:role:edit
-    description: Edit existing roles
-  - name: security:role:delete
-    description: Delete roles
-  - name: security:role:assign
-    description: Assign roles to users
-  - name: security:permission:view
-    description: View registered permissions
-  - name: security:permission:register
-    description: Register new permissions
-  - name: security:user:view
-    description: View user information
-  - name: security:user:create
-    description: Create new users
-  - name: security:user:edit
-    description: Edit user information
-  - name: security:user:delete
-    description: Delete users
-  - name: security:user_account_state:view
-    description: View user account state and lockout metadata
-  - name: security:user_account_state:manage
-    description: Manage user account state such as lock, disable, or expiration
-  - name: security:audit:view
-    description: View audit events and pricing snapshots
-  - name: security:audit:create
-    description: Create audit events and pricing snapshots
-  - name: security:authorization:decide
-    description: Evaluate authorization decisions for principals
-  - name: security:token:issue_internal
-    description: Issue internal JWT access tokens for trusted callers
+  - name: "security:audit:create"
+    description: "Create audit events and pricing snapshots"
+  - name: "security:audit:export"
+    description: "Export audit"
+  - name: "security:audit:view"
+    description: "View audit events and pricing snapshots"
+  - name: "security:authorization:decide"
+    description: "Evaluate authorization decisions for principals"
+  - name: "security:permission:register"
+    description: "Register new permissions"
+  - name: "security:permission:view"
+    description: "View registered permissions"
+  - name: "security:role:assign"
+    description: "Assign roles to users"
+  - name: "security:role:create"
+    description: "Create new roles"
+  - name: "security:role:delete"
+    description: "Delete roles"
+  - name: "security:role:edit"
+    description: "Edit existing roles"
+  - name: "security:role:view"
+    description: "View roles and their permissions"
+  - name: "security:token:issue_internal"
+    description: "Issue internal JWT access tokens for trusted callers"
+  - name: "security:user:create"
+    description: "Create new users"
+  - name: "security:user:delete"
+    description: "Delete users"
+  - name: "security:user:edit"
+    description: "Edit user information"
+  - name: "security:user:view"
+    description: "View user information"
+  - name: "security:user_account_state:manage"
+    description: "Manage user account state such as lock, disable, or expiration"
+  - name: "security:user_account_state:view"
+    description: "View user account state and lockout metadata"
