@@ -1043,13 +1043,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 8")
-    void catalogVersionIsEight() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(8);
+        @DisplayName("CATALOG_VERSION is 10")
+        void catalogVersionIsTen() {
+                assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(10);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 284")
+        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 327")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1062,9 +1062,12 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(262)).isEqualTo("PERM_accounting:ap:approve");
         assertThat(GatewayPermissionCatalog.authorityForBit(278)).isEqualTo("PERM_timekeeping:overlap_override");
         assertThat(GatewayPermissionCatalog.authorityForBit(279)).isEqualTo("PERM_workorder:dashboard:view");
-        assertThat(GatewayPermissionCatalog.authorityForBit(284)).isEqualTo("PERM_workorder:start");
+                assertThat(GatewayPermissionCatalog.authorityForBit(284)).isEqualTo("PERM_workorder:start");
+                // batch-4: additional synced permissions (bits 285-327)
+                assertThat(GatewayPermissionCatalog.authorityForBit(285)).isEqualTo("PERM_accounting:credit-memo:create");
+                assertThat(GatewayPermissionCatalog.authorityForBit(327)).isEqualTo("PERM_workorder:operationalContext:override");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(285)).isNull();
+                assertThat(GatewayPermissionCatalog.authorityForBit(328)).isNull();
     }
 
     @Test
