@@ -361,13 +361,59 @@ public enum PermissionCode {
     WORKORDER__ESTIMATE__PROMOTE(281, "workorder:estimate:promote"),
     WORKORDER__WORKORDER__ASSIGN_TECHNICIAN(282, "workorder:workorder:assign-technician"),
     WORKORDER__WORKORDER__GENERATE_INVOICE(283, "workorder:workorder:generate_invoice"),
-    WORKORDER__START(284, "workorder:start");
+    WORKORDER__START(284, "workorder:start"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__CREDIT_MEMO__CREATE(285, "accounting:credit-memo:create"),
+    ACCOUNTING__CREDIT_MEMO__READ(286, "accounting:credit-memo:read"),
+    ACCOUNTING__DEFAULT_MAPPING__CREATE(287, "accounting:default-mapping:create"),
+    ACCOUNTING__DEFAULT_MAPPING__DELETE(288, "accounting:default-mapping:delete"),
+    ACCOUNTING__DEFAULT_MAPPING__EDIT(289, "accounting:default-mapping:edit"),
+    ACCOUNTING__DEFAULT_MAPPING__VIEW(290, "accounting:default-mapping:view"),
+    ACCOUNTING__GL_MAPPING__CREATE(291, "accounting:gl-mapping:create"),
+    ACCOUNTING__GL_MAPPING__RESOLVE(292, "accounting:gl-mapping:resolve"),
+    ACCOUNTING__MAPPING_KEY__CREATE(293, "accounting:mapping-key:create"),
+    ACCOUNTING__MAPPING_KEY__DEACTIVATE(294, "accounting:mapping-key:deactivate"),
+    ACCOUNTING__MAPPING_KEY__EDIT(295, "accounting:mapping-key:edit"),
+    ACCOUNTING__MAPPING_KEY__VIEW(296, "accounting:mapping-key:view"),
+    ACCOUNTING__PAYMENT__APPLY(297, "accounting:payment:apply"),
+    ACCOUNTING__PAYMENT__REVERSE(298, "accounting:payment:reverse"),
+    ACCOUNTING__POSTING_CATEGORY__CREATE(299, "accounting:posting-category:create"),
+    ACCOUNTING__POSTING_CATEGORY__DEACTIVATE(300, "accounting:posting-category:deactivate"),
+    ACCOUNTING__POSTING_CATEGORY__EDIT(301, "accounting:posting-category:edit"),
+    ACCOUNTING__POSTING_CATEGORY__VIEW(302, "accounting:posting-category:view"),
+    ACCOUNTING__REPORT__EXPORT(303, "accounting:report:export"),
+    ACCOUNTING__TIME__EXPORT(304, "accounting:time:export"),
+
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__PERSON__CREATE(305, "crm:person:create"),
+    CRM__PERSON__READ(306, "crm:person:read"),
+    CRM__RELATIONSHIP__CREATE(307, "crm:relationship:create"),
+    CRM__RELATIONSHIP__DELETE(308, "crm:relationship:delete"),
+    CRM__RELATIONSHIP__READ(309, "crm:relationship:read"),
+    CRM__RELATIONSHIP__UPDATE(310, "crm:relationship:update"),
+
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__AVAILABILITY__READ(311, "inventory:availability:read"),
+
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__AVAILABILITY__VIEW(312, "people:availability:view"),
+
+    // ── Pricing (new) ──────────────────────────────────────────────────────────
+    PRICING__OVERRIDE__APPROVE(313, "pricing:override:approve"),
+    PRICING__RESTRICTION__MANAGE(314, "pricing:restriction:manage"),
+    PRICING__RESTRICTION__OVERRIDE(315, "pricing:restriction:override"),
+
+    // ── Reporting (new) ────────────────────────────────────────────────────────
+    REPORTING__VIEW__FINANCIAL_STATEMENTS(316, "reporting:view:financial-statements"),
+
+    // ── Security (new) ─────────────────────────────────────────────────────────
+    SECURITY__AUDIT__EXPORT(317, "security:audit:export");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 8;
+    public static final int CATALOG_VERSION = 9;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

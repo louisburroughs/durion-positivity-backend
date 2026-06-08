@@ -13,6 +13,7 @@ cd "$ROOT_DIR"
 
 DRY_RUN=false
 CHECK=false
+SYNC=false
 MODULES=()
 
 usage() {
@@ -23,15 +24,19 @@ Usage:
   scripts/generate-permissions.sh [options] [module...]
 
 Options:
+  --sync      Register new @PreAuthorize permissions in PermissionCode.java and
+              GatewayPermissionCatalog.java, then regenerate permissions.yaml
   --dry-run   Print changes without writing files
-  --check     Exit non-zero if any permissions.yaml would change (CI mode)
+  --check     Exit non-zero if any permissions.yaml would change, or (with
+              --sync) if any @PreAuthorize permissions are unregistered (CI mode)
   -h, --help  Show this help
 
 Examples:
   scripts/generate-permissions.sh
+  scripts/generate-permissions.sh --sync
   scripts/generate-permissions.sh pos-workorder pos-accounting
   scripts/generate-permissions.sh --dry-run
-  scripts/generate-permissions.sh --check
+  scripts/generate-permissions.sh --sync --check
 EOF
 }
 
@@ -39,6 +44,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
     --check)   CHECK=true;   shift ;;
+    --sync)    SYNC=true;    shift ;;
     -h|--help) usage; exit 0 ;;
     pos-*)     MODULES+=("$1"); shift ;;
     *)
@@ -58,5 +64,6 @@ PY_ARGS=("$ROOT_DIR")
 [[ ${#MODULES[@]} -gt 0 ]] && PY_ARGS+=("${MODULES[@]}")
 [[ "$DRY_RUN" == true ]] && PY_ARGS+=(--dry-run)
 [[ "$CHECK"   == true ]] && PY_ARGS+=(--check)
+[[ "$SYNC"    == true ]] && PY_ARGS+=(--sync)
 
 python3 "$SCRIPT_DIR/generate-permissions.py" "${PY_ARGS[@]}"

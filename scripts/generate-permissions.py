@@ -7,8 +7,12 @@ Only permissions belonging to the module's own domain are written to its YAML.
 Cross-domain references (e.g. pos-workorder using inventory:pick_list:view) are
 logged as informational warnings but are not added to the file.
 
+With --sync, also updates PermissionCode.java and GatewayPermissionCatalog.java
+by appending any @PreAuthorize permissions not yet registered as bit-indexed
+enum constants, and bumps CATALOG_VERSION in both files.
+
 Usage:
-    python3 scripts/generate-permissions.py ROOT_DIR [module ...] [--dry-run] [--check]
+    python3 scripts/generate-permissions.py ROOT_DIR [module ...] [--dry-run] [--check] [--sync]
 """
 
 import argparse
@@ -20,6 +24,16 @@ from pathlib import Path
 # Allows letters, digits, underscores, and hyphens in each segment.
 PERM_RE = re.compile(
     r"'([a-z][a-z0-9_-]+:[a-z][a-z0-9_-]+(?::[a-z][a-z0-9_-]+)?)'"
+)
+ENUM_ENTRY_RE = re.compile(r'\((\d+),\s*"([^"]+)"\)')
+
+PERMISSION_CODE_RELPATH = (
+    "pos-security-service/src/main/java/com/positivity/securityservice"
+    "/internal/enums/PermissionCode.java"
+)
+GATEWAY_CATALOG_RELPATH = (
+    "pos-api-gateway/src/main/java/com/positivity/gateway/config"
+    "/GatewayPermissionCatalog.java"
 )
 
 
@@ -162,6 +176,144 @@ def discover_modules(root: Path) -> list[Path]:
     )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Catalog sync: keep PermissionCode.java and GatewayPermissionCatalog.java in
+# step with @PreAuthorize annotations without manual bit-index bookkeeping.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def scan_all_preauthorize(root: Path) -> set[str]:
+    """Collect every permission string from @PreAuthorize across all pos-* modules."""
+    all_perms: set[str] = set()
+    for java_root in sorted(root.glob("pos-*/src/main/java")):
+        for java_file in java_root.rglob("*.java"):
+            text = java_file.read_text(encoding="utf-8", errors="replace")
+            for block in extract_preauthorize_blocks(text):
+                for m in PERM_RE.finditer(block):
+                    perm = m.group(1)
+                    if not perm.startswith("ROLE_"):
+                        all_perms.add(perm)
+    return all_perms
+
+
+def parse_permission_code_java(root: Path) -> tuple[set[str], int]:
+    """Return (registered_codes, max_bit_index) from PermissionCode.java."""
+    text = (root / PERMISSION_CODE_RELPATH).read_text(encoding="utf-8")
+    entries = ENUM_ENTRY_RE.findall(text)
+    codes = {code for _, code in entries}
+    max_bit = max((int(bit) for bit, _ in entries), default=-1)
+    return codes, max_bit
+
+
+def perm_to_enum_name(perm: str) -> str:
+    """'domain:resource:action' → 'DOMAIN__RESOURCE__ACTION'."""
+    return perm.replace("-", "_").replace(":", "__").upper()
+
+
+def _bump_catalog_version(text: str) -> tuple[str, int]:
+    holder: list[int] = []
+
+    def repl(m: re.Match) -> str:
+        v = int(m.group(1)) + 1
+        holder.append(v)
+        return f"public static final int CATALOG_VERSION = {v};"
+
+    new_text = re.sub(
+        r"public static final int CATALOG_VERSION = (\d+);", repl, text
+    )
+    if not holder:
+        raise ValueError("CATALOG_VERSION constant not found")
+    return new_text, holder[0]
+
+
+def sync_permission_code_java(
+    root: Path, new_perms: list[str], next_bit: int, dry_run: bool
+) -> int:
+    """Append new_perms to PermissionCode.java, bump CATALOG_VERSION, return new version."""
+    java_path = root / PERMISSION_CODE_RELPATH
+    text = java_path.read_text(encoding="utf-8")
+
+    by_domain: dict[str, list[str]] = {}
+    for perm in new_perms:
+        domain = perm.split(":")[0]
+        by_domain.setdefault(domain, []).append(perm)
+
+    entry_lines: list[str] = []
+    for domain in sorted(by_domain):
+        display = domain.replace("-", " ").replace("_", " ").title()
+        bar = "─" * max(0, 64 - len(display))
+        entry_lines.append(f"\n    // ── {display} (new) {bar}─")
+        for perm in sorted(by_domain[domain]):
+            enum_name = perm_to_enum_name(perm)
+            entry_lines.append(f'    {enum_name}({next_bit}, "{perm}"),')
+            next_bit += 1
+
+    # Last entry ends with ; not ,
+    entry_lines[-1] = entry_lines[-1][:-1] + ";"
+    new_block = "\n".join(entry_lines)
+
+    # Insertion point: the last enum constant's ); is immediately followed by
+    # a blank line and the CATALOG_VERSION javadoc. Change ); to ), and insert.
+    pattern = re.compile(
+        r"(\(\d+,\s*\"[^\"]+\"\));(\s*\n\s*\n\s*/\*\*\s*\n\s*\*\s*Current catalog version)",
+        re.DOTALL,
+    )
+    if not pattern.search(text):
+        raise ValueError("Cannot find insertion point in PermissionCode.java")
+    new_text = pattern.sub(r"\1," + new_block + r"\2", text)
+
+    new_text, new_version = _bump_catalog_version(new_text)
+    if not dry_run:
+        java_path.write_text(new_text, encoding="utf-8")
+    return new_version
+
+
+def sync_gateway_catalog_java(
+    root: Path, new_perms: list[str], start_bit: int, new_version: int, dry_run: bool
+) -> None:
+    """Append new AUTHORITY_BY_BIT entries to GatewayPermissionCatalog.java and set CATALOG_VERSION."""
+    java_path = root / GATEWAY_CATALOG_RELPATH
+    text = java_path.read_text(encoding="utf-8")
+
+    sorted_perms = sorted(new_perms)
+    end_bit = start_bit + len(sorted_perms) - 1
+    bar = "─" * 42
+    new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]
+    for i, perm in enumerate(sorted_perms):
+        bit = start_bit + i
+        pad = " " * max(1, 45 - len(perm))
+        comma = "," if i < len(sorted_perms) - 1 else ""
+        new_lines.append(f'        "PERM_{perm}"{comma}{pad}// {bit}')
+
+    new_block = "\n".join(new_lines)
+
+    # The last array entry has no trailing comma. Match it and the closing };.
+    # [^,\n]* matches the trailing spaces + optional // comment before newline.
+    tail_re = re.compile(r'("PERM_[^"]+")([^,\n]*\n)(\s*\};)')
+    m = tail_re.search(text)
+    if not m:
+        raise ValueError(
+            "Cannot find last AUTHORITY_BY_BIT entry in GatewayPermissionCatalog.java"
+        )
+
+    new_text = (
+        text[: m.start()]
+        + m.group(1) + ","  # add comma to previous last entry
+        + m.group(2)        # rest of that line (spaces + comment + newline)
+        + new_block + "\n"
+        + m.group(3)        # closing };
+        + text[m.end() :]
+    )
+
+    new_text = re.sub(
+        r"public static final int CATALOG_VERSION = \d+;",
+        f"public static final int CATALOG_VERSION = {new_version};",
+        new_text,
+    )
+
+    if not dry_run:
+        java_path.write_text(new_text, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Regenerate permissions.yaml from @PreAuthorize annotations"
@@ -182,16 +334,58 @@ def main() -> None:
         action="store_true",
         help="Exit non-zero if any permissions.yaml would change (CI mode)",
     )
+    parser.add_argument(
+        "--sync",
+        action="store_true",
+        help=(
+            "Scan @PreAuthorize annotations, register any unknown permissions in "
+            "PermissionCode.java and GatewayPermissionCatalog.java, and bump "
+            "CATALOG_VERSION. Runs before permissions.yaml regeneration."
+        ),
+    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
+
+    catalog_error = False
+
+    if args.sync:
+        annotated = scan_all_preauthorize(root)
+        registered, max_bit = parse_permission_code_java(root)
+        new_perms = sorted(annotated - registered)
+
+        if new_perms:
+            prefix = "(dry-run) " if args.dry_run else ""
+            if args.check:
+                print(
+                    f"\nERROR: {len(new_perms)} permission(s) in @PreAuthorize are not "
+                    "registered in PermissionCode:",
+                    file=sys.stderr,
+                )
+                for p in new_perms:
+                    print(f"  - {p}", file=sys.stderr)
+                print(
+                    "Run scripts/generate-permissions.sh --sync to register them.",
+                    file=sys.stderr,
+                )
+                catalog_error = True
+            else:
+                next_bit = max_bit + 1
+                new_version = sync_permission_code_java(root, new_perms, next_bit, args.dry_run)
+                sync_gateway_catalog_java(root, new_perms, next_bit, new_version, args.dry_run)
+                print(f"{prefix}Catalog sync — {len(new_perms)} new permission(s) registered:")
+                for i, p in enumerate(new_perms):
+                    print(f"  + {p} (bit {next_bit + i})")
+                print(f"  CATALOG_VERSION: {new_version - 1} → {new_version}")
+        else:
+            print("Catalog sync: up-to-date")
 
     if args.modules:
         module_paths = [root / m for m in args.modules]
     else:
         module_paths = discover_modules(root)
 
-    any_changed = False
+    any_yaml_changed = False
     for module_path in module_paths:
         result = process_module(module_path, args.dry_run, args.check)
         if result is None:
@@ -199,7 +393,7 @@ def main() -> None:
 
         module_name = result["module"]
         if result["changed"]:
-            any_changed = True
+            any_yaml_changed = True
             prefix = "(dry-run) " if args.dry_run else ""
             print(f"{prefix}{module_name}:")
             for p in result["added"]:
@@ -212,7 +406,7 @@ def main() -> None:
                 f"  (cross-domain refs not written: {', '.join(result['cross_domain'])})"
             )
 
-    if args.check and any_changed:
+    if args.check and any_yaml_changed:
         print(
             "\nERROR: One or more permissions.yaml files are out of date.",
             file=sys.stderr,
@@ -221,6 +415,9 @@ def main() -> None:
             "Run scripts/generate-permissions.sh to regenerate them.",
             file=sys.stderr,
         )
+        catalog_error = True
+
+    if catalog_error:
         sys.exit(1)
 
 

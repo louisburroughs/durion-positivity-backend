@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 8;
+    public static final int CATALOG_VERSION = 9;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -294,7 +294,42 @@ public final class GatewayPermissionCatalog {
         "PERM_workorder:estimate:promote",            // 281
         "PERM_workorder:workorder:assign-technician", // 282
         "PERM_workorder:workorder:generate_invoice",  // 283
-        "PERM_workorder:start"                        // 284
+        "PERM_workorder:start",                        // 284
+
+        // ── New batch (bits 285–317) ──────────────────────────────────────────
+        "PERM_accounting:credit-memo:create",                // 285
+        "PERM_accounting:credit-memo:read",                  // 286
+        "PERM_accounting:default-mapping:create",            // 287
+        "PERM_accounting:default-mapping:delete",            // 288
+        "PERM_accounting:default-mapping:edit",              // 289
+        "PERM_accounting:default-mapping:view",              // 290
+        "PERM_accounting:gl-mapping:create",                 // 291
+        "PERM_accounting:gl-mapping:resolve",                // 292
+        "PERM_accounting:mapping-key:create",                // 293
+        "PERM_accounting:mapping-key:deactivate",            // 294
+        "PERM_accounting:mapping-key:edit",                  // 295
+        "PERM_accounting:mapping-key:view",                  // 296
+        "PERM_accounting:payment:apply",                     // 297
+        "PERM_accounting:payment:reverse",                   // 298
+        "PERM_accounting:posting-category:create",           // 299
+        "PERM_accounting:posting-category:deactivate",       // 300
+        "PERM_accounting:posting-category:edit",             // 301
+        "PERM_accounting:posting-category:view",             // 302
+        "PERM_accounting:report:export",                     // 303
+        "PERM_accounting:time:export",                       // 304
+        "PERM_crm:person:create",                            // 305
+        "PERM_crm:person:read",                              // 306
+        "PERM_crm:relationship:create",                      // 307
+        "PERM_crm:relationship:delete",                      // 308
+        "PERM_crm:relationship:read",                        // 309
+        "PERM_crm:relationship:update",                      // 310
+        "PERM_inventory:availability:read",                  // 311
+        "PERM_people:availability:view",                     // 312
+        "PERM_pricing:override:approve",                     // 313
+        "PERM_pricing:restriction:manage",                   // 314
+        "PERM_pricing:restriction:override",                 // 315
+        "PERM_reporting:view:financial-statements",          // 316
+        "PERM_security:audit:export"                        // 317
     };
 
     public static String authorityForBit(int bitIndex) {

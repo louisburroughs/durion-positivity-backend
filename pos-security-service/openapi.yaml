@@ -2304,8 +2304,8 @@ paths:
     post:
       tags:
       - JWT API
-      summary: Issue JWT token pair (access + refresh)
-      description: Authenticate and receive both access token (1-hour) and refresh token (7-day). See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.
+      summary: Issue privileged JWT token pair (access + refresh)
+      description: Privileged internal endpoint that issues both access token (1-hour) and refresh token (7-day). Requires authority security:token:issue_internal. See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.
       operationId: generateTokenPair
       requestBody:
         content:
@@ -2333,7 +2333,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '403':
-          description: Forbidden
+          description: 'Forbidden: missing security:token:issue_internal permission'
           content:
             application/json:
               schema:
@@ -2356,6 +2356,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenPairResponse'
+      security:
+      - bearerAuth:
+        - security:token:issue_internal
+      x-required-permissions:
+      - security:token:issue_internal
   /v1/auth/self-register:
     post:
       tags:
