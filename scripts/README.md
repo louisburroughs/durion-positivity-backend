@@ -23,6 +23,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`build-pos-accounting-baseline-from-dump.py`](#build-pos-accounting-baseline-from-dumpy) | Database | Convert `pg_dump` output to a Flyway baseline SQL file |
 | [`verify-observability.sh`](#verify-observabilitysh) | Observability | Check Jaeger, Prometheus, Grafana, and OTEL Collector health |
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
+| [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
 | [`export-permission-registrations-yaml.py`](#export-permission-registrations-yamlpy) | Permissions | Aggregate all `permissions.yaml` manifests into one report |
 | [`redeploy-backend-tag.sh`](#redeploy-backend-tagsh) | Deployment | Update `BACKEND_TAG` and redeploy services on the alpha EC2 host |
 | [`update-version.sh`](#update-versionsh) | Versioning | Bump the Maven project version (patch / minor / major) |
@@ -318,6 +319,35 @@ Generates `openapi.yaml` for every configured module and creates an aggregate in
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
 - Module generation still works with `--no-aggregate`.
+
+---
+
+### `generate-permissions.sh`
+
+Regenerates `src/main/resources/permissions.yaml` for each module by statically scanning `@PreAuthorize` annotations in Java source for `hasAuthority` and `hasAnyAuthority` calls. **Additive-only** — it never removes existing entries, since some permissions may be enforced via programmatic authority checks that are invisible to static analysis.
+
+Also called automatically at the end of each `generate-openapi.sh` run (pass `--no-permissions` to that script to skip it).
+
+**Usage:**
+```bash
+./scripts/generate-permissions.sh                          # regenerate all modules
+./scripts/generate-permissions.sh pos-workorder pos-accounting  # specific modules only
+./scripts/generate-permissions.sh --dry-run                # print changes without writing
+./scripts/generate-permissions.sh --check                  # exit non-zero if any file would change (CI)
+```
+
+**What it does:**
+1. Discovers all modules with a `src/main/resources/permissions.yaml`
+2. Scans `src/main/java/**/*.java` for `@PreAuthorize` annotations (handles multi-line)
+3. Extracts permission strings from `hasAuthority('x')` and `hasAnyAuthority('x', 'y', ...)`
+4. Filters out `ROLE_*` strings and permissions from other domains (cross-domain refs are logged as warnings)
+5. Merges newly discovered permissions into the existing YAML, preserving hand-written descriptions
+6. Sorts all entries alphabetically and writes the file
+
+**Notes:**
+- Requires `python3` and `PyYAML`.
+- `--check` is suitable for CI to detect YAML drift after controller changes.
+- **Does not update `CATALOG_VERSION`.** Catalog version bumps are a separate manual step — see [Adding a New Permission](../../../durion/docs/architecture/AUTHORIZATION_MODEL.md#adding-a-new-permission) in `AUTHORIZATION_MODEL.md`.
 
 ---
 
