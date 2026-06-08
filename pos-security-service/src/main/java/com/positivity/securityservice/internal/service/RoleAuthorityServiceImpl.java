@@ -70,9 +70,12 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> csrAuthorities() {
         Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
         authorities.addAll(List.of(
-                // Party
+                // Party / person (same CRM concept)
                 "crm:party:view",
                 "crm:party:search",
+                "crm:person:read",
+                // Relationships (read-only)
+                "crm:relationship:read",
                 // Contacts & roles
                 "crm:contact:view",
                 "crm:contact:create",
@@ -116,11 +119,15 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:party:create",
                 "crm:party:deactivate",
                 "crm:party:merge",
+                "crm:person:create",
                 "crm:contact:delete",
                 "crm:contact_role:revoke",
                 "crm:vehicle:deactivate",
                 "crm:integration:audit",
-                "crm:billing_rules:edit"));
+                "crm:billing_rules:edit",
+                "crm:relationship:create",
+                "crm:relationship:update",
+                "crm:relationship:delete"));
         return set;
     }
 
@@ -180,6 +187,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "security:user_account_state:manage",
                 "security:audit:view",
                 "security:audit:create",
+                "security:audit:export",
                 "security:authorization:decide",
                 "security:token:issue_internal"));
     }
@@ -200,12 +208,26 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "accounting:mapping:view",
                 "accounting:mapping:create",
                 "accounting:mapping:edit",
+                // Default Mappings
+                "accounting:default-mapping:view",
+                "accounting:default-mapping:create",
+                "accounting:default-mapping:edit",
+                // Mapping Keys
+                "accounting:mapping-key:view",
+                "accounting:mapping-key:create",
+                "accounting:mapping-key:edit",
+                // GL Mapping resolution
+                "accounting:gl-mapping:create",
                 // Posting Rules
                 "accounting:posting_rules:view",
                 "accounting:posting_rules:create",
+                // Posting Categories (view only)
+                "accounting:posting-category:view",
                 // Journal Entries (view and create draft)
                 "accounting:je:view",
                 "accounting:je:create",
+                // Credit Memos (read)
+                "accounting:credit-memo:read",
                 // Events
                 "accounting:events:view",
                 "accounting:events:submit",
@@ -223,7 +245,12 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> apClerkAuthorities() {
         Set<String> set = new HashSet<>(glAnalystAuthorities());
         // Additional AP Clerk permissions (already include GL_ANALYST)
-        set.addAll(List.of("accounting:ap:approve", "accounting:ap:reject", "accounting:ap:pay"));
+        set.addAll(List.of(
+                "accounting:ap:approve",
+                "accounting:ap:reject",
+                "accounting:ap:pay",
+                "accounting:credit-memo:create",
+                "accounting:payment:apply"));
         return set;
     }
 
@@ -237,14 +264,26 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "accounting:je:post",
                 "accounting:je:reverse",
                 "accounting:events:retry",
-                "accounting:events:reprocess"));
+                "accounting:events:reprocess",
+                "accounting:payment:reverse",
+                "accounting:posting-category:create",
+                "accounting:posting-category:edit",
+                "accounting:posting-category:deactivate",
+                "accounting:default-mapping:delete",
+                "accounting:mapping-key:deactivate",
+                "accounting:gl-mapping:resolve",
+                "reporting:view:financial-statements"));
         return set;
     }
 
     private Set<String> controllerAuthorities() {
         Set<String> set = new HashSet<>(accountantAuthorities());
         // Additional Controller permissions (includes ACCOUNTANT)
-        set.addAll(List.of("accounting:posting_rules:archive", "accounting:export:request"));
+        set.addAll(List.of(
+                "accounting:posting_rules:archive",
+                "accounting:export:request",
+                "accounting:report:export",
+                "accounting:time:export"));
         return set;
     }
 
@@ -273,6 +312,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> serviceAdvisorAuthorities() {
         Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
         authorities.addAll(List.of(
+                "inventory:availability:read",
                 "appointments:view",
                 "appointments:create",
                 "appointments:reschedule",
@@ -317,6 +357,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> locationManagerAuthorities() {
         Set<String> authorities = new HashSet<>(serviceAdvisorAuthorities());
         authorities.addAll(List.of(
+                "people:availability:view",
                 "shop:location:create",
                 "shop:location:edit",
                 "shop:bay:create",
@@ -345,6 +386,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> technicianAuthorities() {
         Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
         authorities.addAll(List.of(
+                "inventory:availability:read",
                 "shop:schedule:view",
                 "workorder:workorder:view",
                 "workorder:start",
@@ -414,6 +456,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
 
     private Set<String> inventoryAuthorities() {
         return new HashSet<>(List.of(
+                "inventory:availability:read",
                 "inventory:on_hand:view",
                 "inventory:on_hand:search",
                 "inventory:ledger:view",
@@ -549,6 +592,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
 
     private Set<String> peopleAuthorities() {
         return new HashSet<>(List.of(
+                "people:availability:view",
                 "people:person:view",
                 "people:person:create",
                 "people:person:edit",
@@ -581,7 +625,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "pricing:normalization:view",
                 "pricing:normalization:edit",
                 "pricing:restrictions:view",
-                "pricing:restrictions:edit"));
+                "pricing:restrictions:edit",
+                "pricing:restriction:manage",
+                "pricing:restriction:override",
+                "pricing:override:approve"));
     }
 
     private Set<String> appointmentAuthorities() {

@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Regenerate src/main/resources/permissions.yaml for modules by scanning
-# @PreAuthorize annotations in Java source.
+# @PreAuthorize annotations in Java source, then refresh the aggregate
+# permissions report.
 #
 # This script is a thin wrapper around scripts/generate-permissions.py and
-# is also called automatically by scripts/generate-openapi.sh at the end of
-# each run (pass --no-permissions to generate-openapi.sh to disable that).
+# scripts/export-permission-registrations-yaml.py. It is also called
+# automatically by scripts/generate-openapi.sh at the end of each run
+# (pass --no-permissions to generate-openapi.sh to disable that).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGGREGATE_OUTPUT="docs/permissions-report.yaml"
 cd "$ROOT_DIR"
 
 DRY_RUN=false
@@ -67,3 +70,9 @@ PY_ARGS=("$ROOT_DIR")
 [[ "$SYNC"    == true ]] && PY_ARGS+=(--sync)
 
 python3 "$SCRIPT_DIR/generate-permissions.py" "${PY_ARGS[@]}"
+
+if [[ "$DRY_RUN" == false && "$CHECK" == false ]]; then
+  python3 "$SCRIPT_DIR/export-permission-registrations-yaml.py" \
+    --root "$ROOT_DIR" \
+    --output "$AGGREGATE_OUTPUT"
+fi

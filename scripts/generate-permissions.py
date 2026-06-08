@@ -20,10 +20,11 @@ import re
 import sys
 from pathlib import Path
 
-# Matches single-quoted lowercase permission strings: 'a:b' or 'a:b:c'
-# Allows letters, digits, underscores, and hyphens in each segment.
+# Matches single-quoted permission strings: 'a:b' or 'a:b:c'
+# Segments start with a lowercase letter and may contain letters (mixed case),
+# digits, underscores, and hyphens — e.g. 'workorder:operationalContext:override'.
 PERM_RE = re.compile(
-    r"'([a-z][a-z0-9_-]+:[a-z][a-z0-9_-]+(?::[a-z][a-z0-9_-]+)?)'"
+    r"'([a-z][a-zA-Z0-9_-]+:[a-z][a-zA-Z0-9_-]+(?::[a-z][a-zA-Z0-9_-]+)?)'"
 )
 ENUM_ENTRY_RE = re.compile(r'\((\d+),\s*"([^"]+)"\)')
 

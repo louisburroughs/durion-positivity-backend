@@ -343,10 +343,12 @@ Also called automatically at the end of each `generate-openapi.sh` run (pass `--
 4. Filters out `ROLE_*` strings and permissions from other domains (cross-domain refs are logged as warnings)
 5. Merges newly discovered permissions into the existing YAML, preserving hand-written descriptions
 6. Sorts all entries alphabetically and writes the file
+7. Writes the aggregate permissions report to `docs/permissions-report.yaml`
 
 **Notes:**
 - Requires `python3` and `PyYAML`.
 - `--check` is suitable for CI to detect YAML drift after controller changes.
+- The aggregate report is only refreshed on normal write runs; `--dry-run` and `--check` skip it.
 - **Does not update `CATALOG_VERSION`.** Catalog version bumps are a separate manual step — see [Adding a New Permission](../../../durion/docs/architecture/AUTHORIZATION_MODEL.md#adding-a-new-permission) in `AUTHORIZATION_MODEL.md`.
 
 ---
