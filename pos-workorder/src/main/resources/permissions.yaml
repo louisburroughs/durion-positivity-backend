@@ -62,6 +62,8 @@ permissions:
     description: "Add labor entries"
   - name: "workorder:labor:view"
     description: "View labor entries"
+  - name: "workorder:operationalContext:override"
+    description: "Override operationalContext"
   - name: "workorder:parts:add"
     description: "Add parts to workorder"
   - name: "workorder:parts:consume"

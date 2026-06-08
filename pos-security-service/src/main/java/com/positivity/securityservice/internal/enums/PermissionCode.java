@@ -407,13 +407,26 @@ public enum PermissionCode {
     REPORTING__VIEW__FINANCIAL_STATEMENTS(316, "reporting:view:financial-statements"),
 
     // ── Security (new) ─────────────────────────────────────────────────────────
-    SECURITY__AUDIT__EXPORT(317, "security:audit:export");
+    SECURITY__AUDIT__EXPORT(317, "security:audit:export"),
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__TIMEADJUSTMENT__APPROVE(318, "people:timeAdjustment:approve"),
+    PEOPLE__TIMEADJUSTMENT__CREATE(319, "people:timeAdjustment:create"),
+    PEOPLE__TIMEADJUSTMENT__VIEW(320, "people:timeAdjustment:view"),
+    PEOPLE__TIMEENTRY__APPROVE(321, "people:timeEntry:approve"),
+    PEOPLE__TIMEENTRY__REJECT(322, "people:timeEntry:reject"),
+    PEOPLE__TIMEEXCEPTION__ACKNOWLEDGE(323, "people:timeException:acknowledge"),
+    PEOPLE__TIMEEXCEPTION__CREATE(324, "people:timeException:create"),
+    PEOPLE__TIMEEXCEPTION__RESOLVE(325, "people:timeException:resolve"),
+    PEOPLE__TIMEEXCEPTION__VIEW(326, "people:timeException:view"),
+
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 9;
+    public static final int CATALOG_VERSION = 10;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

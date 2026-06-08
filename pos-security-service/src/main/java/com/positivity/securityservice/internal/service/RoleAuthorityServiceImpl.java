@@ -358,6 +358,16 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         Set<String> authorities = new HashSet<>(serviceAdvisorAuthorities());
         authorities.addAll(List.of(
                 "people:availability:view",
+                // Time management (self-service + team approval)
+                "people:timeAdjustment:view",
+                "people:timeAdjustment:create",
+                "people:timeAdjustment:approve",
+                "people:timeEntry:approve",
+                "people:timeEntry:reject",
+                "people:timeException:view",
+                "people:timeException:create",
+                "people:timeException:acknowledge",
+                "people:timeException:resolve",
                 "shop:location:create",
                 "shop:location:edit",
                 "shop:bay:create",
@@ -404,7 +414,13 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "timekeeping:work_session:create",
                 "timekeeping:work_session:stop",
                 "timekeeping:work_session:break_start",
-                "timekeeping:work_session:break_stop"));
+                "timekeeping:work_session:break_stop",
+                // Time self-service
+                "people:timeAdjustment:view",
+                "people:timeAdjustment:create",
+                "people:timeException:view",
+                "people:timeException:create",
+                "people:timeException:acknowledge"));
         return authorities;
     }
 
@@ -608,7 +624,16 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "people:role:revoke",
                 "people:skill:view",
                 "people:skill:edit",
-                "people:skill:assign"));
+                "people:skill:assign",
+                "people:timeAdjustment:view",
+                "people:timeAdjustment:create",
+                "people:timeAdjustment:approve",
+                "people:timeEntry:approve",
+                "people:timeEntry:reject",
+                "people:timeException:view",
+                "people:timeException:create",
+                "people:timeException:acknowledge",
+                "people:timeException:resolve"));
     }
 
     private Set<String> pricingAuthorities() {
