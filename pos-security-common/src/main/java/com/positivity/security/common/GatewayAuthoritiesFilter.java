@@ -82,13 +82,19 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             return;
         }
 
+        String permBitsHeader = request.getHeader(GatewaySecurityConstants.HEADER_PERM_BITS);
+        String permVerHeader = request.getHeader(GatewaySecurityConstants.HEADER_PERM_VER);
         String authoritiesHeader = request.getHeader(GatewaySecurityConstants.HEADER_AUTHORITIES);
         String rolesHeader = request.getHeader(GatewaySecurityConstants.HEADER_ROLES);
         String userHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER);
         String authorizationHeader = request.getHeader(AUTHORIZATION_HEADER);
 
-        if (StringUtils.hasText(authoritiesHeader) || StringUtils.hasText(rolesHeader)) {
-            List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader, rolesHeader);
+        boolean hasPermBits = StringUtils.hasText(permBitsHeader);
+
+        if (hasPermBits || StringUtils.hasText(authoritiesHeader) || StringUtils.hasText(rolesHeader)) {
+            List<SimpleGrantedAuthority> authorities = hasPermBits
+                    ? authoritiesFromPermBits(permBitsHeader, permVerHeader, rolesHeader)
+                    : parseAuthorities(authoritiesHeader, rolesHeader);
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
@@ -191,6 +197,42 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         Stream<String> roleStream = csvValues(rolesHeader);
 
         return Stream.concat(authorityStream, roleStream)
+                .distinct()
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+    }
+
+    private List<SimpleGrantedAuthority> authoritiesFromPermBits(
+            String permBitsHeader, String permVerHeader, String rolesHeader) {
+        int permVer;
+        try {
+            permVer = Integer.parseInt(permVerHeader);
+        } catch (NumberFormatException | NullPointerException e) {
+            loggr.warn("Invalid or missing X-Perm-Ver header; clearing auth context");
+            return Collections.emptyList();
+        }
+
+        if (permVer != DownstreamPermissionCatalog.CATALOG_VERSION) {
+            loggr.warn("X-Perm-Ver {} does not match local catalog version {}; clearing auth context",
+                    permVer, DownstreamPermissionCatalog.CATALOG_VERSION);
+            return Collections.emptyList();
+        }
+
+        java.util.BitSet bits;
+        try {
+            byte[] bytes = Base64.getUrlDecoder().decode(permBitsHeader);
+            bits = java.util.BitSet.valueOf(bytes);
+        } catch (IllegalArgumentException e) {
+            loggr.warn("Malformed X-Perm-Bits header: {}; clearing auth context", e.getMessage());
+            return Collections.emptyList();
+        }
+
+        Stream<String> permStream = DownstreamPermissionCatalog.authoritiesFromBitSet(bits)
+                .stream()
+                .flatMap(this::expandAuthority);
+        Stream<String> roleStream = csvValues(rolesHeader);
+
+        return Stream.concat(permStream, roleStream)
                 .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
