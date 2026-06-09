@@ -21,7 +21,8 @@ public class LocationInventoryInquiryClient {
     public LocationInventoryInquiryClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.inventory.service-id:inventory}") String inventoryServiceId) {
-        this.restClient = restClientBuilder.baseUrl("http://" + inventoryServiceId).build();
+        this.restClient =
+                restClientBuilder.baseUrl("http://" + inventoryServiceId).build();
     }
 
     public int getOnHandQuantity(@NonNull UUID storageLocationId) {

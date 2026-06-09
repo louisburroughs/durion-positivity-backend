@@ -1,16 +1,16 @@
 {
   "properties": [
     {
-      "name": "people.service.url",
+      "name": "pos.people.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for person lookups used by the location module.",
-      "defaultValue": "http://localhost:8080/v1/people"
+      "description": "Eureka service-id for the pos-people service.",
+      "defaultValue": "people"
     },
     {
-      "name": "gateway.url",
+      "name": "pos.inventory.service-id",
       "type": "java.lang.String",
-      "description": "Gateway base URL used by location service RestClient integrations.",
-      "defaultValue": "http://localhost:8080"
+      "description": "Eureka service-id for the pos-inventory service.",
+      "defaultValue": "inventory"
     },
     {
       "name": "pos.events.base-url",
