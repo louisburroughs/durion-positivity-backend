@@ -1,7 +1,5 @@
 package com.positivity.inventory.internal.client;
 
-import com.positivity.security.common.GatewaySecurityConstants;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,12 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Component
 public class WorkorderValidationClient {
@@ -26,10 +21,8 @@ public class WorkorderValidationClient {
 
     public WorkorderValidationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(gatewayUrl + "/workorder/v1/workorders")
-                .build();
+            @Value("${pos.workorder.service-id:workorder}") String workorderServiceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + workorderServiceId).build();
     }
 
     @NonNull
@@ -42,8 +35,9 @@ public class WorkorderValidationClient {
 
         WorkorderDetailResponse response = restClient
                 .get()
-                .uri("/{workorderId}/detail", workorderUuid)
-                .headers(this::applySecurityHeaders)
+                .uri("/v1/workorders/{workorderId}/detail", workorderUuid)
+                .header("X-User", "pos-inventory")
+                .header("X-Authorities", "workorder:workorder:view")
                 .retrieve()
                 .body(WorkorderDetailResponse.class);
 
@@ -78,29 +72,6 @@ public class WorkorderValidationClient {
             return UUID.fromString(value);
         } catch (Exception ex) {
             throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
-        }
-    }
-
-    private void applySecurityHeaders(HttpHeaders headers) {
-        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
-            throw new IllegalStateException("Missing HTTP request context for token forwarding");
-        }
-
-        HttpServletRequest request = requestAttributes.getRequest();
-        copyHeaderIfPresent(request, headers, HttpHeaders.AUTHORIZATION);
-        copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_TOKEN);
-        copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_USER);
-        copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_AUTHORITIES);
-
-        if (headers.isEmpty()) {
-            throw new IllegalStateException("No security headers available for workorder validation request");
-        }
-    }
-
-    private void copyHeaderIfPresent(HttpServletRequest request, HttpHeaders headers, String headerName) {
-        String value = request.getHeader(headerName);
-        if (StringUtils.hasText(value)) {
-            headers.set(headerName, value);
         }
     }
 
