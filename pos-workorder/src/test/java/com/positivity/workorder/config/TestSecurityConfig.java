@@ -5,7 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -151,13 +150,11 @@ public class TestSecurityConfig {
             } else {
                 String xAuthoritiesHeader = request.getHeader("X-Authorities");
                 if (xAuthoritiesHeader != null && !xAuthoritiesHeader.isBlank()) {
-                    List<SimpleGrantedAuthority> merged = new ArrayList<>(TEST_AUTHORITIES);
-                    Arrays.stream(xAuthoritiesHeader.split(","))
+                    authorities = Arrays.stream(xAuthoritiesHeader.split(","))
                             .map(String::trim)
                             .filter(s -> !s.isEmpty())
                             .map(SimpleGrantedAuthority::new)
-                            .forEach(merged::add);
-                    authorities = merged;
+                            .toList();
                 } else {
                     authorities = TEST_AUTHORITIES;
                 }

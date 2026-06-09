@@ -67,12 +67,12 @@ class GatewayHeaderAuthenticationFilterTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Fallback: X-Perm-Bits present, X-Perm-Ver missing → fall back to CSV
+    // Fail closed: X-Perm-Bits present, X-Perm-Ver missing → unauthenticated
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("permBits_missingPermVer_fallsBackToCsvAuthorities: X-Perm-Bits present but X-Perm-Ver absent uses X-Authorities CSV")
-    void permBits_missingPermVer_fallsBackToCsvAuthorities() throws Exception {
+    @DisplayName("permBits_missingPermVer_clearsAuth: X-Perm-Bits present but X-Perm-Ver absent clears security context (fail closed)")
+    void permBits_missingPermVer_clearsAuth() throws Exception {
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -82,25 +82,16 @@ class GatewayHeaderAuthenticationFilterTest {
 
         filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
-
-        List<String> authorityStrings = auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
-        assertThat(authorityStrings)
-                .containsExactlyInAnyOrder("csv:authority:one", "csv:authority:two");
-        // must NOT contain the bitset-decoded permission
-        assertThat(authorityStrings).doesNotContain("accounting:je:view");
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Fallback: X-Perm-Ver present but wrong version → fall back to CSV
+    // Fail closed: X-Perm-Ver present but wrong version → unauthenticated
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("permBits_wrongVersion_fallsBackToCsvAuthorities: X-Perm-Ver != CATALOG_VERSION uses X-Authorities CSV")
-    void permBits_wrongVersion_fallsBackToCsvAuthorities() throws Exception {
+    @DisplayName("permBits_wrongVersion_clearsAuth: X-Perm-Ver != CATALOG_VERSION clears security context (fail closed)")
+    void permBits_wrongVersion_clearsAuth() throws Exception {
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -110,14 +101,7 @@ class GatewayHeaderAuthenticationFilterTest {
 
         filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
-
-        List<String> authorityStrings = auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
-        assertThat(authorityStrings).containsExactly("fallback:authority");
-        assertThat(authorityStrings).doesNotContain("accounting:je:view");
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

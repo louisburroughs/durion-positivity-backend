@@ -22,8 +22,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>Resolution order:
  * <ol>
  *   <li>{@code X-Perm-Bits} + {@code X-Perm-Ver} — decoded via {@link PermissionBitsetCodec};
- *       requires {@code X-Perm-Ver} to match {@link PermissionCode#CATALOG_VERSION}.</li>
- *   <li>{@code X-Authorities} CSV — used when {@code X-Perm-Bits} is absent or decoding fails.</li>
+ *       requires {@code X-Perm-Ver} to match {@link PermissionCode#CATALOG_VERSION}.
+ *       If the header is present but decoding fails, the request is treated as unauthenticated
+ *       (fail closed — {@code X-Authorities} is NOT consulted).</li>
+ *   <li>{@code X-Authorities} CSV — used only when {@code X-Perm-Bits} is absent.</li>
  * </ol>
  * When neither source yields authorities the security context is left unauthenticated.
  */
@@ -42,8 +44,14 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
         String userHeader = request.getHeader(HEADER_USER);
         String username = userHeader != null && !userHeader.isBlank() ? userHeader : "gateway-user";
 
-        List<SimpleGrantedAuthority> authorities = decodePermBits(request);
-        if (authorities == null) {
+        String permBitsHeader = request.getHeader(HEADER_PERM_BITS);
+        boolean hasPermBits = permBitsHeader != null && !permBitsHeader.isBlank();
+
+        List<SimpleGrantedAuthority> authorities;
+        if (hasPermBits) {
+            // X-Perm-Bits present: fail closed on any decode failure, never fall back to X-Authorities
+            authorities = decodePermBits(request, permBitsHeader);
+        } else {
             authorities = parseAuthorities(request.getHeader(HEADER_AUTHORITIES));
         }
 
@@ -64,27 +72,22 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
     /**
      * Attempts to decode {@code X-Perm-Bits} using {@link PermissionBitsetCodec}.
      *
-     * @return the decoded authorities list, or {@code null} if the header is absent,
-     *         the version is missing/invalid, or decoding fails
+     * @return the decoded authorities list, or {@code null} on any validation/decode failure
+     *         (caller must treat null as unauthenticated — fail closed)
      */
-    private List<SimpleGrantedAuthority> decodePermBits(HttpServletRequest request) {
-        String permBitsHeader = request.getHeader(HEADER_PERM_BITS);
-        if (permBitsHeader == null || permBitsHeader.isBlank()) {
-            return null;
-        }
-
+    private List<SimpleGrantedAuthority> decodePermBits(HttpServletRequest request, String permBitsHeader) {
         String permVerHeader = request.getHeader(HEADER_PERM_VER);
         int permVer;
         try {
             permVer = Integer.parseInt(permVerHeader);
         } catch (NumberFormatException | NullPointerException e) {
-            log.warn("X-Perm-Bits present but X-Perm-Ver is missing or invalid (value={}); falling back to X-Authorities uri={}",
+            log.warn("X-Perm-Bits present but X-Perm-Ver is missing or invalid (value={}); clearing auth context uri={}",
                     permVerHeader, request.getRequestURI());
             return null;
         }
 
         if (permVer != PermissionCode.CATALOG_VERSION) {
-            log.warn("X-Perm-Ver {} does not match local catalog version {}; falling back to X-Authorities uri={}",
+            log.warn("X-Perm-Ver {} does not match local catalog version {}; clearing auth context uri={}",
                     permVer, PermissionCode.CATALOG_VERSION, request.getRequestURI());
             return null;
         }
@@ -95,7 +98,7 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                     .map(p -> new SimpleGrantedAuthority(p.code()))
                     .toList();
         } catch (Exception e) {
-            log.warn("Failed to decode X-Perm-Bits; falling back to X-Authorities uri={} error={}",
+            log.warn("Failed to decode X-Perm-Bits; clearing auth context uri={} error={}",
                     request.getRequestURI(), e.getMessage());
             return null;
         }
