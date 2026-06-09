@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -38,7 +39,7 @@ import org.springframework.web.client.RestClient;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class InvoiceServiceClient {
 
     @Qualifier("invoiceServiceRestClient")
@@ -46,8 +47,14 @@ public class InvoiceServiceClient {
 
     private final CircuitBreaker invoiceServiceCircuitBreaker;
 
-    @Value("${pos.invoice.service.url:http://api-gateway}")
-    private String invoiceServiceUrl;
+    @Value("${pos.invoice.service-id:invoice}")
+    private String invoiceServiceId;
+
+    InvoiceServiceClient(RestClient restClient, CircuitBreaker invoiceServiceCircuitBreaker, String invoiceServiceId) {
+        this.restClient = restClient;
+        this.invoiceServiceCircuitBreaker = invoiceServiceCircuitBreaker;
+        this.invoiceServiceId = invoiceServiceId;
+    }
 
     /**
      * Fetch invoice details from Invoice service.
@@ -64,7 +71,9 @@ public class InvoiceServiceClient {
             try {
                 InvoiceDetails details = restClient
                         .get()
-                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}", invoiceId)
+                        .uri("http://" + invoiceServiceId + "/v1/invoices/{id}", invoiceId)
+                        .header("X-User", "pos-accounting")
+                        .header("X-Authorities", "invoice:manage")
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (request, httpResponse) -> {
                             log.warn(
@@ -131,7 +140,9 @@ public class InvoiceServiceClient {
             try {
                 ApplyPaymentToInvoiceResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/apply-payment", invoiceId)
+                        .uri("http://" + invoiceServiceId + "/v1/invoices/{id}/apply-payment", invoiceId)
+                        .header("X-User", "pos-accounting")
+                        .header("X-Authorities", "invoice:manage")
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -199,7 +210,9 @@ public class InvoiceServiceClient {
             try {
                 ReversePaymentApplicationResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/reverse-payment", invoiceId)
+                        .uri("http://" + invoiceServiceId + "/v1/invoices/{id}/reverse-payment", invoiceId)
+                        .header("X-User", "pos-accounting")
+                        .header("X-Authorities", "invoice:manage")
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
@@ -264,7 +277,9 @@ public class InvoiceServiceClient {
             try {
                 ApplyCreditMemoResponse response = restClient
                         .post()
-                        .uri(invoiceServiceUrl + "/invoice/v1/invoices/{id}/apply-credit-memo", invoiceId)
+                        .uri("http://" + invoiceServiceId + "/v1/invoices/{id}/apply-credit-memo", invoiceId)
+                        .header("X-User", "pos-accounting")
+                        .header("X-Authorities", "invoice:manage")
                         .body(request)
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {

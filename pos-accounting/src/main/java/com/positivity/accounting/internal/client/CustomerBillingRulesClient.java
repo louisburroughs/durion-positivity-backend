@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -15,20 +16,25 @@ import org.springframework.web.client.RestClient;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class CustomerBillingRulesClient {
 
     @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
 
-    @Value("${pos.customer.service.url:http://api-gateway}")
-    private String customerServiceUrl;
+    @Value("${pos.customer.service-id:customer}")
+    private String customerServiceId;
+
+    CustomerBillingRulesClient(RestClient restClient, String customerServiceId) {
+        this.restClient = restClient;
+        this.customerServiceId = customerServiceId;
+    }
 
     public BillingRuleRefResponse getBillingRules(UUID customerId) {
         try {
             BillingRuleRefResponse response = restClient
                     .get()
-                    .uri(customerServiceUrl + "/customer/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
+                    .uri("http://" + customerServiceId + "/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
                     .header("X-User", "pos-accounting")
                     .header("X-Authorities", "crm:party:view")
                     .retrieve()
