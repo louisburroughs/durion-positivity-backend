@@ -24,13 +24,14 @@ import org.springframework.web.client.RestClient;
 
 class CatalogClientBuilderTest {
 
-    private static final String BASE_URL = "http://api-gateway";
+    private static final String INVENTORY_BASE_URL = "http://inventory";
+    private static final String PRICE_BASE_URL = "http://price";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(TestClientConfiguration.class, BuilderProbeConfiguration.class);
 
     @Test
-    void inventoryAndPricingClientsUseLoadBalancedBuilderWithDefaultGatewayBaseUrl() {
+    void inventoryAndPricingClientsUseLoadBalancedBuilderWithDirectServiceBaseUrls() {
         contextRunner.run(context -> {
             RestClient.Builder plainBuilder = context.getBean("restClientBuilder", RestClient.Builder.class);
             RestClient.Builder loadBalancedBuilder =
@@ -39,22 +40,24 @@ class CatalogClientBuilderTest {
             context.getBean(InventoryClientImpl.class);
             context.getBean(PricingClientImpl.class);
 
-            verify(loadBalancedBuilder, times(2)).baseUrl(BASE_URL);
+            verify(loadBalancedBuilder, times(1)).baseUrl(INVENTORY_BASE_URL);
+            verify(loadBalancedBuilder, times(1)).baseUrl(PRICE_BASE_URL);
             verify(loadBalancedBuilder, times(2)).build();
-            verify(plainBuilder, never()).baseUrl(BASE_URL);
+            verify(plainBuilder, never()).baseUrl(INVENTORY_BASE_URL);
+            verify(plainBuilder, never()).baseUrl(PRICE_BASE_URL);
             verify(plainBuilder, never()).build();
         });
     }
 
     @Test
-    void inventoryClientUsesGatewayPrefixedAvailabilityQueryPath() {
+    void inventoryClientUsesDirectServiceAvailabilityQueryPath() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        InventoryClientImpl client = new InventoryClientImpl(builder, BASE_URL);
+        InventoryClientImpl client = new InventoryClientImpl(builder, "inventory", "/v1/inventory");
         UUID locationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
         mockServer
-                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/availability/query?productSku=SKU-123&locationId="
+                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/query?productSku=SKU-123&locationId="
                         + locationId))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
@@ -70,15 +73,15 @@ class CatalogClientBuilderTest {
     }
 
     @Test
-    void inventoryClientUsesGatewayPrefixedLeadTimePath() {
+    void inventoryClientUsesDirectServiceLeadTimePath() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        InventoryClientImpl client = new InventoryClientImpl(builder, BASE_URL);
+        InventoryClientImpl client = new InventoryClientImpl(builder, "inventory", "/v1/inventory");
         UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
         UUID locationId = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
         mockServer
-                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/availability/lead-time?productId=" + productId
+                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/lead-time?productId=" + productId
                         + "&locationId=" + locationId))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
@@ -96,16 +99,16 @@ class CatalogClientBuilderTest {
     }
 
     @Test
-    void pricingClientUsesGatewayPrefixedQuotesPath() {
+    void pricingClientUsesDirectServiceQuotesPath() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        PricingClientImpl client = new PricingClientImpl(builder, BASE_URL);
+        PricingClientImpl client = new PricingClientImpl(builder, "price", "/v1/price");
         UUID productId = UUID.fromString("44444444-4444-4444-4444-444444444444");
         UUID locationId = UUID.fromString("55555555-5555-5555-5555-555555555555");
         UUID customerTierId = UUID.fromString("66666666-6666-6666-6666-666666666666");
 
         mockServer
-                .expect(requestTo(BASE_URL + "/price/v1/price/quotes"))
+                .expect(requestTo(PRICE_BASE_URL + "/v1/price/quotes"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(
                         "{" + "\"msrp\":{\"amount\":19.99,\"currency\":\"USD\"},"
@@ -124,13 +127,13 @@ class CatalogClientBuilderTest {
         @Bean
         InventoryClientImpl inventoryClientImpl(
                 @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder loadBalancedRestClientBuilder) {
-            return new InventoryClientImpl(loadBalancedRestClientBuilder, BASE_URL);
+            return new InventoryClientImpl(loadBalancedRestClientBuilder, "inventory", "/v1/inventory");
         }
 
         @Bean
         PricingClientImpl pricingClientImpl(
                 @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder loadBalancedRestClientBuilder) {
-            return new PricingClientImpl(loadBalancedRestClientBuilder, BASE_URL);
+            return new PricingClientImpl(loadBalancedRestClientBuilder, "price", "/v1/price");
         }
     }
 
@@ -140,17 +143,19 @@ class CatalogClientBuilderTest {
         @Bean("restClientBuilder")
         @Primary
         RestClient.Builder restClientBuilder() {
-            return mockBuilder();
+            return mockBuilder(INVENTORY_BASE_URL, PRICE_BASE_URL);
         }
 
         @Bean("loadBalancedRestClientBuilder")
         RestClient.Builder loadBalancedRestClientBuilder() {
-            return mockBuilder();
+            return mockBuilder(INVENTORY_BASE_URL, PRICE_BASE_URL);
         }
 
-        private RestClient.Builder mockBuilder() {
+        private RestClient.Builder mockBuilder(String... baseUrls) {
             RestClient.Builder builder = mock(RestClient.Builder.class);
-            when(builder.baseUrl(BASE_URL)).thenReturn(builder);
+            for (String baseUrl : baseUrls) {
+                when(builder.baseUrl(baseUrl)).thenReturn(builder);
+            }
             when(builder.build()).thenReturn(mock(RestClient.class));
             return builder;
         }

@@ -7,16 +7,28 @@
       "defaultValue": "00000000-0000-0000-0000-000000000001"
     },
     {
-      "name": "pos.inventory.base-url",
+      "name": "pos.inventory.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-inventory service.",
-      "defaultValue": "http://api-gateway"
+      "description": "Eureka service ID for pos-inventory.",
+      "defaultValue": "inventory"
     },
     {
-      "name": "pos.price.base-url",
+      "name": "pos.inventory.base-path",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-price service.",
-      "defaultValue": "http://api-gateway"
+      "description": "Base path for pos-inventory API.",
+      "defaultValue": "/v1/inventory"
+    },
+    {
+      "name": "pos.price.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service ID for pos-price.",
+      "defaultValue": "price"
+    },
+    {
+      "name": "pos.price.base-path",
+      "type": "java.lang.String",
+      "description": "Base path for pos-price API.",
+      "defaultValue": "/v1/price"
     },
     {
       "name": "pos.events.base-url",

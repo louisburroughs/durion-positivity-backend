@@ -25,11 +25,14 @@ import org.springframework.web.client.RestClient;
 public class InventoryClientImpl implements InventoryClient {
 
     private final RestClient restClient;
+    private final String basePath;
 
     public InventoryClientImpl(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.inventory.base-url:http://api-gateway}") String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+            @Value("${pos.inventory.service-id:inventory}") String serviceId,
+            @Value("${pos.inventory.base-path:/v1/inventory}") String basePath) {
+        this.basePath = basePath;
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     @Override
@@ -39,7 +42,7 @@ public class InventoryClientImpl implements InventoryClient {
         AvailabilityServiceResponse response = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/inventory/v1/inventory/availability/query")
+                        .path(basePath + "/availability/query")
                         .queryParam("productSku", productSku)
                         .queryParam("locationId", locationId)
                         .build())
@@ -67,7 +70,7 @@ public class InventoryClientImpl implements InventoryClient {
             LeadTimeServiceResponse response = restClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/inventory/v1/inventory/availability/lead-time")
+                            .path(basePath + "/availability/lead-time")
                             .queryParam("productId", productId)
                             .queryParam("locationId", locationId)
                             .build())

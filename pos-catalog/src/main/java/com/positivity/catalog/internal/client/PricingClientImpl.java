@@ -24,11 +24,14 @@ import org.springframework.web.client.RestClient;
 public class PricingClientImpl implements PricingClient {
 
     private final RestClient restClient;
+    private final String basePath;
 
     public PricingClientImpl(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.price.base-url:http://api-gateway}") String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+            @Value("${pos.price.service-id:price}") String serviceId,
+            @Value("${pos.price.base-path:/v1/price}") String basePath) {
+        this.basePath = basePath;
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     @Override
@@ -38,7 +41,7 @@ public class PricingClientImpl implements PricingClient {
 
         PriceQuoteServiceResponse response = restClient
                 .post()
-                .uri("/price/v1/price/quotes")
+                .uri(basePath + "/quotes")
                 .body(body)
                 .retrieve()
                 .body(PriceQuoteServiceResponse.class);
