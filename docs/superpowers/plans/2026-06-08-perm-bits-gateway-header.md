@@ -104,7 +104,6 @@ class DownstreamPermissionCatalogTest {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/louis-burroughs/IdeaProjects/durion-positivity-backend
 ./mvnw -pl pos-security-common test -Dtest=DownstreamPermissionCatalogTest -q 2>&1 | tail -10
 ```
 
@@ -1072,7 +1071,6 @@ help=(
 - [ ] **Step 4: Run the existing script tests**
 
 ```bash
-cd /home/louis-burroughs/IdeaProjects/durion-positivity-backend
 python3 -m pytest scripts/tests/ -q 2>&1 | tail -10
 ```
 
@@ -1183,8 +1181,8 @@ In the **Important Authorization Principle** section, update the bullet about he
 
 ```bash
 grep -r "X-Authorities" \
-  /home/louis-burroughs/IdeaProjects/durion/docs/architecture/ \
-  /home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-security-service/docs/ \
+  ../durion/docs/architecture/ \
+  pos-security-service/docs/ \
   2>/dev/null
 ```
 
@@ -1194,9 +1192,9 @@ Remaining `X-Authorities` references in docs should only be in the "legacy fallb
 
 ```bash
 git add \
-  /home/louis-burroughs/IdeaProjects/durion/docs/architecture/AUTHORIZATION_MODEL.md \
-  /home/louis-burroughs/IdeaProjects/durion/docs/architecture/API_SECURITY_ARCHITECTURE.md \
-  /home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-security-service/docs/security-service-guide.md
+  ../durion/docs/architecture/AUTHORIZATION_MODEL.md \
+  ../durion/docs/architecture/API_SECURITY_ARCHITECTURE.md \
+  pos-security-service/docs/security-service-guide.md
 git commit -m "docs: update authorization model for X-Perm-Bits gateway header forwarding"
 ```
 

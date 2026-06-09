@@ -151,8 +151,8 @@ class GatewayAuthoritiesFilterTest {
         }
 
         @Test
-        @DisplayName("X-Perm-Bits with wrong catalog version results in empty authorities")
-        void permBitsWithWrongVersion_emptyAuthorities() throws ServletException, IOException {
+        @DisplayName("X-Perm-Bits with wrong catalog version clears the security context (fail closed)")
+        void permBitsWithWrongVersion_clearsAuth() throws ServletException, IOException {
                 java.util.BitSet bits = new java.util.BitSet();
                 bits.set(27);
                 String encoded = java.util.Base64.getUrlEncoder()
@@ -166,13 +166,12 @@ class GatewayAuthoritiesFilterTest {
 
                 filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
-                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-                assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
+                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
         @Test
-        @DisplayName("X-Perm-Bits with malformed Base64 results in empty authorities")
-        void permBitsWithInvalidBase64_emptyAuthorities() throws ServletException, IOException {
+        @DisplayName("X-Perm-Bits with malformed Base64 clears the security context (fail closed)")
+        void permBitsWithInvalidBase64_clearsAuth() throws ServletException, IOException {
                 MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/customers");
                 request.addHeader(GatewaySecurityConstants.HEADER_USER, "alice");
                 request.addHeader(GatewaySecurityConstants.HEADER_PERM_BITS, "!!!not-valid-base64!!!");
@@ -181,13 +180,12 @@ class GatewayAuthoritiesFilterTest {
 
                 filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
-                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-                assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
+                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
         @Test
-        @DisplayName("X-Perm-Bits with missing X-Perm-Ver header results in empty authorities")
-        void permBitsWithMissingVersion_emptyAuthorities() throws ServletException, IOException {
+        @DisplayName("X-Perm-Bits with missing X-Perm-Ver header clears the security context (fail closed)")
+        void permBitsWithMissingVersion_clearsAuth() throws ServletException, IOException {
                 java.util.BitSet bits = new java.util.BitSet();
                 bits.set(27);
                 String encoded = java.util.Base64.getUrlEncoder()
@@ -201,7 +199,6 @@ class GatewayAuthoritiesFilterTest {
 
                 filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
-                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-                assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
+                assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 }

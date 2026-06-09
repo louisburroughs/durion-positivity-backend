@@ -96,6 +96,14 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             List<SimpleGrantedAuthority> authorities = hasPermBits
                     ? authoritiesFromPermBits(permBitsHeader, permVerHeader, rolesHeader)
                     : parseAuthorities(authoritiesHeader, rolesHeader);
+
+            if (authorities == null) {
+                // authoritiesFromPermBits returned null — invalid/untrusted perm-bits headers; fail closed
+                SecurityContextHolder.clearContext();
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
@@ -203,24 +211,26 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
                 .toList();
     }
 
+    // null return = decode failure (fail closed); empty list = valid header with zero permissions.
+    @SuppressWarnings("java:S1168")
     private List<SimpleGrantedAuthority> authoritiesFromPermBits(
             String permBitsHeader, String permVerHeader, String rolesHeader) {
         if (permVerHeader == null) {
             loggr.warn("Missing X-Perm-Ver header; clearing auth context");
-            return Collections.emptyList();
+            return null;
         }
         int permVer;
         try {
             permVer = Integer.parseInt(permVerHeader);
         } catch (NumberFormatException _) {
             loggr.warn("Invalid X-Perm-Ver header '{}'; clearing auth context", permVerHeader);
-            return Collections.emptyList();
+            return null;
         }
 
         if (permVer != DownstreamPermissionCatalog.CATALOG_VERSION) {
             loggr.warn("X-Perm-Ver {} does not match local catalog version {}; clearing auth context",
                     permVer, DownstreamPermissionCatalog.CATALOG_VERSION);
-            return Collections.emptyList();
+            return null;
         }
 
         BitSet bits;
@@ -229,7 +239,7 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             bits = BitSet.valueOf(bytes);
         } catch (IllegalArgumentException e) {
             loggr.warn("Malformed X-Perm-Bits header: {}; clearing auth context", e.getMessage());
-            return Collections.emptyList();
+            return null;
         }
 
         Stream<String> permStream = DownstreamPermissionCatalog.authoritiesFromBitSet(bits)
