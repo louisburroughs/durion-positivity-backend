@@ -20,7 +20,7 @@ public class GatewayAuthProperties {
 
     /**
      * When true, inbound {@code X-User}, {@code X-User-Id}, {@code X-Authorities},
-     * and {@code X-Roles}
+     * {@code X-Perm-Bits}, {@code X-Perm-Ver}, and {@code X-Roles}
      * headers are stripped before forwarding to downstream services.
      */
     private boolean stripInboundIdentityHeaders = true;
