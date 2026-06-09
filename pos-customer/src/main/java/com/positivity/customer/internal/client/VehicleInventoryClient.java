@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
 @Component
 public class VehicleInventoryClient {
 
-    private static final String VEHICLE_BY_ID_PATH = "/v1/vehicles/{vehicleId}";
+    private static final String VEHICLE_BY_ID_PATH = "/v1/vehicle-registry/{vehicleId}";
 
     private final RestClient restClient;
 
@@ -48,7 +48,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .post()
-                    .uri("/v1/vehicles")
+                    .uri("/v1/vehicle-registry")
                     .header("X-User", "pos-customer")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -98,7 +98,7 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .get()
-                    .uri("/v1/vehicles/vin/{vin}", vin)
+                    .uri("/v1/vehicle-registry/vin/{vin}", vin)
                     .header("X-User", "pos-customer")
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {

@@ -62,7 +62,7 @@ class CustomerClientUriTest {
         VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
 
         mockServer
-                .expect(requestTo("http://vehicle-inventory/v1/vehicles"))
+                .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-customer"))
                 .andRespond(withSuccess(
@@ -84,7 +84,7 @@ class CustomerClientUriTest {
         VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
 
         mockServer
-                .expect(requestTo("http://vehicle-inventory/v1/vehicles/" + VEHICLE_ID))
+                .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-User", "pos-customer"))
                 .andRespond(withSuccess(
@@ -105,7 +105,7 @@ class CustomerClientUriTest {
         VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
 
         mockServer
-                .expect(requestTo("http://vehicle-inventory/v1/vehicles/vin/1HGCM82633A004352"))
+                .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/vin/1HGCM82633A004352"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-User", "pos-customer"))
                 .andRespond(withSuccess(
@@ -126,7 +126,7 @@ class CustomerClientUriTest {
         VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
 
         mockServer
-                .expect(requestTo("http://vehicle-inventory/v1/vehicles/" + VEHICLE_ID))
+                .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(header("X-User", "pos-customer"))
                 .andRespond(withSuccess(
@@ -148,7 +148,7 @@ class CustomerClientUriTest {
         VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
 
         mockServer
-                .expect(requestTo("http://vehicle-inventory/v1/vehicles/" + VEHICLE_ID))
+                .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.DELETE))
                 .andExpect(header("X-User", "pos-customer"))
                 .andRespond(withSuccess());
