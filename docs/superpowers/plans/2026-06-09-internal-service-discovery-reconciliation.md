@@ -86,7 +86,7 @@ git commit -m "docs: update discovery migration docs for direct-discovery defaul
 
 Context: All three clients already use `@Qualifier("invoiceServiceRestClient")` which is built from `loadBalancedRestClientBuilder`. The RestClient has no base URL. Each client composes the URL as `serviceUrl + "/prefix/v1/..."`. `CustomerBillingRulesClient` and `WorkorderInvoiceClient` already inject correct `X-User`/`X-Authorities` headers. `InvoiceServiceClient` does not.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `pos-accounting/src/test/java/com/positivity/accounting/internal/client/AccountingClientUriTest.java`:
 
@@ -153,7 +153,7 @@ class AccountingClientUriTest {
 }
 ```
 
-- [ ] **Step 2: Run tests — verify they fail**
+- [x] **Step 2: Run tests — verify they fail**
 
 ```bash
 ./mvnw -pl pos-accounting test -Dtest=AccountingClientUriTest -q 2>&1 | tail -20
@@ -633,7 +633,7 @@ Downstream native paths:
   grep -n "@PreAuthorize" pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java | head -5
   ```
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `pos-inventory/src/test/java/com/positivity/inventory/internal/client/InventoryClientUriTest.java`:
 
@@ -702,13 +702,13 @@ class InventoryClientUriTest {
 }
 ```
 
-- [ ] **Step 2: Run tests — verify they fail**
+- [x] **Step 2: Run tests — verify they fail**
 
 ```bash
 ./mvnw -pl pos-inventory test -Dtest=InventoryClientUriTest -q 2>&1 | tail -20
 ```
 
-- [ ] **Step 3: Implement SiteDefaultsClient**
+- [x] **Step 3: Implement SiteDefaultsClient**
 
 Replace constructor:
 ```java
@@ -729,7 +729,7 @@ Replace `applySecurityHeaders(HttpHeaders headers)` method and the call `.header
 
 Remove `copyHeaderIfPresent`, `applySecurityHeaders`, and the `jakarta.servlet.*` / `RequestContextHolder` imports.
 
-- [ ] **Step 4: Implement StorageLocationValidationClient**
+- [x] **Step 4: Implement StorageLocationValidationClient**
 
 Replace constructor:
 ```java
@@ -752,7 +752,7 @@ Replace `.header(HttpHeaders.AUTHORIZATION, authorizationHeader)` with:
 
 Remove `resolveAuthorizationHeader()`, `BEARER_PREFIX` constant, `jakarta.servlet.*`, `RequestContextHolder` imports.
 
-- [ ] **Step 5: Implement WorkorderValidationClient**
+- [x] **Step 5: Implement WorkorderValidationClient**
 
 Replace constructor:
 ```java
@@ -778,13 +778,13 @@ Replace `.headers(this::applySecurityHeaders)` with:
 
 Remove `applySecurityHeaders`, `copyHeaderIfPresent`, `jakarta.servlet.*`, `RequestContextHolder`, `GatewaySecurityConstants` imports.
 
-- [ ] **Step 6: Run tests — verify they pass**
+- [x] **Step 6: Run tests — verify they pass**
 
 ```bash
 ./mvnw -pl pos-inventory test -q 2>&1 | tail -10
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pos-inventory/
