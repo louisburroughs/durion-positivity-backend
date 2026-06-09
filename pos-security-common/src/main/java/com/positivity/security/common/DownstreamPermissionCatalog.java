@@ -29,6 +29,7 @@ public final class DownstreamPermissionCatalog {
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
      * authority string for bit N in the {@code X-Perm-Bits} header.
      */
+    // Package-private: use authorityForBit() and authoritiesFromBitSet() as the public API.
     static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
         "PERM_accounting:je:create",
@@ -383,6 +384,6 @@ public final class DownstreamPermissionCatalog {
                 result.add(authority);
             }
         }
-        return result;
+        return List.copyOf(result);
     }
 }

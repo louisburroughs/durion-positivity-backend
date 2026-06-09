@@ -34,7 +34,7 @@ class DownstreamPermissionCatalogTest {
         List<String> result = DownstreamPermissionCatalog.authoritiesFromBitSet(bits);
 
         assertThat(result)
-                .containsExactlyInAnyOrder("PERM_crm:party:view", "PERM_crm:party:search");
+                .containsExactly("PERM_crm:party:view", "PERM_crm:party:search");
     }
 
     @Test
@@ -51,7 +51,12 @@ class DownstreamPermissionCatalogTest {
     }
 
     @Test
-    void catalogVersion_isPositive() {
-        assertThat(DownstreamPermissionCatalog.CATALOG_VERSION).isGreaterThan(0);
+    void catalogVersion_matchesExpected() {
+        assertThat(DownstreamPermissionCatalog.CATALOG_VERSION).isEqualTo(10);
+    }
+
+    @Test
+    void authorityForBit_exactBoundaryIndex_returnsNull() {
+        assertThat(DownstreamPermissionCatalog.authorityForBit(DownstreamPermissionCatalog.AUTHORITY_BY_BIT.length)).isNull();
     }
 }
