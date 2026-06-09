@@ -36,47 +36,56 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Workorder Detail", description = "Workorder detail with role-based visibility")
 public class WorkorderDetailController {
 
-        private final WorkorderDetailService workorderDetailService;
+    private final WorkorderDetailService workorderDetailService;
 
-        @GetMapping("/{workorderId}/detail")
-        @PreAuthorize("hasAuthority('workorder:workorder:view')")
-        @Operation(summary = "Get workorder detail with role-based visibility", description = "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
-                        + "Capability flags indicate which actions the user can perform.", responses = {
-                                        @ApiResponse(responseCode = "200", description = "Workorder detail retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
-                                        @ApiResponse(responseCode = "404", description = "Workorder not found")
-                        })
-        public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
-                        @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId) {
+    @GetMapping("/{workorderId}/detail")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Get workorder detail with role-based visibility",
+            description =
+                    "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
+                            + "Capability flags indicate which actions the user can perform.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Workorder detail retrieved successfully",
+                        content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
+                @ApiResponse(responseCode = "404", description = "Workorder not found")
+            })
+    public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
+            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
+                    @PathVariable
+                    @NonNull
+                    UUID workorderId) {
 
-                // Read authorities from Spring Security context (populated by
-                // GatewayAuthoritiesFilter)
-                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-                Set<String> userAuthorities = authentication != null
-                                ? authentication.getAuthorities().stream()
-                                                .map(GrantedAuthority::getAuthority)
-                                                .collect(Collectors.toUnmodifiableSet())
-                                : Collections.emptySet();
+        // Read authorities from Spring Security context (populated by GatewayAuthoritiesFilter)
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Set<String> userAuthorities = authentication != null
+                ? authentication.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toUnmodifiableSet())
+                : Collections.emptySet();
 
-                log.debug(
-                                "Getting workorder detail: workorderId(mask)={}, authorityCount={}",
-                                maskForLog(workorderId),
-                                userAuthorities.size());
+        log.debug(
+                "Getting workorder detail: workorderId(mask)={}, authorityCount={}",
+                maskForLog(workorderId),
+                userAuthorities.size());
 
-                WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId,
-                                userAuthorities);
+        WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId, userAuthorities);
 
-                return ResponseEntity.ok(response);
+        return ResponseEntity.ok(response);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
         }
-
-        private String maskForLog(Object value) {
-                if (value == null) {
-                        return "null";
-                }
-                String sanitized = value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
-                int length = sanitized.length();
-                if (length <= 4) {
-                        return "****";
-                }
-                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+        String sanitized =
+                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
         }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+    }
 }
