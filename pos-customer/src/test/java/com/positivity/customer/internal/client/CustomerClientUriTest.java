@@ -59,7 +59,7 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
+        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry"))
@@ -81,7 +81,7 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
+        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
@@ -102,7 +102,7 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
+        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/vin/1HGCM82633A004352"))
@@ -123,7 +123,7 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
+        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
@@ -145,7 +145,7 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder, "vehicle-inventory");
+        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))

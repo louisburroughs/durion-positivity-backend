@@ -34,9 +34,9 @@ public class VehicleInventoryClient {
         log.info("VehicleInventoryClient initialized with serviceId: {}", serviceId);
     }
 
-    /** Package-private constructor for unit tests. */
-    VehicleInventoryClient(RestClient.Builder restClientBuilder, String serviceId) {
-        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
+    /** Package-private constructor for unit tests — accepts a pre-built RestClient. */
+    VehicleInventoryClient(RestClient restClient) {
+        this.restClient = restClient;
     }
 
     /**
