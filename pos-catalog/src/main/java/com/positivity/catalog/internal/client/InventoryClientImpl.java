@@ -10,13 +10,11 @@ import org.springframework.web.client.RestClient;
 
 /**
  * RestClient implementation for {@link InventoryClient}.
- * Calls {@code GET /v1/inventory/availability/query} on the pos-inventory
- * service.
+ * Calls {@code GET /v1/inventory/availability/by-sku} and
+ * {@code GET /v1/inventory/availability/lead-time} on the pos-inventory service.
  *
  * <p>
- * pos-inventory availability endpoint is protected by
- * {@code @PreAuthorize("hasAnyAuthority('inventory:availability:read',...)")}
- * so the {@code X-Authorities} header is set for service-to-service calls.
+ * Both endpoints require {@code inventory:on_hand:view} or {@code inventory:on_hand:search}.
  *
  * Issue: CAP-247 Story #16
  */
@@ -42,12 +40,12 @@ public class InventoryClientImpl implements InventoryClient {
         AvailabilityServiceResponse response = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path(basePath + "/availability/query")
+                        .path(basePath + "/availability/by-sku")
                         .queryParam("productSku", productSku)
                         .queryParam("locationId", locationId)
                         .build())
                 .header("X-User", "pos-catalog-service")
-                .header("X-Authorities", "inventory:availability:read")
+                .header("X-Authorities", "inventory:on_hand:view")
                 .retrieve()
                 .body(AvailabilityServiceResponse.class);
 
@@ -75,7 +73,7 @@ public class InventoryClientImpl implements InventoryClient {
                             .queryParam("locationId", locationId)
                             .build())
                     .header("X-User", "pos-catalog-service")
-                    .header("X-Authorities", "inventory:availability:read")
+                    .header("X-Authorities", "inventory:on_hand:view")
                     .retrieve()
                     .body(LeadTimeServiceResponse.class);
 

@@ -57,7 +57,7 @@ class CatalogClientBuilderTest {
         UUID locationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
         mockServer
-                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/query?productSku=SKU-123&locationId="
+                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/by-sku?productSku=SKU-123&locationId="
                         + locationId))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
