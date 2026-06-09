@@ -12,28 +12,29 @@
 
 ## File Map
 
-| Status | File | Change |
-|--------|------|--------|
-| Create | `pos-security-common/src/main/java/com/positivity/security/common/DownstreamPermissionCatalog.java` | New class: AUTHORITY_BY_BIT array + decode helper |
-| Create | `pos-security-common/src/test/java/com/positivity/security/common/DownstreamPermissionCatalogTest.java` | Unit tests for the new catalog |
-| Modify | `pos-security-common/src/main/java/com/positivity/security/common/GatewaySecurityConstants.java` | Add `HEADER_PERM_BITS` and `HEADER_PERM_VER` constants |
-| Modify | `pos-security-common/src/main/java/com/positivity/security/common/GatewayAuthoritiesFilter.java` | Prefer `X-Perm-Bits` decode path, keep `X-Authorities` as fallback |
-| Modify | `pos-security-common/src/test/java/com/positivity/security/common/GatewayAuthoritiesFilterTest.java` | Add tests for the new bitset decode path |
-| Modify | `pos-api-gateway/src/main/java/com/positivity/gateway/config/SecurityGatewayConfig.java` | Send `X-Perm-Bits`+`X-Perm-Ver` instead of `X-Authorities` |
-| Modify | `pos-api-gateway/src/main/java/com/positivity/gateway/config/GatewayAuthProperties.java` | Update strip-list Javadoc comment |
-| Modify | `pos-api-gateway/src/test/java/com/positivity/gateway/config/SecurityGatewayConfigTest.java` | Update header assertions from `X-Authorities` to `X-Perm-Bits` |
+| Status | File                                                                                                                         | Change                                                               |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Create | `pos-security-common/src/main/java/com/positivity/security/common/DownstreamPermissionCatalog.java`                          | New class: AUTHORITY_BY_BIT array + decode helper                    |
+| Create | `pos-security-common/src/test/java/com/positivity/security/common/DownstreamPermissionCatalogTest.java`                      | Unit tests for the new catalog                                       |
+| Modify | `pos-security-common/src/main/java/com/positivity/security/common/GatewaySecurityConstants.java`                             | Add `HEADER_PERM_BITS` and `HEADER_PERM_VER` constants               |
+| Modify | `pos-security-common/src/main/java/com/positivity/security/common/GatewayAuthoritiesFilter.java`                             | Prefer `X-Perm-Bits` decode path, keep `X-Authorities` as fallback   |
+| Modify | `pos-security-common/src/test/java/com/positivity/security/common/GatewayAuthoritiesFilterTest.java`                         | Add tests for the new bitset decode path                             |
+| Modify | `pos-api-gateway/src/main/java/com/positivity/gateway/config/SecurityGatewayConfig.java`                                     | Send `X-Perm-Bits`+`X-Perm-Ver` instead of `X-Authorities`           |
+| Modify | `pos-api-gateway/src/main/java/com/positivity/gateway/config/GatewayAuthProperties.java`                                     | Update strip-list Javadoc comment                                    |
+| Modify | `pos-api-gateway/src/test/java/com/positivity/gateway/config/SecurityGatewayConfigTest.java`                                 | Update header assertions from `X-Authorities` to `X-Perm-Bits`       |
 | Modify | `pos-security-service/src/main/java/com/positivity/securityservice/internal/security/GatewayHeaderAuthenticationFilter.java` | Add `X-Perm-Bits` decode path using internal `PermissionBitsetCodec` |
-| Modify | `pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java` | Replace `@RequestHeader X-Authorities` with Spring Security context |
-| Modify | `scripts/generate-permissions.py` | Sync `DownstreamPermissionCatalog` as a third catalog target |
-| Modify | `durion/docs/architecture/AUTHORIZATION_MODEL.md` | Update gateway flow + glossary for new headers |
-| Modify | `durion/docs/architecture/API_SECURITY_ARCHITECTURE.md` | Minor update to gateway responsibilities |
-| Modify | `pos-security-service/docs/security-service-guide.md` | Update authorization principle bullet |
+| Modify | `pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java`                    | Replace `@RequestHeader X-Authorities` with Spring Security context  |
+| Modify | `scripts/generate-permissions.py`                                                                                            | Sync `DownstreamPermissionCatalog` as a third catalog target         |
+| Modify | `durion/docs/architecture/AUTHORIZATION_MODEL.md`                                                                            | Update gateway flow + glossary for new headers                       |
+| Modify | `durion/docs/architecture/API_SECURITY_ARCHITECTURE.md`                                                                      | Minor update to gateway responsibilities                             |
+| Modify | `pos-security-service/docs/security-service-guide.md`                                                                        | Update authorization principle bullet                                |
 
 ---
 
 ## Task 1: DownstreamPermissionCatalog
 
 **Files:**
+
 - Create: `pos-security-common/src/main/java/com/positivity/security/common/DownstreamPermissionCatalog.java`
 - Create: `pos-security-common/src/test/java/com/positivity/security/common/DownstreamPermissionCatalogTest.java`
 
@@ -233,6 +234,7 @@ public final class DownstreamPermissionCatalog {
 ```
 
 > **Important:** The stub above only includes entries 0–51. Before running the tests, copy ALL remaining entries (52 through the last entry) verbatim from `pos-api-gateway/src/main/java/com/positivity/gateway/config/GatewayPermissionCatalog.java`. The array lengths and `CATALOG_VERSION` in both files must be identical. Run this to get the full list:
+>
 > ```bash
 > grep '"PERM_' pos-api-gateway/src/main/java/com/positivity/gateway/config/GatewayPermissionCatalog.java
 > ```
@@ -258,6 +260,7 @@ git commit -m "feat(security-common): add DownstreamPermissionCatalog for X-Perm
 ## Task 2: GatewaySecurityConstants — Add Header Constants
 
 **Files:**
+
 - Modify: `pos-security-common/src/main/java/com/positivity/security/common/GatewaySecurityConstants.java`
 
 - [ ] **Step 1: Add constants**
@@ -302,6 +305,7 @@ git commit -m "feat(security-common): add HEADER_PERM_BITS and HEADER_PERM_VER c
 ## Task 3: GatewayAuthoritiesFilter — Decode X-Perm-Bits
 
 **Files:**
+
 - Modify: `pos-security-common/src/main/java/com/positivity/security/common/GatewayAuthoritiesFilter.java`
 - Modify: `pos-security-common/src/test/java/com/positivity/security/common/GatewayAuthoritiesFilterTest.java`
 
@@ -520,6 +524,7 @@ git commit -m "feat(security-common): decode X-Perm-Bits in GatewayAuthoritiesFi
 ## Task 4: SecurityGatewayConfig — Forward X-Perm-Bits
 
 **Files:**
+
 - Modify: `pos-api-gateway/src/main/java/com/positivity/gateway/config/SecurityGatewayConfig.java`
 - Modify: `pos-api-gateway/src/main/java/com/positivity/gateway/config/GatewayAuthProperties.java`
 - Modify: `pos-api-gateway/src/test/java/com/positivity/gateway/config/SecurityGatewayConfigTest.java`
@@ -566,6 +571,7 @@ return Optional.of(new AuthenticatedIdentity(
 The legacy path in `resolveLegacyAuthoritiesHeader` still returns a CSV string. Update the legacy `return` statement to continue forwarding `X-Authorities` for legacy tokens (the `AuthenticatedIdentity` field `permBitsHeader` stores an empty string for legacy, and `forwardAuthenticatedRequest` detects which path to use):
 
 The `if (legacyAuthoritiesHeader.isPresent())` block creates:
+
 ```java
 return Optional.of(new AuthenticatedIdentity(
         subject, claims.get("uid", String.class),
@@ -755,6 +761,7 @@ git commit -m "feat(gateway): forward X-Perm-Bits instead of expanded X-Authorit
 ## Task 5: GatewayHeaderAuthenticationFilter — Security Service Update
 
 **Files:**
+
 - Modify: `pos-security-service/src/main/java/com/positivity/securityservice/internal/security/GatewayHeaderAuthenticationFilter.java`
 
 The security service uses its own private `GatewayHeaderAuthenticationFilter` (not the one from `pos-security-common`). It needs the same `X-Perm-Bits` decode capability. Unlike downstream services, the security service has direct access to `PermissionBitsetCodec` and `PermissionCode`, so it does not need `DownstreamPermissionCatalog`.
@@ -892,6 +899,7 @@ git commit -m "feat(security-service): decode X-Perm-Bits in GatewayHeaderAuthen
 ## Task 6: WorkorderDetailController — Read Authorities from Security Context
 
 **Files:**
+
 - Modify: `pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java`
 
 The controller currently binds `@RequestHeader(value = "X-Authorities", required = false)` and parses it manually. After this change, the gateway no longer sends `X-Authorities` for browser requests, so the binding will always return `null`. The `GatewayAuthoritiesFilter` already populates the Spring Security context from `X-Perm-Bits`, so the correct fix is to read from there. Integration tests that inject `X-Authorities` still work because the filter falls back to the CSV path.
@@ -974,6 +982,7 @@ git commit -m "fix(workorder): read user authorities from Spring Security contex
 ## Task 7: generate-permissions.py — Sync DownstreamPermissionCatalog
 
 **Files:**
+
 - Modify: `scripts/generate-permissions.py`
 
 - [ ] **Step 1: Add the downstream catalog path constant**
@@ -1089,6 +1098,7 @@ git commit -m "feat(scripts): sync DownstreamPermissionCatalog alongside Gateway
 ## Task 8: Documentation Updates
 
 **Files:**
+
 - Modify: `durion/docs/architecture/AUTHORIZATION_MODEL.md`
 - Modify: `durion/docs/architecture/API_SECURITY_ARCHITECTURE.md`
 - Modify: `pos-security-service/docs/security-service-guide.md`
@@ -1195,6 +1205,7 @@ git commit -m "docs: update authorization model for X-Perm-Bits gateway header f
 ## Self-Review Checklist
 
 **Spec coverage:**
+
 - [x] Gateway sends `X-Perm-Bits` instead of expanded `X-Authorities` — Task 4
 - [x] Downstream services decode `X-Perm-Bits` — Task 3 (`GatewayAuthoritiesFilter`)
 - [x] Security service decodes `X-Perm-Bits` — Task 5 (`GatewayHeaderAuthenticationFilter`)
@@ -1204,11 +1215,13 @@ git commit -m "docs: update authorization model for X-Perm-Bits gateway header f
 - [x] Documentation updated — Task 8
 
 **Backward compatibility:**
+
 - Service-to-service REST clients (`InventoryClientImpl`, `CustomerBillingRulesClient`, `WorkorderInvoiceClient`, `RestClientConfig`) inject `X-Authorities` directly. These remain functional because `GatewayAuthoritiesFilter` falls back to `X-Authorities` when `X-Perm-Bits` is absent.
 - Integration tests that inject `X-Authorities` continue to work unchanged for the same reason.
 - Legacy tokens (tokens with no `perm_ver` claim) still receive `X-Authorities` from the gateway (legacy path in `SecurityGatewayConfig`).
 
 **Type consistency:**
+
 - `DownstreamPermissionCatalog.authoritiesFromBitSet(BitSet)` returns `List<String>` — used correctly in `GatewayAuthoritiesFilter.authoritiesFromPermBits`.
 - `GatewaySecurityConstants.HEADER_PERM_BITS` / `HEADER_PERM_VER` — used in filter (Task 3) and referenced in gateway constants (Task 4 uses its own local string constants for symmetry with existing style).
 - `AuthenticatedIdentity.permBitsHeader()` / `AuthenticatedIdentity.legacyAuthoritiesHeader()` — both accessed in `forwardAuthenticatedRequest` and the mismatch check.

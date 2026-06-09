@@ -99,8 +99,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(username, null, authorities);
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
+                    authorities);
             Map<String, Object> details = new HashMap<>();
             details.put(GatewaySecurityConstants.DETAIL_USERNAME, username);
             userId.ifPresent(id -> details.put(GatewaySecurityConstants.DETAIL_USER_ID, id));
@@ -212,7 +212,7 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         int permVer;
         try {
             permVer = Integer.parseInt(permVerHeader);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             loggr.warn("Invalid X-Perm-Ver header '{}'; clearing auth context", permVerHeader);
             return Collections.emptyList();
         }
