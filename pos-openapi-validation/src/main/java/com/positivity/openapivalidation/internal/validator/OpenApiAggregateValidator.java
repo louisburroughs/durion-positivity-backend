@@ -16,6 +16,8 @@ import java.util.Map;
 
 public class OpenApiAggregateValidator {
 
+    private static final String PATHS = "paths";
+
     public @NonNull List<OpenApiValidationIssue> validate(@NonNull Path aggregatePath) {
         try {
             return doValidate(aggregatePath);
@@ -42,7 +44,6 @@ public class OpenApiAggregateValidator {
         return List.copyOf(issues);
     }
 
-    @SuppressWarnings("unchecked")
     private void collectUnresolvedRefs(
             Path aggregatePath,
             Object node,
@@ -50,31 +51,54 @@ public class OpenApiAggregateValidator {
             List<OpenApiValidationIssue> issues,
             String currentPath) throws IOException {
         if (node instanceof Map<?, ?> mapNode) {
-            Object refValue = mapNode.get("$ref");
-            if (refValue instanceof String ref) {
-                validateRef(aggregatePath, root, currentPath, ref, issues);
-            }
-
-            for (Map.Entry<?, ?> entry : mapNode.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    continue;
-                }
-                String nextPath = currentPath;
-                if ("paths".equals(currentPath)) {
-                    nextPath = key;
-                } else if (currentPath == null && "paths".equals(key)) {
-                    nextPath = "paths";
-                }
-                collectUnresolvedRefs(aggregatePath, entry.getValue(), root, issues, nextPath);
-            }
+            processMapNode(aggregatePath, mapNode, root, issues, currentPath);
             return;
         }
 
         if (node instanceof Collection<?> collectionNode) {
-            for (Object item : collectionNode) {
-                collectUnresolvedRefs(aggregatePath, item, root, issues, currentPath);
-            }
+            processCollectionNode(aggregatePath, collectionNode, root, issues, currentPath);
         }
+    }
+
+    private void processMapNode(
+            Path aggregatePath,
+            Map<?, ?> mapNode,
+            Object root,
+            List<OpenApiValidationIssue> issues,
+            String currentPath) throws IOException {
+        Object refValue = mapNode.get("$ref");
+        if (refValue instanceof String ref) {
+            validateRef(aggregatePath, root, currentPath, ref, issues);
+        }
+
+        for (Map.Entry<?, ?> entry : mapNode.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                continue;
+            }
+            String nextPath = computeNextPath(currentPath, key);
+            collectUnresolvedRefs(aggregatePath, entry.getValue(), root, issues, nextPath);
+        }
+    }
+
+    private void processCollectionNode(
+            Path aggregatePath,
+            Collection<?> collectionNode,
+            Object root,
+            List<OpenApiValidationIssue> issues,
+            String currentPath) throws IOException {
+        for (Object item : collectionNode) {
+            collectUnresolvedRefs(aggregatePath, item, root, issues, currentPath);
+        }
+    }
+
+    private String computeNextPath(String currentPath, String key) {
+        if (PATHS.equals(currentPath)) {
+            return key;
+        }
+        if (currentPath == null && PATHS.equals(key)) {
+            return PATHS;
+        }
+        return currentPath;
     }
 
     private void validateRef(
