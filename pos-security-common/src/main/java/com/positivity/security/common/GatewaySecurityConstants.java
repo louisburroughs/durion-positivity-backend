@@ -49,6 +49,22 @@ public final class GatewaySecurityConstants {
     public static final String HEADER_ROLES = "X-Roles";
 
     /**
+     * Header containing the Base64URL-encoded permission bitset forwarded by
+     * the API gateway. Replaces the verbose {@link #HEADER_AUTHORITIES} CSV
+     * for gateway-to-service traffic. Decoded by {@link GatewayAuthoritiesFilter}
+     * using {@link DownstreamPermissionCatalog}.
+     */
+    public static final String HEADER_PERM_BITS = "X-Perm-Bits";
+
+    /**
+     * Header containing the integer permission catalog version that corresponds
+     * to the {@link #HEADER_PERM_BITS} bitset. Must match
+     * {@link DownstreamPermissionCatalog#CATALOG_VERSION} for the filter to
+     * use the compact decode path.
+     */
+    public static final String HEADER_PERM_VER = "X-Perm-Ver";
+
+    /**
      * Header containing the authenticated username/subject.
      * Injected by pos-api-gateway after JWT validation.
      */
