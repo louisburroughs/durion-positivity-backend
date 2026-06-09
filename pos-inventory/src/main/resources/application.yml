@@ -105,6 +105,7 @@ pos:
         #   ]
         # }
         path: ${POS_INVENTORY_RECEIVING_STUB_PATH:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}
-
-gateway:
-  url: ${GATEWAY_URL:http://api-gateway}
+  location:
+    service-id: ${POS_LOCATION_SERVICE_ID:location}
+  workorder:
+    service-id: ${POS_WORKORDER_SERVICE_ID:workorder}

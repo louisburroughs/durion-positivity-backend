@@ -508,7 +508,7 @@ grep -n "@PreAuthorize" pos-vehicle-inventory/src/main/java/com/positivity/vehic
 
 `GET /v1/people/{id}` requires `people:person:view` (confirmed).
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `pos-customer/src/test/java/com/positivity/customer/internal/client/CustomerClientUriTest.java`:
 
@@ -555,7 +555,7 @@ class CustomerClientUriTest {
 }
 ```
 
-- [ ] **Step 2: Run tests — verify they fail**
+- [x] **Step 2: Run tests — verify they fail**
 
 ```bash
 ./mvnw -pl pos-customer test -Dtest=CustomerClientUriTest -q 2>&1 | tail -20
@@ -806,15 +806,16 @@ Downstream native paths:
 - `PersonClient`: `http://people` + `GET /v1/people/{id}` — requires `people:person:view`
 - `LocationInventoryInquiryClient`: `http://inventory` + `GET /v1/inventory/locations/{storageLocationId}/inventory-inquiry` — requires `inventory:on_hand:view` (confirmed)
 
-- [ ] **Step 1: Update PersonClientTest**
+- [x] **Step 1: Update PersonClientTest**
 
 In `PersonClientTest.java`, change:
 
 ```java
-private static final String BASE_URL = "http://people";  // was "http://api-gateway"
+private static final String SERVICE_ID = "people";
+private static final String BASE_URL = "http://" + SERVICE_ID;  // was "http://api-gateway"
 
 // Setup in @BeforeEach:
-personClient = new PersonClient(builder, BASE_URL);
+personClient = new PersonClient(builder, SERVICE_ID);
 ```
 
 Update both test assertions:
@@ -828,7 +829,7 @@ Add a header assertion:
 .andExpect(header("X-Authorities", "people:person:view"))
 ```
 
-- [ ] **Step 2: Run test — verify it fails**
+- [x] **Step 2: Run test — verify it fails**
 
 ```bash
 ./mvnw -pl pos-location test -Dtest=PersonClientTest -q 2>&1 | tail -20
@@ -836,7 +837,7 @@ Add a header assertion:
 
 Expected: FAIL — wrong URL.
 
-- [ ] **Step 3: Implement PersonClient**
+- [x] **Step 3: Implement PersonClient**
 
 Rename the constructor parameter `gatewayBaseUrl` → `serviceId` (and corresponding `@Value`):
 ```java
@@ -857,7 +858,7 @@ Add auth header:
 
 Remove `peopleServiceUrl` field if it existed; the base URL is now embedded in the RestClient.
 
-- [ ] **Step 4: Implement LocationInventoryInquiryClient**
+- [x] **Step 4: Implement LocationInventoryInquiryClient**
 
 Write a new test first:
 
@@ -924,13 +925,13 @@ Replace the `.header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())` l
 
 Remove `resolveAuthorizationHeader()`, `BEARER_PREFIX`, `GatewaySecurityConstants` imports, `jakarta.servlet.*` imports, `RequestContextHolder`.
 
-- [ ] **Step 5: Run tests — verify they pass**
+- [x] **Step 5: Run tests — verify they pass**
 
 ```bash
 ./mvnw -pl pos-location test -q 2>&1 | tail -10
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pos-location/
@@ -967,7 +968,7 @@ Required permissions:
   grep -n "@PreAuthorize" pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkexecController.java 2>/dev/null | head -5
   ```
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `pos-people/src/test/java/com/positivity/people/internal/client/PeopleClientUriTest.java`:
 
@@ -1045,13 +1046,13 @@ void locationReferenceClient_isActive_callsNativePath() {
 
 (Write similar tests for `WorkexecJobTimeClient` and `SecurityServiceClient`.)
 
-- [ ] **Step 2: Run tests — verify they fail**
+- [x] **Step 2: Run tests — verify they fail**
 
 ```bash
 ./mvnw -pl pos-people test -Dtest=PeopleClientUriTest -q 2>&1 | tail -20
 ```
 
-- [ ] **Step 3: Implement RestClientConfig**
+- [x] **Step 3: Implement RestClientConfig**
 
 In `pos-people/src/main/java/com/positivity/people/internal/config/RestClientConfig.java`:
 
@@ -1091,17 +1092,17 @@ For `securityServiceRestClient` → `SecurityServiceClient`:
 - `/security-service/v1/roles/assignments` → `/v1/roles/assignments`
 - `/security-service/v1/roles/assignments/{assignmentId}` → `/v1/roles/assignments/{assignmentId}`
 
-- [ ] **Step 4: Update URI paths in all three client classes**
+- [x] **Step 4: Update URI paths in all three client classes**
 
 Apply path changes in `SecurityServiceClient.java`, `LocationReferenceClient.java`, and `WorkexecJobTimeClient.java` as listed above.
 
-- [ ] **Step 5: Run tests — verify they pass**
+- [x] **Step 5: Run tests — verify they pass**
 
 ```bash
 ./mvnw -pl pos-people test -q 2>&1 | tail -10
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pos-people/
@@ -1128,7 +1129,7 @@ Downstream native path changes:
 - `CustomerRegistrationClient` (base: `http://customer`):
   - `/customer/v1/crm/persons` → `/v1/crm/persons`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `pos-security-service/src/test/java/com/positivity/securityservice/internal/client/SecurityServiceClientUriTest.java`:
 
@@ -1177,13 +1178,13 @@ class SecurityServiceClientUriTest {
 }
 ```
 
-- [ ] **Step 2: Run tests — verify they fail**
+- [x] **Step 2: Run tests — verify they fail**
 
 ```bash
 ./mvnw -pl pos-security-service test -Dtest=SecurityServiceClientUriTest -q 2>&1 | tail -20
 ```
 
-- [ ] **Step 3: Implement RestClientConfig**
+- [x] **Step 3: Implement RestClientConfig**
 
 Replace in `peopleRegistrationRestClient`:
 ```java
@@ -1199,7 +1200,7 @@ Change: `builder.requestFactory(factory).baseUrl(peopleBaseUrl)` → `builder.re
 Repeat for `customerRegistrationRestClient`:
 - `pos.customer.base-url:http://api-gateway` → `pos.customer.service-id:customer`
 
-- [ ] **Step 4: Update URI paths**
+- [x] **Step 4: Update URI paths**
 
 In `PeopleRegistrationClient.java`, strip `/people` prefix from all URIs:
 - `.uri("/people/v1/people/resolve")` → `.uri("/v1/people/resolve")`
@@ -1210,13 +1211,13 @@ In `PeopleRegistrationClient.java`, strip `/people` prefix from all URIs:
 In `CustomerRegistrationClient.java`:
 - `.path("/customer/v1/crm/persons")` → `.path("/v1/crm/persons")`
 
-- [ ] **Step 5: Run tests — verify they pass**
+- [x] **Step 5: Run tests — verify they pass**
 
 ```bash
 ./mvnw -pl pos-security-service test -q 2>&1 | tail -10
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pos-security-service/
