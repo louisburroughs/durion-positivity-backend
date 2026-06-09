@@ -2,14 +2,11 @@ package com.positivity.shopmanager.internal.client;
 
 import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
 import com.positivity.shopmanager.internal.exception.HrUnavailableException;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -18,24 +15,20 @@ public class HrAvailabilityClient {
 
     private final RestClient hrRestClient;
 
-    public HrAvailabilityClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.hr.base-url:http://api-gateway}") String hrBaseUrl) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofMillis(200));
-        requestFactory.setReadTimeout(Duration.ofMillis(200));
-        this.hrRestClient =
-                builder.baseUrl(hrBaseUrl).requestFactory(requestFactory).build();
+    public HrAvailabilityClient(@Qualifier("hrRestClient") RestClient hrRestClient) {
+        this.hrRestClient = hrRestClient;
     }
 
     public Object getAvailabilityOverlay(String locationId, LocalDate date) {
         return hrRestClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/people/v1/availability/overlay")
+                        .path("/v1/availability/overlay")
                         .queryParam("locationId", locationId)
                         .queryParam("date", date)
                         .build())
+                .header("X-User", "pos-shop-manager")
+                .header("X-Authorities", "people:availability:view")
                 .retrieve()
                 .body(Object.class);
     }
@@ -52,11 +45,13 @@ public class HrAvailabilityClient {
             List<HrScheduleBlock> result = hrRestClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/people/hr/v1/schedules")
+                            .path("/hr/v1/schedules")
                             .queryParam("personId", personId)
                             .queryParam("startTime", windowStart.toString())
                             .queryParam("endTime", windowEnd.toString())
                             .build())
+                    .header("X-User", "pos-shop-manager")
+                    .header("X-Authorities", "people:availability:view")
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<HrScheduleBlock>>() {});
             return result != null ? result : List.of();

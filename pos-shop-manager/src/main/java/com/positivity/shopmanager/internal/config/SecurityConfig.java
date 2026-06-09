@@ -53,11 +53,22 @@ public class SecurityConfig {
     @Bean(name = "crmRestClient")
     public RestClient crmRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
+            @Value("${pos.customer.service-id:customer}") String serviceId,
             @Value("${pos.crm.connect-timeout-ms:200}") int connectTimeoutMs,
             @Value("${pos.crm.read-timeout-ms:2000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        return builder.requestFactory(factory).build();
+        return builder.requestFactory(factory).baseUrl("http://" + serviceId).build();
+    }
+
+    @Bean(name = "hrRestClient")
+    public RestClient hrRestClient(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
+            @Value("${pos.people.service-id:people}") String serviceId) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(200));
+        factory.setReadTimeout(Duration.ofMillis(200));
+        return builder.requestFactory(factory).baseUrl("http://" + serviceId).build();
     }
 }
