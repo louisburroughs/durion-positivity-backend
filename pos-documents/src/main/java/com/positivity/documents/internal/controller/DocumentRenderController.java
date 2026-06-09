@@ -43,7 +43,7 @@ public class DocumentRenderController {
     @ApiResponse(
             responseCode = "200",
             description = "PDF rendered successfully",
-            content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary")))
+            content = @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary", implementation = String.class)))
     @ApiResponse(responseCode = "400", description = "Invalid render request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<byte[]> renderDocument(@RequestBody @Valid RenderRequest request) {

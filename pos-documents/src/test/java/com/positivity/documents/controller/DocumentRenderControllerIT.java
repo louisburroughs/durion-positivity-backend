@@ -13,6 +13,7 @@ import com.positivity.documents.service.PdfRenderingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -40,6 +41,7 @@ class DocumentRenderControllerIT {
     }
 
     @Test
+    @WithMockUser(authorities = "documents:render")
     void shouldReturnPdfContentType() throws Exception {
         when(pdfRenderingService.renderPdf(any())).thenReturn("%PDF-test".getBytes());
 

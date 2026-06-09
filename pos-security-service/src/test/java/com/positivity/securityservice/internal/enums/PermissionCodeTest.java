@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.enums;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -14,12 +15,12 @@ import org.junit.jupiter.api.Test;
  * <p>
  * Verifies:
  * <ul>
- * <li>Catalog contains exactly 262 permissions matching
- * {@code scripts/permissions-aggregate.yaml}.</li>
- * <li>Each bit index in the range [0, 261] is assigned exactly once (no gaps,
+ * <li>Catalog contains exactly 285 permissions matching
+ * {@code pos-security-service/docs/permissions-aggregate.yaml}.</li>
+ * <li>Each bit index in the range [0, 284] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
- * <li>{@code CATALOG_VERSION = 7} constant is declared and accessible.</li>
+ * <li>{@code CATALOG_VERSION = 8} constant is declared and accessible.</li>
  * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
@@ -31,18 +32,21 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
+    private static final int EXPECTED_PERMISSION_COUNT = 328;
+    private static final int EXPECTED_CATALOG_VERSION = 10;
+
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 262 entries
+    // AC-1: Catalog size — 328 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 262 permissions")
-    void catalogContainsExactly262Permissions() {
-        assertThat(PermissionCode.values()).hasSize(262);
+    @DisplayName("catalog contains exactly 328 permissions")
+    void catalogContainsExactly328Permissions() {
+        assertThat(PermissionCode.values()).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     // -------------------------------------------------------------------------
-    // AC-3 / AC-6: Bit index uniqueness and sequential coverage [0, 220]
+    // AC-3 / AC-6: Bit index uniqueness and sequential coverage [0, 284]
     // -------------------------------------------------------------------------
 
     @Test
@@ -52,17 +56,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(262);
+        assertThat(bitIndexes).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 261 with no gaps")
-    void bitIndexesSpanFrom0To261WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 327 with no gaps")
+    void bitIndexesSpanFrom0To327WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..261 must be present
-        for (int i = 0; i < 262; i++) {
+        // Issue PERM-001: every index 0..327 must be present
+        for (int i = 0; i < EXPECTED_PERMISSION_COUNT; i++) {
             assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
     }
@@ -74,10 +78,10 @@ class PermissionCodeTest {
     @Test
     @DisplayName("all code strings are unique")
     void allCodeStringsAreUnique() {
-        Set<String> codes =
-                Arrays.stream(PermissionCode.values()).map(PermissionCode::code).collect(Collectors.toSet());
+        Set<String> codes = Arrays.stream(PermissionCode.values()).map(PermissionCode::code)
+                .collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(262);
+        assertThat(codes).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
     // -------------------------------------------------------------------------
@@ -85,9 +89,9 @@ class PermissionCodeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CATALOG_VERSION is 7")
-    void catalogVersionIsSeven() {
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(7);
+    @DisplayName("CATALOG_VERSION is declared and matches expected value")
+    void catalogVersionIsCorrect() {
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(EXPECTED_CATALOG_VERSION);
     }
 
     // -------------------------------------------------------------------------
@@ -120,7 +124,7 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("known last permission 'people:userLink:write' has bit index 238")
+    @DisplayName("known permission 'people:userLink:write' has bit index 238")
     void knownLastPermissionHasBitIndex238() {
         Optional<PermissionCode> perm = PermissionCode.fromCode("people:userLink:write");
         assertThat(perm).isPresent();
@@ -133,5 +137,48 @@ class PermissionCodeTest {
         Optional<PermissionCode> perm = PermissionCode.fromCode("people:person:delete");
         assertThat(perm).isPresent();
         assertThat(perm.get().bitIndex()).isEqualTo(236);
+    }
+
+    // -------------------------------------------------------------------------
+    // PERM-002: 23 previously-dark permissions now present (bits 262–284)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("all previously-dark permissions now exist in PermissionCode")
+    void allDarkPermissionsExistInPermissionCode() {
+        List<String> darkPermissions = List.of(
+                "accounting:ap:approve",
+                "accounting:ap:reject",
+                "accounting:coa:deactivate",
+                "accounting:je:reverse",
+                "accounting:mapping:view",
+                "accounting:mapping:create",
+                "accounting:mapping:edit",
+                "accounting:mapping:deactivate",
+                "accounting:posting_rules:view",
+                "accounting:posting_rules:create",
+                "accounting:posting_rules:publish",
+                "accounting:posting_rules:archive",
+                "timekeeping:work_session:create",
+                "timekeeping:work_session:stop",
+                "timekeeping:work_session:break_start",
+                "timekeeping:work_session:break_stop",
+                "timekeeping:overlap_override",
+                "workorder:dashboard:view",
+                "workorder:estimate:submit",
+                "workorder:estimate:promote",
+                "workorder:workorder:assign-technician",
+                "workorder:workorder:generate_invoice",
+                "workorder:start");
+
+        Set<String> knownCodes = Arrays.stream(PermissionCode.values())
+                .map(PermissionCode::code)
+                .collect(Collectors.toSet());
+
+        assertThat(darkPermissions)
+                .isNotEmpty()
+                .allSatisfy(perm -> assertThat(knownCodes)
+                        .as("PermissionCode missing entry for '%s'", perm)
+                        .contains(perm));
     }
 }

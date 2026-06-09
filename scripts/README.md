@@ -16,12 +16,14 @@ Utility scripts for development, operations, testing, and deployment.
 | [`check-flyway-hygiene.sh`](#check-flyway-hygienesh) | Code Quality | Validate Flyway migration hygiene across `pos-*` modules |
 | [`verify-secrets.sh`](#verify-secretssh) | Security | Scan `application.yml` files for hardcoded secrets |
 | [`verify-docker-compose-secrets.sh`](#verify-docker-compose-secretssh) | Security | Verify `docker-compose.yml` secrets are fully externalized |
+| [`check-authz-doc-drift.sh`](#check-authz-doc-driftsh) | Documentation / Security | Check live authz docs against current token, endpoint, and catalog-version expectations |
 | [`inventory-flyway-modules.sh`](#inventory-flyway-modulessh) | Database | Inventory Flyway-managed modules for baseline planning |
 | [`emit-pos-accounting-baseline.sh`](#emit-pos-accounting-baselinesh) | Database | Emit accounting schema from a disposable Postgres container |
 | [`compare-schema-tables.py`](#compare-schema-tablespy) | Database | Table-aware diff of two schema SQL files |
 | [`build-pos-accounting-baseline-from-dump.py`](#build-pos-accounting-baseline-from-dumpy) | Database | Convert `pg_dump` output to a Flyway baseline SQL file |
 | [`verify-observability.sh`](#verify-observabilitysh) | Observability | Check Jaeger, Prometheus, Grafana, and OTEL Collector health |
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
+| [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
 | [`export-permission-registrations-yaml.py`](#export-permission-registrations-yamlpy) | Permissions | Aggregate all `permissions.yaml` manifests into one report |
 | [`redeploy-backend-tag.sh`](#redeploy-backend-tagsh) | Deployment | Update `BACKEND_TAG` and redeploy services on the alpha EC2 host |
 | [`update-version.sh`](#update-versionsh) | Versioning | Bump the Maven project version (patch / minor / major) |
@@ -156,6 +158,27 @@ Checks that `docker-compose.yml` contains no hardcoded PostgreSQL, Grafana, or d
 ```
 
 Also checks that `.env` contains `CHANGE_ME` placeholders and `.env.example` is safe to commit.
+
+---
+
+### `check-authz-doc-drift.sh`
+
+Checks the active authorization documents against a few high-value sources of drift:
+
+- `PermissionCode.CATALOG_VERSION` vs `GatewayPermissionCatalog.CATALOG_VERSION`
+- token-guide HTTP verbs for login, validate, revoke, and token-pair examples
+- stale `Required role(s):` phrasing in active docs
+- stale `/api/permissions/register` examples in active docs
+- presence of both `perm_bits` and `roles` in the canonical contract docs
+
+**Usage:**
+```bash
+./scripts/check-authz-doc-drift.sh
+```
+
+**Notes:**
+- Exits non-zero when documentation and live code disagree
+- Requires the sibling `durion` repo to be present next to `durion-positivity-backend`
 
 ---
 
@@ -296,6 +319,37 @@ Generates `openapi.yaml` for every configured module and creates an aggregate in
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
 - Module generation still works with `--no-aggregate`.
+
+---
+
+### `generate-permissions.sh`
+
+Regenerates `src/main/resources/permissions.yaml` for each module by statically scanning `@PreAuthorize` annotations in Java source for `hasAuthority` and `hasAnyAuthority` calls. **Additive-only** — it never removes existing entries, since some permissions may be enforced via programmatic authority checks that are invisible to static analysis.
+
+Also called automatically at the end of each `generate-openapi.sh` run (pass `--no-permissions` to that script to skip it).
+
+**Usage:**
+```bash
+./scripts/generate-permissions.sh                          # regenerate all modules
+./scripts/generate-permissions.sh pos-workorder pos-accounting  # specific modules only
+./scripts/generate-permissions.sh --dry-run                # print changes without writing
+./scripts/generate-permissions.sh --check                  # exit non-zero if any file would change (CI)
+```
+
+**What it does:**
+1. Discovers all modules with a `src/main/resources/permissions.yaml`
+2. Scans `src/main/java/**/*.java` for `@PreAuthorize` annotations (handles multi-line)
+3. Extracts permission strings from `hasAuthority('x')` and `hasAnyAuthority('x', 'y', ...)`
+4. Filters out `ROLE_*` strings and permissions from other domains (cross-domain refs are logged as warnings)
+5. Merges newly discovered permissions into the existing YAML, preserving hand-written descriptions
+6. Sorts all entries alphabetically and writes the file
+7. Writes the aggregate permissions report to `docs/permissions-report.yaml`
+
+**Notes:**
+- Requires `python3` and `PyYAML`.
+- `--check` is suitable for CI to detect YAML drift after controller changes.
+- The aggregate report is only refreshed on normal write runs; `--dry-run` and `--check` skip it.
+- **Does not update `CATALOG_VERSION`.** Catalog version bumps are a separate manual step — see [Adding a New Permission](../../../durion/docs/architecture/AUTHORIZATION_MODEL.md#adding-a-new-permission) in `AUTHORIZATION_MODEL.md`.
 
 ---
 

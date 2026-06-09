@@ -332,13 +332,101 @@ public enum PermissionCode {
     INVENTORY__STOCK_MOVEMENT__CREATE(260, "inventory:stock_movement:create"),
 
     // ── Workorder (batch 2) ──────────────────────────────────────────────────
-    WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume");
+    WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume"),
+
+    // ── Accounting (batch 3) ─────────────────────────────────────────────────
+    ACCOUNTING__AP__APPROVE(262, "accounting:ap:approve"),
+    ACCOUNTING__AP__REJECT(263, "accounting:ap:reject"),
+    ACCOUNTING__COA__DEACTIVATE(264, "accounting:coa:deactivate"),
+    ACCOUNTING__JE__REVERSE(265, "accounting:je:reverse"),
+    ACCOUNTING__MAPPING__VIEW(266, "accounting:mapping:view"),
+    ACCOUNTING__MAPPING__CREATE(267, "accounting:mapping:create"),
+    ACCOUNTING__MAPPING__EDIT(268, "accounting:mapping:edit"),
+    ACCOUNTING__MAPPING__DEACTIVATE(269, "accounting:mapping:deactivate"),
+    ACCOUNTING__POSTING_RULES__VIEW(270, "accounting:posting_rules:view"),
+    ACCOUNTING__POSTING_RULES__CREATE(271, "accounting:posting_rules:create"),
+    ACCOUNTING__POSTING_RULES__PUBLISH(272, "accounting:posting_rules:publish"),
+    ACCOUNTING__POSTING_RULES__ARCHIVE(273, "accounting:posting_rules:archive"),
+
+    // ── Timekeeping (batch 3) ─────────────────────────────────────────────────
+    TIMEKEEPING__WORK_SESSION__CREATE(274, "timekeeping:work_session:create"),
+    TIMEKEEPING__WORK_SESSION__STOP(275, "timekeeping:work_session:stop"),
+    TIMEKEEPING__WORK_SESSION__BREAK_START(276, "timekeeping:work_session:break_start"),
+    TIMEKEEPING__WORK_SESSION__BREAK_STOP(277, "timekeeping:work_session:break_stop"),
+    TIMEKEEPING__OVERLAP_OVERRIDE(278, "timekeeping:overlap_override"),
+
+    // ── Workorder (batch 3) ──────────────────────────────────────────────────
+    WORKORDER__DASHBOARD__VIEW(279, "workorder:dashboard:view"),
+    WORKORDER__ESTIMATE__SUBMIT(280, "workorder:estimate:submit"),
+    WORKORDER__ESTIMATE__PROMOTE(281, "workorder:estimate:promote"),
+    WORKORDER__WORKORDER__ASSIGN_TECHNICIAN(282, "workorder:workorder:assign-technician"),
+    WORKORDER__WORKORDER__GENERATE_INVOICE(283, "workorder:workorder:generate_invoice"),
+    WORKORDER__START(284, "workorder:start"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__CREDIT_MEMO__CREATE(285, "accounting:credit-memo:create"),
+    ACCOUNTING__CREDIT_MEMO__READ(286, "accounting:credit-memo:read"),
+    ACCOUNTING__DEFAULT_MAPPING__CREATE(287, "accounting:default-mapping:create"),
+    ACCOUNTING__DEFAULT_MAPPING__DELETE(288, "accounting:default-mapping:delete"),
+    ACCOUNTING__DEFAULT_MAPPING__EDIT(289, "accounting:default-mapping:edit"),
+    ACCOUNTING__DEFAULT_MAPPING__VIEW(290, "accounting:default-mapping:view"),
+    ACCOUNTING__GL_MAPPING__CREATE(291, "accounting:gl-mapping:create"),
+    ACCOUNTING__GL_MAPPING__RESOLVE(292, "accounting:gl-mapping:resolve"),
+    ACCOUNTING__MAPPING_KEY__CREATE(293, "accounting:mapping-key:create"),
+    ACCOUNTING__MAPPING_KEY__DEACTIVATE(294, "accounting:mapping-key:deactivate"),
+    ACCOUNTING__MAPPING_KEY__EDIT(295, "accounting:mapping-key:edit"),
+    ACCOUNTING__MAPPING_KEY__VIEW(296, "accounting:mapping-key:view"),
+    ACCOUNTING__PAYMENT__APPLY(297, "accounting:payment:apply"),
+    ACCOUNTING__PAYMENT__REVERSE(298, "accounting:payment:reverse"),
+    ACCOUNTING__POSTING_CATEGORY__CREATE(299, "accounting:posting-category:create"),
+    ACCOUNTING__POSTING_CATEGORY__DEACTIVATE(300, "accounting:posting-category:deactivate"),
+    ACCOUNTING__POSTING_CATEGORY__EDIT(301, "accounting:posting-category:edit"),
+    ACCOUNTING__POSTING_CATEGORY__VIEW(302, "accounting:posting-category:view"),
+    ACCOUNTING__REPORT__EXPORT(303, "accounting:report:export"),
+    ACCOUNTING__TIME__EXPORT(304, "accounting:time:export"),
+
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__PERSON__CREATE(305, "crm:person:create"),
+    CRM__PERSON__READ(306, "crm:person:read"),
+    CRM__RELATIONSHIP__CREATE(307, "crm:relationship:create"),
+    CRM__RELATIONSHIP__DELETE(308, "crm:relationship:delete"),
+    CRM__RELATIONSHIP__READ(309, "crm:relationship:read"),
+    CRM__RELATIONSHIP__UPDATE(310, "crm:relationship:update"),
+
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__AVAILABILITY__READ(311, "inventory:availability:read"),
+
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__AVAILABILITY__VIEW(312, "people:availability:view"),
+
+    // ── Pricing (new) ──────────────────────────────────────────────────────────
+    PRICING__OVERRIDE__APPROVE(313, "pricing:override:approve"),
+    PRICING__RESTRICTION__MANAGE(314, "pricing:restriction:manage"),
+    PRICING__RESTRICTION__OVERRIDE(315, "pricing:restriction:override"),
+
+    // ── Reporting (new) ────────────────────────────────────────────────────────
+    REPORTING__VIEW__FINANCIAL_STATEMENTS(316, "reporting:view:financial-statements"),
+
+    // ── Security (new) ─────────────────────────────────────────────────────────
+    SECURITY__AUDIT__EXPORT(317, "security:audit:export"),
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__TIMEADJUSTMENT__APPROVE(318, "people:timeAdjustment:approve"),
+    PEOPLE__TIMEADJUSTMENT__CREATE(319, "people:timeAdjustment:create"),
+    PEOPLE__TIMEADJUSTMENT__VIEW(320, "people:timeAdjustment:view"),
+    PEOPLE__TIMEENTRY__APPROVE(321, "people:timeEntry:approve"),
+    PEOPLE__TIMEENTRY__REJECT(322, "people:timeEntry:reject"),
+    PEOPLE__TIMEEXCEPTION__ACKNOWLEDGE(323, "people:timeException:acknowledge"),
+    PEOPLE__TIMEEXCEPTION__CREATE(324, "people:timeException:create"),
+    PEOPLE__TIMEEXCEPTION__RESOLVE(325, "people:timeException:resolve"),
+    PEOPLE__TIMEEXCEPTION__VIEW(326, "people:timeException:view"),
+
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 7;
+    public static final int CATALOG_VERSION = 10;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
