@@ -8,12 +8,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
