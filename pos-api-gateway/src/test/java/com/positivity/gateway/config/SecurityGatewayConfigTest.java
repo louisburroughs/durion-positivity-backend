@@ -812,6 +812,43 @@ class SecurityGatewayConfigTest {
                 assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
+        /**
+         * Inbound X-Perm-Bits matches token perm_bits claim → forwarded when
+         * mismatch-rejection is on.
+         */
+        @Test
+        @DisplayName("matching inbound X-Perm-Bits with rejectHeaderTokenMismatch=true is forwarded, not rejected")
+        void rejectHeaderTokenMismatch_matchingXPermBits_returns200() {
+                String tokenPermBits = encodePermBits(116);
+                String token = buildToken("alice", "u1", tokenPermBits, GatewayPermissionCatalog.CATALOG_VERSION);
+
+                GatewayAuthProperties props = new GatewayAuthProperties();
+                props.setRejectHeaderTokenMismatch(true);
+
+                GlobalFilter filter = new SecurityGatewayConfig(
+                                TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                                .authFilter();
+                AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+                GatewayFilterChain chain = ex -> {
+                        downstreamHeaders.set(ex.getRequest().getHeaders());
+                        return Mono.empty();
+                };
+
+                var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                                .header("X-Perm-Bits", tokenPermBits)
+                                .build());
+
+                filter.filter(exchange, chain).block();
+
+                assertThat(exchange.getResponse().getStatusCode()).isNull();
+                assertThat(downstreamHeaders.get()).isNotNull();
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(116)).isTrue(); // people:employee:view
+        }
+
         // ── PERM-008 — stripInboundIdentityHeaders=false ─────────────────────────
 
         /**
