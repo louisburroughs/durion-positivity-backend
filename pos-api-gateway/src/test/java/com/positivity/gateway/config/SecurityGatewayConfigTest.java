@@ -783,6 +783,35 @@ class SecurityGatewayConfigTest {
                 assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
         }
 
+        /**
+         * Inbound X-Perm-Bits conflicts with token perm_bits claim → 401 when
+         * mismatch-rejection is on.
+         */
+        @Test
+        void rejectHeaderTokenMismatch_spoofedXPermBits_returns401() {
+                String tokenPermBits = encodePermBits(116);
+                String token = buildToken("alice", "u1", tokenPermBits, GatewayPermissionCatalog.CATALOG_VERSION);
+
+                // Construct a different perm_bits value (bit 0 instead of 116)
+                String spoofedPermBits = encodePermBits(0);
+
+                GatewayAuthProperties props = new GatewayAuthProperties();
+                props.setRejectHeaderTokenMismatch(true);
+
+                GlobalFilter filter = new SecurityGatewayConfig(
+                                TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                                .authFilter();
+
+                var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                                .header("X-Perm-Bits", spoofedPermBits)
+                                .build());
+
+                filter.filter(exchange, ignored -> Mono.empty()).block();
+
+                assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
         // ── PERM-008 — stripInboundIdentityHeaders=false ─────────────────────────
 
         /**

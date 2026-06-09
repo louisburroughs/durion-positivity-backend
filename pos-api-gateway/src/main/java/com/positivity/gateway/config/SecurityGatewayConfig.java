@@ -364,7 +364,8 @@ public class SecurityGatewayConfig {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
-                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader());
+                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
+                    || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader());
             if (mismatch) {
                 return rejectAuthentication(
                         context,
