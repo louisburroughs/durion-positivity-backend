@@ -67,9 +67,9 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   people:
-    base-url: ${POS_PEOPLE_BASE_URL:http://api-gateway}
+    service-id: ${POS_PEOPLE_SERVICE_ID:people}
   customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://api-gateway}
+    service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   security:
     lockout:
       max-attempts: 5
