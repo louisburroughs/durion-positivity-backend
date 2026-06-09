@@ -1010,16 +1010,18 @@ These two patterns coexisting in the same module is not a problem, but the codeb
 
 ---
 
-### A10. pos-shop-manager Gateway URLs Are Understated as a Risk
+### A10. pos-shop-manager localhost:8080 URLs Are Direct-Discovery Migration Targets
 
-The module assessment marks `pos-shop-manager` as a "strong candidate" but the codebase contains:
+The module assessment marks `pos-shop-manager` as a "strong candidate" and the codebase contains:
 
 ```
 pos.crm.customer-base-url:  http://localhost:8080/v1/customers
 pos.crm.vehicle-base-url:   http://localhost:8080/v1/vehicles
 ```
 
-`localhost:8080` is the API gateway address in local development. These are gateway-routed calls. The analysis correctly identifies that gateway calls need individual review (Phase 5), but the per-module assessment does not flag this conflict. `pos-shop-manager` should be marked "mixed/needs gateway review" not "strong candidate," because at least two of its clients cannot be mechanically migrated to direct service discovery.
+`localhost:8080` is the API gateway address in local development. Under the earlier analysis these were treated as gateway-routed calls that "cannot be mechanically migrated." That position is superseded by A5: direct Eureka discovery is now the default for all internal runtime calls, and gateway routing is the documented exception. The `localhost:8080` and `http://api-gateway` patterns are exactly what the direct-discovery migration replaces.
+
+`pos-shop-manager` is a confirmed migration candidate (Task 9 of the implementation plan). `CrmCustomerClient` and `CrmVehicleClient` should be migrated to `@LoadBalanced RestClient.Builder` targeting `http://customer` and `http://customer` (or the relevant Eureka service IDs) with `X-Authorities` and `X-User` injected directly, consistent with the standard direct-discovery pattern.
 
 ---
 
@@ -1130,7 +1132,7 @@ The original plan specifies phases but does not define per-wave exit criteria. B
 | A7  | `workexecRestClient` has correct ID but wrong port — low-risk fix                                                                                                                        | Low      | Open                      | Phase 4          |
 | A8  | `BearerTokenRelayInterceptor` must be preserved on `@LoadBalanced` builder                                                                                                               | High     | Open                      | Phase 3          |
 | A9  | `LoadBalancerClient` vs `@LoadBalanced` — inconsistency needs a style decision                                                                                                           | Low      | Open                      | Phase 3          |
-| A10 | `pos-shop-manager` module assessment understates gateway dependency                                                                                                                      | Medium   | Open                      | Phase 4          |
+| A10 | **Resolved**: `pos-shop-manager` `localhost:8080` URLs are direct-discovery migration targets under the A5 default; confirmed migration candidate (Task 9)                               | Medium   | Position updated          | Phase 4          |
 | A11 | **Resolved**: Java SDK is external-consumer only; fix `servers.url` in OpenAPI specs to gateway path; internal callers use `@LoadBalanced RestClient`                                    | Medium   | Recommendation documented | Pre-Phase 1      |
 | A12 | **Resolved**: Eureka is the platform standard; AWS must run Eureka within each tenant cell; HA and operational requirements documented                                                   | N/A      | Position confirmed        | AWS provisioning |
 | A13 | Per-wave exit criteria missing — defined above                                                                                                                                           | Medium   | Pre-Phase 1               |
