@@ -20,7 +20,6 @@ import java.util.BitSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -48,6 +47,8 @@ import reactor.core.publisher.Mono;
 public class SecurityGatewayConfig {
     private static final String AUTHORIZATION = "Authorization";
     private static final String HEADER_X_AUTHORITIES = "X-Authorities";
+    private static final String HEADER_X_PERM_BITS = "X-Perm-Bits";
+    private static final String HEADER_X_PERM_VER = "X-Perm-Ver";
     private static final String HEADER_X_ROLES = "X-Roles";
     private static final String HEADER_X_USER = "X-User";
     private static final String HEADER_X_USER_ID = "X-User-Id";
@@ -171,7 +172,8 @@ public class SecurityGatewayConfig {
         InboundIdentityHeaders inboundHeaders = new InboundIdentityHeaders(
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER),
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER_ID),
-                incomingRequest.getHeaders().getFirst(HEADER_X_AUTHORITIES));
+                incomingRequest.getHeaders().getFirst(HEADER_X_AUTHORITIES),
+                incomingRequest.getHeaders().getFirst(HEADER_X_PERM_BITS));
 
         ServerHttpRequest strippedRequest = incomingRequest
                 .mutate()
@@ -180,6 +182,8 @@ public class SecurityGatewayConfig {
                         headers.remove(HEADER_X_USER);
                         headers.remove(HEADER_X_USER_ID);
                         headers.remove(HEADER_X_AUTHORITIES);
+                        headers.remove(HEADER_X_PERM_BITS);
+                        headers.remove(HEADER_X_PERM_VER);
                         headers.remove(HEADER_X_ROLES);
                         incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
                     }
@@ -233,7 +237,10 @@ public class SecurityGatewayConfig {
         String rolesHeader = resolveRolesHeader(claims);
         if (legacyAuthoritiesHeader.isPresent()) {
             return Optional.of(new AuthenticatedIdentity(
-                    subject, claims.get("uid", String.class), legacyAuthoritiesHeader.get(), rolesHeader, jti));
+                    subject, claims.get("uid", String.class),
+                    "",                              // no perm_bits for legacy tokens
+                    legacyAuthoritiesHeader.get(),   // CSV from legacy authorities claim
+                    rolesHeader, jti));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -254,9 +261,12 @@ public class SecurityGatewayConfig {
             return Optional.empty();
         }
 
-        String authoritiesHeader = buildAuthoritiesHeader(decodedPermissions.get());
+        String permBits = claims.get("perm_bits", String.class);
         return Optional.of(new AuthenticatedIdentity(
-                subject, claims.get("uid", String.class), authoritiesHeader, rolesHeader, jti));
+                subject, claims.get("uid", String.class),
+                permBits != null ? permBits : "",
+                "",       // no legacy CSV for new tokens
+                rolesHeader, jti));
     }
 
     private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
@@ -304,14 +314,6 @@ public class SecurityGatewayConfig {
                     jti);
             return Optional.empty();
         }
-    }
-
-    private String buildAuthoritiesHeader(BitSet decodedPermissions) {
-        List<String> authorities = decodedPermissions.stream()
-                .mapToObj(GatewayPermissionCatalog::authorityForBit)
-                .filter(Objects::nonNull)
-                .toList();
-        return String.join(",", authorities);
     }
 
     private String resolveRolesHeader(Claims claims) {
@@ -362,7 +364,8 @@ public class SecurityGatewayConfig {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
-                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.authoritiesHeader());
+                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
+                    || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader());
             if (mismatch) {
                 return rejectAuthentication(
                         context,
@@ -381,7 +384,15 @@ public class SecurityGatewayConfig {
                     if (StringUtils.hasText(identity.userId())) {
                         headers.set(HEADER_X_USER_ID, identity.userId());
                     }
-                    headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
+                    if (StringUtils.hasText(identity.permBitsHeader())) {
+                        headers.set(HEADER_X_PERM_BITS, identity.permBitsHeader());
+                        headers.set(HEADER_X_PERM_VER, String.valueOf(GatewayPermissionCatalog.CATALOG_VERSION));
+                        headers.remove(HEADER_X_AUTHORITIES);
+                    } else if (StringUtils.hasText(identity.legacyAuthoritiesHeader())) {
+                        headers.set(HEADER_X_AUTHORITIES, identity.legacyAuthoritiesHeader());
+                        headers.remove(HEADER_X_PERM_BITS);
+                        headers.remove(HEADER_X_PERM_VER);
+                    }
                     if (StringUtils.hasText(identity.rolesHeader())) {
                         headers.set(HEADER_X_ROLES, identity.rolesHeader());
                     } else {
@@ -392,12 +403,13 @@ public class SecurityGatewayConfig {
 
         if (LOG.isDebugEnabled()) {
             LOG.debug(
-                    "Forwarding authenticated request path={} user={} userId={} roles={} permissions={}",
+                    "Forwarding authenticated request path={} user={} userId={} roles={} permBits={} legacyAuthorities={}",
                     context.path(),
                     identity.subject(),
                     identity.userId(),
                     countCsvEntries(identity.rolesHeader()),
-                    countCsvEntries(identity.authoritiesHeader()));
+                    StringUtils.hasText(identity.permBitsHeader()) ? "present" : "absent",
+                    countCsvEntries(identity.legacyAuthoritiesHeader()));
         }
 
         return chain.filter(
@@ -594,7 +606,7 @@ public class SecurityGatewayConfig {
         return !inboundValue.equals(expectedValue);
     }
 
-    private record InboundIdentityHeaders(String user, String userId, String authorities) {}
+    private record InboundIdentityHeaders(String user, String userId, String authorities, String permBits) {}
 
     private record AuthRequestContext(
             ServerWebExchange exchange,
@@ -603,5 +615,10 @@ public class SecurityGatewayConfig {
             InboundIdentityHeaders inboundHeaders) {}
 
     private record AuthenticatedIdentity(
-            String subject, String userId, String authoritiesHeader, String rolesHeader, String jti) {}
+            String subject,
+            String userId,
+            String permBitsHeader,
+            String legacyAuthoritiesHeader,
+            String rolesHeader,
+            String jti) {}
 }

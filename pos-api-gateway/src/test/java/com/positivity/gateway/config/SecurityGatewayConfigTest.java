@@ -201,8 +201,7 @@ class SecurityGatewayConfigTest {
         // ── PERM-006 / PERM-007 — local JWT validation & bitset decode ───────────
 
         /**
-         * Valid token with people permission bits is forwarded with decoded
-         * authorities.
+         * Valid token with people permission bits is forwarded with X-Perm-Bits header.
          */
         @Test
         void validToken_withPermBits_returns200_withDecodedAuthorities() {
@@ -228,8 +227,13 @@ class SecurityGatewayConfigTest {
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
                 assertThat(downstreamHeaders.get()).isNotNull();
-                String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).contains("PERM_people:employee:view").contains("PERM_people:employee:create");
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                String permVer = downstreamHeaders.get().getFirst("X-Perm-Ver");
+                assertThat(permVer).isEqualTo(String.valueOf(GatewayPermissionCatalog.CATALOG_VERSION));
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(116)).isTrue(); // people:employee:view
+                assertThat(decoded.get(117)).isTrue(); // people:employee:create
         }
 
         @Test
@@ -255,8 +259,11 @@ class SecurityGatewayConfigTest {
                 filter.filter(exchange, chain).block();
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
-                String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).contains("PERM_nlti:request:submit").contains("PERM_mcp:chat:execute");
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(221)).isTrue(); // nlti:request:submit
+                assertThat(decoded.get(226)).isTrue(); // mcp:chat:execute
         }
 
         @Test
@@ -281,8 +288,11 @@ class SecurityGatewayConfigTest {
                 filter.filter(exchange, chain).block();
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
-                String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).contains("PERM_people:person:view").contains("PERM_people:userLink:write");
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(233)).isTrue(); // people:person:view
+                assertThat(decoded.get(238)).isTrue(); // people:userLink:write
         }
 
         @Test
@@ -310,7 +320,10 @@ class SecurityGatewayConfigTest {
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
                 assertThat(downstreamHeaders.get().getFirst("X-Roles")).isEqualTo("ROLE_ADMIN");
-                assertThat(downstreamHeaders.get().getFirst("X-Authorities")).contains("PERM_mcp:chat:execute");
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(226)).isTrue(); // mcp:chat:execute
         }
 
         /** Token signed with a different key is rejected as unauthorized. */
@@ -431,8 +444,8 @@ class SecurityGatewayConfigTest {
         // ── PERM-008 — inbound identity header stripping ─────────────────────────
 
         /**
-         * Spoofed inbound authorities are stripped and replaced with token-derived
-         * authorities.
+         * Spoofed inbound X-Authorities is stripped; new-token path sets X-Perm-Bits
+         * instead.
          */
         @Test
         void spoofedXAuthoritiesHeader_isStripped() {
@@ -458,8 +471,13 @@ class SecurityGatewayConfigTest {
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
                 assertThat(downstreamHeaders.get()).isNotNull();
-                String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).doesNotContain("ROLE_SUPER_ADMIN").contains("PERM_people:employee:view");
+                // X-Authorities must not carry any spoofed value
+                assertThat(downstreamHeaders.get().get("X-Authorities")).isNullOrEmpty();
+                // The real permissions are forwarded as X-Perm-Bits
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(116)).isTrue(); // people:employee:view
         }
 
         /** Spoofed inbound user header is stripped and replaced by token subject. */
@@ -516,6 +534,7 @@ class SecurityGatewayConfigTest {
                 assertThat(downstreamHeaders.get()).isNotNull();
                 assertThat(downstreamHeaders.get().get("X-User")).isNullOrEmpty();
                 assertThat(downstreamHeaders.get().get("X-Authorities")).isNullOrEmpty();
+                assertThat(downstreamHeaders.get().get("X-Perm-Bits")).isNullOrEmpty();
         }
 
         /**
@@ -550,7 +569,8 @@ class SecurityGatewayConfigTest {
         // ── PERM-007 — zero / full permission volume ─────────────────────────────
 
         /**
-         * Empty perm_bits is accepted and yields an empty/absent authorities header.
+         * Empty perm_bits is accepted; neither X-Perm-Bits nor X-Authorities is set
+         * downstream.
          */
         @Test
         void tokenWithZeroPermissions_returns200_withEmptyAuthorities() {
@@ -573,12 +593,14 @@ class SecurityGatewayConfigTest {
                 filter.filter(exchange, chain).block();
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
-                String authorities = downstreamHeaders.get() == null ? null
-                                : downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).isNullOrEmpty();
+                // Empty perm_bits: hasText("") is false, so neither header is set
+                assertThat(downstreamHeaders.get() == null ? null
+                                : downstreamHeaders.get().getFirst("X-Perm-Bits")).isNullOrEmpty();
+                assertThat(downstreamHeaders.get() == null ? null
+                                : downstreamHeaders.get().getFirst("X-Authorities")).isNullOrEmpty();
         }
 
-        /** Full catalog perm_bits is accepted and yields all PERM authorities. */
+        /** Full catalog perm_bits is accepted and forwarded as X-Perm-Bits. */
         @Test
         void tokenWithAllPermissions_returns200_withAllCatalogAuthorities() {
                 int catalogSize = GatewayPermissionCatalog.AUTHORITY_BY_BIT.length;
@@ -607,12 +629,13 @@ class SecurityGatewayConfigTest {
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
                 assertThat(downstreamHeaders.get()).isNotNull();
-                String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                assertThat(authorities).isNotNull();
-                long permCount = Arrays.stream(authorities.split(","))
-                                .filter(a -> a.startsWith("PERM_"))
-                                .count();
-                assertThat(permCount).isEqualTo(catalogSize);
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                // All catalog bit positions must be set
+                for (int i = 0; i < catalogSize; i++) {
+                        assertThat(decoded.get(i)).as("bit %d should be set", i).isTrue();
+                }
         }
 
         // ── PERM-006 — missing Authorization header ───────────────────────────────
@@ -760,6 +783,72 @@ class SecurityGatewayConfigTest {
                 assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
         }
 
+        /**
+         * Inbound X-Perm-Bits conflicts with token perm_bits claim → 401 when
+         * mismatch-rejection is on.
+         */
+        @Test
+        void rejectHeaderTokenMismatch_spoofedXPermBits_returns401() {
+                String tokenPermBits = encodePermBits(116);
+                String token = buildToken("alice", "u1", tokenPermBits, GatewayPermissionCatalog.CATALOG_VERSION);
+
+                // Construct a different perm_bits value (bit 0 instead of 116)
+                String spoofedPermBits = encodePermBits(0);
+
+                GatewayAuthProperties props = new GatewayAuthProperties();
+                props.setRejectHeaderTokenMismatch(true);
+
+                GlobalFilter filter = new SecurityGatewayConfig(
+                                TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                                .authFilter();
+
+                var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                                .header("X-Perm-Bits", spoofedPermBits)
+                                .build());
+
+                filter.filter(exchange, ignored -> Mono.empty()).block();
+
+                assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        /**
+         * Inbound X-Perm-Bits matches token perm_bits claim → forwarded when
+         * mismatch-rejection is on.
+         */
+        @Test
+        @DisplayName("matching inbound X-Perm-Bits with rejectHeaderTokenMismatch=true is forwarded, not rejected")
+        void rejectHeaderTokenMismatch_matchingXPermBits_returns200() {
+                String tokenPermBits = encodePermBits(116);
+                String token = buildToken("alice", "u1", tokenPermBits, GatewayPermissionCatalog.CATALOG_VERSION);
+
+                GatewayAuthProperties props = new GatewayAuthProperties();
+                props.setRejectHeaderTokenMismatch(true);
+
+                GlobalFilter filter = new SecurityGatewayConfig(
+                                TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                                .authFilter();
+                AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+                GatewayFilterChain chain = ex -> {
+                        downstreamHeaders.set(ex.getRequest().getHeaders());
+                        return Mono.empty();
+                };
+
+                var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                                .header("X-Perm-Bits", tokenPermBits)
+                                .build());
+
+                filter.filter(exchange, chain).block();
+
+                assertThat(exchange.getResponse().getStatusCode()).isNull();
+                assertThat(downstreamHeaders.get()).isNotNull();
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(116)).isTrue(); // people:employee:view
+        }
+
         // ── PERM-008 — stripInboundIdentityHeaders=false ─────────────────────────
 
         /**
@@ -843,7 +932,7 @@ class SecurityGatewayConfigTest {
 
         /**
          * Missing perm_bits with perm_ver=1 and tokenIdentityRequired=false yields
-         * empty authorities.
+         * no X-Perm-Bits and no X-Authorities downstream.
          */
         @Test
         void missingPermBits_whenTokenIdentityNotRequired_returns200_withEmptyAuthorities() {
@@ -866,6 +955,7 @@ class SecurityGatewayConfigTest {
                 filter.filter(exchange, chain).block();
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
+                assertThat(downstreamHeaders.get().getFirst("X-Perm-Bits")).isNullOrEmpty();
                 assertThat(downstreamHeaders.get().getFirst("X-Authorities")).isNullOrEmpty();
         }
 
@@ -1026,7 +1116,10 @@ class SecurityGatewayConfigTest {
                 filter.filter(exchange, chain).block();
 
                 assertThat(exchange.getResponse().getStatusCode()).isNull();
-                assertThat(downstreamHeaders.get().getFirst("X-Authorities")).contains("PERM_people:employee:view");
+                String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                assertThat(downstreamPermBits).isNotBlank();
+                BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                assertThat(decoded.get(116)).isTrue(); // people:employee:view
         }
 
         /**
@@ -1209,9 +1302,13 @@ class SecurityGatewayConfigTest {
                         assertThat(downstreamHeaders.get()).isNotNull();
                         assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
                         assertThat(downstreamHeaders.get().getFirst("X-User-Id")).isEqualTo(uid);
-                        assertThat(downstreamHeaders.get().getFirst("X-Authorities"))
-                                        .contains("PERM_people:employee:view")
-                                        .contains("PERM_people:employee:create");
+                        String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                        assertThat(downstreamHeaders.get().getFirst("X-Perm-Ver"))
+                                        .isEqualTo(String.valueOf(GatewayPermissionCatalog.CATALOG_VERSION));
+                        assertThat(downstreamPermBits).isNotBlank();
+                        BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                        assertThat(decoded.get(116)).isTrue(); // people:employee:view
+                        assertThat(decoded.get(117)).isTrue(); // people:employee:create
                 }
 
                 /**
@@ -1283,8 +1380,11 @@ class SecurityGatewayConfigTest {
 
                         assertThat(exchange.getResponse().getStatusCode()).isNull();
                         assertThat(downstreamHeaders.get()).isNotNull();
-                        String authorities = downstreamHeaders.get().getFirst("X-Authorities");
-                        assertThat(authorities).contains("PERM_accounting:je:view").doesNotContain("ROLE_");
+                        String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                        assertThat(downstreamPermBits).isNotBlank();
+                        BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                        assertThat(decoded.get(0)).isTrue(); // accounting:je:view (bit 0)
+                        assertThat(downstreamHeaders.get().get("X-Authorities")).isNullOrEmpty();
                 }
 
                 /**
@@ -1323,11 +1423,13 @@ class SecurityGatewayConfigTest {
 
                         assertThat(exchange.getResponse().getStatusCode()).isNull();
                         assertThat(downstreamHeaders.get()).isNotNull();
-                        String downstreamAuthorities = downstreamHeaders.get().getFirst("X-Authorities");
-                        assertThat(downstreamAuthorities)
-                                        .doesNotContain("ROLE_SUPER_ADMIN")
-                                        .doesNotContain("PERM_all:access:grant")
-                                        .contains("PERM_people:employee:view");
+                        // X-Authorities must not carry any spoofed value
+                        assertThat(downstreamHeaders.get().get("X-Authorities")).isNullOrEmpty();
+                        // The real permissions are forwarded as X-Perm-Bits
+                        String downstreamPermBits = downstreamHeaders.get().getFirst("X-Perm-Bits");
+                        assertThat(downstreamPermBits).isNotBlank();
+                        BitSet decoded = BitSet.valueOf(Base64.getUrlDecoder().decode(downstreamPermBits));
+                        assertThat(decoded.get(116)).isTrue(); // people:employee:view only
                 }
 
                 /**

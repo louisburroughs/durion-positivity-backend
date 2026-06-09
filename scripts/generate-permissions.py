@@ -7,9 +7,9 @@ Only permissions belonging to the module's own domain are written to its YAML.
 Cross-domain references (e.g. pos-workorder using inventory:pick_list:view) are
 logged as informational warnings but are not added to the file.
 
-With --sync, also updates PermissionCode.java and GatewayPermissionCatalog.java
-by appending any @PreAuthorize permissions not yet registered as bit-indexed
-enum constants, and bumps CATALOG_VERSION in both files.
+With --sync, also updates PermissionCode.java, GatewayPermissionCatalog.java, and
+DownstreamPermissionCatalog.java by appending any @PreAuthorize permissions not yet
+registered as bit-indexed enum constants, and bumps CATALOG_VERSION in all three files.
 
 Usage:
     python3 scripts/generate-permissions.py ROOT_DIR [module ...] [--dry-run] [--check] [--sync]
@@ -36,6 +36,10 @@ PERMISSION_CODE_RELPATH = (
 GATEWAY_CATALOG_RELPATH = (
     "pos-api-gateway/src/main/java/com/positivity/gateway/config"
     "/GatewayPermissionCatalog.java"
+)
+DOWNSTREAM_CATALOG_RELPATH = (
+    "pos-security-common/src/main/java/com/positivity/security/common"
+    "/DownstreamPermissionCatalog.java"
 )
 
 
@@ -333,6 +337,51 @@ def sync_gateway_catalog_java(
         java_path.write_text(new_text, encoding="utf-8")
 
 
+def sync_downstream_catalog_java(
+    root: Path, new_perms: list[str], start_bit: int, new_version: int, dry_run: bool
+) -> None:
+    """Append new AUTHORITY_BY_BIT entries to DownstreamPermissionCatalog.java and set CATALOG_VERSION."""
+    java_path = root / DOWNSTREAM_CATALOG_RELPATH
+    text = java_path.read_text(encoding="utf-8")
+
+    sorted_perms = sorted(new_perms)
+    end_bit = start_bit + len(sorted_perms) - 1
+    bar = "─" * 42
+    new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]
+    for i, perm in enumerate(sorted_perms):
+        bit = start_bit + i
+        pad = " " * max(1, 45 - len(perm))
+        comma = "," if i < len(sorted_perms) - 1 else ""
+        new_lines.append(f'        "PERM_{perm}"{comma}{pad}// {bit}')
+
+    new_block = "\n".join(new_lines)
+
+    tail_re = re.compile(r'("PERM_[^"]+")([^,\n]*\n)(\s*\};)')
+    m = tail_re.search(text)
+    if not m:
+        raise ValueError(
+            "Cannot find last AUTHORITY_BY_BIT entry in DownstreamPermissionCatalog.java"
+        )
+
+    new_text = (
+        text[: m.start()]
+        + m.group(1) + ","
+        + m.group(2)
+        + new_block + "\n"
+        + m.group(3)
+        + text[m.end() :]
+    )
+
+    new_text = re.sub(
+        r"public static final int CATALOG_VERSION = \d+;",
+        f"public static final int CATALOG_VERSION = {new_version};",
+        new_text,
+    )
+
+    if not dry_run:
+        java_path.write_text(new_text, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Regenerate permissions.yaml from @PreAuthorize annotations"
@@ -358,7 +407,8 @@ def main() -> None:
         action="store_true",
         help=(
             "Scan @PreAuthorize annotations, register any unknown permissions in "
-            "PermissionCode.java and GatewayPermissionCatalog.java, and bump "
+            "PermissionCode.java, GatewayPermissionCatalog.java, and "
+            "DownstreamPermissionCatalog.java, and bump "
             "CATALOG_VERSION. Runs before permissions.yaml regeneration."
         ),
     )
@@ -392,6 +442,7 @@ def main() -> None:
                 next_bit = max_bit + 1
                 new_version = sync_permission_code_java(root, new_perms, next_bit, args.dry_run)
                 sync_gateway_catalog_java(root, new_perms, next_bit, new_version, args.dry_run)
+                sync_downstream_catalog_java(root, new_perms, next_bit, new_version, args.dry_run)
                 print(f"{prefix}Catalog sync — {len(new_perms)} new permission(s) registered:")
                 for i, p in enumerate(new_perms):
                     print(f"  + {p} (bit {next_bit + i})")

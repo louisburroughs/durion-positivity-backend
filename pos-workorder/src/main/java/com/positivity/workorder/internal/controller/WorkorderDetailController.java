@@ -8,15 +8,18 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -53,15 +56,15 @@ public class WorkorderDetailController {
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     @NonNull
-                    UUID workorderId,
-            @Parameter(
-                            description = "User authorities (comma-separated)",
-                            example = "workorder:workorder:view,workorder:financials:view")
-                    @RequestHeader(value = "X-Authorities", required = false)
-                    String authorities) {
+                    UUID workorderId) {
 
-        // Extract authorities from header
-        Set<String> userAuthorities = extractAuthorities(authorities);
+        // Read authorities from Spring Security context (populated by GatewayAuthoritiesFilter)
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Set<String> userAuthorities = authentication != null
+                ? authentication.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toUnmodifiableSet())
+                : Collections.emptySet();
 
         log.debug(
                 "Getting workorder detail: workorderId(mask)={}, authorityCount={}",
@@ -71,13 +74,6 @@ public class WorkorderDetailController {
         WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId, userAuthorities);
 
         return ResponseEntity.ok(response);
-    }
-
-    private Set<String> extractAuthorities(String authoritiesHeader) {
-        if (authoritiesHeader == null || authoritiesHeader.isBlank()) {
-            return Set.of();
-        }
-        return new HashSet<>(Arrays.asList(authoritiesHeader.split(",")));
     }
 
     private String maskForLog(Object value) {
