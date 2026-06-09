@@ -74,8 +74,8 @@ class PeopleClientUriTest {
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
         WorkexecJobTimeClient client = new WorkexecJobTimeClient(builder.build());
-        assertThat(client.getJobTimeTotals(LocalDate.parse("2026-01-01"), LocalDate.parse("2026-01-31"), "UTC",
-                        locationId, List.of()))
+        assertThat(client.getJobTimeTotals(
+                        LocalDate.parse("2026-01-01"), LocalDate.parse("2026-01-31"), "UTC", locationId, List.of()))
                 .isEmpty();
         server.verify();
     }
