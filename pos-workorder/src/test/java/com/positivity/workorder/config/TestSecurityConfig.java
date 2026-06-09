@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -143,9 +145,23 @@ public class TestSecurityConfig {
                 }
             }
 
-            List<SimpleGrantedAuthority> authorities = Boolean.TRUE.equals(request.getAttribute(NO_PICK_AUTH_ATTR))
-                    ? NO_PICK_AUTHORITIES
-                    : TEST_AUTHORITIES;
+            List<SimpleGrantedAuthority> authorities;
+            if (Boolean.TRUE.equals(request.getAttribute(NO_PICK_AUTH_ATTR))) {
+                authorities = NO_PICK_AUTHORITIES;
+            } else {
+                String xAuthoritiesHeader = request.getHeader("X-Authorities");
+                if (xAuthoritiesHeader != null && !xAuthoritiesHeader.isBlank()) {
+                    List<SimpleGrantedAuthority> merged = new ArrayList<>(TEST_AUTHORITIES);
+                    Arrays.stream(xAuthoritiesHeader.split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .map(SimpleGrantedAuthority::new)
+                            .forEach(merged::add);
+                    authorities = merged;
+                } else {
+                    authorities = TEST_AUTHORITIES;
+                }
+            }
             var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
             authentication.setDetails(Map.of(
                     "username", username,
