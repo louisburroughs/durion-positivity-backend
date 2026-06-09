@@ -43,7 +43,7 @@ public class SecurityServiceClient {
 
         List<User> users = restClient
                 .get()
-                .uri("/security-service/v1/users")
+                .uri("/v1/users")
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
                     throw new IllegalArgumentException("Invalid username for security lookup: " + username);
@@ -76,7 +76,7 @@ public class SecurityServiceClient {
 
         Role role = restClient
                 .get()
-                .uri("/security-service/v1/roles/by-name/{name}", roleName)
+                .uri("/v1/roles/by-name/{name}", roleName)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {
                     throw new jakarta.persistence.EntityNotFoundException(
@@ -102,7 +102,7 @@ public class SecurityServiceClient {
         List<RoleDto> roles = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/security-service/v1/roles")
+                        .path("/v1/roles")
                         .queryParam("scopeType", scope)
                         .build())
                 .retrieve()
@@ -139,7 +139,7 @@ public class SecurityServiceClient {
         List<UserRoleDto> assignments = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/security-service/v1/roles/assignments/user/{userId}")
+                        .path("/v1/roles/assignments/user/{userId}")
                         .queryParam("includeHistory", includeHistory)
                         .queryParam("endDate", endDate)
                         .build(userId))
@@ -198,7 +198,7 @@ public class SecurityServiceClient {
 
         RoleAssignment assignment = restClient
                 .post()
-                .uri("/security-service/v1/roles/assignments")
+                .uri("/v1/roles/assignments")
                 .body(apiRequest)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (httpRequest, httpResponse) -> {
@@ -234,7 +234,7 @@ public class SecurityServiceClient {
         List<RoleAssignment> fullAssignments = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/security-service/v1/roles/assignments/user/{userId}")
+                        .path("/v1/roles/assignments/user/{userId}")
                         .queryParam("includeHistory", true)
                         .build(userId))
                 .retrieve()
@@ -272,7 +272,7 @@ public class SecurityServiceClient {
         restClient
                 .delete()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/security-service/v1/roles/assignments/{assignmentId}")
+                        .path("/v1/roles/assignments/{assignmentId}")
                         .queryParam("endDate", revocationDate)
                         .build(assignmentId))
                 .retrieve()
