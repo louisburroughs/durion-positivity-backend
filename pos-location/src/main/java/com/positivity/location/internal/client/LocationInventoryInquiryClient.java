@@ -1,19 +1,13 @@
 package com.positivity.location.internal.client;
 
-import com.positivity.security.common.GatewaySecurityConstants;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Client for reading location-level inventory facts from pos-inventory.
@@ -22,24 +16,21 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Component
 public class LocationInventoryInquiryClient {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-
     private final RestClient restClient;
 
     public LocationInventoryInquiryClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(gatewayUrl + "/inventory/v1/inventory/locations")
-                .build();
+            @Value("${pos.inventory.service-id:inventory}") String inventoryServiceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + inventoryServiceId).build();
     }
 
     public int getOnHandQuantity(@NonNull UUID storageLocationId) {
         try {
             LocationInventoryInquiryResponse response = restClient
                     .get()
-                    .uri("/{storageLocationId}/inventory-inquiry", storageLocationId)
-                    .header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())
+                    .uri("/v1/inventory/locations/{storageLocationId}/inventory-inquiry", storageLocationId)
+                    .header("X-User", "pos-location")
+                    .header("X-Authorities", "inventory:on_hand:view")
                     .retrieve()
                     .body(LocationInventoryInquiryResponse.class);
 
@@ -53,27 +44,6 @@ public class LocationInventoryInquiryClient {
             log.error("Failed to fetch inventory for storage location {}", storageLocationId, e);
             throw new IllegalStateException("Inventory inquiry failed for location " + storageLocationId, e);
         }
-    }
-
-    private String resolveAuthorizationHeader() {
-        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
-            throw new IllegalStateException("Missing HTTP request context for token forwarding");
-        }
-
-        HttpServletRequest request = requestAttributes.getRequest();
-        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return authorizationHeader;
-        }
-
-        String gatewayTokenHeader = request.getHeader(GatewaySecurityConstants.HEADER_TOKEN);
-        if (StringUtils.hasText(gatewayTokenHeader)) {
-            return gatewayTokenHeader.startsWith(BEARER_PREFIX)
-                    ? gatewayTokenHeader
-                    : BEARER_PREFIX + gatewayTokenHeader;
-        }
-
-        throw new IllegalStateException("Missing bearer token for inventory inquiry request");
     }
 
     @Data

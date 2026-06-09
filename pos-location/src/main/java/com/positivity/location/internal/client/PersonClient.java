@@ -16,13 +16,19 @@ public class PersonClient {
 
     public PersonClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.gateway.base-url:http://api-gateway}") String gatewayBaseUrl) {
-        this.restClient = restClientBuilder.baseUrl(gatewayBaseUrl).build();
+            @Value("${pos.people.service-id:people}") String serviceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     public PersonDTO getPersonById(Long id) {
         try {
-            return restClient.get().uri("/people/v1/people/{id}", id).retrieve().body(PersonDTO.class);
+            return restClient
+                    .get()
+                    .uri("/v1/people/{id}", id)
+                    .header("X-Authorities", "people:person:view")
+                    .header("X-User", "pos-location")
+                    .retrieve()
+                    .body(PersonDTO.class);
         } catch (HttpClientErrorException.NotFound e) {
             log.debug("Person not found: id={}", id);
             return null;
