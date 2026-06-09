@@ -25,7 +25,7 @@ The service does not enforce most business API permissions directly after login.
 - Roles are coarse assignment and UX signals.
 - APIs are enforced with permissions.
 - Access tokens carry `roles`, `perm_bits`, and `perm_ver`.
-- The gateway turns token permissions into trusted `X-Authorities` for downstream `@PreAuthorize` checks.
+- The gateway turns token `perm_bits` into compact `X-Perm-Bits` + `X-Perm-Ver` headers for downstream `@PreAuthorize` checks. `X-Authorities` CSV is a fallback for service-to-service calls and integration tests.
 
 Do not treat labels such as "Admin" or "Manager" as the authoritative API contract. The authoritative contract is the permission string on the controller method.
 
