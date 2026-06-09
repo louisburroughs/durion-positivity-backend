@@ -167,4 +167,39 @@ class GatewayAuthoritiesFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
         assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
     }
+
+    @Test
+    @DisplayName("X-Perm-Bits with malformed Base64 results in empty authorities")
+    void permBitsWithInvalidBase64_emptyAuthorities() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/customers");
+        request.addHeader(GatewaySecurityConstants.HEADER_USER, "alice");
+        request.addHeader(GatewaySecurityConstants.HEADER_PERM_BITS, "!!!not-valid-base64!!!");
+        request.addHeader(GatewaySecurityConstants.HEADER_PERM_VER,
+                String.valueOf(DownstreamPermissionCatalog.CATALOG_VERSION));
+
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("X-Perm-Bits with missing X-Perm-Ver header results in empty authorities")
+    void permBitsWithMissingVersion_emptyAuthorities() throws ServletException, IOException {
+        java.util.BitSet bits = new java.util.BitSet();
+        bits.set(27);
+        String encoded = java.util.Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(bits.toByteArray());
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/customers");
+        request.addHeader(GatewaySecurityConstants.HEADER_USER, "alice");
+        request.addHeader(GatewaySecurityConstants.HEADER_PERM_BITS, encoded);
+        // No X-Perm-Ver header added
+
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities()).isEmpty();
+    }
 }

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -204,11 +205,15 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
     private List<SimpleGrantedAuthority> authoritiesFromPermBits(
             String permBitsHeader, String permVerHeader, String rolesHeader) {
+        if (permVerHeader == null) {
+            loggr.warn("Missing X-Perm-Ver header; clearing auth context");
+            return Collections.emptyList();
+        }
         int permVer;
         try {
             permVer = Integer.parseInt(permVerHeader);
-        } catch (NumberFormatException | NullPointerException e) {
-            loggr.warn("Invalid or missing X-Perm-Ver header; clearing auth context");
+        } catch (NumberFormatException e) {
+            loggr.warn("Invalid X-Perm-Ver header '{}'; clearing auth context", permVerHeader);
             return Collections.emptyList();
         }
 
@@ -218,10 +223,10 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             return Collections.emptyList();
         }
 
-        java.util.BitSet bits;
+        BitSet bits;
         try {
             byte[] bytes = Base64.getUrlDecoder().decode(permBitsHeader);
-            bits = java.util.BitSet.valueOf(bytes);
+            bits = BitSet.valueOf(bytes);
         } catch (IllegalArgumentException e) {
             loggr.warn("Malformed X-Perm-Bits header: {}; clearing auth context", e.getMessage());
             return Collections.emptyList();
