@@ -36,7 +36,7 @@ public class CustomerReferenceService {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = customerRestClient
                     .get()
-                    .uri("/v1/customers/{customerId}", customerId)
+                    .uri("/v1/crm/{customerId}", customerId)
                     .header("X-User", "pos-workorder")
                     .header("X-Authorities", "crm:party:view")
                     .retrieve()

@@ -22,6 +22,7 @@ class InventoryClientUriTest {
 
         server.expect(requestTo("http://location/v1/locations/" + siteId + "/defaults"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-inventory"))
                 .andExpect(header("X-Authorities", "location:read"))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
@@ -38,6 +39,7 @@ class InventoryClientUriTest {
 
         server.expect(requestTo("http://location/v1/storage-locations/" + storageLocationId + "/validation"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-inventory"))
                 .andExpect(header("X-Authorities", "location:read"))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
@@ -54,6 +56,7 @@ class InventoryClientUriTest {
 
         server.expect(requestTo("http://workorder/v1/workorders/" + workorderId + "/detail"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-inventory"))
                 .andExpect(header("X-Authorities", "workorder:workorder:view"))
                 .andRespond(withSuccess("{\"status\":\"OPEN\",\"parts\":[]}", MediaType.APPLICATION_JSON));
 

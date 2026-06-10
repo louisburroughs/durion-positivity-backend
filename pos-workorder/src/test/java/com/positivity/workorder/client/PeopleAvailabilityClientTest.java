@@ -144,6 +144,7 @@ class PeopleAvailabilityClientTest {
         // goal here is asserting the request URI and X-Authorities header.
         server.expect(requestTo(Matchers.containsString("/v1/people/availability")))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-workorder"))
                 .andExpect(header("X-Authorities", "people:availability:view"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 

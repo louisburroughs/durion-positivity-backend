@@ -23,7 +23,7 @@ public class HrAvailabilityClient {
         return hrRestClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/availability/overlay")
+                        .path("/v1/people/availability")
                         .queryParam("locationId", locationId)
                         .queryParam("date", date)
                         .build())

@@ -103,6 +103,7 @@ class ShopmgrOperationalContextClientTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         server.expect(requestTo(Matchers.containsString("/v1/shopmgr/workorders/")))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-workorder"))
                 .andExpect(header("X-Authorities", "shop:schedule:view"))
                 .andRespond(withSuccess(
                         "{\"version\":\"1\",\"locationId\":\"" + LOCATION_ID + "\",\"bayId\":\"B1\",\"locked\":false}",

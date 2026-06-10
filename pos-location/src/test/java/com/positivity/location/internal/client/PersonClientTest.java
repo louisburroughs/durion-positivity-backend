@@ -35,6 +35,7 @@ class PersonClientTest {
         mockServer
                 .expect(requestTo(BASE_URL + "/v1/people/42"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-location"))
                 .andExpect(header("X-Authorities", "people:person:view"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
@@ -47,6 +48,7 @@ class PersonClientTest {
         mockServer
                 .expect(requestTo(BASE_URL + "/v1/people/42"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-location"))
                 .andExpect(header("X-Authorities", "people:person:view"))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 

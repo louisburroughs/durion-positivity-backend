@@ -25,6 +25,7 @@ class SecurityServiceClientUriTest {
 
         server.expect(requestTo("http://people/v1/people/resolve"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-User", "pos-security-service"))
                 .andExpect(header(
                         "X-Authorities",
                         "people:person:create,people:person:delete,people:userLink:view,people:userLink:write"))
@@ -49,6 +50,8 @@ class SecurityServiceClientUriTest {
 
         server.expect(requestTo("http://customer/v1/crm/persons?limit=10&offset=0"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-security-service"))
+                .andExpect(header("X-Authorities", "crm:person:read"))
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
         CustomerRegistrationClient client = new CustomerRegistrationClient(builder.build());

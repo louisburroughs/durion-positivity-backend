@@ -24,7 +24,7 @@ public class CrmVehicleClient {
         try {
             Map<?, ?> payload = crmRestClient
                     .get()
-                    .uri("/v1/vehicles/{vehicleId}", vehicleId)
+                    .uri("/v1/crm/snapshot/vehicle/{vehicleId}", vehicleId)
                     .header("X-User", "pos-shop-manager")
                     .header("X-Authorities", "crm:vehicle:view")
                     .retrieve()

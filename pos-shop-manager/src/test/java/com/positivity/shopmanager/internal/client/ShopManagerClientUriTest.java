@@ -24,7 +24,7 @@ class ShopManagerClientUriTest {
                 MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
                 UUID customerId = UUID.randomUUID();
 
-                server.expect(requestTo("http://customer/v1/customers/" + customerId))
+                server.expect(requestTo("http://customer/v1/crm/" + customerId))
                                 .andExpect(method(HttpMethod.GET))
                                 .andExpect(header("X-User", "pos-shop-manager"))
                                 .andExpect(header("X-Authorities", "crm:party:view"))
@@ -41,7 +41,7 @@ class ShopManagerClientUriTest {
                 MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
                 UUID vehicleId = UUID.randomUUID();
 
-                server.expect(requestTo("http://customer/v1/vehicles/" + vehicleId))
+                server.expect(requestTo("http://customer/v1/crm/snapshot/vehicle/" + vehicleId))
                                 .andExpect(method(HttpMethod.GET))
                                 .andExpect(header("X-User", "pos-shop-manager"))
                                 .andExpect(header("X-Authorities", "crm:vehicle:view"))
@@ -57,7 +57,7 @@ class ShopManagerClientUriTest {
                 RestClient.Builder builder = RestClient.builder().baseUrl("http://people");
                 MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 
-                server.expect(requestTo("http://people/v1/availability/overlay?locationId=loc-1&date=2026-01-01"))
+                server.expect(requestTo("http://people/v1/people/availability?locationId=loc-1&date=2026-01-01"))
                                 .andExpect(method(HttpMethod.GET))
                                 .andExpect(header("X-User", "pos-shop-manager"))
                                 .andExpect(header("X-Authorities", "people:availability:view"))
