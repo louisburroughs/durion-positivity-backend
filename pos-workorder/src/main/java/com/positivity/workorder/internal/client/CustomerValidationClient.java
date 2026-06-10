@@ -16,32 +16,21 @@ public class CustomerValidationClient {
 
     public CustomerValidationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.gateway.base-url:http://api-gateway}") String gatewayBaseUrl) {
-        this.restClient = restClientBuilder.baseUrl(gatewayBaseUrl).build();
+            @Value("${pos.customer.service-id:customer}") String serviceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     public boolean checkRequirementsMet(@NonNull UUID customerId) {
         try {
             return Boolean.TRUE.equals(restClient
                     .get()
-                    .uri("/customer/v1/customers/{id}/requirements-met", customerId)
+                    .uri("/v1/customers/{id}/requirements-met", customerId)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "crm:party:view")
                     .retrieve()
                     .body(Boolean.class));
         } catch (Exception e) {
             log.error("Failed to check customer requirements for {}", customerId, e);
-            return false;
-        }
-    }
-
-    public boolean checkApprovalStatus(@NonNull UUID approvalId) {
-        try {
-            return Boolean.TRUE.equals(restClient
-                    .get()
-                    .uri("/customer/v1/approvals/{id}/is-approved", approvalId)
-                    .retrieve()
-                    .body(Boolean.class));
-        } catch (Exception e) {
-            log.error("Failed to check customer approval for {}", approvalId, e);
             return false;
         }
     }

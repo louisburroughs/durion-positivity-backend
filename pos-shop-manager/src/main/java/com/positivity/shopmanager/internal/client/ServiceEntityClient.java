@@ -10,18 +10,16 @@ import org.springframework.web.client.RestClient;
 public class ServiceEntityClient {
     private final RestClient restClient;
 
-    @Value("${catalog.service.url:http://api-gateway}")
-    private String catalogServiceUrl;
-
-    public ServiceEntityClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder) {
-        this.restClient = builder.build();
+    public ServiceEntityClient(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
+            @Value("${pos.catalog.service-id:catalog}") String serviceId) {
+        this.restClient = builder.baseUrl("http://" + serviceId)
+                .defaultHeader("X-User", "pos-shop-manager")
+                .defaultHeader("X-Authorities", "catalog:product:read")
+                .build();
     }
 
     public ServiceEntityDTO getServiceById(Long id) {
-        return restClient
-                .get()
-                .uri(catalogServiceUrl + "/catalog/v1/services/{id}", id)
-                .retrieve()
-                .body(ServiceEntityDTO.class);
+        return restClient.get().uri("/v1/services/{id}", id).retrieve().body(ServiceEntityDTO.class);
     }
 }

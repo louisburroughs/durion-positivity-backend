@@ -61,9 +61,8 @@ springdoc:
     path: /swagger-ui.html
   default-produces-media-type: application/json
 
-gateway:
-  url: ${GATEWAY_URL:http://api-gateway}
-
 pos:
-  gateway:
-    base-url: ${POS_GATEWAY_BASE_URL:http://api-gateway}
+  people:
+    service-id: ${POS_PEOPLE_SERVICE_ID:people}
+  inventory:
+    service-id: ${POS_INVENTORY_SERVICE_ID:inventory}

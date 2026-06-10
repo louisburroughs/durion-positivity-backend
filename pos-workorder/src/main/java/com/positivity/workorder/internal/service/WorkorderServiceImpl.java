@@ -204,8 +204,10 @@ public class WorkorderServiceImpl implements WorkorderService {
             log.info("Promotion preconditions validated successfully for estimate {}", workorder.getEstimateId());
         }
 
-        // Check customer approval from pos-customer-approval (legacy)
-        if (workorder.getApprovalId() != null && !checkCustomerApproval(workorder.getApprovalId())) {
+        // If approvalId is set, the workorder must already carry a valid customer
+        // approval (status APPROVED with an approvedAt timestamp), as stamped by
+        // approveWorkorder() - this is an internal Workorder state check.
+        if (workorder.getApprovalId() != null && !isCustomerApproved(workorder)) {
             throw new IllegalArgumentException("Customer approval not found or not valid");
         }
 
@@ -343,8 +345,8 @@ public class WorkorderServiceImpl implements WorkorderService {
         return customerValidationClient.checkRequirementsMet(customerId);
     }
 
-    private boolean checkCustomerApproval(UUID approvalId) {
-        return customerValidationClient.checkApprovalStatus(approvalId);
+    private boolean isCustomerApproved(Workorder workorder) {
+        return workorder.getStatus() == WorkorderStatus.APPROVED && workorder.getApprovedAt() != null;
     }
 
     @Override

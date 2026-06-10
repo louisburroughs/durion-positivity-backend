@@ -24,7 +24,7 @@ public class LocationReferenceClient {
         try {
             LocationValidationResponse response = restClient
                     .get()
-                    .uri("/location/v1/locations/{locationId}/validation", locationId)
+                    .uri("/v1/locations/{locationId}/validation", locationId)
                     .retrieve()
                     .body(LocationValidationResponse.class);
             if (response == null) {
@@ -54,7 +54,7 @@ public class LocationReferenceClient {
         try {
             LocationSummaryResponse response = restClient
                     .get()
-                    .uri("/location/v1/locations/{locationId}", locationId)
+                    .uri("/v1/locations/{locationId}", locationId)
                     .retrieve()
                     .body(LocationSummaryResponse.class);
 

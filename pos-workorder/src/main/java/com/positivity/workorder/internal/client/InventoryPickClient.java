@@ -28,7 +28,9 @@ public class InventoryPickClient {
 
         InventoryPickListDto response = inventoryServiceRestClient
                 .get()
-                .uri("/inventory/v1/inventory/pick-lists/{pickListId}", pickListId)
+                .uri("/v1/inventory/pick-lists/{pickListId}", pickListId)
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:pick_list:view")
                 .retrieve()
                 .body(InventoryPickListDto.class);
 
@@ -46,9 +48,11 @@ public class InventoryPickClient {
         List<InventoryPickListDto> response = inventoryServiceRestClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/inventory/v1/inventory/pick-lists")
+                        .path("/v1/inventory/pick-lists")
                         .queryParam("workorderId", workorderId)
                         .build())
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:pick_list:view")
                 .retrieve()
                 .body(PICK_LIST_RESPONSE_TYPE);
 
@@ -66,7 +70,9 @@ public class InventoryPickClient {
 
         InventoryPickListDto response = inventoryServiceRestClient
                 .post()
-                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/release", pickListId)
+                .uri("/v1/inventory/pick-lists/{pickListId}/release", pickListId)
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:pick_list:execute")
                 .retrieve()
                 .body(InventoryPickListDto.class);
 
@@ -84,7 +90,9 @@ public class InventoryPickClient {
 
         List<InventoryPickTaskDto> response = inventoryServiceRestClient
                 .get()
-                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/tasks", pickListId)
+                .uri("/v1/inventory/pick-lists/{pickListId}/tasks", pickListId)
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:pick_list:view")
                 .retrieve()
                 .body(PICK_TASK_RESPONSE_TYPE);
 
@@ -103,7 +111,9 @@ public class InventoryPickClient {
 
         InventoryPickTaskDto response = inventoryServiceRestClient
                 .post()
-                .uri("/inventory/v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm", pickListId, taskId)
+                .uri("/v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm", pickListId, taskId)
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:pick_list:execute")
                 .body(request)
                 .retrieve()
                 .body(InventoryPickTaskDto.class);
@@ -154,7 +164,9 @@ public class InventoryPickClient {
 
         InventoryConsumptionDto response = inventoryServiceRestClient
                 .post()
-                .uri("/inventory/v1/inventory/consumption")
+                .uri("/v1/inventory/consumption")
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "inventory:adjustment:create")
                 .body(request)
                 .retrieve()
                 .body(InventoryConsumptionDto.class);

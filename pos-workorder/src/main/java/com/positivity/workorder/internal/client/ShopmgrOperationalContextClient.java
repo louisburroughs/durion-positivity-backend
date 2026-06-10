@@ -24,8 +24,8 @@ public class ShopmgrOperationalContextClient {
 
     public ShopmgrOperationalContextClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.shopmgr.base-url:http://api-gateway}") String shopmgrBaseUrl) {
-        this.restClient = restClientBuilder.baseUrl(shopmgrBaseUrl).build();
+            @Value("${pos.shopmgr.service-id:shop-manager}") String serviceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     /**
@@ -38,7 +38,9 @@ public class ShopmgrOperationalContextClient {
         try {
             return restClient
                     .get()
-                    .uri("/shop-manager/v1/shopmgr/workorders/{workorderId}/operationalContext", workorderId)
+                    .uri("/v1/shopmgr/workorders/{workorderId}/operationalContext", workorderId)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "shop:schedule:view")
                     .retrieve()
                     .body(OperationalContextResponse.class);
         } catch (RestClientResponseException e) {
@@ -60,7 +62,9 @@ public class ShopmgrOperationalContextClient {
         try {
             List<BayAvailabilityDto> result = restClient
                     .get()
-                    .uri("/shop-manager/v1/shopmgr/locations/{locationId}/bays", locationId)
+                    .uri("/v1/shopmgr/locations/{locationId}/bays", locationId)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "shop:bay:view")
                     .retrieve()
                     .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {});
             return result != null ? result : List.of();

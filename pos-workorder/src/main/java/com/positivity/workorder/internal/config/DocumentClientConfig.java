@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,8 +14,8 @@ public class DocumentClientConfig {
 
     @Bean
     public RestClient documentServiceRestClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.documents.base-url:http://pos-documents:8080}") String documentServiceBaseUrl) {
-        return restClientBuilder.baseUrl(documentServiceBaseUrl).build();
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.documents.service-id:documents}") String serviceId) {
+        return restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 }

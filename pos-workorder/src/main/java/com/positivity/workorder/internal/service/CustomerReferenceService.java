@@ -22,8 +22,9 @@ public class CustomerReferenceService {
 
     public CustomerReferenceService(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.customer.base-url:http://api-gateway}") String customerBaseUrl) {
-        this.customerRestClient = restClientBuilder.baseUrl(customerBaseUrl).build();
+            @Value("${pos.customer.service-id:customer}") String serviceId) {
+        this.customerRestClient =
+                restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     public @NonNull CustomerContact resolve(@Nullable UUID customerId) {
@@ -35,7 +36,9 @@ public class CustomerReferenceService {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = customerRestClient
                     .get()
-                    .uri("/customer/v1/customers/{customerId}", customerId)
+                    .uri("/v1/crm/{customerId}", customerId)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "crm:party:view")
                     .retrieve()
                     .body(Map.class);
 

@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,10 +25,13 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -61,14 +68,15 @@ class PeopleAvailabilityClientTest {
                         .build()))
                 .build();
 
-        RestClient mockRestClient = mock(RestClient.class, Answers.RETURNS_DEEP_STUBS);
-        when(mockRestClient
-                        .get()
-                        .uri(org.mockito.ArgumentMatchers
-                                .<Function<org.springframework.web.util.UriBuilder, java.net.URI>>any())
-                        .retrieve()
-                        .body(PeopleAvailabilityResponse.class))
-                .thenReturn(expected);
+        @SuppressWarnings("rawtypes")
+        RestClient.RequestHeadersUriSpec requestSpec =
+                mock(RestClient.RequestHeadersUriSpec.class, Answers.RETURNS_SELF);
+        RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        when(responseSpec.body(PeopleAvailabilityResponse.class)).thenReturn(expected);
+        when(requestSpec.retrieve()).thenReturn(responseSpec);
+
+        RestClient mockRestClient = mock(RestClient.class);
+        when(mockRestClient.get()).thenReturn(requestSpec);
 
         PeopleAvailabilityClient client = new PeopleAvailabilityClient(TEST_CLOCK, mockRestClient);
         var response = client.fetchAvailability(LOCATION_ID, TEST_DATE);
@@ -119,6 +127,33 @@ class PeopleAvailabilityClientTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // fetchAvailability calls native people path (no gateway prefix)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("fetchAvailability calls native people path (no gateway prefix)")
+    void fetchAvailability_callsNativePeoplePath() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        // Respond with 404 (handled without body deserialization) to avoid the
+        // pre-existing @Jacksonized/Jackson 3 incompatibility noted above; the
+        // goal here is asserting the request URI and X-Authorities header.
+        server.expect(requestTo(Matchers.containsString("/v1/people/availability")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-workorder"))
+                .andExpect(header("X-Authorities", "people:availability:view"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        PeopleAvailabilityClient client = new PeopleAvailabilityClient(
+                TEST_CLOCK, builder.baseUrl("http://people").build());
+        var response = client.fetchAvailability("L1", TEST_DATE);
+
+        assertThat(response.getPeople()).isEmpty();
+        server.verify();
     }
 
     // -----------------------------------------------------------------------

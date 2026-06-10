@@ -4,6 +4,7 @@ import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -15,20 +16,25 @@ import org.springframework.web.client.RestClient;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class WorkorderInvoiceClient {
 
     @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
 
-    @Value("${pos.workorder.service.url:http://api-gateway}")
-    private String workorderServiceUrl;
+    @Value("${pos.workorder.service-id:workorder}")
+    private String workorderServiceId;
+
+    WorkorderInvoiceClient(RestClient restClient, String workorderServiceId) {
+        this.restClient = restClient;
+        this.workorderServiceId = workorderServiceId;
+    }
 
     public InvoiceGenerationResponse regenerateInvoiceFromWorkorder(UUID workorderId, String idempotencyKey) {
         try {
             RestClient.RequestBodySpec request = restClient
                     .post()
-                    .uri(workorderServiceUrl + "/workorder/v1/workorders/{workorderId}/generate-invoice", workorderId)
+                    .uri("http://" + workorderServiceId + "/v1/workorders/{workorderId}/generate-invoice", workorderId)
                     .header("X-User", "pos-accounting")
                     .header("X-Authorities", "workorder:workorder:generate_invoice");
 

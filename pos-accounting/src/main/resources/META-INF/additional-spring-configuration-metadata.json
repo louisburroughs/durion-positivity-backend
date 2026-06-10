@@ -51,22 +51,22 @@
       "description": "Kafka consumer group for accounting payment event consumers."
     },
     {
-      "name": "pos.invoice.service.url",
+      "name": "pos.invoice.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-invoice service.",
-      "defaultValue": "http://pos-invoice:8085"
+      "description": "Eureka service ID for pos-invoice.",
+      "defaultValue": "invoice"
     },
     {
-      "name": "pos.customer.service.url",
+      "name": "pos.customer.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-customer service.",
-      "defaultValue": "http://pos-customer:8080"
+      "description": "Eureka service ID for pos-customer.",
+      "defaultValue": "customer"
     },
     {
-      "name": "pos.workorder.service.url",
+      "name": "pos.workorder.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-workorder service.",
-      "defaultValue": "http://pos-workorder:8080"
+      "description": "Eureka service ID for pos-workorder.",
+      "defaultValue": "workorder"
     },
     {
       "name": "pos.restclient.connect.timeout",

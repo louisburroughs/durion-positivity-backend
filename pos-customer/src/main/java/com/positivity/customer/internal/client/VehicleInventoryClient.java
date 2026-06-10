@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -21,15 +22,21 @@ import org.springframework.web.client.RestClient;
 @Component
 public class VehicleInventoryClient {
 
-    private static final String VEHICLE_BY_ID_PATH = "/vehicle-inventory/v1/vehicles/{vehicleId}";
+    private static final String VEHICLE_BY_ID_PATH = "/v1/vehicle-registry/{vehicleId}";
 
     private final RestClient restClient;
 
+    @Autowired
     public VehicleInventoryClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.vehicle-inventory.base-url:http://api-gateway}") String vehicleInventoryBaseUrl) {
-        this.restClient = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
-        log.info("VehicleInventoryClient initialized with baseUrl: {}", vehicleInventoryBaseUrl);
+            @Value("${pos.vehicle-inventory.service-id:vehicle-inventory}") String serviceId) {
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
+        log.info("VehicleInventoryClient initialized with serviceId: {}", serviceId);
+    }
+
+    /** Package-private constructor for unit tests — accepts a pre-built RestClient. */
+    VehicleInventoryClient(RestClient restClient) {
+        this.restClient = restClient;
     }
 
     /**
@@ -41,7 +48,9 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .post()
-                    .uri("/vehicle-inventory/v1/vehicles")
+                    .uri("/v1/vehicle-registry")
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:create")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -65,6 +74,8 @@ public class VehicleInventoryClient {
             VehicleResponse response = restClient
                     .get()
                     .uri(VEHICLE_BY_ID_PATH, vehicleId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:view")
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -89,7 +100,9 @@ public class VehicleInventoryClient {
         try {
             VehicleResponse response = restClient
                     .get()
-                    .uri("/vehicle-inventory/v1/vehicles/vin/{vin}", vin)
+                    .uri("/v1/vehicle-registry/vin/{vin}", vin)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:view")
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -115,6 +128,8 @@ public class VehicleInventoryClient {
             VehicleResponse response = restClient
                     .put()
                     .uri(VEHICLE_BY_ID_PATH, vehicleId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:update")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -135,7 +150,13 @@ public class VehicleInventoryClient {
         log.debug("Deleting vehicle with ID: {}", vehicleId);
 
         try {
-            restClient.delete().uri(VEHICLE_BY_ID_PATH, vehicleId).retrieve().toBodilessEntity();
+            restClient
+                    .delete()
+                    .uri(VEHICLE_BY_ID_PATH, vehicleId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:delete")
+                    .retrieve()
+                    .toBodilessEntity();
 
             log.info("Successfully deleted vehicle: {}", vehicleId);
         } catch (Exception e) {

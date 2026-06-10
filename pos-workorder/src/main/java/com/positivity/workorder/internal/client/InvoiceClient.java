@@ -27,7 +27,9 @@ public class InvoiceClient {
     public InvoiceGenerationResponse createInvoice(@NonNull InvoiceCreationRequest request) {
         InvoiceGenerationResponse response = invoiceServiceRestClient
                 .post()
-                .uri("/invoice/v1/invoices")
+                .uri("/v1/invoices")
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "invoice:manage")
                 .body(request)
                 .retrieve()
                 .body(InvoiceGenerationResponse.class);
@@ -45,7 +47,9 @@ public class InvoiceClient {
 
         Map<String, Object> invoiceData = invoiceServiceRestClient
                 .get()
-                .uri("/invoice/v1/invoices/{invoiceId}", invoiceId)
+                .uri("/v1/invoices/{invoiceId}", invoiceId)
+                .header("X-User", "pos-workorder")
+                .header("X-Authorities", "invoice:manage")
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
 

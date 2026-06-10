@@ -92,6 +92,11 @@ public class CommercialPartyServiceImpl implements CustomerService {
         return commercialRepository.findById(id).map(this::toDTO);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<CommercialParty> findPartyById(@NonNull UUID id) {
+        return commercialRepository.findById(id);
+    }
+
     /**
      * Creates a new customer from DTO.
      *

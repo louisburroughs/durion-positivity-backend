@@ -28,6 +28,9 @@ public class McpServerConfiguration {
         return RestClient.builder();
     }
 
+    // MCP tools route through pos-api-gateway because they relay end-user bearer tokens
+    // which require JWT->X-Authorities conversion at the gateway layer.
+    // See docs/service-discovery-migration/client-policy-matrix.md: gateway-exception.
     @Bean
     @LoadBalanced
     public RestClient.Builder loadBalancedRestClientBuilder(@NonNull BearerTokenRelayInterceptor interceptor) {

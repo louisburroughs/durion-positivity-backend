@@ -12,7 +12,7 @@ public class InventoryClientConfig {
     @Bean
     public RestClient inventoryServiceRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.inventory.base-url:http://api-gateway}") String inventoryBaseUrl) {
-        return restClientBuilder.baseUrl(inventoryBaseUrl).build();
+            @Value("${pos.inventory.service-id:inventory}") String serviceId) {
+        return restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 }
