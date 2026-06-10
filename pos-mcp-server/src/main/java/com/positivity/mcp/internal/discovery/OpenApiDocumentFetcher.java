@@ -79,7 +79,7 @@ public class OpenApiDocumentFetcher {
             basePath = specPath.substring(0, specPath.length() - openApiPath.length());
         } else {
             int lastSlash = specPath != null ? specPath.lastIndexOf('/') : -1;
-            basePath = lastSlash > 0 ? specPath.substring(0, lastSlash) : "";
+            basePath = lastSlash > 0 && specPath != null ? specPath.substring(0, lastSlash) : "";
         }
         if (basePath.isEmpty() || basePath.equals("/")) {
             return URI.create(specUri.getScheme() + "://" + specUri.getAuthority());
