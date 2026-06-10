@@ -24,10 +24,10 @@
       "description": "Kafka consumer group for workorder command consumers."
     },
     {
-      "name": "pos.customer.base-url",
+      "name": "pos.customer.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for pos-customer integration.",
-      "defaultValue": "http://pos-customer:8084"
+      "description": "Eureka service-id for the pos-customer service.",
+      "defaultValue": "customer"
     },
     {
       "name": "pos.vehicle.base-url",
@@ -42,34 +42,34 @@
       "defaultValue": "http://pos-tax:8091"
     },
     {
-      "name": "pos.invoice.base-url",
+      "name": "pos.invoice.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for invoice service integration.",
-      "defaultValue": "http://pos-invoice:8089"
+      "description": "Eureka service-id for the pos-invoice service.",
+      "defaultValue": "invoice"
     },
     {
-      "name": "pos.documents.base-url",
+      "name": "pos.documents.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for documents service integration.",
-      "defaultValue": "http://pos-documents:8080"
+      "description": "Eureka service-id for the pos-documents service.",
+      "defaultValue": "documents"
     },
     {
-      "name": "pos.inventory.base-url",
+      "name": "pos.inventory.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for inventory service integration.",
-      "defaultValue": "http://pos-inventory:8087"
+      "description": "Eureka service-id for the pos-inventory service.",
+      "defaultValue": "inventory"
     },
     {
-      "name": "pos.people.base-url",
+      "name": "pos.people.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for people service integration.",
-      "defaultValue": "http://pos-people:8084"
+      "description": "Eureka service-id for the pos-people service.",
+      "defaultValue": "people"
     },
     {
-      "name": "pos.shopmgr.base-url",
+      "name": "pos.shopmgr.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for shop-manager service integration.",
-      "defaultValue": "http://localhost:8080"
+      "description": "Eureka service-id for the pos-shop-manager service.",
+      "defaultValue": "shop-manager"
     },
     {
       "name": "gateway.base-url",

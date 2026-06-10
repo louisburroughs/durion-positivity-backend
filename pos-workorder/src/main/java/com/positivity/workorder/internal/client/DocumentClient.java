@@ -44,6 +44,8 @@ public class DocumentClient {
                     .post()
                     .uri("/v1/documents/render")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "documents:render")
                     .body(request)
                     .retrieve()
                     .body(byte[].class);

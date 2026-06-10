@@ -31,11 +31,13 @@ public class PeopleAvailabilityClient {
             return peopleServiceRestClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/people/v1/people/availability")
+                            .path("/v1/people/availability")
                             .queryParam("locationId", locationId)
                             .queryParam("date", date.toString())
                             .queryParam("includeSchedule", "true")
                             .build())
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "people:availability:view")
                     .retrieve()
                     .body(PeopleAvailabilityResponse.class);
         } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {

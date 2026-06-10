@@ -17,7 +17,7 @@ public class InvoiceClientConfig {
     @Bean
     public RestClient invoiceServiceRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.invoice.base-url:http://api-gateway}") String invoiceBaseUrl) {
-        return restClientBuilder.baseUrl(invoiceBaseUrl).build();
+            @Value("${pos.invoice.service-id:invoice}") String serviceId) {
+        return restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 }
