@@ -84,12 +84,6 @@
       "defaultValue": "http://localhost:8080/v1/customers"
     },
     {
-      "name": "customer.approval.service.url",
-      "type": "java.lang.String",
-      "description": "Customer approval service URL used in workorder approvals.",
-      "defaultValue": "http://localhost:8080/v1/approvals"
-    },
-    {
       "name": "timekeeping.allowOverlappingSessions",
       "type": "java.lang.Boolean",
       "description": "Allow overlapping technician work sessions when enabled.",

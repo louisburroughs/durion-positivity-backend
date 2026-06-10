@@ -18,7 +18,6 @@ public class ContractTestConfiguration {
     public CustomerValidationClient contractTestCustomerValidationClient() {
         CustomerValidationClient mock = Mockito.mock(CustomerValidationClient.class);
         Mockito.when(mock.checkRequirementsMet(Mockito.any())).thenReturn(Boolean.TRUE);
-        Mockito.when(mock.checkApprovalStatus(Mockito.any())).thenReturn(Boolean.TRUE);
         return mock;
     }
 }

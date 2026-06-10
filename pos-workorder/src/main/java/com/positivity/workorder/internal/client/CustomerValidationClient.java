@@ -34,19 +34,4 @@ public class CustomerValidationClient {
             return false;
         }
     }
-
-    public boolean checkApprovalStatus(@NonNull UUID approvalId) {
-        try {
-            return Boolean.TRUE.equals(restClient
-                    .get()
-                    .uri("/v1/approvals/{id}/is-approved", approvalId)
-                    .header("X-User", "pos-workorder")
-                    .header("X-Authorities", "crm:party:view")
-                    .retrieve()
-                    .body(Boolean.class));
-        } catch (Exception e) {
-            log.error("Failed to check customer approval for {}", approvalId, e);
-            return false;
-        }
-    }
 }
