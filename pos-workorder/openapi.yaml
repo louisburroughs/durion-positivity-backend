@@ -3381,13 +3381,6 @@ paths:
         schema:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
-      - name: X-Authorities
-        in: header
-        description: User authorities (comma-separated)
-        required: false
-        schema:
-          type: string
-        example: workorder:workorder:view,workorder:financials:view
       responses:
         '200':
           description: Workorder detail retrieved successfully
@@ -3522,14 +3515,14 @@ paths:
             application/pdf:
               schema:
                 type: string
-                format: binary
+                format: byte
         '502':
           description: Document service unavailable
           content:
             application/pdf:
               schema:
                 type: string
-                format: binary
+                format: byte
       security:
       - bearerAuth:
         - workorder:estimate:view

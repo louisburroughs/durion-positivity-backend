@@ -26,6 +26,8 @@ tags:
   description: Contact point and role management for parties
 - name: CRM Accounts
   description: Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations
+- name: Customer Requirements
+  description: Eligibility checks for customer-facing workflows
 - name: Promotion Redemptions
   description: Operations for recording and querying promotion redemptions
 - name: CRM Persons
@@ -1151,6 +1153,39 @@ paths:
         - Promotion:ViewRedemption
       x-required-permissions:
       - Promotion:ViewRedemption
+  /v1/customers/{id}/requirements-met:
+    get:
+      tags:
+      - Customer Requirements
+      summary: Check whether a customer meets requirements
+      description: Returns true when the customer is active and, for commercial parties, not on credit hold.
+      operationId: requirementsMet
+      parameters:
+      - name: id
+        in: path
+        description: Customer ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Customer requirements evaluation returned
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '401':
+          description: Authentication required
+        '403':
+          description: Caller lacks PARTY_VIEW authority
+        '404':
+          description: Customer not found
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
