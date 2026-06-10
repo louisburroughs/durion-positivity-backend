@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -57,8 +58,8 @@ class CatalogClientBuilderTest {
         UUID locationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
         mockServer
-                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/by-sku?productSku=SKU-123&locationId="
-                        + locationId))
+                .expect(requestTo(INVENTORY_BASE_URL
+                        + "/v1/inventory/availability/by-sku?productSku=SKU-123&locationId=" + locationId))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
                         "{" + "\"onHandQuantity\":12,"
@@ -110,6 +111,8 @@ class CatalogClientBuilderTest {
         mockServer
                 .expect(requestTo(PRICE_BASE_URL + "/v1/price/quotes"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-User", "pos-catalog-service"))
+                .andExpect(header("X-Authorities", "pricing:price_book:view"))
                 .andRespond(withSuccess(
                         "{" + "\"msrp\":{\"amount\":19.99,\"currency\":\"USD\"},"
                                 + "\"unitPrice\":{\"amount\":17.49,\"currency\":\"USD\"},"
