@@ -29,7 +29,7 @@ public class InvoiceClient {
                 .post()
                 .uri("/v1/invoices")
                 .header("X-User", "pos-workorder")
-                .header("X-Authorities", "workorder:invoice:create,workorder:invoice:view")
+                .header("X-Authorities", "invoice:manage")
                 .body(request)
                 .retrieve()
                 .body(InvoiceGenerationResponse.class);
@@ -49,7 +49,7 @@ public class InvoiceClient {
                 .get()
                 .uri("/v1/invoices/{invoiceId}", invoiceId)
                 .header("X-User", "pos-workorder")
-                .header("X-Authorities", "workorder:invoice:create,workorder:invoice:view")
+                .header("X-Authorities", "invoice:manage")
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
 
