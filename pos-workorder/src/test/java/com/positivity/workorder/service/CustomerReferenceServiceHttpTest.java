@@ -23,10 +23,10 @@ class CustomerReferenceServiceHttpTest {
                 {"data":{"customerName":"Jane Doe","phoneNumber":"+1-555-0100"}}
                 """;
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/customer/v1/customers/" + customerId, 200, payload, callCount);
+        HttpServer server = startServer("/v1/customers/" + customerId, 200, payload, callCount);
         try {
-            String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
 
             CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
 
@@ -42,10 +42,10 @@ class CustomerReferenceServiceHttpTest {
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/customer/v1/customers/" + customerId, 404, "{}", callCount);
+        HttpServer server = startServer("/v1/customers/" + customerId, 404, "{}", callCount);
         try {
-            String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
 
             CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
 
@@ -62,13 +62,13 @@ class CustomerReferenceServiceHttpTest {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer(
-                "/customer/v1/customers/" + customerId,
+                "/v1/customers/" + customerId,
                 200,
                 "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}",
                 callCount);
         try {
-            String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
 
             var resolved = service.resolveAll(List.of(customerId, customerId));
 
@@ -78,6 +78,58 @@ class CustomerReferenceServiceHttpTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void resolve_callsNativeCustomerPath_withAuthorityHeader() throws Exception {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startServerCapturingHeaders(
+                "/v1/customers/" + customerId, 200, "{\"customerName\":\"Jane Doe\"}", callCount, receivedHeaders -> {
+                    assertThat(receivedHeaders.getFirst("X-User")).isEqualTo("pos-workorder");
+                    assertThat(receivedHeaders.getFirst("X-Authorities")).isEqualTo("crm:party:view");
+                });
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
+
+            assertThat(contact.name()).isEqualTo("Jane Doe");
+            assertThat(callCount.get()).isEqualTo(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private HttpServer startServerCapturingHeaders(
+            String expectedPath,
+            int status,
+            String body,
+            AtomicInteger callCount,
+            java.util.function.Consumer<com.sun.net.httpserver.Headers> headerAssertions)
+            throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            callCount.incrementAndGet();
+            String requestPath = exchange.getRequestURI().getPath();
+            if (!"GET".equals(exchange.getRequestMethod()) || !expectedPath.equals(requestPath)) {
+                exchange.sendResponseHeaders(404, -1);
+                exchange.close();
+                return;
+            }
+
+            headerAssertions.accept(exchange.getRequestHeaders());
+
+            byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(status, payload.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(payload);
+            }
+        });
+        server.start();
+        return server;
     }
 
     private HttpServer startServer(String expectedPath, int status, String body, AtomicInteger callCount)
