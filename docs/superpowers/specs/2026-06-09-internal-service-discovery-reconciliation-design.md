@@ -81,14 +81,15 @@ No additional `spring.cloud.discovery.enabled=false` override or static instance
 
 ### 3. Service-to-service authentication
 
-Direct internal callers do not pass through the API gateway and therefore do not receive a JWT-validated security context from the gateway filter. They authenticate to downstream services by injecting a minimal `X-Authorities` header containing only the permissions required for the specific call.
+Direct internal callers do not pass through the API gateway and therefore do not receive a JWT-validated security context from the gateway filter. They authenticate to downstream services by injecting both a service principal header (`X-User`) and a minimal `X-Authorities` header containing only the permissions required for the specific call.
 
 Each internal client is responsible for:
 
+- injecting `X-User` with the caller service identity (for example, `pos-shop-manager`)
 - injecting `X-Authorities` with a precise, minimal permission set (e.g., `PERM_inventory:item:view`)
-- not injecting `X-User` or `X-Roles` unless explicitly required by the downstream endpoint
+- not injecting `X-Roles` unless explicitly required by the downstream endpoint
 
-Downstream services accept this via `GatewayAuthoritiesFilter`'s `X-Authorities` CSV fallback path, which is intentionally preserved for service-to-service use. This trust model assumes network isolation (Docker network `pos-network`); see the existing security model ADR for the formal trust boundary statement.
+Downstream services accept this via `GatewayAuthoritiesFilter`'s `X-Authorities` CSV fallback path, with `X-User` providing the service principal for audit/context propagation where required by service logic. This trust model assumes network isolation (Docker network `pos-network`); see the existing security model ADR for the formal trust boundary statement.
 
 This policy applies to all internal runtime callers converted under this migration. It must not be removed or weakened during the client conversion.
 

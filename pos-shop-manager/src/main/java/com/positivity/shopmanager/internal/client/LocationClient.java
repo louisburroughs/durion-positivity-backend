@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 @Component
 public class LocationClient {
 
+    private static final String HEADER_AUTHORITIES = "X-Authorities";
     private static final String AUTH_BAY_READ = "location:bay:read";
     private static final String AUTH_BAY_MANAGE = "location:bay:manage";
     private static final String AUTH_MOBILE_UNIT_READ = "location:mobile-unit:read";
@@ -27,7 +28,7 @@ public class LocationClient {
         return restClient
                 .get()
                 .uri("/v1/locations/bays")
-                .header("X-Authorities", AUTH_BAY_READ)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -36,7 +37,7 @@ public class LocationClient {
         return restClient
                 .get()
                 .uri("/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
-                .header("X-Authorities", AUTH_BAY_READ)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -45,7 +46,7 @@ public class LocationClient {
         return restClient
                 .post()
                 .uri("/v1/locations/{locationId}/bays", locationId)
-                .header("X-Authorities", AUTH_BAY_MANAGE)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
                 .body(request)
                 .retrieve()
                 .body(Object.class);
@@ -55,9 +56,10 @@ public class LocationClient {
         restClient
                 .put()
                 .uri("/v1/locations/bays")
-                .header("X-Authorities", AUTH_BAY_MANAGE)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
                 .body(request)
-                .retrieve();
+                .retrieve()
+                .toBodilessEntity();
         return request;
     }
 
@@ -65,15 +67,16 @@ public class LocationClient {
         restClient
                 .delete()
                 .uri("/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
-                .header("X-Authorities", AUTH_BAY_MANAGE)
-                .retrieve();
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     public Object getMobileUnits() {
         return restClient
                 .get()
                 .uri("/v1/locations/mobileUnit")
-                .header("X-Authorities", AUTH_MOBILE_UNIT_READ)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -82,7 +85,7 @@ public class LocationClient {
         return restClient
                 .get()
                 .uri("/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
-                .header("X-Authorities", AUTH_MOBILE_UNIT_READ)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -91,7 +94,7 @@ public class LocationClient {
         return restClient
                 .post()
                 .uri("/v1/locations/{locationId}/mobileUnit", locationId)
-                .header("X-Authorities", AUTH_MOBILE_UNIT_MANAGE)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
                 .body(request)
                 .retrieve()
                 .body(Object.class);
@@ -101,9 +104,10 @@ public class LocationClient {
         restClient
                 .put()
                 .uri("/v1/locations/mobileUnit")
-                .header("X-Authorities", AUTH_MOBILE_UNIT_MANAGE)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
                 .body(request)
-                .retrieve();
+                .retrieve()
+                .toBodilessEntity();
         return request;
     }
 
@@ -111,7 +115,8 @@ public class LocationClient {
         restClient
                 .delete()
                 .uri("/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
-                .header("X-Authorities", AUTH_MOBILE_UNIT_MANAGE)
-                .retrieve();
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
+                .retrieve()
+                .toBodilessEntity();
     }
 }
