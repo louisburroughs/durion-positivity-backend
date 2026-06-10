@@ -14,7 +14,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the customer module.
-     * Total: 36 event types.
+     * Total: 37 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -114,6 +114,12 @@ public final class EventTypes {
                                 "Retrieve comprehensive CRM snapshot via vehicle ownership")
                         .build(),
                 EventTypeRegistration.fastRead("CRM_SNAPSHOT_BILLING_RULES_GET", "Get billing rules for party")
+                        .build(),
+
+                // CustomerRequirementsController - 1 event (Issue #653)
+                EventTypeRegistration.fastRead(
+                                "CUSTOMER_REQUIREMENTS_MET_GET",
+                                "Check whether a customer meets workorder eligibility requirements")
                         .build(),
 
                 // PromotionRedemptionController - 2 events (Story #94)
