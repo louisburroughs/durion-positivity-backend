@@ -50,6 +50,7 @@ public class VehicleInventoryClient {
                     .post()
                     .uri("/v1/vehicle-registry")
                     .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:create")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -74,6 +75,7 @@ public class VehicleInventoryClient {
                     .get()
                     .uri(VEHICLE_BY_ID_PATH, vehicleId)
                     .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:view")
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -100,6 +102,7 @@ public class VehicleInventoryClient {
                     .get()
                     .uri("/v1/vehicle-registry/vin/{vin}", vin)
                     .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:view")
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, clientResponse) -> {
                         if (clientResponse.getStatusCode().value() == 404) {
@@ -126,6 +129,7 @@ public class VehicleInventoryClient {
                     .put()
                     .uri(VEHICLE_BY_ID_PATH, vehicleId)
                     .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:update")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -146,7 +150,13 @@ public class VehicleInventoryClient {
         log.debug("Deleting vehicle with ID: {}", vehicleId);
 
         try {
-            restClient.delete().uri(VEHICLE_BY_ID_PATH, vehicleId).header("X-User", "pos-customer").retrieve().toBodilessEntity();
+            restClient
+                    .delete()
+                    .uri(VEHICLE_BY_ID_PATH, vehicleId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "vehicle-inventory:registry:delete")
+                    .retrieve()
+                    .toBodilessEntity();
 
             log.info("Successfully deleted vehicle: {}", vehicleId);
         } catch (Exception e) {

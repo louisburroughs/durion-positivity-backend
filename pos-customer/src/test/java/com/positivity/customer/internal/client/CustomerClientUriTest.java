@@ -39,10 +39,9 @@ class CustomerClientUriTest {
                 .expect(requestTo("http://people/v1/people/resolve"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-customer"))
-                .andExpect(header("X-Authorities", "people:person:view"))
+                .andExpect(header("X-Authorities", "people:person:create"))
                 .andRespond(withSuccess(
-                        "{\"personId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\"}",
-                        MediaType.APPLICATION_JSON));
+                        "{\"personId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\"}", MediaType.APPLICATION_JSON));
 
         UUID result = client.resolveOrCreatePersonId("test@example.com", "555-1234", "Doe", "John");
 
@@ -59,15 +58,15 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
+        VehicleInventoryClient client = new VehicleInventoryClient(
+                builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-customer"))
-                .andRespond(withSuccess(
-                        "{\"vehicleId\":\"" + VEHICLE_ID + "\"}",
-                        MediaType.APPLICATION_JSON));
+                .andExpect(header("X-Authorities", "vehicle-inventory:registry:create"))
+                .andRespond(withSuccess("{\"vehicleId\":\"" + VEHICLE_ID + "\"}", MediaType.APPLICATION_JSON));
 
         CreateVehicleRequest request = new CreateVehicleRequest();
         VehicleResponse response = client.createVehicle(request);
@@ -81,15 +80,15 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
+        VehicleInventoryClient client = new VehicleInventoryClient(
+                builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-User", "pos-customer"))
-                .andRespond(withSuccess(
-                        "{\"vehicleId\":\"" + VEHICLE_ID + "\"}",
-                        MediaType.APPLICATION_JSON));
+                .andExpect(header("X-Authorities", "vehicle-inventory:registry:view"))
+                .andRespond(withSuccess("{\"vehicleId\":\"" + VEHICLE_ID + "\"}", MediaType.APPLICATION_JSON));
 
         Optional<VehicleResponse> result = client.getVehicle(VEHICLE_ID);
 
@@ -102,15 +101,15 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
+        VehicleInventoryClient client = new VehicleInventoryClient(
+                builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/vin/1HGCM82633A004352"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-User", "pos-customer"))
-                .andRespond(withSuccess(
-                        "{\"vehicleId\":\"" + VEHICLE_ID + "\"}",
-                        MediaType.APPLICATION_JSON));
+                .andExpect(header("X-Authorities", "vehicle-inventory:registry:view"))
+                .andRespond(withSuccess("{\"vehicleId\":\"" + VEHICLE_ID + "\"}", MediaType.APPLICATION_JSON));
 
         Optional<VehicleResponse> result = client.getVehicleByVin("1HGCM82633A004352");
 
@@ -123,15 +122,15 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
+        VehicleInventoryClient client = new VehicleInventoryClient(
+                builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(header("X-User", "pos-customer"))
-                .andRespond(withSuccess(
-                        "{\"vehicleId\":\"" + VEHICLE_ID + "\"}",
-                        MediaType.APPLICATION_JSON));
+                .andExpect(header("X-Authorities", "vehicle-inventory:registry:update"))
+                .andRespond(withSuccess("{\"vehicleId\":\"" + VEHICLE_ID + "\"}", MediaType.APPLICATION_JSON));
 
         CreateVehicleRequest request = new CreateVehicleRequest();
         VehicleResponse response = client.updateVehicle(VEHICLE_ID, request);
@@ -145,12 +144,14 @@ class CustomerClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
 
-        VehicleInventoryClient client = new VehicleInventoryClient(builder.baseUrl("http://vehicle-inventory").build());
+        VehicleInventoryClient client = new VehicleInventoryClient(
+                builder.baseUrl("http://vehicle-inventory").build());
 
         mockServer
                 .expect(requestTo("http://vehicle-inventory/v1/vehicle-registry/" + VEHICLE_ID))
                 .andExpect(method(HttpMethod.DELETE))
                 .andExpect(header("X-User", "pos-customer"))
+                .andExpect(header("X-Authorities", "vehicle-inventory:registry:delete"))
                 .andRespond(withSuccess());
 
         client.deleteVehicle(VEHICLE_ID);

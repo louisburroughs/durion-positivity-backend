@@ -52,7 +52,7 @@ public class PeopleClient {
                     .post()
                     .uri("/v1/people/resolve")
                     .header("X-User", "pos-customer")
-                    .header("X-Authorities", "people:person:view")
+                    .header("X-Authorities", "people:person:create")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
