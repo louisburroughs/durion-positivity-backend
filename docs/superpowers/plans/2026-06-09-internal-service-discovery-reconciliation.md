@@ -12,21 +12,21 @@
 
 ## Service ID Quick Reference
 
-| Downstream Module | Eureka service-id | Gateway prefix stripped from path |
-|---|---|---|
-| pos-accounting | `accounting` | `/accounting` |
-| pos-catalog | `catalog` | `/catalog` |
-| pos-customer | `customer` | `/customer` |
-| pos-inventory | `inventory` | `/inventory` |
-| pos-invoice | `invoice` | `/invoice` |
-| pos-location | `location` | `/location` |
-| pos-people | `people` | `/people` |
-| pos-price | `price` | `/price` |
-| pos-security-service | `security-service` | `/security-service` |
-| pos-shop-manager | `shop-manager` | `/shop-manager` |
-| pos-vehicle-inventory | `vehicle-inventory` | `/vehicle-inventory` |
-| pos-workorder | `workorder` | `/workorder` |
-| pos-documents | `documents` | not gateway-routed; native path unchanged |
+| Downstream Module     | Eureka service-id   | Gateway prefix stripped from path         |
+| --------------------- | ------------------- | ----------------------------------------- |
+| pos-accounting        | `accounting`        | `/accounting`                             |
+| pos-catalog           | `catalog`           | `/catalog`                                |
+| pos-customer          | `customer`          | `/customer`                               |
+| pos-inventory         | `inventory`         | `/inventory`                              |
+| pos-invoice           | `invoice`           | `/invoice`                                |
+| pos-location          | `location`          | `/location`                               |
+| pos-people            | `people`            | `/people`                                 |
+| pos-price             | `price`             | `/price`                                  |
+| pos-security-service  | `security-service`  | `/security-service`                       |
+| pos-shop-manager      | `shop-manager`      | `/shop-manager`                           |
+| pos-vehicle-inventory | `vehicle-inventory` | `/vehicle-inventory`                      |
+| pos-workorder         | `workorder`         | `/workorder`                              |
+| pos-documents         | `documents`         | not gateway-routed; native path unchanged |
 
 Source: `docs/service-discovery-migration/service-id-registry.md`
 
@@ -43,6 +43,7 @@ Task 11 (pos-mcp-server) is a partial migration only — base URL switches from 
 ### Task 1: Phase 1 — Policy doc updates
 
 **Files:**
+
 - Modify: `docs/service-discovery-loadbalancer-migration-analysis.md`
 - Modify: `docs/service-discovery-migration/client-policy-matrix.md`
 
@@ -79,6 +80,7 @@ git commit -m "docs: update discovery migration docs for direct-discovery defaul
 ### Task 2: pos-accounting migration
 
 **Files:**
+
 - Modify: `pos-accounting/src/main/java/com/positivity/accounting/internal/client/CustomerBillingRulesClient.java`
 - Modify: `pos-accounting/src/main/java/com/positivity/accounting/internal/client/InvoiceServiceClient.java`
 - Modify: `pos-accounting/src/main/java/com/positivity/accounting/internal/client/WorkorderInvoiceClient.java`
@@ -166,23 +168,27 @@ Expected: FAIL — compilation error (constructors don't accept a String service
 In `CustomerBillingRulesClient.java`:
 
 Replace:
+
 ```java
 @Value("${pos.customer.service.url:http://api-gateway}")
 private String customerServiceUrl;
 ```
 
 With:
+
 ```java
 @Value("${pos.customer.service-id:customer}")
 private String customerServiceId;
 ```
 
 Replace the URI construction:
+
 ```java
 .uri(customerServiceUrl + "/customer/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
 ```
 
 With:
+
 ```java
 .uri("http://" + customerServiceId + "/v1/crm/snapshot/party/{partyId}/billing-rules", customerId)
 ```
@@ -200,18 +206,21 @@ CustomerBillingRulesClient(RestClient restClient, String customerServiceId) {
 - [ ] **Step 4: Implement — InvoiceServiceClient**
 
 Replace:
+
 ```java
 @Value("${pos.invoice.service.url:http://api-gateway}")
 private String invoiceServiceUrl;
 ```
 
 With:
+
 ```java
 @Value("${pos.invoice.service-id:invoice}")
 private String invoiceServiceId;
 ```
 
 In all URI constructions, replace `invoiceServiceUrl + "/invoice/v1/invoices/..."` with `"http://" + invoiceServiceId + "/v1/invoices/..."`:
+
 - `invoiceServiceUrl + "/invoice/v1/invoices/{id}"` → `"http://" + invoiceServiceId + "/v1/invoices/{id}"`
 - `invoiceServiceUrl + "/invoice/v1/invoices/{id}/apply-payment"` → `"http://" + invoiceServiceId + "/v1/invoices/{id}/apply-payment"`
 - `invoiceServiceUrl + "/invoice/v1/invoices/{id}/reverse-payment"` → `"http://" + invoiceServiceId + "/v1/invoices/{id}/reverse-payment"`
@@ -220,11 +229,13 @@ In all URI constructions, replace `invoiceServiceUrl + "/invoice/v1/invoices/...
 Check `pos-invoice/src/main/java/.../controller/InvoiceController.java` for the `@PreAuthorize` annotation on `GET /v1/invoices/{id}` and `POST /v1/invoices/{id}/apply-payment`. Add `X-User: pos-accounting` and `X-Authorities: <required>` headers to each request in this client.
 
 From checking the test assertion above, `GET /v1/invoices/{id}` should require `workorder:invoice:view`. Verify this:
+
 ```bash
 grep -n "@PreAuthorize" pos-invoice/src/main/java/com/positivity/invoice/internal/controller/InvoiceController.java | head -10
 ```
 
 Add auth injection to each method in `InvoiceServiceClient`, for example:
+
 ```java
 InvoiceDetails details = restClient
     .get()
@@ -236,6 +247,7 @@ InvoiceDetails details = restClient
 ```
 
 Add package-private test constructor:
+
 ```java
 InvoiceServiceClient(RestClient restClient, CircuitBreaker circuitBreaker, String invoiceServiceId) {
     this.restClient = restClient;
@@ -247,28 +259,33 @@ InvoiceServiceClient(RestClient restClient, CircuitBreaker circuitBreaker, Strin
 - [ ] **Step 5: Implement — WorkorderInvoiceClient**
 
 Replace:
+
 ```java
 @Value("${pos.workorder.service.url:http://api-gateway}")
 private String workorderServiceUrl;
 ```
 
 With:
+
 ```java
 @Value("${pos.workorder.service-id:workorder}")
 private String workorderServiceId;
 ```
 
 Replace URI:
+
 ```java
 .uri(workorderServiceUrl + "/workorder/v1/workorders/{workorderId}/generate-invoice", workorderId)
 ```
 
 With:
+
 ```java
 .uri("http://" + workorderServiceId + "/v1/workorders/{workorderId}/generate-invoice", workorderId)
 ```
 
 Add package-private test constructor:
+
 ```java
 WorkorderInvoiceClient(RestClient restClient, String workorderServiceId) {
     this.restClient = restClient;
@@ -279,11 +296,13 @@ WorkorderInvoiceClient(RestClient restClient, String workorderServiceId) {
 - [ ] **Step 6: Update additional-spring-configuration-metadata.json**
 
 Check if the file exists:
+
 ```bash
 ls pos-accounting/src/main/resources/META-INF/additional-spring-configuration-metadata.json 2>/dev/null
 ```
 
 If it exists, remove any entries for `pos.customer.service.url`, `pos.invoice.service.url`, `pos.workorder.service.url` and add:
+
 ```json
 { "name": "pos.customer.service-id", "type": "java.lang.String",
   "description": "Eureka service ID for pos-customer.",
@@ -317,6 +336,7 @@ git commit -m "feat(pos-accounting): migrate service clients to direct Eureka di
 ### Task 3: pos-catalog migration
 
 **Files:**
+
 - Modify: `pos-catalog/src/main/java/com/positivity/catalog/internal/client/InventoryClientImpl.java`
 - Modify: `pos-catalog/src/main/java/com/positivity/catalog/internal/client/PricingClientImpl.java`
 - Modify: `pos-catalog/src/test/java/com/positivity/catalog/internal/client/CatalogClientBuilderTest.java`
@@ -325,10 +345,12 @@ git commit -m "feat(pos-accounting): migrate service clients to direct Eureka di
 Context: Both clients receive `baseUrl` as a constructor parameter (already the LoadBalanced builder pattern). Test `CatalogClientBuilderTest` asserts `http://api-gateway` base URL and gateway-prefixed paths (`/inventory/v1/...`, `/price/v1/...`).
 
 Downstream native paths:
+
 - `InventoryClientImpl`: strip `/inventory` → `GET /v1/inventory/availability/query`, `GET /v1/inventory/availability/lead-time`
 - `PricingClientImpl`: strip `/price` → `POST /v1/price/quotes`
 
 Need to add `X-Authorities` to both clients. Check:
+
 ```bash
 grep -n "@PreAuthorize" pos-inventory/src/main/java/com/positivity/inventory/internal/controller/InventoryAvailabilityController.java | head -5
 grep -n "@PreAuthorize" pos-price/src/main/java/com/positivity/price/internal/controller/PriceQuoteController.java | head -5
@@ -348,6 +370,7 @@ private static final String PRICE_BASE_URL = "http://price";
 ```
 
 Update `inventoryAndPricingClientsUseLoadBalancedBuilderWithDefaultGatewayBaseUrl`:
+
 ```java
 @Test
 void inventoryAndPricingClientsUseLoadBalancedBuilderWithDirectServiceIds() {
@@ -366,6 +389,7 @@ void inventoryAndPricingClientsUseLoadBalancedBuilderWithDirectServiceIds() {
 ```
 
 Update `inventoryClientUsesGatewayPrefixedAvailabilityQueryPath` → rename to `inventoryClientUsesNativeAvailabilityQueryPath`:
+
 ```java
 @Test
 void inventoryClientUsesNativeAvailabilityQueryPath() {
@@ -389,6 +413,7 @@ Update `inventoryClientUsesGatewayPrefixedLeadTimePath` → rename to `inventory
 Update `pricingClientUsesGatewayPrefixedQuotesPath` → rename to `pricingClientUsesNativeQuotesPath`, change URL to `http://price/v1/price/quotes`.
 
 Update `TestClientConfiguration` to match new constructor:
+
 ```java
 @Bean
 InventoryClientImpl inventoryClientImpl(...) {
@@ -413,6 +438,7 @@ Expected: FAIL — compilation errors (constructors don't match yet).
 - [ ] **Step 3: Implement InventoryClientImpl**
 
 Change constructor signature:
+
 ```java
 public InventoryClientImpl(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
@@ -426,10 +452,12 @@ private final String basePath;
 ```
 
 In all URI calls replace `/inventory/v1/inventory/...` with `basePath + "/..."`:
+
 - `"/inventory/v1/inventory/availability/query"` → `basePath + "/availability/query"`
 - `"/inventory/v1/inventory/availability/lead-time"` → `basePath + "/availability/lead-time"`
 
 Add auth headers (check `@PreAuthorize` on `InventoryAvailabilityController`):
+
 ```bash
 grep -n "@PreAuthorize" pos-inventory/src/main/java/com/positivity/inventory/internal/controller/InventoryAvailabilityController.java | head -5
 ```
@@ -437,6 +465,7 @@ grep -n "@PreAuthorize" pos-inventory/src/main/java/com/positivity/inventory/int
 - [ ] **Step 4: Implement PricingClientImpl**
 
 Change constructor:
+
 ```java
 public PricingClientImpl(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
@@ -456,12 +485,14 @@ Add auth headers for price calls (check pos-price's PriceQuoteController).
 - [ ] **Step 5: Update additional-spring-configuration-metadata.json**
 
 In `pos-catalog/src/main/resources/META-INF/additional-spring-configuration-metadata.json`, replace:
+
 ```json
 { "name": "pos.inventory.base-url", "defaultValue": "http://api-gateway" }
 { "name": "pos.price.base-url", "defaultValue": "http://api-gateway" }
 ```
 
 With:
+
 ```json
 { "name": "pos.inventory.service-id", "type": "java.lang.String",
   "description": "Eureka service ID for pos-inventory.", "defaultValue": "inventory" },
@@ -491,16 +522,19 @@ git commit -m "feat(pos-catalog): migrate inventory and price clients to direct 
 ### Task 4: pos-customer migration
 
 **Files:**
+
 - Modify: `pos-customer/src/main/java/com/positivity/customer/internal/client/PeopleClient.java`
 - Modify: `pos-customer/src/main/java/com/positivity/customer/internal/client/VehicleInventoryClient.java`
 
 Context: `PeopleClient` uses `loadBalancedRestClientBuilder` and receives base URL as a constructor parameter. `VehicleInventoryClient` uses `@Value("${pos.vehicle-inventory.base-url:http://api-gateway}")` and `@Qualifier("loadBalancedRestClientBuilder")`.
 
 Downstream native paths:
+
 - `PeopleClient`: strip `/people` → `GET /v1/people/{id}`
 - `VehicleInventoryClient`: strip `/vehicle-inventory` → `POST /v1/vehicles`, `GET /v1/vehicles/vin/{vin}`, `GET /v1/vehicles/{vehicleId}`
 
 Neither client injects auth headers. Check downstream controllers:
+
 ```bash
 grep -n "@PreAuthorize" pos-people/src/main/java/com/positivity/people/internal/controller/PersonController.java | head -5
 grep -n "@PreAuthorize" pos-vehicle-inventory/src/main/java/com/positivity/vehicleinventory/internal/controller/VehicleController.java 2>/dev/null | head -5
@@ -564,6 +598,7 @@ class CustomerClientUriTest {
 - [ ] **Step 3: Implement PeopleClient**
 
 Change constructor to accept `serviceId`:
+
 ```java
 public PeopleClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
@@ -575,6 +610,7 @@ public PeopleClient(
 Change URI from `peopleServiceUrl + "/people/v1/people/{id}"` to `/v1/people/{id}` (relative to base URL).
 
 Add auth header to the request:
+
 ```java
 .header("X-Authorities", "people:person:view")
 .header("X-User", "pos-customer")
@@ -583,11 +619,13 @@ Add auth header to the request:
 - [ ] **Step 4: Implement VehicleInventoryClient**
 
 Replace:
+
 ```java
 @Value("${pos.vehicle-inventory.base-url:http://api-gateway}") String vehicleInventoryBaseUrl
 ```
 
 With:
+
 ```java
 @Value("${pos.vehicle-inventory.service-id:vehicle-inventory}") String serviceId
 ```
@@ -595,6 +633,7 @@ With:
 Change `builder.baseUrl(vehicleInventoryBaseUrl)` → `builder.baseUrl("http://" + serviceId)`.
 
 Strip the `/vehicle-inventory` prefix from all URI paths:
+
 - `"/vehicle-inventory/v1/vehicles"` → `"/v1/vehicles"`
 - `"/vehicle-inventory/v1/vehicles/vin/{vin}"` → `"/v1/vehicles/vin/{vin}"`
 - `VEHICLE_BY_ID_PATH = "/vehicle-inventory/v1/vehicles/{vehicleId}"` → `"/v1/vehicles/{vehicleId}"`
@@ -619,6 +658,7 @@ git commit -m "feat(pos-customer): migrate people and vehicle-inventory clients 
 ### Task 5: pos-inventory migration
 
 **Files:**
+
 - Modify: `pos-inventory/src/main/java/com/positivity/inventory/internal/client/SiteDefaultsClient.java`
 - Modify: `pos-inventory/src/main/java/com/positivity/inventory/internal/client/StorageLocationValidationClient.java`
 - Modify: `pos-inventory/src/main/java/com/positivity/inventory/internal/client/WorkorderValidationClient.java`
@@ -626,9 +666,11 @@ git commit -m "feat(pos-customer): migrate people and vehicle-inventory clients 
 Context: All three clients use `gateway.url` property and bake the path prefix into the RestClient base URL. All three copy auth headers from the incoming HTTP request context. After migration: use `pos.location.service-id` / `pos.workorder.service-id`, remove request-context-header forwarding, inject `X-Authorities` statically.
 
 Downstream native paths:
+
 - `SiteDefaultsClient`: `http://location` + `GET /v1/locations/{siteId}/defaults` — requires `location:read` (confirmed from `SiteDefaultsController` line 74)
 - `StorageLocationValidationClient`: `http://location` + `GET /v1/storage-locations/{storageLocationId}/validation` — requires `location:read` (confirmed from `StorageLocationValidationController` line 42)
 - `WorkorderValidationClient`: `http://workorder` + `GET /v1/workorders/{workorderId}/detail` — check:
+
   ```bash
   grep -n "@PreAuthorize" pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java | head -5
   ```
@@ -711,6 +753,7 @@ class InventoryClientUriTest {
 - [x] **Step 3: Implement SiteDefaultsClient**
 
 Replace constructor:
+
 ```java
 public SiteDefaultsClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -722,6 +765,7 @@ public SiteDefaultsClient(
 Change URI from `"/{siteId}/defaults"` (relative to old gateway + path base URL) to `"/v1/locations/{siteId}/defaults"`.
 
 Replace `applySecurityHeaders(HttpHeaders headers)` method and the call `.headers(this::applySecurityHeaders)` with explicit header injection:
+
 ```java
 .header("X-User", "pos-inventory")
 .header("X-Authorities", "location:read")
@@ -732,6 +776,7 @@ Remove `copyHeaderIfPresent`, `applySecurityHeaders`, and the `jakarta.servlet.*
 - [x] **Step 4: Implement StorageLocationValidationClient**
 
 Replace constructor:
+
 ```java
 public StorageLocationValidationClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -745,6 +790,7 @@ public StorageLocationValidationClient(
 Change URI from `"/{storageLocationId}/validation"` to `"/v1/storage-locations/{storageLocationId}/validation"`.
 
 Replace `.header(HttpHeaders.AUTHORIZATION, authorizationHeader)` with:
+
 ```java
 .header("X-User", "pos-inventory")
 .header("X-Authorities", "location:read")
@@ -755,6 +801,7 @@ Remove `resolveAuthorizationHeader()`, `BEARER_PREFIX` constant, `jakarta.servle
 - [x] **Step 5: Implement WorkorderValidationClient**
 
 Replace constructor:
+
 ```java
 public WorkorderValidationClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -766,11 +813,13 @@ public WorkorderValidationClient(
 Change URI from `"/{workorderId}/detail"` to `"/v1/workorders/{workorderId}/detail"`.
 
 Confirm the required permission:
+
 ```bash
 grep -n "@PreAuthorize" pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkorderDetailController.java | head -5
 ```
 
 Replace `.headers(this::applySecurityHeaders)` with:
+
 ```java
 .header("X-User", "pos-inventory")
 .header("X-Authorities", "workorder:workorder:view")  // verify against controller
@@ -796,6 +845,7 @@ git commit -m "feat(pos-inventory): migrate location and workorder clients to di
 ### Task 6: pos-location migration
 
 **Files:**
+
 - Modify: `pos-location/src/main/java/com/positivity/location/internal/client/PersonClient.java`
 - Modify: `pos-location/src/main/java/com/positivity/location/internal/client/LocationInventoryInquiryClient.java`
 - Modify: `pos-location/src/test/java/com/positivity/location/internal/client/PersonClientTest.java`
@@ -803,6 +853,7 @@ git commit -m "feat(pos-inventory): migrate location and workorder clients to di
 Context: `PersonClient` receives `gatewayBaseUrl` as constructor parameter. `LocationInventoryInquiryClient` bakes path prefix into base URL and uses bearer token forwarding from request context.
 
 Downstream native paths:
+
 - `PersonClient`: `http://people` + `GET /v1/people/{id}` — requires `people:person:view`
 - `LocationInventoryInquiryClient`: `http://inventory` + `GET /v1/inventory/locations/{storageLocationId}/inventory-inquiry` — requires `inventory:on_hand:view` (confirmed)
 
@@ -819,12 +870,14 @@ personClient = new PersonClient(builder, SERVICE_ID);
 ```
 
 Update both test assertions:
+
 ```java
 // was: BASE_URL + "/people/v1/people/42"
 mockServer.expect(requestTo(BASE_URL + "/v1/people/42"))
 ```
 
 Add a header assertion:
+
 ```java
 .andExpect(header("X-Authorities", "people:person:view"))
 ```
@@ -840,6 +893,7 @@ Expected: FAIL — wrong URL.
 - [x] **Step 3: Implement PersonClient**
 
 Rename the constructor parameter `gatewayBaseUrl` → `serviceId` (and corresponding `@Value`):
+
 ```java
 public PersonClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -851,6 +905,7 @@ public PersonClient(
 Change URI from `"/people/v1/people/{id}"` to `"/v1/people/{id}"`.
 
 Add auth header:
+
 ```java
 .header("X-Authorities", "people:person:view")
 .header("X-User", "pos-location")
@@ -898,6 +953,7 @@ class LocationInventoryInquiryClientTest {
 ```
 
 Run the test to confirm it fails:
+
 ```bash
 ./mvnw -pl pos-location test -Dtest=LocationInventoryInquiryClientTest -q 2>&1 | tail -20
 ```
@@ -905,6 +961,7 @@ Run the test to confirm it fails:
 Now implement the change in `LocationInventoryInquiryClient.java`:
 
 Replace constructor:
+
 ```java
 public LocationInventoryInquiryClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -918,6 +975,7 @@ public LocationInventoryInquiryClient(
 Change URI from `"/{storageLocationId}/inventory-inquiry"` (which was relative to the old path-baked base URL) to `"/v1/inventory/locations/{storageLocationId}/inventory-inquiry"`.
 
 Replace the `.header(HttpHeaders.AUTHORIZATION, resolveAuthorizationHeader())` line with:
+
 ```java
 .header("X-User", "pos-location")
 .header("X-Authorities", "inventory:on_hand:view")
@@ -943,6 +1001,7 @@ git commit -m "feat(pos-location): migrate people and inventory clients to direc
 ### Task 7: pos-people migration
 
 **Files:**
+
 - Modify: `pos-people/src/main/java/com/positivity/people/internal/config/RestClientConfig.java`
 - Modify: `pos-people/src/main/java/com/positivity/people/internal/client/SecurityServiceClient.java`
 - Modify: `pos-people/src/main/java/com/positivity/people/internal/client/LocationReferenceClient.java`
@@ -951,19 +1010,24 @@ git commit -m "feat(pos-location): migrate people and inventory clients to direc
 Context: All three beans (`securityServiceRestClient`, `workexecRestClient`, `locationServiceRestClient`) use `pos.X.base-url:http://api-gateway`. None of the clients inject auth headers.
 
 Downstream service IDs and native paths after stripping gateway prefix:
+
 - `securityServiceRestClient` → service-id `security-service`; strip `/security-service`: `/v1/users`, `/v1/roles`, `/v1/roles/by-name/{name}`, `/v1/roles/assignments`, `/v1/roles/assignments/user/{userId}`, `/v1/roles/assignments/{assignmentId}`
 - `workexecRestClient` → service-id `workorder` (workexec is part of pos-workorder); strip `/workorder`: `/v1/workexec/job-time-totals`
 - `locationServiceRestClient` → service-id `location`; strip `/location`: `/v1/locations/{id}/validation`, `/v1/locations/{id}`
 
 Required permissions:
+
 - Security service endpoints: check `pos-security-service/.../controller/UserController.java`, `RoleController.java`, `RoleAssignmentController.java`
+
   ```bash
   grep -n "@PreAuthorize" pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/UserController.java | head -5
   grep -n "@PreAuthorize" pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/RoleController.java | head -5
   grep -n "@PreAuthorize" pos-security-service/src/main/java/com/positivity/securityservice/internal/controller/RoleAssignmentController.java | head -5
   ```
+
 - Location validation: `location:read` (confirmed)
 - Workexec job time totals: check pos-workorder's workexec controller:
+
   ```bash
   grep -n "@PreAuthorize" pos-workorder/src/main/java/com/positivity/workorder/internal/controller/WorkexecController.java 2>/dev/null | head -5
   ```
@@ -1011,6 +1075,7 @@ Note: Because the RestClient's base URL comes from the RestClientConfig bean (no
 A simpler approach: use `MockRestServiceServer` bound to a `RestClient.Builder`, build the client, then pass it to the client class via a package-private constructor.
 
 For `LocationReferenceClient`:
+
 ```java
 // package-private constructor for tests:
 LocationReferenceClient(RestClient restClient) {
@@ -1019,6 +1084,7 @@ LocationReferenceClient(RestClient restClient) {
 ```
 
 Test:
+
 ```java
 @Test
 void locationReferenceClient_isActive_callsNativePath() {
@@ -1057,16 +1123,21 @@ void locationReferenceClient_isActive_callsNativePath() {
 In `pos-people/src/main/java/com/positivity/people/internal/config/RestClientConfig.java`:
 
 Replace:
+
 ```java
 @Value("${pos.security-service.base-url:http://api-gateway}") String securityServiceBaseUrl
 ```
+
 With:
+
 ```java
 @Value("${pos.security-service.service-id:security-service}") String serviceId
 ```
+
 And change `builder.requestFactory(factory).baseUrl(securityServiceBaseUrl).build()` → `builder.requestFactory(factory).baseUrl("http://" + serviceId).build()`.
 
 Also add `defaultHeader` calls for auth:
+
 ```java
 return builder.requestFactory(factory)
     .baseUrl("http://" + serviceId)
@@ -1078,13 +1149,16 @@ return builder.requestFactory(factory)
 Repeat the same pattern for `workexecRestClient` (`pos.workexec.service-id:workorder`) and `locationServiceRestClient` (`pos.location-service.service-id:location`).
 
 For `locationServiceRestClient`, after migration to `baseUrl("http://location")`, the `LocationReferenceClient` URI paths must change:
+
 - `/location/v1/locations/{locationId}/validation` → `/v1/locations/{locationId}/validation`
 - `/location/v1/locations/{locationId}` → `/v1/locations/{locationId}`
 
 For `workexecRestClient` → `WorkexecJobTimeClient`:
+
 - `/workorder/v1/workexec/job-time-totals` → `/v1/workexec/job-time-totals`
 
 For `securityServiceRestClient` → `SecurityServiceClient`:
+
 - `/security-service/v1/users` → `/v1/users`
 - `/security-service/v1/roles/by-name/{name}` → `/v1/roles/by-name/{name}`
 - `/security-service/v1/roles` → `/v1/roles`
@@ -1114,6 +1188,7 @@ git commit -m "feat(pos-people): migrate security-service, location, workexec cl
 ### Task 8: pos-security-service migration
 
 **Files:**
+
 - Modify: `pos-security-service/src/main/java/com/positivity/securityservice/internal/config/RestClientConfig.java`
 - Modify: `pos-security-service/src/main/java/com/positivity/securityservice/internal/client/PeopleRegistrationClient.java`
 - Modify: `pos-security-service/src/main/java/com/positivity/securityservice/internal/client/CustomerRegistrationClient.java`
@@ -1121,6 +1196,7 @@ git commit -m "feat(pos-people): migrate security-service, location, workexec cl
 Context: Both beans already inject `X-User` and `X-Authorities` via `defaultHeader`. Only the base URL and URI paths need to change. After migration to `http://people` and `http://customer`, strip gateway prefixes from paths.
 
 Downstream native path changes:
+
 - `PeopleRegistrationClient` (base: `http://people`):
   - `/people/v1/people/resolve` → `/v1/people/resolve`
   - `/people/v1/people/{personId}/users` → `/v1/people/{personId}/users`
@@ -1187,10 +1263,13 @@ class SecurityServiceClientUriTest {
 - [x] **Step 3: Implement RestClientConfig**
 
 Replace in `peopleRegistrationRestClient`:
+
 ```java
 @Value("${pos.people.base-url:http://api-gateway}") String peopleBaseUrl
 ```
+
 →
+
 ```java
 @Value("${pos.people.service-id:people}") String serviceId
 ```
@@ -1198,17 +1277,20 @@ Replace in `peopleRegistrationRestClient`:
 Change: `builder.requestFactory(factory).baseUrl(peopleBaseUrl)` → `builder.requestFactory(factory).baseUrl("http://" + serviceId)`.
 
 Repeat for `customerRegistrationRestClient`:
+
 - `pos.customer.base-url:http://api-gateway` → `pos.customer.service-id:customer`
 
 - [x] **Step 4: Update URI paths**
 
 In `PeopleRegistrationClient.java`, strip `/people` prefix from all URIs:
+
 - `.uri("/people/v1/people/resolve")` → `.uri("/v1/people/resolve")`
 - `.uri("/people/v1/people/{personId}/users", personId)` → `.uri("/v1/people/{personId}/users", personId)`
 - `.uri("/people/v1/people/users/link")` → `.uri("/v1/people/users/link")`
 - `.uri("/people/v1/people/{personId}", personId)` → `.uri("/v1/people/{personId}", personId)`
 
 In `CustomerRegistrationClient.java`:
+
 - `.path("/customer/v1/crm/persons")` → `.path("/v1/crm/persons")`
 
 - [x] **Step 5: Run tests — verify they pass**
@@ -1229,6 +1311,7 @@ git commit -m "feat(pos-security-service): migrate people and customer registrat
 ### Task 9: pos-shop-manager migration
 
 **Files:**
+
 - Modify: `pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/config/SecurityConfig.java`
 - Modify: `pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/client/CrmCustomerClient.java`
 - Modify: `pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/client/CrmVehicleClient.java`
@@ -1242,6 +1325,7 @@ Context: `CrmCustomerClient` and `CrmVehicleClient` use `@Qualifier("crmRestClie
 None of these clients inject auth headers.
 
 Downstream native paths:
+
 - `CrmCustomerClient` → `http://customer` + `GET /v1/customers/{id}` — check pos-customer CustomerController
 - `CrmVehicleClient` → `http://customer` + `GET /v1/vehicles/{vehicleId}` — check pos-customer VehicleController
 - `HrAvailabilityClient` → `http://people` + `GET /v1/availability/overlay`, `GET /hr/v1/schedules`
@@ -1250,6 +1334,7 @@ Downstream native paths:
 - `ServiceEntityClient` → `http://catalog` + `GET /v1/services/{id}` — check pos-catalog ServiceController
 
 Check permissions:
+
 ```bash
 grep -n "@PreAuthorize" pos-customer/src/main/java/com/positivity/customer/internal/controller/CustomerController.java | head -5
 grep -n "@PreAuthorize" pos-location/src/main/java/com/positivity/location/internal/controller/LocationController.java | grep -E "5[0-9]:" | head -5
@@ -1354,12 +1439,14 @@ Remove `@Value("${pos.crm.customer-base-url:...}") private String customerBaseUr
 Change URI from `customerBaseUrl + "/customer/v1/customers/{customerId}"` to `"/v1/customers/{customerId}"`.
 
 Add auth header:
+
 ```java
 .header("X-User", "pos-shop-manager")
 .header("X-Authorities", "crm:party:view")
 ```
 
 Add package-private constructor for tests:
+
 ```java
 CrmCustomerClient(RestClient crmRestClient, String ignored) {
     this.crmRestClient = crmRestClient;
@@ -1371,6 +1458,7 @@ CrmCustomerClient(RestClient crmRestClient, String ignored) {
 - [ ] **Step 5: Implement CrmVehicleClient**
 
 Same pattern as `CrmCustomerClient`:
+
 - Remove `pos.crm.vehicle-base-url` field
 - Change URI from `vehicleBaseUrl + "/customer/v1/vehicles/{vehicleId}"` → `"/v1/vehicles/{vehicleId}"`
 - Add `X-User: pos-shop-manager` + `X-Authorities: crm:party:view`
@@ -1382,6 +1470,7 @@ Change constructor parameter from `pos.hr.base-url:http://api-gateway` to `pos.p
 Change `builder.baseUrl(hrBaseUrl)` → `builder.baseUrl("http://" + serviceId)`.
 
 Strip `/people` from URI paths:
+
 - `.path("/people/v1/availability/overlay")` → `.path("/v1/availability/overlay")`
 - `.path("/people/hr/v1/schedules")` → `.path("/hr/v1/schedules")`
 
@@ -1394,6 +1483,7 @@ Change constructor from `location.service.url:http://api-gateway` to `pos.locati
 Store `serviceId`; change URL composition from `locationServiceUrl + "/location/v1/locations/..."` to `"http://" + locationServiceId + "/v1/locations/..."`.
 
 OR: Set base URL on the RestClient and use relative paths:
+
 ```java
 this.restClient = builder.baseUrl("http://" + serviceId).build();
 // then use: .uri("/v1/locations/bays") etc.
@@ -1406,12 +1496,14 @@ Add auth headers (use `location:read` for GET, `location:write` for POST/PUT/DEL
 Change `people.service.url:http://api-gateway` → `pos.people.service-id:people`.
 
 Change URI from `peopleServiceUrl + "/people/v1/people/{id}"` → switch to base URL construction:
+
 ```java
 this.restClient = builder.baseUrl("http://" + serviceId).build();
 // usage: .uri("/v1/people/{id}", id)
 ```
 
 Add auth:
+
 ```java
 .header("X-Authorities", "people:person:view")
 .header("X-User", "pos-shop-manager")
@@ -1422,6 +1514,7 @@ Add auth:
 Change `catalog.service.url:http://api-gateway` → `pos.catalog.service-id:catalog`.
 
 Change URI from `catalogServiceUrl + "/catalog/v1/services/{id}"` → base URL + relative path:
+
 ```java
 this.restClient = builder.baseUrl("http://" + serviceId).build();
 // usage: .uri("/v1/services/{id}", id)
@@ -1447,6 +1540,7 @@ git commit -m "feat(pos-shop-manager): migrate all service clients to direct Eur
 ### Task 10: pos-workorder migration
 
 **Files:**
+
 - Modify: `pos-workorder/src/main/java/com/positivity/workorder/internal/client/CustomerValidationClient.java`
 - Modify: `pos-workorder/src/main/java/com/positivity/workorder/internal/client/ShopmgrOperationalContextClient.java`
 - Modify: `pos-workorder/src/main/java/com/positivity/workorder/internal/config/InventoryClientConfig.java`
@@ -1467,6 +1561,7 @@ Context: `CustomerValidationClient` and `ShopmgrOperationalContextClient` take `
 `TaxClientConfig` and `TaxClient` remain unchanged (tax-exemption exception).
 
 Downstream native paths:
+
 - `CustomerValidationClient` (→ `http://customer`): strip `/customer`
   - `/customer/v1/customers/{id}/requirements-met` → `/v1/customers/{id}/requirements-met`
   - `/customer/v1/approvals/{id}/is-approved` → `/v1/approvals/{id}/is-approved`
@@ -1483,6 +1578,7 @@ Downstream native paths:
 - `DocumentClientConfig` → `DocumentClient` (→ `http://documents`): path already native (`/v1/documents/render`), no prefix to strip
 
 Check permissions:
+
 ```bash
 grep -n "@PreAuthorize" pos-customer/src/main/java/com/positivity/customer/internal/controller/CustomerRequirementsController.java 2>/dev/null | head -5
 grep -n "@PreAuthorize" pos-invoice/src/main/java/com/positivity/invoice/internal/controller/InvoiceController.java | head -5
@@ -1542,6 +1638,7 @@ void fetchAvailability_callsNativePeoplePath() {
 - [ ] **Step 4: Implement CustomerValidationClient**
 
 Change constructor:
+
 ```java
 public CustomerValidationClient(
     @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -1551,10 +1648,12 @@ public CustomerValidationClient(
 ```
 
 Strip `/customer` from URI paths:
+
 - `.uri("/customer/v1/customers/{id}/requirements-met", customerId)` → `.uri("/v1/customers/{id}/requirements-met", customerId)`
 - `.uri("/customer/v1/approvals/{id}/is-approved", approvalId)` → `.uri("/v1/approvals/{id}/is-approved", approvalId)`
 
 Add auth headers to each request:
+
 ```java
 .header("X-User", "pos-workorder")
 .header("X-Authorities", "crm:party:view")  // verify against CustomerRequirementsController
@@ -1563,6 +1662,7 @@ Add auth headers to each request:
 - [ ] **Step 5: Implement ShopmgrOperationalContextClient**
 
 Change constructor parameter:
+
 ```java
 @Value("${pos.shopmgr.service-id:shop-manager}") String serviceId
 ```
@@ -1570,10 +1670,12 @@ Change constructor parameter:
 Change `restClientBuilder.baseUrl(shopmgrBaseUrl)` → `restClientBuilder.baseUrl("http://" + serviceId)`.
 
 Strip `/shop-manager` from URI paths:
+
 - `"/shop-manager/v1/shopmgr/workorders/{workorderId}/operationalContext"` → `"/v1/shopmgr/workorders/{workorderId}/operationalContext"`
 - `"/shop-manager/v1/shopmgr/locations/{locationId}/bays"` → `"/v1/shopmgr/locations/{locationId}/bays"`
 
 Add auth headers (check pos-shop-manager's `ShopmgrController` for required permissions):
+
 ```bash
 grep -n "@PreAuthorize" pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/controller/ShopmgrController.java 2>/dev/null | head -5
 ```
@@ -1581,6 +1683,7 @@ grep -n "@PreAuthorize" pos-shop-manager/src/main/java/com/positivity/shopmanage
 - [ ] **Step 6: Implement InventoryClientConfig**
 
 Change parameter:
+
 ```java
 @Value("${pos.inventory.service-id:inventory}") String serviceId
 ```
@@ -1588,6 +1691,7 @@ Change parameter:
 Change `restClientBuilder.baseUrl(inventoryBaseUrl)` → `restClientBuilder.baseUrl("http://" + serviceId)`.
 
 Then in `InventoryPickClient.java`, strip `/inventory` from all URI paths:
+
 - `"/inventory/v1/inventory/pick-lists/{pickListId}"` → `"/v1/inventory/pick-lists/{pickListId}"`
 - `"/inventory/v1/inventory/pick-lists/{pickListId}/release"` → `"/v1/inventory/pick-lists/{pickListId}/release"`
 - `"/inventory/v1/inventory/pick-lists/{pickListId}/tasks"` → `"/v1/inventory/pick-lists/{pickListId}/tasks"`
@@ -1596,6 +1700,7 @@ Then in `InventoryPickClient.java`, strip `/inventory` from all URI paths:
 - `"/inventory/v1/inventory/consumption"` → `"/v1/inventory/consumption"`
 
 Add auth headers to each request:
+
 ```java
 .header("X-User", "pos-workorder")
 .header("X-Authorities", "inventory:pick_list:view")  // or execute — verify per endpoint
@@ -1606,6 +1711,7 @@ Check `pos-inventory`'s PickListController for exact permissions per operation.
 - [ ] **Step 7: Implement InvoiceClientConfig**
 
 Change:
+
 ```java
 @Value("${pos.invoice.service-id:invoice}") String serviceId
 ```
@@ -1613,10 +1719,12 @@ Change:
 Change `restClientBuilder.baseUrl(invoiceBaseUrl)` → `restClientBuilder.baseUrl("http://" + serviceId)`.
 
 In `InvoiceClient.java`, strip `/invoice`:
+
 - `"/invoice/v1/invoices"` → `"/v1/invoices"`
 - `"/invoice/v1/invoices/{invoiceId}"` → `"/v1/invoices/{invoiceId}"`
 
 Add auth headers (check pos-invoice's InvoiceController for required permissions):
+
 ```java
 .header("X-User", "pos-workorder")
 .header("X-Authorities", "workorder:invoice:create,workorder:invoice:view")
@@ -1625,6 +1733,7 @@ Add auth headers (check pos-invoice's InvoiceController for required permissions
 - [ ] **Step 8: Implement PeopleClientConfig**
 
 Change:
+
 ```java
 @Value("${pos.people.service-id:people}") String serviceId
 ```
@@ -1632,16 +1741,19 @@ Change:
 Change `restClientBuilder.baseUrl(peopleServiceBaseUrl)` → `restClientBuilder.baseUrl("http://" + serviceId)`.
 
 In `PeopleLocationClient.java`:
+
 - `"/people/v1/people/me/primary-location"` → `"/v1/people/me/primary-location"`
 - Add auth headers.
 
 In `PeopleAvailabilityClient.java`:
+
 - `.path("/people/v1/people/availability")` → `.path("/v1/people/availability")`
 - Add auth headers (check pos-people's PeopleAvailabilityController).
 
 - [ ] **Step 9: Implement DocumentClientConfig**
 
 Change from plain builder to LoadBalanced:
+
 ```java
 @Bean
 public RestClient documentServiceRestClient(
@@ -1654,6 +1766,7 @@ public RestClient documentServiceRestClient(
 The `DocumentClient` paths (`/v1/documents/render`) are already gateway-native, no prefix to strip.
 
 Add auth headers to `DocumentClient.renderPdf()` (check pos-documents render endpoint permissions):
+
 ```java
 .header("X-User", "pos-workorder")
 .header("X-Authorities", "<required-permission>")
@@ -1662,6 +1775,7 @@ Add auth headers to `DocumentClient.renderPdf()` (check pos-documents render end
 - [ ] **Step 10: Update additional-spring-configuration-metadata.json**
 
 In `pos-workorder/src/main/resources/META-INF/additional-spring-configuration-metadata.json`, replace old `*.base-url` properties with new `*.service-id` equivalents:
+
 - `pos.customer.base-url` → `pos.customer.service-id` (default: `customer`)
 - `pos.invoice.base-url` → `pos.invoice.service-id` (default: `invoice`)
 - `pos.people.base-url` → `pos.people.service-id` (default: `people`)
@@ -1689,6 +1803,7 @@ git commit -m "feat(pos-workorder): migrate all service clients to direct Eureka
 ### Task 11: pos-mcp-server partial migration (gateway exception)
 
 **Files:**
+
 - Modify: `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/tools/WorkorderFacadeTool.java`
 - Modify: `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/tools/InventoryFacadeTool.java`
 - Modify: `pos-mcp-server/src/main/java/com/positivity/mcp/internal/orchestration/tools/VehicleFacadeTool.java`
@@ -1712,6 +1827,7 @@ Check which `@Value("${pos.X.base-url}")` properties in tool classes currently d
 - [ ] **Step 3: Update application.yml defaults**
 
 For each tool property that currently defaults to `http://pos-{service}:8080/v1/...`, change the default in `application.yml` to `http://api-gateway/{gateway-prefix}/v1/...`. For example:
+
 - `pos.workorder.base-url: http://pos-workorder:8080/v1/workorders` → `pos.workorder.base-url: http://api-gateway/workorder/v1/workorders`
 - `pos.inventory.base-url: http://pos-inventory:8087/v1/inventory` → `pos.inventory.base-url: http://api-gateway/inventory/v1/inventory`
 
@@ -1722,6 +1838,7 @@ Note: `EventsFacadeTool` uses `pos.event-receiver.base-url` — check if this is
 - [ ] **Step 4: Document this exception**
 
 Add a comment in `McpServerConfiguration.java` above `loadBalancedRestClientBuilder`:
+
 ```java
 // MCP tools route through api-gateway because they relay end-user bearer tokens
 // which require JWT→X-Authorities conversion at the gateway layer.
@@ -1746,6 +1863,7 @@ git commit -m "feat(pos-mcp-server): fix tool base URLs from Docker DNS to LoadB
 ### Task 12: Verification and documentation cleanup
 
 **Files:**
+
 - Modify: `docs/service-discovery-migration/service-id-registry.md`
 - Modify: `docs/service-discovery-migration/client-policy-matrix.md`
 
@@ -1802,6 +1920,7 @@ git commit -m "docs: finalize service discovery migration docs after direct-disc
 ## Self-Review Checklist
 
 **Spec coverage check:**
+
 - § Policy 1 (internal runtime via Eureka): covered in Tasks 2–10 ✓
 - § Policy 2 (local dev via docker-compose): no code change needed; existing eureka-server covers it ✓
 - § Policy 3 (X-Authorities injection): each task adds auth headers; permissions verified from `@PreAuthorize` ✓
@@ -1813,6 +1932,7 @@ git commit -m "docs: finalize service discovery migration docs after direct-disc
 - § Grep audit: Task 12 ✓
 
 **Known auth permissions to verify before merging** (check `@PreAuthorize` on the linked controller):
+
 - `InvoiceServiceClient` → pos-invoice `InvoiceController.getInvoiceDetails`
 - `InventoryPickClient` → pos-inventory `PickListController` (pick/execute permissions per operation)
 - `InvoiceClient` (pos-workorder) → pos-invoice `InvoiceController.createInvoice`
