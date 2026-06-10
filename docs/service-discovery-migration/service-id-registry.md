@@ -44,3 +44,4 @@ status: draft
 - Tax remains internal-only and exempt from Eureka/gateway migration scope (ADR-0021).
 - Startup infrastructure callers should use Docker DNS hostnames directly (for example pos-security-service and pos-event-receiver) to avoid startup-order coupling to discovery.
 - Current gateway path for MCP is `/mcp-server/**` in source configuration.
+- All gateway-routed internal runtime clients have been migrated to direct Eureka discovery (`http://{service-id}` via `@LoadBalanced RestClient.Builder`). The approved exception is pos-mcp-server (bearer token relay requires gateway JWT validation). Startup-infra clients (EventTypeInitializer, PermissionRegistration, DocumentTemplateInitializer) retain Docker DNS direct addresses. Tax service (pos-tax) retains the ADR-0021 direct-call exception.
