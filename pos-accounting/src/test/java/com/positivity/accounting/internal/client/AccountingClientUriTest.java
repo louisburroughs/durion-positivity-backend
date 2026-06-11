@@ -33,12 +33,9 @@ import org.springframework.web.client.RestClient;
  */
 class AccountingClientUriTest {
 
-    private static final UUID PARTY_ID =
-            UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID INVOICE_ID =
-            UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID WORKORDER_ID =
-            UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID PARTY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID INVOICE_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID WORKORDER_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     // -----------------------------------------------------------------------
     // CustomerBillingRulesClient
@@ -50,18 +47,15 @@ class AccountingClientUriTest {
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
 
-        CustomerBillingRulesClient client =
-                new CustomerBillingRulesClient(restClient, "customer");
+        CustomerBillingRulesClient client = new CustomerBillingRulesClient(restClient, "customer");
 
         mockServer
-                .expect(requestTo(
-                        "http://customer/v1/crm/snapshot/party/" + PARTY_ID + "/billing-rules"))
+                .expect(requestTo("http://customer/v1/crm/snapshot/party/" + PARTY_ID + "/billing-rules"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-User", "pos-accounting"))
                 .andExpect(header("X-Authorities", "crm:party:view"))
                 .andRespond(withSuccess(
-                        "{\"poRequired\":false,\"taxExempt\":false,\"currency\":\"USD\"}",
-                        MediaType.APPLICATION_JSON));
+                        "{\"poRequired\":false,\"taxExempt\":false,\"currency\":\"USD\"}", MediaType.APPLICATION_JSON));
 
         BillingRuleRefResponse response = client.getBillingRules(PARTY_ID);
 
@@ -78,12 +72,10 @@ class AccountingClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        CircuitBreaker circuitBreaker = CircuitBreakerRegistry
-                .of(CircuitBreakerConfig.ofDefaults())
-                .circuitBreaker("test-invoice");
+        CircuitBreaker circuitBreaker =
+                CircuitBreakerRegistry.of(CircuitBreakerConfig.ofDefaults()).circuitBreaker("test-invoice");
 
-        InvoiceServiceClient client =
-                new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
+        InvoiceServiceClient client = new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
 
         mockServer
                 .expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID))
@@ -111,12 +103,10 @@ class AccountingClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        CircuitBreaker circuitBreaker = CircuitBreakerRegistry
-                .of(CircuitBreakerConfig.ofDefaults())
+        CircuitBreaker circuitBreaker = CircuitBreakerRegistry.of(CircuitBreakerConfig.ofDefaults())
                 .circuitBreaker("test-invoice-apply-payment");
 
-        InvoiceServiceClient client =
-                new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
+        InvoiceServiceClient client = new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
 
         mockServer
                 .expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/apply-payment"))
@@ -151,12 +141,10 @@ class AccountingClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        CircuitBreaker circuitBreaker = CircuitBreakerRegistry
-                .of(CircuitBreakerConfig.ofDefaults())
+        CircuitBreaker circuitBreaker = CircuitBreakerRegistry.of(CircuitBreakerConfig.ofDefaults())
                 .circuitBreaker("test-invoice-reverse-payment");
 
-        InvoiceServiceClient client =
-                new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
+        InvoiceServiceClient client = new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
 
         mockServer
                 .expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/reverse-payment"))
@@ -191,12 +179,10 @@ class AccountingClientUriTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        CircuitBreaker circuitBreaker = CircuitBreakerRegistry
-                .of(CircuitBreakerConfig.ofDefaults())
+        CircuitBreaker circuitBreaker = CircuitBreakerRegistry.of(CircuitBreakerConfig.ofDefaults())
                 .circuitBreaker("test-invoice-apply-credit-memo");
 
-        InvoiceServiceClient client =
-                new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
+        InvoiceServiceClient client = new InvoiceServiceClient(restClient, circuitBreaker, "invoice");
 
         mockServer
                 .expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/apply-credit-memo"))
@@ -235,12 +221,10 @@ class AccountingClientUriTest {
         MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
 
-        WorkorderInvoiceClient client =
-                new WorkorderInvoiceClient(restClient, "workorder");
+        WorkorderInvoiceClient client = new WorkorderInvoiceClient(restClient, "workorder");
 
         mockServer
-                .expect(requestTo(
-                        "http://workorder/v1/workorders/" + WORKORDER_ID + "/generate-invoice"))
+                .expect(requestTo("http://workorder/v1/workorders/" + WORKORDER_ID + "/generate-invoice"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-accounting"))
                 .andExpect(header("X-Authorities", "workorder:workorder:generate_invoice"))
@@ -250,8 +234,7 @@ class AccountingClientUriTest {
                                 + "\"workorderId\":\"" + WORKORDER_ID + "\"}",
                         MediaType.APPLICATION_JSON));
 
-        InvoiceGenerationResponse response =
-                client.regenerateInvoiceFromWorkorder(WORKORDER_ID, null);
+        InvoiceGenerationResponse response = client.regenerateInvoiceFromWorkorder(WORKORDER_ID, null);
 
         assertThat(response).isNotNull();
         mockServer.verify();

@@ -192,8 +192,7 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
         Response style:
         - %s
         - Prefer concrete statuses, exact entities, and next actions over generic advice.
-        """.formatted(
-                title, mission, responsibility, promptKey, guardrail, responseStyle);
+        """.formatted(title, mission, responsibility, promptKey, guardrail, responseStyle);
     }
 
     private final SystemPromptRepository systemPromptRepository;

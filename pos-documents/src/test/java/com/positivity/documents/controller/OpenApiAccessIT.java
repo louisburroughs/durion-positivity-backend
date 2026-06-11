@@ -27,6 +27,7 @@ class OpenApiAccessIT {
 
         assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
         assertThat(response.body()).contains("summary: Render document to PDF");
-        assertThat(response.body()).contains("description: Renders input content and template context into a PDF document.");
+        assertThat(response.body())
+                .contains("description: Renders input content and template context into a PDF document.");
     }
 }

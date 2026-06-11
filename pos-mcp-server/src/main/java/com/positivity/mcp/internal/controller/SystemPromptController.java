@@ -49,9 +49,7 @@ class SystemPromptController {
     }
 
     @GetMapping("/{id}")
-    @Operation(
-            summary = "Get system prompt",
-            description = "Retrieve a single MCP system prompt by its identifier")
+    @Operation(summary = "Get system prompt", description = "Retrieve a single MCP system prompt by its identifier")
     @ApiResponse(responseCode = "200", description = "System prompt returned")
     @ApiResponse(responseCode = "404", description = "System prompt not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

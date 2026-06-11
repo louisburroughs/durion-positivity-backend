@@ -12,12 +12,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
 
-        List<TimeEntry> findByTimeEntryIdIn(List<UUID> ids);
+    List<TimeEntry> findByTimeEntryIdIn(List<UUID> ids);
 
-        long countByStatus(TimeEntryStatus status);
+    long countByStatus(TimeEntryStatus status);
 
-        @NonNull
-        @Query("""
+    @NonNull
+    @Query("""
                         SELECT t
                         FROM TimeEntry t
                         WHERE t.attendanceStartAt IS NOT NULL
@@ -26,15 +26,15 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
                           AND (:locationId IS NULL OR t.locationId = :locationId)
                           AND (:includeAllTechnicians = true OR t.person.id IN :technicianIds)
                         """)
-        List<TimeEntry> findAttendanceOverlappingWindow(
-                        @Param("windowStartInclusive") Instant windowStartInclusive,
-                        @Param("windowEndExclusive") Instant windowEndExclusive,
-                        @Param("locationId") UUID locationId,
-                        @Param("technicianIds") List<UUID> technicianIds,
-                        @Param("includeAllTechnicians") boolean includeAllTechnicians);
+    List<TimeEntry> findAttendanceOverlappingWindow(
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            @Param("locationId") UUID locationId,
+            @Param("technicianIds") List<UUID> technicianIds,
+            @Param("includeAllTechnicians") boolean includeAllTechnicians);
 
-        @NonNull
-        @Query("""
+    @NonNull
+    @Query("""
                         SELECT t
                         FROM TimeEntry t
                         LEFT JOIN FETCH t.person p
@@ -43,9 +43,9 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
                           AND t.attendanceStartAt < :windowEndExclusive
                           AND t.locationId IN :locationIds
                         """)
-        List<TimeEntry> findApprovedForExport(
-                        @Param("status") TimeEntryStatus status,
-                        @Param("windowStartInclusive") Instant windowStartInclusive,
-                        @Param("windowEndExclusive") Instant windowEndExclusive,
-                        @Param("locationIds") List<UUID> locationIds);
+    List<TimeEntry> findApprovedForExport(
+            @Param("status") TimeEntryStatus status,
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            @Param("locationIds") List<UUID> locationIds);
 }

@@ -12,14 +12,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
  *
  * Issue: #41
  */
-
 public interface AuditLogEventRepository
-                extends JpaRepository<AuditLogEvent, UUID>, JpaSpecificationExecutor<AuditLogEvent> {
+        extends JpaRepository<AuditLogEvent, UUID>, JpaSpecificationExecutor<AuditLogEvent> {
 
-        List<AuditLogEvent> findByEventTypeOrderByTimestampDesc(String eventType);
+    List<AuditLogEvent> findByEventTypeOrderByTimestampDesc(String eventType);
 
-        List<AuditLogEvent> findByEntityIdAndEntityTypeOrderByTimestampDesc(String entityId, String entityType);
+    List<AuditLogEvent> findByEntityIdAndEntityTypeOrderByTimestampDesc(String entityId, String entityType);
 
-        List<AuditLogEvent> findByEntityIdAndEntityTypeAndTimestampBetweenOrderByTimestampDesc(
-                        String entityId, String entityType, Instant from, Instant to);
+    List<AuditLogEvent> findByEntityIdAndEntityTypeAndTimestampBetweenOrderByTimestampDesc(
+            String entityId, String entityType, Instant from, Instant to);
 }

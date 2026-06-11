@@ -22,7 +22,8 @@ public class WorkorderValidationClient {
     public WorkorderValidationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.workorder.service-id:workorder}") String workorderServiceId) {
-        this.restClient = restClientBuilder.baseUrl("http://" + workorderServiceId).build();
+        this.restClient =
+                restClientBuilder.baseUrl("http://" + workorderServiceId).build();
     }
 
     @NonNull

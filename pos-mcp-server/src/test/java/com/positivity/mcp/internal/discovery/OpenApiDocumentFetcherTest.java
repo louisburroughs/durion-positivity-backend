@@ -117,7 +117,8 @@ class OpenApiDocumentFetcherTest {
         WebClient trackingClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     requestedUris.add(request.url());
-                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                    return Mono.just(
+                            ClientResponse.create(HttpStatus.OK).body(yaml).build());
                 })
                 .build();
 
@@ -129,8 +130,7 @@ class OpenApiDocumentFetcherTest {
         assertThat(result).isNotNull();
         assertThat(result.baseUri()).isEqualTo(URI.create("http://gateway.local:8080"));
         assertThat(requestedUris).hasSize(1);
-        assertThat(requestedUris.getFirst().toString())
-                .isEqualTo("http://gateway.local:8080/v3/api-docs");
+        assertThat(requestedUris.getFirst().toString()).isEqualTo("http://gateway.local:8080/v3/api-docs");
     }
 
     @Test
@@ -146,7 +146,8 @@ class OpenApiDocumentFetcherTest {
         WebClient trackingClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     requestedUris.add(request.url());
-                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                    return Mono.just(
+                            ClientResponse.create(HttpStatus.OK).body(yaml).build());
                 })
                 .build();
 
@@ -158,8 +159,7 @@ class OpenApiDocumentFetcherTest {
         assertThat(result).isNotNull();
         assertThat(result.baseUri()).isEqualTo(URI.create("http://gateway.local:8080/mcp"));
         assertThat(requestedUris).hasSize(1);
-        assertThat(requestedUris.getFirst().toString())
-                .isEqualTo("http://gateway.local:8080/mcp/v3/api-docs");
+        assertThat(requestedUris.getFirst().toString()).isEqualTo("http://gateway.local:8080/mcp/v3/api-docs");
     }
 
     @Test
@@ -173,7 +173,8 @@ class OpenApiDocumentFetcherTest {
         WebClient trackingClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     requestedUris.add(request.url());
-                    return Mono.just(ClientResponse.create(HttpStatus.OK).body(yaml).build());
+                    return Mono.just(
+                            ClientResponse.create(HttpStatus.OK).body(yaml).build());
                 })
                 .build();
 
@@ -209,15 +210,14 @@ class OpenApiDocumentFetcherTest {
     }
 
     private static WebClient webClientReturning(String body) {
-        ExchangeFunction exchange = request -> Mono.just(
-                ClientResponse.create(HttpStatus.OK).body(body).build());
+        ExchangeFunction exchange = request ->
+                Mono.just(ClientResponse.create(HttpStatus.OK).body(body).build());
         return WebClient.builder().exchangeFunction(exchange).build();
     }
 
     private static String loadClasspathResource(String path) {
         try {
-            return StreamUtils.copyToString(
-                    new ClassPathResource(path).getInputStream(), StandardCharsets.UTF_8);
+            return StreamUtils.copyToString(new ClassPathResource(path).getInputStream(), StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new IllegalStateException("Could not load test resource: " + path, e);
         }

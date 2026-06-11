@@ -20,7 +20,8 @@ public class SiteDefaultsClient {
     public SiteDefaultsClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.location.service-id:location}") String locationServiceId) {
-        this.restClient = restClientBuilder.baseUrl("http://" + locationServiceId).build();
+        this.restClient =
+                restClientBuilder.baseUrl("http://" + locationServiceId).build();
     }
 
     @NonNull

@@ -41,7 +41,8 @@ public class ItemCostController {
             scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "inventory.cost.standard.update"})
     @Operation(
             summary = "Update standard item cost",
-            description = "Updates the standard cost for the specified item and returns the refreshed item cost values.")
+            description =
+                    "Updates the standard cost for the specified item and returns the refreshed item cost values.")
     @ApiResponse(
             responseCode = "200",
             description = "Updated",

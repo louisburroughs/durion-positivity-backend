@@ -28,7 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/appointments/{appointmentId}/assignments")
 @RequiredArgsConstructor
-@Tag(name = "Appointment Assignments", description = "Create and list technician and resource assignments for an appointment")
+@Tag(
+        name = "Appointment Assignments",
+        description = "Create and list technician and resource assignments for an appointment")
 public class AssignmentController {
 
     private final AssignmentService assignmentService;
@@ -42,7 +44,8 @@ public class AssignmentController {
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_CREATED", apiVersion = "1")
     @Operation(
             summary = "Create appointment assignments",
-            description = "Creates assignments for the specified appointment using the requested mechanics or shop resources.")
+            description =
+                    "Creates assignments for the specified appointment using the requested mechanics or shop resources.")
     @ApiResponse(
             responseCode = "201",
             description = "Assignments created",

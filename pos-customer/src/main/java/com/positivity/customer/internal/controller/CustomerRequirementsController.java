@@ -41,7 +41,10 @@ public class CustomerRequirementsController {
                         description = "Customer requirements evaluation returned",
                         content = @Content(schema = @Schema(implementation = Boolean.class))),
                 @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content),
-                @ApiResponse(responseCode = "403", description = "Caller lacks PARTY_VIEW authority", content = @Content),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Caller lacks PARTY_VIEW authority",
+                        content = @Content),
                 @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content)
             })
     @GetMapping("/{id}/requirements-met")
@@ -49,7 +52,8 @@ public class CustomerRequirementsController {
     @EmitEvent(id = "CUSTOMER_REQUIREMENTS_MET_GET", apiVersion = "1")
     public ResponseEntity<Boolean> requirementsMet(
             @Parameter(description = "Customer ID", required = true) @PathVariable @NonNull UUID id) {
-        return customerRequirementsService.requirementsMet(id)
+        return customerRequirementsService
+                .requirementsMet(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

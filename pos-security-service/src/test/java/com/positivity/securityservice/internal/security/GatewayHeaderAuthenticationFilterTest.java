@@ -39,12 +39,13 @@ class GatewayHeaderAuthenticationFilterTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("permBits_validPayload_decodesAuthorities: valid X-Perm-Bits + matching X-Perm-Ver populates security context with decoded permissions")
+    @DisplayName(
+            "permBits_validPayload_decodesAuthorities: valid X-Perm-Bits + matching X-Perm-Ver populates security context with decoded permissions")
     void permBits_validPayload_decodesAuthorities() throws Exception {
         Set<PermissionCode> permissions = EnumSet.of(
-                PermissionCode.ACCOUNTING__JE__VIEW,   // bit 0 → "accounting:je:view"
-                PermissionCode.CATALOG__PRODUCT__VIEW  // bit 11 → "catalog:product:view"
-        );
+                PermissionCode.ACCOUNTING__JE__VIEW, // bit 0 → "accounting:je:view"
+                PermissionCode.CATALOG__PRODUCT__VIEW // bit 11 → "catalog:product:view"
+                );
         String encoded = PermissionBitsetCodec.encode(permissions);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -62,8 +63,7 @@ class GatewayHeaderAuthenticationFilterTest {
         List<String> authorityStrings = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
-        assertThat(authorityStrings)
-                .containsExactlyInAnyOrder("accounting:je:view", "catalog:product:view");
+        assertThat(authorityStrings).containsExactlyInAnyOrder("accounting:je:view", "catalog:product:view");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -71,7 +71,8 @@ class GatewayHeaderAuthenticationFilterTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("permBits_missingPermVer_clearsAuth: X-Perm-Bits present but X-Perm-Ver absent clears security context (fail closed)")
+    @DisplayName(
+            "permBits_missingPermVer_clearsAuth: X-Perm-Bits present but X-Perm-Ver absent clears security context (fail closed)")
     void permBits_missingPermVer_clearsAuth() throws Exception {
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
 
@@ -90,7 +91,8 @@ class GatewayHeaderAuthenticationFilterTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("permBits_wrongVersion_clearsAuth: X-Perm-Ver != CATALOG_VERSION clears security context (fail closed)")
+    @DisplayName(
+            "permBits_wrongVersion_clearsAuth: X-Perm-Ver != CATALOG_VERSION clears security context (fail closed)")
     void permBits_wrongVersion_clearsAuth() throws Exception {
         String encoded = PermissionBitsetCodec.encode(Set.of(PermissionCode.ACCOUNTING__JE__VIEW));
 
@@ -124,8 +126,7 @@ class GatewayHeaderAuthenticationFilterTest {
         List<String> authorityStrings = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
-        assertThat(authorityStrings)
-                .containsExactlyInAnyOrder("security:role:view", "security:permission:view");
+        assertThat(authorityStrings).containsExactlyInAnyOrder("security:role:view", "security:permission:view");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -133,7 +134,8 @@ class GatewayHeaderAuthenticationFilterTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("noAuthHeaders_noAuthenticationSet: neither X-Perm-Bits nor X-Authorities → security context is not populated")
+    @DisplayName(
+            "noAuthHeaders_noAuthenticationSet: neither X-Perm-Bits nor X-Authorities → security context is not populated")
     void noAuthHeaders_noAuthenticationSet() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         // no auth headers

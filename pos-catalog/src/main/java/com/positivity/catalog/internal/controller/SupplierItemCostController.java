@@ -43,7 +43,8 @@ public class SupplierItemCostController {
             scopes = {"catalog:supplier_cost:write"})
     @Operation(
             summary = "Create supplier cost structure",
-            description = "Creates a supplier-specific item cost structure with the submitted supplier, item, and tier details.")
+            description =
+                    "Creates a supplier-specific item cost structure with the submitted supplier, item, and tier details.")
     @ApiResponse(
             responseCode = "201",
             description = "Created",

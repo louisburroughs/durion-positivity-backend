@@ -38,7 +38,8 @@ public class NltiController {
     @PreAuthorize("hasAuthority('" + McpPermissions.NLTI_REQUEST_SUBMIT + "')")
     @Operation(
             summary = "Submit a natural language task request",
-            description = "Submit a natural language task request for asynchronous MCP processing and correlation tracking")
+            description =
+                    "Submit a natural language task request for asynchronous MCP processing and correlation tracking")
     ResponseEntity<NltiResponseV1> submitRequest(
             @Valid @RequestBody @NonNull NltiRequestDTO request,
             @RequestHeader(value = NltiCorrelationIdSupport.CORRELATION_ID_HEADER, required = false)

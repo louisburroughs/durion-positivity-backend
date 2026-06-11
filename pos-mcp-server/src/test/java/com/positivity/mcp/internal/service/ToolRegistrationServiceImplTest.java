@@ -142,8 +142,7 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of());
-        return new ToolRegistrationServiceImpl(
-                properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+        return new ToolRegistrationServiceImpl(properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
     }
 
     private ToolRegistrationServiceImpl serviceWithIncludedServices(List<String> includedServices) {
@@ -157,13 +156,12 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of());
-        return new ToolRegistrationServiceImpl(
-                properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+        return new ToolRegistrationServiceImpl(properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
     }
 
     private static ListAppender<ILoggingEvent> attachLogAppender() {
-        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
-                LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         logger.addAppender(appender);
@@ -171,8 +169,8 @@ class ToolRegistrationServiceImplTest {
     }
 
     private static void detachLogAppender(ListAppender<ILoggingEvent> appender) {
-        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
-                LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ToolRegistrationServiceImpl.class);
         logger.detachAppender(appender);
     }
 

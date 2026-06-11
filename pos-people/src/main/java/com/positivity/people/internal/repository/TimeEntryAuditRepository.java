@@ -4,5 +4,4 @@ import com.positivity.people.internal.entity.TimeEntryAudit;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface TimeEntryAuditRepository extends JpaRepository<TimeEntryAudit, UUID> {
-}
+public interface TimeEntryAuditRepository extends JpaRepository<TimeEntryAudit, UUID> {}

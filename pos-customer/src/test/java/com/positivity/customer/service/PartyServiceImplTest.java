@@ -502,8 +502,8 @@ class PartyServiceImplTest {
         CommercialParty first = party(UUID.fromString("00000000-0000-0000-0000-000000000101"));
         first.setLegalName("Acme Corp");
 
-        PageRequest expectedPageable = PageRequest.of(
-                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+        PageRequest expectedPageable =
+                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
 
         when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(first), expectedPageable, 1));
 
@@ -519,8 +519,8 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_returnsEmptyResultsWithPagingMetadata() {
-        PageRequest expectedPageable = PageRequest.of(
-                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+        PageRequest expectedPageable =
+                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
 
         when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
 
@@ -535,8 +535,8 @@ class PartyServiceImplTest {
     @Test
     void browseParties_normalizesControllerDefaultSortToIgnoreCaseAndStableTieBreaker() {
         PageRequest requestedPageable = PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName")));
-        PageRequest expectedPageable = PageRequest.of(
-                0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+        PageRequest expectedPageable =
+                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
 
         when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
 

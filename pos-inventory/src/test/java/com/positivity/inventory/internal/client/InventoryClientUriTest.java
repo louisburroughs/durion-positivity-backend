@@ -62,7 +62,8 @@ class InventoryClientUriTest {
 
         WorkorderValidationClient client = new WorkorderValidationClient(builder, "workorder");
         try {
-            client.getWorkorderLineValidation(workorderId.toString(), UUID.randomUUID().toString());
+            client.getWorkorderLineValidation(
+                    workorderId.toString(), UUID.randomUUID().toString());
         } catch (Exception ignored) {
         }
         server.verify();

@@ -45,8 +45,10 @@ public class OpenApiDocumentFetcher {
         try {
             specUri = URI.create(specUrl);
         } catch (IllegalArgumentException ex) {
-            log.warn("Malformed mcp.server.aggregate-spec-url '{}', skipping aggregate discovery: {}",
-                    specUrl, ex.getMessage());
+            log.warn(
+                    "Malformed mcp.server.aggregate-spec-url '{}', skipping aggregate discovery: {}",
+                    specUrl,
+                    ex.getMessage());
             return Mono.empty();
         }
         if (!specUri.isAbsolute()) {

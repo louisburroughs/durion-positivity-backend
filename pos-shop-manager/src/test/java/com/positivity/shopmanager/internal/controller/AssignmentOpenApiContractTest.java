@@ -31,7 +31,8 @@ class AssignmentOpenApiContractTest extends BaseContractIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andReturn();
 
-        Map<String, Object> openApiSpec = objectMapper.readValue(result.getResponse().getContentAsByteArray(), Map.class);
+        Map<String, Object> openApiSpec =
+                objectMapper.readValue(result.getResponse().getContentAsByteArray(), Map.class);
         Map<String, Object> paths = (Map<String, Object>) openApiSpec.get("paths");
 
         assertOperationSummaryAndDescription(paths, "/v1/appointments/{appointmentId}/assignments", "get");
@@ -41,7 +42,9 @@ class AssignmentOpenApiContractTest extends BaseContractIntegrationTest {
     @SuppressWarnings("unchecked")
     private static void assertOperationSummaryAndDescription(Map<String, Object> paths, String path, String method) {
         Map<String, Object> pathItem = (Map<String, Object>) paths.get(path);
-        org.assertj.core.api.Assertions.assertThat(pathItem).as("path %s should exist", path).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(pathItem)
+                .as("path %s should exist", path)
+                .isNotNull();
 
         Map<String, Object> operation = (Map<String, Object>) pathItem.get(method);
         org.assertj.core.api.Assertions.assertThat(operation)
