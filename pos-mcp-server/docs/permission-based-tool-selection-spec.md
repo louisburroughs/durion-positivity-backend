@@ -12,6 +12,52 @@ permission-bit gating, and expands the `mcp_tool` candidate pool from the 16
 hand-curated facade tools to the full tool surface already discovered from the
 gateway's aggregate OpenAPI spec and registered with the MCP Java SDK.
 
+## Background: How Tool Discovery Works Today
+
+Before either change in this spec, it's important to be precise about how
+`pos-mcp-server` currently learns about the ~100+ OpenAPI-discovered
+operations referenced throughout this document. This is **not** classpath or
+source-code scanning of the `pos-*` modules — it is an HTTP-fetch +
+OpenAPI-model pipeline that runs at startup and populates the MCP Java SDK's
+own tool registry:
+
+1. `OpenApiDocumentFetcher.fetchAggregateSpec()` issues an HTTP GET (via the
+   reactive `WebClient` bean `discoveryWebClient`) against
+   `mcp.server.aggregate-spec-url` — the gateway's (`pos-api-gateway`)
+   aggregated `/v3/api-docs` endpoint. The gateway's base URI is resolved
+   through Eureka (`DiscoveryClient.getInstances("pos-api-gateway")`), with a
+   `http://localhost:8080` fallback for local/dev.
+2. The response body is parsed with `OpenAPIV3Parser`
+   (`io.swagger.v3.parser`, `resolve=true`, `resolveFully=true`) into an
+   `OpenAPI` model object — the same aggregate spec that backs the gateway's
+   Swagger UI, already including every service's `x-required-permissions`
+   extensions (added by each service's
+   `OpenApiConfig.requiredPermissionsOperationCustomizer`).
+3. `OpenApiToolMapper.toAggregateToolSpecifications(baseUri, openApi)` walks
+   every path/operation in that model. For each operation it derives a
+   `domain` (the first non-version path segment), a sanitized `toolName`
+   (`{domain}_{operationId}`), a `displayName`/`description`, and an input
+   schema, and builds an `McpSchema.Tool` (an MCP SDK type) plus a handler
+   from `OperationProxyFactory` that performs the actual HTTP call against the
+   gateway when the tool is invoked.
+4. `ToolRegistrationServiceImpl.registerDiscoveredTools()` (triggered by
+   `ToolBootstrapRunner`, an `ApplicationRunner`) registers each
+   `McpSchema.Tool` via `mcpAsyncServer.addTool(...)` — the MCP Java SDK's
+   tool-registry API — and then calls
+   `mcpAsyncServer.notifyToolsListChanged()` so connected MCP clients refresh
+   their tool list.
+
+The result: "the complete list of tools available via the Java SDK" is
+exactly the operation set present in the gateway's aggregate OpenAPI spec at
+the time of the last successful fetch, refreshed at startup, with failures
+swallowed (`onErrorResume` → `Mono.empty()`) so a gateway/discovery outage
+never blocks `pos-mcp-server` startup.
+
+This pipeline is **out of scope to change** for this spec. §9 and §10 extend
+its *output* — persisting it into `mcp_tool`/`mcp_tool_permission` and
+bridging it to the LangChain4j agents — but the fetch/parse/register steps
+above remain as-is.
+
 ## Problem Statement
 
 Today, `ToolRegistryService.resolveCandidateTools` gates the `mcp_tool`
