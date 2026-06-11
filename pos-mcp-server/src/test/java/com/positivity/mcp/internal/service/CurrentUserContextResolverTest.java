@@ -50,6 +50,24 @@ class CurrentUserContextResolverTest {
         assertThat(context.primaryRole()).isEqualTo("ROLE_ADMIN");
         assertThat(context.roles()).containsExactly("ROLE_ADMIN");
         assertThat(context.authorities()).contains("ROLE_ADMIN", "mcp:chat:execute");
+        assertThat(context.permissionCodes())
+                .containsExactlyInAnyOrder("mcp:chat:execute", PermissionCodes.AUTHENTICATED);
+    }
+
+    @Test
+    @DisplayName("resolve derives permissionCodes from bare authorities, excluding ROLE_/PERM_ prefixes, "
+            + "and always includes the AUTHENTICATED sentinel")
+    void resolve_permissionCodes_extractsBareAuthoritiesAndIncludesAuthenticatedSentinel() {
+        Authentication authentication = authenticationWithMixedAuthorities(USER_ID);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        when(mcpRoleResolver.resolvePrimaryRole(authentication)).thenReturn("ROLE_ADMIN");
+
+        CurrentUserContextResolver resolver = new CurrentUserContextResolver(mcpRoleResolver);
+        CurrentUserContext context = resolver.resolve(authentication);
+
+        assertThat(context.permissionCodes())
+                .containsExactlyInAnyOrder("security:user:view", "mcp:chat:execute", PermissionCodes.AUTHENTICATED)
+                .doesNotContain("ROLE_ADMIN", "PERM_security:user:view");
     }
 
     @Test
@@ -69,6 +87,23 @@ class CurrentUserContextResolverTest {
                 "admin.alpha",
                 "n/a",
                 List.of(new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("mcp:chat:execute")));
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "admin.alpha",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                userId));
+        return authentication;
+    }
+
+    private static Authentication authenticationWithMixedAuthorities(UUID userId) {
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                "admin.alpha",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_ADMIN"),
+                        new SimpleGrantedAuthority("PERM_security:user:view"),
+                        new SimpleGrantedAuthority("security:user:view"),
+                        new SimpleGrantedAuthority("mcp:chat:execute")));
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USERNAME,
                 "admin.alpha",

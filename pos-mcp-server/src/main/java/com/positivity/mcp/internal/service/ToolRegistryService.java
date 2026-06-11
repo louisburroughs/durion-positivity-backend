@@ -22,7 +22,6 @@ public class ToolRegistryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistryService.class);
     private static final int MAX_QUERY_PREVIEW_LENGTH = 160;
-    private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ADMIN_FACADE_TOOL = "AdminFacadeTool";
     private static final Set<String> ADMIN_QUERY_KEYWORDS = Set.of(
             "user",
@@ -60,13 +59,12 @@ public class ToolRegistryService {
     }
 
     public @NonNull List<ToolMetadata> resolveCandidateTools(@NonNull ToolSelectionContext context, int topK) {
-        String registryRole = ToolRegistryRoleMapper.normalize(context.role());
         if (topK <= 0) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup skipped role={} registryRole={} workflow={} topK={} reason=non-positive-topk queryPreview=\"{}\"",
+                        "MCP tool lookup skipped role={} permissionCodes={} workflow={} topK={} reason=non-positive-topk queryPreview=\"{}\"",
                         context.role(),
-                        registryRole,
+                        context.permissionCodes(),
                         context.workflowState(),
                         topK,
                         preview(context.userInput()));
@@ -74,13 +72,14 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools = repository.findEnabledByRoleAndWorkflow(registryRole, context.workflowState());
+        List<ToolMetadata> gatedTools =
+                repository.findEnabledByPermissionsAndWorkflow(context.permissionCodes(), context.workflowState());
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool lookup start role={} registryRole={} workflow={} topK={} gatedToolCount={} gatedTools={} queryPreview=\"{}\"",
+                    "MCP tool lookup start role={} permissionCodes={} workflow={} topK={} gatedToolCount={} gatedTools={} queryPreview=\"{}\"",
                     context.role(),
-                    registryRole,
+                    context.permissionCodes(),
                     context.workflowState(),
                     topK,
                     gatedTools.size(),
@@ -91,9 +90,9 @@ public class ToolRegistryService {
         if (gatedTools.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup no gated tools role={} registryRole={} workflow={} queryPreview=\"{}\"",
+                        "MCP tool lookup no gated tools role={} permissionCodes={} workflow={} queryPreview=\"{}\"",
                         context.role(),
-                        registryRole,
+                        context.permissionCodes(),
                         context.workflowState(),
                         preview(context.userInput()));
             }
@@ -104,9 +103,9 @@ public class ToolRegistryService {
         if (!adminFastPathSelection.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool lookup fast-path result role={} registryRole={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                        "MCP tool lookup fast-path result role={} permissionCodes={} workflow={} selectedTools={} queryPreview=\"{}\"",
                         context.role(),
-                        registryRole,
+                        context.permissionCodes(),
                         context.workflowState(),
                         toolNames(adminFastPathSelection),
                         preview(context.userInput()));
@@ -117,20 +116,21 @@ public class ToolRegistryService {
         float[] embedding = embeddingModel.embed(context.userInput()).content().vector();
         int semanticLimit = Math.max(topK, 10);
 
-        // Phase 2 fix: gated ANN — only tools authorized for this role+workflow enter
-        // the
-        // ranking window. Unauthorized tools can never displace authorized ones.
-        List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForRole(
-                embedding, semanticLimit, registryRole, context.workflowState());
+        // Permission-gated ANN — only tools authorized for this caller's permissionCodes
+        // and workflow enter the ranking window. Unauthorized tools can never displace
+        // authorized ones.
+        List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForPermissions(
+                embedding, semanticLimit, context.permissionCodes(), context.workflowState());
 
         if (semanticCandidates.isEmpty()) {
             // Fallback: tools have no embeddings yet; return highest-priority gated tools
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool scoring no-embedding fallback role={} registryRole={} workflow={} returning top-{} by priority",
+                        "MCP tool scoring no-embedding fallback role={} permissionCodes={} workflow={} gatedToolCount={} returning top-{} by priority",
                         context.role(),
-                        registryRole,
+                        context.permissionCodes(),
                         context.workflowState(),
+                        gatedTools.size(),
                         topK);
             }
             return gatedTools.stream()
@@ -153,11 +153,13 @@ public class ToolRegistryService {
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool scoring role={} registryRole={} workflow={} topK={} gatedTools={} semanticCandidates={} scoredCandidates={}",
+                    "MCP tool scoring role={} permissionCodes={} workflow={} topK={} gatedToolCount={} semanticCandidateCount={} gatedTools={} semanticCandidates={} scoredCandidates={}",
                     context.role(),
-                    registryRole,
+                    context.permissionCodes(),
                     context.workflowState(),
                     topK,
+                    gatedTools.size(),
+                    semanticCandidates.size(),
                     toolNames(gatedTools),
                     semanticCandidateSummaries(semanticCandidates),
                     scoredCandidateSummaries(scoredCandidates));
@@ -167,31 +169,28 @@ public class ToolRegistryService {
                 scoredCandidates.stream().limit(topK).map(ScoredTool::tool).toList();
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP tool lookup result role={} registryRole={} workflow={} selectedTools={} queryPreview=\"{}\"",
+                    "MCP tool lookup result role={} permissionCodes={} workflow={} selectedToolCount={} selectedTools={} queryPreview=\"{}\"",
                     context.role(),
-                    registryRole,
+                    context.permissionCodes(),
                     context.workflowState(),
+                    selectedTools.size(),
                     toolNames(selectedTools),
                     preview(context.userInput()));
         }
         return selectedTools;
     }
 
+    /**
+     * Returns {@code AdminFacadeTool} as the sole candidate when the caller's query matches
+     * admin-style keywords/phrases and {@code AdminFacadeTool} is already present in {@code
+     * gatedTools} — i.e. the caller holds at least one of its mapped {@code
+     * mcp_tool_permission} codes (permission gating already applied upstream by {@link
+     * #resolveCandidateTools}). No role check is performed here.
+     */
     private @NonNull List<ToolMetadata> adminFastPathSelection(
             @NonNull ToolSelectionContext context, @NonNull List<ToolMetadata> gatedTools) {
-        if (!ROLE_ADMIN.equals(context.role())) {
-            return List.of();
-        }
-
         Set<String> matchedTerms = matchedAdminQueryTerms(context.userInput());
         if (matchedTerms.isEmpty()) {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug(
-                        "MCP tool fast-path skipped role={} workflow={} reason=no-admin-keywords queryPreview=\"{}\"",
-                        context.role(),
-                        context.workflowState(),
-                        preview(context.userInput()));
-            }
             return List.of();
         }
 
@@ -201,8 +200,9 @@ public class ToolRegistryService {
         if (!adminTools.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool fast-path matched role={} workflow={} tool={} matchedTerms={} queryPreview=\"{}\"",
+                        "MCP tool fast-path matched role={} permissionCodes={} workflow={} tool={} matchedTerms={} queryPreview=\"{}\"",
                         context.role(),
+                        context.permissionCodes(),
                         context.workflowState(),
                         ADMIN_FACADE_TOOL,
                         matchedTerms,
@@ -211,8 +211,9 @@ public class ToolRegistryService {
         } else {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
-                        "MCP tool fast-path eligible but admin tool unavailable role={} workflow={} matchedTerms={} gatedTools={}",
+                        "MCP tool fast-path eligible but admin tool unavailable role={} permissionCodes={} workflow={} matchedTerms={} gatedTools={}",
                         context.role(),
+                        context.permissionCodes(),
                         context.workflowState(),
                         matchedTerms,
                         toolNames(gatedTools));

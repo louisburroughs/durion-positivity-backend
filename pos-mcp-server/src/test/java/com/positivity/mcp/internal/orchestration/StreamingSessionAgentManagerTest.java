@@ -75,6 +75,7 @@ import reactor.core.publisher.Flux;
 class StreamingSessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");
+    private static final Set<String> PERMISSION_CODES = Set.of("AUTHENTICATED", "mcp:chat:stream");
 
     @Mock
     private StreamingChatModel streamingChatModel;
@@ -121,7 +122,7 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(any(), any()))
+                .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
@@ -214,7 +215,7 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
-        when(toolSelectionEngine.selectRoleTools("ROLE_DUPLICATE", "hello"))
+        when(toolSelectionEngine.selectRoleTools("ROLE_DUPLICATE", PERMISSION_CODES, "hello"))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(exaWebSearchTool), List.of(exaWebSearchTool)));
 
@@ -256,14 +257,14 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("streamChat uses shared tool selection even when registry service is unavailable")
     void streamChat_withoutRegistryService_usesSharedSelectionPath() {
         String message = "latest internet sales report";
-        when(toolSelectionEngine.selectRoleTools("ROLE_CASHIER", message))
+        when(toolSelectionEngine.selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(orderFacadeTool), List.of(exaWebSearchTool, inventoryFacadeTool)));
 
         Flux<String> result = manager.streamChat(userContext("user-shared-path", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        verify(toolSelectionEngine).selectRoleTools("ROLE_CASHIER", message);
+        verify(toolSelectionEngine).selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message);
         assertThat(roleAgentCacheKeys(manager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool+InventoryFacadeTool+OrderFacadeTool");
     }
@@ -392,7 +393,7 @@ class StreamingSessionAgentManagerTest {
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
-        verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any());
+        verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any(), any());
     }
 
     @SuppressWarnings("unchecked")
@@ -457,6 +458,11 @@ class StreamingSessionAgentManagerTest {
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
         return new CurrentUserContext(
-                username, userId, primaryRole, Set.of(primaryRole), Set.of(primaryRole, "mcp:chat:stream"));
+                username,
+                userId,
+                primaryRole,
+                Set.of(primaryRole),
+                Set.of(primaryRole, "mcp:chat:stream"),
+                PERMISSION_CODES);
     }
 }

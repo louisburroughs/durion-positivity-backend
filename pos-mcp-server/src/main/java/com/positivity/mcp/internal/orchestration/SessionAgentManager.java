@@ -8,6 +8,7 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
@@ -24,6 +25,7 @@ import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -59,7 +61,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final ToolExecutionAuditLogger toolExecutionAuditLogger;
 
     @Nullable
-        private final SessionSummary sessionSummary;
+    private final SessionSummary sessionSummary;
 
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
@@ -153,7 +155,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 return simpleChat(currentUserContext, message, startMs);
             }
 
-            ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, message);
+            ToolSelectionEngine.ToolSelectionResult selection =
+                    toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message);
             List<Object> selectedTools =
                     sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
             String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
@@ -290,7 +293,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
+                // No CurrentUserContext is available during startup warm-up, so prebuild
+                // with the AUTHENTICATED-only permission set; callers whose actual
+                // permissionCodes differ get a cache miss and build on demand via
+                // getOrCreateAgent (its key already varies with toolCacheKey).
+                ToolSelectionEngine.ToolSelectionResult selection =
+                        toolSelectionEngine.selectRoleTools(role, Set.of(PermissionCodes.AUTHENTICATED), role);
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
