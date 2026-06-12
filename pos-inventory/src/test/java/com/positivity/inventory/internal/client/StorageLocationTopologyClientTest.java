@@ -77,6 +77,42 @@ class StorageLocationTopologyClientTest {
     }
 
     @Test
+    void fetchDescendants_mapsContractFields() {
+        // Issue #659: consumer-side pin of id/name/code/status/parentId/depth
+        Fixture f = fixture();
+        String body = """
+                [{"id":"00000000-0000-0000-0000-0000000000a1","name":"Main Workshop","code":"MAIN-WS-001",
+                  "status":"ACTIVE","parentId":"00000000-0000-0000-0000-000000000001","depth":1}]
+                """;
+        f.server()
+                .expect(requestTo("http://location/v1/locations/" + SITE_ID + "/descendants?parentType=PHYSICAL"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-inventory"))
+                .andExpect(header("X-Authorities", "location:read"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        var descendants = f.client().fetchDescendants(SITE_ID, "PHYSICAL");
+
+        assertThat(descendants).hasSize(1);
+        assertThat(descendants.getFirst().name()).isEqualTo("Main Workshop");
+        assertThat(descendants.getFirst().code()).isEqualTo("MAIN-WS-001");
+        assertThat(descendants.getFirst().depth()).isEqualTo(1);
+        f.server().verify();
+    }
+
+    @Test
+    void fetchDescendants_404_throwsLocationNotFound() {
+        // Issue #659: unknown parent location → LocationNotFoundException
+        Fixture f = fixture();
+        f.server()
+                .expect(requestTo("http://location/v1/locations/" + SITE_ID + "/descendants?parentType=PHYSICAL"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatThrownBy(() -> f.client().fetchDescendants(SITE_ID, "PHYSICAL"))
+                .isInstanceOf(LocationNotFoundException.class);
+    }
+
+    @Test
     void fetchSiteTopology_5xx_throwsServiceUnavailable() {
         // Issue #658: never fabricate partial topology on upstream failure
         Fixture f = fixture();
