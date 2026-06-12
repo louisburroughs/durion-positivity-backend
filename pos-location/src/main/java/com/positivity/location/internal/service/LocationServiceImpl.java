@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
+import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
@@ -24,6 +25,7 @@ import com.positivity.location.service.LocationService;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -53,6 +55,11 @@ public class LocationServiceImpl implements LocationService {
     private static final String LOCATION_NAME_TAKEN = "LOCATION_NAME_TAKEN";
     private static final String LOCATION_CODE_TAKEN = "LOCATION_CODE_TAKEN";
     private static final String DATA_INTEGRITY_VIOLATION = "DATA_INTEGRITY_VIOLATION";
+    private static final String LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";
+
+    /** Defensive depth cap for descendant traversal (ADR-0016 forbids cycles). */
+    private static final int MAX_DESCENDANT_DEPTH = 20;
+
     private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final LocationRepository locationRepository;
@@ -222,6 +229,58 @@ public class LocationServiceImpl implements LocationService {
         return findChildren(parentId, parentType).stream()
                 .map(this::toLocationResponse)
                 .toList();
+    }
+
+    /**
+     * Walks {@link LocationParent} edges of the given type downward from a
+     * location, breadth-first with one batched query per level. The traversal
+     * keeps a visited set so synthetic cycles terminate (ADR-0016 forbids
+     * cycles; this is defensive) and depth is capped at
+     * {@value #MAX_DESCENDANT_DEPTH}.
+     *
+     * Issue: CAP-214 #655
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<LocationDescendantResponseDTO> getDescendantsDto(UUID locationId, String parentTypeValue) {
+        ParentType parentType = parentTypeValue == null || parentTypeValue.isBlank()
+                ? ParentType.PHYSICAL
+                : toParentType(parentTypeValue);
+        if (!locationRepository.existsById(locationId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, LOCATION_NOT_FOUND);
+        }
+
+        List<LocationDescendantResponseDTO> descendants = new ArrayList<>();
+        Set<UUID> visited = new HashSet<>();
+        visited.add(locationId);
+        List<UUID> frontier = List.of(locationId);
+
+        for (int depth = 1; depth <= MAX_DESCENDANT_DEPTH && !frontier.isEmpty(); depth++) {
+            List<UUID> nextFrontier = new ArrayList<>();
+            for (LocationParent edge : locationParentRepository.findByParent_IdInAndParentType(frontier, parentType)) {
+                Location child = edge.getChild();
+                if (child == null || child.getId() == null || !visited.add(child.getId())) {
+                    continue; // already seen: cycle guard
+                }
+                descendants.add(LocationDescendantResponseDTO.builder()
+                        .id(child.getId())
+                        .name(child.getName())
+                        .code(child.getCode())
+                        .status(child.getStatus())
+                        .parentId(edge.getParent() != null ? edge.getParent().getId() : null)
+                        .depth(depth)
+                        .build());
+                nextFrontier.add(child.getId());
+            }
+            frontier = nextFrontier;
+        }
+        if (!frontier.isEmpty()) {
+            log.warn(
+                    "Descendant traversal for location {} truncated at depth cap {}; result may be partial",
+                    locationId,
+                    MAX_DESCENDANT_DEPTH);
+        }
+        return descendants;
     }
 
     public List<Location> getAllLocations() {

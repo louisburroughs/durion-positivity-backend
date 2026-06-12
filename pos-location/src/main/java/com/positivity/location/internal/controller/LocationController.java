@@ -1,6 +1,7 @@
 package com.positivity.location.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRef;
@@ -256,5 +257,34 @@ public class LocationController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(person);
+    }
+
+    /**
+     * Descendants traversal endpoint for topology consumers.
+     *
+     * Issue: CAP-214 #655
+     */
+    @Operation(
+            summary = "Get all descendants for a location",
+            description = "Walk typed parent-child edges downward from a location and return every descendant "
+                    + "as a flat list with its immediate parent id and depth (1 = direct child). "
+                    + "Traversal is cycle-safe and depth-capped at 20.")
+    @ApiResponse(responseCode = "200", description = "List of descendant locations returned successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @PreAuthorize("hasAuthority('location:read')")
+    @EmitEvent(id = "LOCATION_DESCENDANTS_GET", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:read"})
+    @GetMapping("/{locationId}/descendants")
+    public List<LocationDescendantResponseDTO> getDescendants(
+            @Parameter(description = "ID of the root location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID locationId,
+            @Parameter(description = "Parent relationship type to traverse (defaults to PHYSICAL)")
+                    @RequestParam(required = false, defaultValue = "PHYSICAL")
+                    String parentType) {
+        return locationService.getDescendantsDto(locationId, parentType);
     }
 }
