@@ -34,6 +34,17 @@ public class ArchitectureTest {
             };
 
     @ArchTest
+    static final ArchRule inventory_should_not_depend_on_pos_location_classes = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.inventory..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.positivity.location..")
+            .allowEmptyShould(true)
+            .because("pos-inventory must consume pos-location only via REST contracts with"
+                    + " consumer-side DTOs (ADR-0016; CAP-218 #658)");
+
+    @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
             .resideInAPackage("..internal.controller..")

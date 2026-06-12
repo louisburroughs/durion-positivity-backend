@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,7 +26,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Immutable ledger entry representing a single inventory transaction.
  */
 @Entity
-@Table(name = "inventory_ledger_entry")
+@Table(
+        name = "inventory_ledger_entry",
+        indexes = {@Index(name = "idx_inventory_ledger_entry_location_event", columnList = "location_id, event_type")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

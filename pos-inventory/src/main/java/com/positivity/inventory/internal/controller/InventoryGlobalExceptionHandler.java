@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
+import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
@@ -24,6 +25,7 @@ import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundExcep
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
@@ -123,6 +125,16 @@ public class InventoryGlobalExceptionHandler {
     })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(LocationServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleLocationServiceUnavailable(LocationServiceUnavailableException ex) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "LOCATION_SERVICE_UNAVAILABLE", ex.getMessage());
+    }
+
+    @ExceptionHandler(RollupExpansionTooLargeException.class)
+    public ResponseEntity<ApiError> handleRollupExpansionTooLarge(RollupExpansionTooLargeException ex) {
+        return build(HttpStatus.valueOf(422), "ROLLUP_EXPANSION_TOO_LARGE", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCountQuantityException.class)

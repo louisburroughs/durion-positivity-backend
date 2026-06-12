@@ -151,6 +151,11 @@ public enum InventoryLedgerEventType {
      * Hard allocation created for picking/packing.
      * Direction: NEUTRAL
      * Affects On-Hand: NO (affects ATP only)
+     *
+     * <p>Written when an allocation is promoted to HARD with an assigned storage
+     * location. Invariant (CAP-218 #656): per allocation, CREATED quantities −
+     * RELEASED quantities ∈ {0, allocatedQuantity}; a repeat promote must not
+     * write a duplicate CREATED.
      */
     ALLOCATION_CREATED(EventDirection.NEUTRAL, false),
 
@@ -158,6 +163,11 @@ public enum InventoryLedgerEventType {
      * Hard allocation cancelled or released.
      * Direction: NEUTRAL
      * Affects On-Hand: NO (affects ATP only)
+     *
+     * <p>Written when a located HARD allocation is released. Invariant
+     * (CAP-218 #656): whichever flow posts {@link #WORKORDER_CONSUMPTION} for
+     * allocated stock MUST also close the allocation with ALLOCATION_RELEASED,
+     * otherwise outstanding allocations double-count consumed stock.
      */
     ALLOCATION_RELEASED(EventDirection.NEUTRAL, false),
 

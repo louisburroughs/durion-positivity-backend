@@ -80,3 +80,5 @@ pos-mcp-server/src/main/resources/exa.prompt.md
 .superpowers/
 .flattened-pom.xml
 
+.tokensave
+repomix-output.*

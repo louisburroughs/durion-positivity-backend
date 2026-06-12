@@ -43,6 +43,12 @@ class ConsumptionServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.ReservationRepository reservationRepository;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.AllocationRepository allocationRepository;
+
     @Captor
     private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
 
@@ -51,7 +57,12 @@ class ConsumptionServiceImplTest {
     }
 
     private ConsumptionServiceImpl persistentService() {
-        return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository, FIXED_CLOCK);
+        return new ConsumptionServiceImpl(
+                pickTaskRepository,
+                inventoryLedgerEntryRepository,
+                reservationRepository,
+                allocationRepository,
+                FIXED_CLOCK);
     }
 
     // ─── CS1: consumePickedItems — valid picks → ConsumptionResponse fields ─────
@@ -296,5 +307,329 @@ class ConsumptionServiceImplTest {
         assertThatThrownBy(() -> service.consumePickedItems(request))
                 .isInstanceOf(WorkorderConsumptionException.class)
                 .hasMessageContaining("exceeds picked quantity");
+    }
+
+    // ─── CAP-218 #662: allocation closure on consumption ─────────────────────────
+
+    private static final UUID WO_LINE_ID = UUID.fromString("00000000-0000-0000-0000-00000000000c");
+    private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+    private static final UUID STOCK_ITEM_ID = UUID.fromString("00000000-0000-0000-0000-0000000000dd");
+
+    private com.positivity.inventory.internal.entity.ReservationEntity reservationWithLine() {
+        return com.positivity.inventory.internal.entity.ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(WO_LINE_ID)
+                .stockItemId(STOCK_ITEM_ID)
+                .requiredQuantity(5)
+                .allocatedQuantity(5)
+                .status(com.positivity.inventory.internal.enums.ReservationStatus.FULFILLED)
+                .build();
+    }
+
+    private com.positivity.inventory.internal.entity.AllocationEntity locatedHardAllocation(
+            com.positivity.inventory.internal.entity.ReservationEntity reservation, int quantity) {
+        return com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(LOCATION_ID)
+                .allocatedQuantity(quantity)
+                .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
+                .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
+                .build();
+    }
+
+    private PickTaskEntity pickedTaskWithLine(UUID pickTaskId) {
+        return PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .workorderLineId(WO_LINE_ID)
+                .status(PickTaskStatus.PICKED)
+                .quantityPicked(5)
+                .build();
+    }
+
+    @Test
+    @DisplayName("#662: full consumption writes ALLOCATION_RELEASED and closes the allocation")
+    void consumePickedItems_fullConsumption_releasesAllocationAndClosesIt() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var allocation = locatedHardAllocation(reservation, 5);
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
+                .thenReturn(10);
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
+                .thenReturn(0);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 5)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        List<InventoryLedgerEntry> entries = entriesCaptor.getValue();
+        assertThat(entries).hasSize(2);
+        InventoryLedgerEntry released = entries.get(1);
+        assertThat(released.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_RELEASED);
+        assertThat(released.getChangeInQuantity()).isEqualTo(5);
+        assertThat(released.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(released.getStockItemId()).isEqualTo(STOCK_ITEM_ID.toString());
+        assertThat(released.getSourceTransactionId())
+                .isEqualTo(allocation.getAllocationId().toString());
+        assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
+    }
+
+    @Test
+    @DisplayName("#662: partial consumption releases exactly the consumed quantity and keeps allocation open")
+    void consumePickedItems_partialConsumption_releasesConsumedQuantityOnly() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var allocation = locatedHardAllocation(reservation, 5);
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
+                .thenReturn(10);
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
+                .thenReturn(0);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
+        assertThat(released.getChangeInQuantity()).isEqualTo(2);
+        assertThat(allocation.getStatus())
+                .isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED);
+        verify(allocationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#662: consumption of unallocated stock writes no allocation events")
+    void consumePickedItems_noReservation_writesNoAllocationEvents() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.empty());
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
+        assertThat(entriesCaptor.getValue().getFirst().getEventType())
+                .isEqualTo(InventoryLedgerEventType.WORKORDER_CONSUMPTION);
+    }
+
+    @Test
+    @DisplayName("#662: already partially released allocation only releases its remainder")
+    void consumePickedItems_partiallyReleasedAllocation_releasesRemainderOnly() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var allocation = locatedHardAllocation(reservation, 5);
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
+                .thenReturn(10);
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
+                .thenReturn(3);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 4)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
+        // invariant: total RELEASED never exceeds allocatedQuantity (3 + 2 = 5)
+        assertThat(released.getChangeInQuantity()).isEqualTo(2);
+        assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
+    }
+
+    @Test
+    @DisplayName("#662: multi-allocation reservation consumes oldest allocation first, spilling to the next")
+    void consumePickedItems_multiAllocation_oldestFirstWithSpill() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var older = com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(LOCATION_ID)
+                .allocatedQuantity(3)
+                .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
+                .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
+                .createdAt(java.time.Instant.parse("2024-01-01T00:00:00Z"))
+                .build();
+        UUID otherLocation = UUID.fromString("00000000-0000-0000-0000-0000000000ab");
+        var newer = com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
+                .reservation(reservation)
+                .locationId(otherLocation)
+                .allocatedQuantity(3)
+                .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
+                .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
+                .createdAt(java.time.Instant.parse("2024-02-01T00:00:00Z"))
+                .build();
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        // returned newest-first to prove the service sorts oldest-first itself
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(newer, older));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
+                .thenReturn(10);
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        any(String.class),
+                        org.mockito.ArgumentMatchers.eq(InventoryLedgerEventType.ALLOCATION_RELEASED)))
+                .thenReturn(0);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 4)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        List<InventoryLedgerEntry> entries = entriesCaptor.getValue();
+        assertThat(entries).hasSize(3); // 1 consumption + 2 releases
+        InventoryLedgerEntry first = entries.get(1);
+        InventoryLedgerEntry second = entries.get(2);
+        assertThat(first.getSourceTransactionId())
+                .isEqualTo(older.getAllocationId().toString());
+        assertThat(first.getChangeInQuantity()).isEqualTo(3); // older exhausted
+        assertThat(first.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(second.getSourceTransactionId())
+                .isEqualTo(newer.getAllocationId().toString());
+        assertThat(second.getChangeInQuantity()).isEqualTo(1); // spill
+        assertThat(second.getLocationId()).isEqualTo(otherLocation);
+        assertThat(older.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
+        assertThat(newer.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED);
+        // reservation pool shrinks by total released (PR #661 re-review finding 2)
+        assertThat(reservation.getAllocatedQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#662: two items on the same allocation in one request never release beyond allocatedQuantity")
+    void consumePickedItems_sameAllocationTwiceInOneRequest_neverOverReleases() {
+        // PR #661 re-review finding 1 regression: in-batch releases are
+        // invisible to the ledger sum; the in-batch map must cap the total
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var allocation = locatedHardAllocation(reservation, 5);
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
+                .thenReturn(10);
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
+                .thenReturn(0);
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConsumeItemsRequest request = new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(
+                        new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 4),
+                        new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 4)));
+
+        service.consumePickedItems(request);
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        int totalReleased = entriesCaptor.getValue().stream()
+                .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
+                .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
+                .sum();
+        assertThat(totalReleased).isEqualTo(5); // capped at allocatedQuantity, not 8
+        // second item exhausts the remainder and closes the allocation
+        assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
+    }
+
+    @Test
+    @DisplayName("#662: pick task without workorderLineId writes no allocation events")
+    void consumePickedItems_noWorkorderLine_writesNoAllocationEvents() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        PickTaskEntity task = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .status(PickTaskStatus.PICKED)
+                .quantityPicked(5)
+                .build();
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.consumePickedItems(new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2))));
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("#662: reservation with only SOFT/unlocated allocations writes no allocation events")
+    void consumePickedItems_softOrUnlocatedOnly_writesNoAllocationEvents() {
+        ConsumptionServiceImpl service = persistentService();
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        var reservation = reservationWithLine();
+        var soft = com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(5)
+                .allocationState(com.positivity.inventory.internal.enums.AllocationState.SOFT)
+                .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
+                .build();
+
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
+        when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(soft));
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.consumePickedItems(new ConsumeItemsRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2))));
+
+        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
     }
 }
