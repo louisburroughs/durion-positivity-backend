@@ -9,15 +9,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.inventory.internal.client.StorageLocationValidationClient;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.internal.entity.AllocationEntity;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
 import com.positivity.inventory.internal.enums.AllocationStatus;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
+import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -33,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -62,6 +67,8 @@ class ReservationServiceImplTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    private static final UUID STORAGE_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
     @Mock
     private ReservationRepository reservationRepository;
 
@@ -71,12 +78,29 @@ class ReservationServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private StorageLocationValidationClient storageLocationValidationClient;
+
     private ReservationServiceImpl service;
+
+    private static StorageLocationValidationClient.StorageLocationValidation validation(
+            boolean exists, boolean active) {
+        StorageLocationValidationClient.StorageLocationValidation result =
+                new StorageLocationValidationClient.StorageLocationValidation();
+        result.setStorageLocationId(STORAGE_LOCATION_ID);
+        result.setExists(exists);
+        result.setActive(active);
+        return result;
+    }
 
     @BeforeEach
     void setUp() {
         service = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
         // Default lenient stubs for the SC1–SC7 scaffold tests
         lenient().when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
         lenient().when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -107,6 +131,12 @@ class ReservationServiceImplTest {
         lenient()
                 .when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
                 .thenReturn(100);
+        lenient()
+                .when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+                .thenReturn(validation(true, true));
+        lenient()
+                .when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
+                .thenAnswer(i -> i.getArgument(0));
     }
 
     // ─── SC1: Create SOFT reservation ──────────────────────────────────────────
@@ -186,7 +216,8 @@ class ReservationServiceImplTest {
         // Issue #29: SC3 — SOFT → HARD promotion must record hardenedAt and hardenedBy
         // Arrange
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        PromoteAllocationRequest request = new PromoteAllocationRequest("approved for workorder completion");
+        PromoteAllocationRequest request =
+                new PromoteAllocationRequest(STORAGE_LOCATION_ID, "approved for workorder completion");
 
         // Act — RED: impl throws UnsupportedOperationException
         ReservationResponse result = service.promoteToHard(allocationId, request);
@@ -219,7 +250,7 @@ class ReservationServiceImplTest {
         // error code; reservation status must become BACKORDERED
         // Arrange
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        PromoteAllocationRequest request = new PromoteAllocationRequest("urgent");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "urgent");
         // Force insufficient ATP so the exception is thrown
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
                 .thenReturn(1);
@@ -342,7 +373,11 @@ class ReservationServiceImplTest {
     @DisplayName("createOrUpdateReservation repository mode updates existing reservation by workorderLineId")
     void createOrUpdateReservation_repositoryMode_existingReservation_updatesRequiredQuantity() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity existing = ReservationEntity.builder()
@@ -369,7 +404,11 @@ class ReservationServiceImplTest {
     @DisplayName("createOrUpdateReservation repository mode creates reservation and SOFT allocation when absent")
     void createOrUpdateReservation_repositoryMode_missingReservation_createsSoftAllocation() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -402,12 +441,16 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard throws ResourceNotFoundException when allocationId does not exist")
     void promoteToHard_repositoryMode_allocationMissing_throwsResourceNotFound() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(allocationRepository.findById(allocationId)).thenReturn(Optional.empty());
 
-        PromoteAllocationRequest request = new PromoteAllocationRequest("normal");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "normal");
         assertThatThrownBy(() -> repositoryService.promoteToHard(allocationId, request))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Allocation not found");
@@ -417,7 +460,11 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard sets BACKORDERED and throws InsufficientAtpException when ATP is insufficient")
     void promoteToHard_repositoryMode_insufficientAtp_setsBackorderedAndThrows() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -445,7 +492,7 @@ class ReservationServiceImplTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         UUID targetAllocationId = allocation.getAllocationId();
-        PromoteAllocationRequest request = new PromoteAllocationRequest("urgent");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "urgent");
 
         assertThatThrownBy(() -> repositoryService.promoteToHard(targetAllocationId, request))
                 .isInstanceOf(InsufficientAtpException.class)
@@ -459,7 +506,11 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard transitions allocation to HARD and returns FULFILLED when ATP is sufficient")
     void promoteToHard_repositoryMode_sufficientAtp_transitionsToHard() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -489,8 +540,8 @@ class ReservationServiceImplTest {
         when(reservationRepository.save(any(ReservationEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ReservationResponse response =
-                repositoryService.promoteToHard(allocation.getAllocationId(), new PromoteAllocationRequest("approved"));
+        ReservationResponse response = repositoryService.promoteToHard(
+                allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "approved"));
 
         assertThat(allocation.getAllocationState()).isEqualTo(AllocationState.HARD);
         assertThat(allocation.getHardenedAt()).isNotNull();
@@ -504,7 +555,11 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard excludes current HARD allocation from ATP subtraction")
     void promoteToHard_repositoryMode_currentHardAllocation_excludesSelfFromExistingHard() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -540,7 +595,7 @@ class ReservationServiceImplTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         UUID currentAllocationId = current.getAllocationId();
-        PromoteAllocationRequest promoteReq = new PromoteAllocationRequest("re-harden");
+        PromoteAllocationRequest promoteReq = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-harden");
 
         assertThatThrownBy(() -> repositoryService.promoteToHard(currentAllocationId, promoteReq))
                 .isInstanceOf(InsufficientAtpException.class);
@@ -552,7 +607,11 @@ class ReservationServiceImplTest {
     @DisplayName("cancelReservation throws ResourceNotFoundException when reservation does not exist")
     void cancelReservation_repositoryMode_reservationMissing_throwsResourceNotFound() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -566,7 +625,11 @@ class ReservationServiceImplTest {
     @DisplayName("cancelReservation handles empty allocation list and marks reservation CANCELLED")
     void cancelReservation_repositoryMode_emptyAllocationList_marksCancelled() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -595,7 +658,11 @@ class ReservationServiceImplTest {
     @DisplayName("cancelReservation releases both SOFT and HARD allocations")
     void cancelReservation_repositoryMode_releasesSoftAndHardAllocations() {
         ReservationServiceImpl repositoryService = new ReservationServiceImpl(
-                TEST_CLOCK, reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
+                TEST_CLOCK,
+                reservationRepository,
+                allocationRepository,
+                inventoryLedgerEntryRepository,
+                storageLocationValidationClient);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -635,5 +702,183 @@ class ReservationServiceImplTest {
         assertThat(hardAllocation.getStatus()).isEqualTo(AllocationStatus.RELEASED);
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
         verify(allocationRepository).saveAll(any());
+    }
+
+    // ─── CAP-218 #656: allocation ledger events + location on hard promotion ────
+
+    @Test
+    @DisplayName("promoteToHard assigns storage location and writes ALLOCATION_CREATED ledger event")
+    void promoteToHard_softAllocation_assignsLocationAndWritesAllocationCreated() {
+        // Issue #656: hard promotion must pin a storage location and record
+        // an ALLOCATION_CREATED ledger event in the same transaction
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(5)
+                .allocatedQuantity(0)
+                .status(ReservationStatus.PENDING)
+                .build();
+        AllocationEntity allocation = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.SOFT)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
+                .thenReturn(10);
+        when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
+                .thenReturn(List.of());
+        when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.promoteToHard(
+                allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "approved"));
+
+        assertThat(allocation.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        InventoryLedgerEntry entry = ledgerCaptor.getValue();
+        assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_CREATED);
+        assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
+        assertThat(entry.getChangeInQuantity()).isEqualTo(5);
+        assertThat(entry.getStockItemId())
+                .isEqualTo(reservation.getStockItemId().toString());
+        assertThat(entry.getSourceTransactionId())
+                .isEqualTo(allocation.getAllocationId().toString());
+    }
+
+    @Test
+    @DisplayName("promoteToHard on already-HARD located allocation writes no duplicate CREATED and keeps location")
+    void promoteToHard_alreadyHardWithLocation_noDuplicateLedgerEventAndLocationUnchanged() {
+        // Issue #656: re-promote must not write a duplicate ALLOCATION_CREATED
+        // and must keep the location the original event was recorded against
+        UUID originalLocation = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(5)
+                .allocatedQuantity(5)
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        AllocationEntity allocation = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(originalLocation)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
+                .thenReturn(10);
+        when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
+                .thenReturn(List.of(allocation));
+        when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.promoteToHard(
+                allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-promote"));
+
+        assertThat(allocation.getLocationId()).isEqualTo(originalLocation);
+        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("promoteToHard throws LocationNotFoundException when storage location does not exist")
+    void promoteToHard_storageLocationMissing_throwsLocationNotFound() {
+        // Issue #656: nonexistent storage location must fail before any state change
+        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+                .thenReturn(validation(false, false));
+
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "x");
+
+        assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
+                .isInstanceOf(LocationNotFoundException.class);
+        verify(allocationRepository, never()).save(any(AllocationEntity.class));
+        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("promoteToHard throws IllegalArgumentException when storage location is inactive")
+    void promoteToHard_storageLocationInactive_throwsIllegalArgument() {
+        // Issue #656: inactive storage location must be rejected
+        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+                .thenReturn(validation(true, false));
+
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "x");
+
+        assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not active");
+        verify(allocationRepository, never()).save(any(AllocationEntity.class));
+    }
+
+    @Test
+    @DisplayName("cancelReservation writes ALLOCATION_RELEASED only for located HARD allocations")
+    void cancelReservation_mixedAllocations_writesReleasedOnlyForLocatedHard() {
+        // Issue #656: SOFT and unlocated allocations had no CREATED event, so no
+        // RELEASED event may be written for them
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(12)
+                .allocatedQuantity(12)
+                .status(ReservationStatus.PARTIALLY_FULFILLED)
+                .build();
+        AllocationEntity softAllocation = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(4)
+                .allocationState(AllocationState.SOFT)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        AllocationEntity unlocatedHard = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(3)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        AllocationEntity locatedHard = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
+                .reservation(reservation)
+                .locationId(STORAGE_LOCATION_ID)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation))
+                .thenReturn(List.of(softAllocation, unlocatedHard, locatedHard));
+        when(allocationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.cancelReservation(workorderLineId);
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        InventoryLedgerEntry entry = ledgerCaptor.getValue();
+        assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_RELEASED);
+        assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
+        assertThat(entry.getChangeInQuantity()).isEqualTo(5);
+        assertThat(entry.getSourceTransactionId())
+                .isEqualTo(locatedHard.getAllocationId().toString());
     }
 }

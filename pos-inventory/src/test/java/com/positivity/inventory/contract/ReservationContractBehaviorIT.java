@@ -133,7 +133,8 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         when(reservationService.promoteToHard(eq(allocationId), any(PromoteAllocationRequest.class)))
                 .thenReturn(mockResponse);
 
-        String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest("approved for workorder"));
+        String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest(
+                UUID.fromString("00000000-0000-0000-0000-0000000000aa"), "approved for workorder"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations/{allocationId}/promote", allocationId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -141,6 +142,30 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reservationId").value(reservationId.toString()))
                 .andExpect(jsonPath("$.status").value("FULFILLED"));
+    }
+
+    // ─── contract_promoteWithoutStorageLocation_returns400 ──────────────────────
+
+    /**
+     * Verifies that POST /v1/inventory/reservations/{allocationId}/promote without
+     * the required {@code storageLocationId} returns 400 Bad Request per
+     * CAP-218 #656: a HARD allocation must be pinned to a storage location so the
+     * ALLOCATION_CREATED ledger event can be recorded against it.
+     *
+     * Issue: #656
+     */
+    @Test
+    @DisplayName("POST .../promote without storageLocationId → 400 Bad Request")
+    void contract_promoteWithoutStorageLocation_returns400() throws Exception {
+        // Issue #656: storageLocationId is mandatory on promotion
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest(null, "missing location"));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations/{allocationId}/promote", allocationId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
     }
 
     // ─── contract_cancelReservation_returns204 ──────────────────────────────────
@@ -192,7 +217,8 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         when(reservationService.promoteToHard(eq(allocationId), any(PromoteAllocationRequest.class)))
                 .thenThrow(new InsufficientAtpException(allocationId, 10, 3));
 
-        String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest("urgent hardening"));
+        String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest(
+                UUID.fromString("00000000-0000-0000-0000-0000000000aa"), "urgent hardening"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations/{allocationId}/promote", allocationId))
                         .contentType(MediaType.APPLICATION_JSON)
