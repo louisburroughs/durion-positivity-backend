@@ -205,6 +205,9 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     @NonNull
     @Transactional(readOnly = true)
     public List<StorageLocationTopologyResponse> listStorageLocationTopology(@NonNull UUID siteId) {
+        if (!locationRepository.existsById(siteId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SITE_NOT_FOUND");
+        }
         return storageLocationRepository.findAllBySiteId(siteId).stream()
                 .map(entity -> StorageLocationTopologyResponse.builder()
                         .id(entity.getId())

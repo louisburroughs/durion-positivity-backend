@@ -127,4 +127,20 @@ class StorageLocationTopologyContractBehaviorIT extends BaseContractIntegrationT
                 .andExpect(jsonPath("$.content[0].status").value("INACTIVE"))
                 .andExpect(jsonPath("$.content[0].parentStorageLocationId").value(FLOOR_ID.toString()));
     }
+
+    /**
+     * Unknown site yields 404 with an error envelope, distinguishing it from
+     * a site that simply has no storage locations (PR #661 review finding 1).
+     */
+    @Test
+    @DisplayName("#655 - GET /storage-locations/topology for unknown site returns 404")
+    void getTopology_unknownSite_returns404() throws Exception {
+        when(storageLocationService.listStorageLocationTopology(eq(SITE_ID)))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "SITE_NOT_FOUND"));
+
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/{siteId}/storage-locations/topology", SITE_ID)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
 }

@@ -1,6 +1,7 @@
 package com.positivity.location.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for the unpaginated storage-location topology listing (FR-3).
@@ -70,6 +72,7 @@ class StorageLocationTopologyServiceTest {
         StorageLocationEntity cage =
                 entity("Cage-1", StorageLocationType.CAGE, StorageLocationStatus.QUARANTINED, floor);
 
+        when(locationRepository.existsById(SITE_ID)).thenReturn(true);
         when(storageLocationRepository.findAllBySiteId(SITE_ID)).thenReturn(List.of(floor, shelf, bin, cage));
 
         List<StorageLocationTopologyResponse> result = storageLocationService.listStorageLocationTopology(SITE_ID);
@@ -94,8 +97,24 @@ class StorageLocationTopologyServiceTest {
     @Test
     @DisplayName("#655 - site without storage locations returns empty list")
     void listStorageLocationTopology_emptySite_returnsEmptyList() {
+        when(locationRepository.existsById(SITE_ID)).thenReturn(true);
         when(storageLocationRepository.findAllBySiteId(SITE_ID)).thenReturn(List.of());
 
         assertThat(storageLocationService.listStorageLocationTopology(SITE_ID)).isEmpty();
+    }
+
+    /**
+     * Unknown site must yield 404 so the pos-inventory rollup consumer can
+     * distinguish "no such site" from "site with no storage locations"
+     * (PR #661 review finding 1).
+     */
+    @Test
+    @DisplayName("#655 - topology for unknown siteId throws 404 SITE_NOT_FOUND")
+    void listStorageLocationTopology_unknownSite_throwsNotFound() {
+        when(locationRepository.existsById(SITE_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> storageLocationService.listStorageLocationTopology(SITE_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("SITE_NOT_FOUND");
     }
 }

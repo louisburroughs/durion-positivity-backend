@@ -89,6 +89,7 @@ public class StorageLocationController {
             description = "Return every storage location of a site, regardless of status, as a flat unpaginated "
                     + "list with id, name, type, status, and parentStorageLocationId for topology consumers")
     @ApiResponse(responseCode = "200", description = "Storage location topology returned")
+    @ApiResponse(responseCode = "404", description = "Site not found")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
