@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
+import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
@@ -123,6 +124,11 @@ public class InventoryGlobalExceptionHandler {
     })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(LocationServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleLocationServiceUnavailable(LocationServiceUnavailableException ex) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "LOCATION_SERVICE_UNAVAILABLE", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCountQuantityException.class)
