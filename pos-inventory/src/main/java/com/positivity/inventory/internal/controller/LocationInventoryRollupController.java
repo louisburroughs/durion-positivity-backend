@@ -45,7 +45,9 @@ public class LocationInventoryRollupController {
                     + " Returns per-site summaries plus a grand total. With expand=tree, each site entry"
                     + " inlines its full storage-location rollup tree; expansion is rejected with 422 when"
                     + " the descendant site count exceeds the configured cap"
-                    + " (pos.inventory.rollup.expand-site-cap, default 25).",
+                    + " (pos.inventory.rollup.expand-site-cap, default 25). Without expand, summaries are computed"
+                    + " sequentially for every descendant regardless of count; prefer narrow parent locations"
+                    + " for large hierarchies.",
             tags = {"Inventory Rollup"})
     @ApiResponse(
             responseCode = "200",

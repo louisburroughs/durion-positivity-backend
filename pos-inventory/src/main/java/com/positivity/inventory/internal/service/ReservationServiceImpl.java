@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
+import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -84,6 +85,13 @@ public class ReservationServiceImpl implements ReservationService {
         boolean ledgerEventRequired =
                 allocation.getAllocationState() != AllocationState.HARD || allocation.getLocationId() == null;
 
+        // PR #661 review finding 6: surface a conflict instead of silently
+        // discarding a relocation request on an already-located HARD allocation.
+        if (!ledgerEventRequired && !allocation.getLocationId().equals(storageLocationId)) {
+            throw new IllegalStateException("Allocation " + allocationId + " is already hardened at location "
+                    + allocation.getLocationId() + "; relocation via promote is not supported");
+        }
+
         allocation.setAllocationState(AllocationState.HARD);
         if (ledgerEventRequired) {
             allocation.setLocationId(storageLocationId);
@@ -153,8 +161,14 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalArgumentException("storageLocationId is required to promote an allocation to HARD");
         }
 
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                storageLocationValidationClient.getStorageLocationValidation(storageLocationId.toString());
+        StorageLocationValidationClient.StorageLocationValidation validation;
+        try {
+            validation = storageLocationValidationClient.getStorageLocationValidation(storageLocationId.toString());
+        } catch (org.springframework.web.client.HttpServerErrorException
+                | org.springframework.web.client.ResourceAccessException ex) {
+            throw new LocationServiceUnavailableException(
+                    "Location service unavailable while validating storage location", ex);
+        }
         if (!validation.isExists()) {
             throw new LocationNotFoundException(storageLocationId);
         }
@@ -183,6 +197,19 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     private ReservationEntity updateExistingReservation(ReservationEntity existing, CreateReservationRequest request) {
+        // PR #661 review finding 4: a located HARD allocation has an
+        // ALLOCATION_CREATED ledger event recorded under the current SKU;
+        // changing the SKU afterwards would skew per-SKU CREATED-RELEASED math.
+        if (!existing.getStockItemId().equals(request.getStockItemId())) {
+            boolean hasLocatedHard = allocationRepository.findByReservation(existing).stream()
+                    .anyMatch(allocation -> allocation.getAllocationState() == AllocationState.HARD
+                            && allocation.getLocationId() != null
+                            && allocation.getStatus() != AllocationStatus.RELEASED);
+            if (hasLocatedHard) {
+                throw new IllegalStateException(
+                        "Cannot change stock item on a reservation with located HARD allocations; cancel first");
+            }
+        }
         existing.setStockItemId(request.getStockItemId());
         existing.setRequiredQuantity(request.getRequiredQuantity());
         return reservationRepository.save(existing);

@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SiteInventoryRollupServiceImpl.class);
+
     private final StorageLocationTopologyClient storageLocationTopologyClient;
     private final SiteInventoryQuantityLoader quantityLoader;
 
@@ -73,6 +75,18 @@ public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupServic
             }
         }
 
+        // PR #661 review finding 8: raw topology rows could theoretically contain
+        // a parent cycle (A<->B) leaving nodes unreachable from any root; their
+        // quantities would silently vanish from totals. Detect and warn.
+        int reachable = countReachable(roots);
+        if (reachable < byId.size()) {
+            log.warn(
+                    "Site {} topology has {} storage locations unreachable from any root (possible parent cycle);"
+                            + " their quantities are excluded from the rollup",
+                    siteId,
+                    byId.size() - reachable);
+        }
+
         roots.forEach(MutableNode::computeRolledUp);
 
         RollupQuantities totals =
@@ -86,6 +100,17 @@ public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupServic
                 .toList();
 
         return new SiteInventoryRollupResponse(siteId, totals, nodes);
+    }
+
+    private static int countReachable(List<MutableNode> roots) {
+        int count = 0;
+        java.util.Deque<MutableNode> stack = new java.util.ArrayDeque<>(roots);
+        while (!stack.isEmpty()) {
+            MutableNode node = stack.pop();
+            count++;
+            stack.addAll(node.children);
+        }
+        return count;
     }
 
     private static final class MutableNode {

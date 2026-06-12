@@ -755,10 +755,47 @@ class ReservationServiceImplTest {
     }
 
     @Test
-    @DisplayName("promoteToHard on already-HARD located allocation writes no duplicate CREATED and keeps location")
-    void promoteToHard_alreadyHardWithLocation_noDuplicateLedgerEventAndLocationUnchanged() {
+    @DisplayName("promoteToHard re-promote at the SAME location writes no duplicate CREATED")
+    void promoteToHard_alreadyHardSameLocation_noDuplicateLedgerEvent() {
         // Issue #656: re-promote must not write a duplicate ALLOCATION_CREATED
-        // and must keep the location the original event was recorded against
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(5)
+                .allocatedQuantity(5)
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        AllocationEntity allocation = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(STORAGE_LOCATION_ID)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
+                .thenReturn(10);
+        when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
+                .thenReturn(List.of(allocation));
+        when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
+        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.promoteToHard(
+                allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-promote"));
+
+        assertThat(allocation.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
+        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("promoteToHard re-promote at a DIFFERENT location → IllegalStateException (409), location kept")
+    void promoteToHard_alreadyHardDifferentLocation_throwsConflictAndKeepsLocation() {
+        // PR #661 review finding 6: relocation via promote is rejected, not
+        // silently ignored
         UUID originalLocation = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -782,15 +819,66 @@ class ReservationServiceImplTest {
                 .thenReturn(10);
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of(allocation));
-        when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
-        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
-        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.promoteToHard(
-                allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-promote"));
+        UUID targetAllocationId = allocation.getAllocationId();
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-promote");
+
+        assertThatThrownBy(() -> service.promoteToHard(targetAllocationId, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already hardened");
 
         assertThat(allocation.getLocationId()).isEqualTo(originalLocation);
+        verify(allocationRepository, never()).save(any(AllocationEntity.class));
         verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("createOrUpdateReservation rejects SKU change while located HARD allocation exists")
+    void createOrUpdateReservation_skuChangeWithLocatedHard_throwsConflict() {
+        // PR #661 review finding 4: SKU change would skew per-SKU ledger math
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ReservationEntity existing = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(5)
+                .allocatedQuantity(5)
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        AllocationEntity locatedHard = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(existing)
+                .locationId(STORAGE_LOCATION_ID)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.of(existing));
+        when(allocationRepository.findByReservation(existing)).thenReturn(List.of(locatedHard));
+
+        CreateReservationRequest skuChange = new CreateReservationRequest(
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000099"), 5);
+
+        assertThatThrownBy(() -> service.createOrUpdateReservation(skuChange))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot change stock item");
+        verify(reservationRepository, never()).save(any(ReservationEntity.class));
+    }
+
+    @Test
+    @DisplayName("promoteToHard surfaces 503-mapped exception when location validation service is down")
+    void promoteToHard_validationServiceDown_throwsLocationServiceUnavailable() {
+        // PR #661 review finding 5: outage must map to 503, not raw 500
+        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
+
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "x");
+
+        assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
+                .isInstanceOf(com.positivity.inventory.internal.exception.LocationServiceUnavailableException.class);
+        verify(allocationRepository, never()).save(any(AllocationEntity.class));
     }
 
     @Test
