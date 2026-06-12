@@ -24,7 +24,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +79,10 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         List<ConsumeItemLine> items = request.getItems() == null ? List.of() : request.getItems();
 
         List<InventoryLedgerEntry> entriesToSave = new ArrayList<>();
+        // Releases accumulated in this request are not yet visible to the
+        // ledger-derived "already released" lookup; track them per allocation
+        // so multi-item requests cannot over-release (PR #661 re-review finding 1).
+        Map<UUID, Integer> releasedInBatch = new HashMap<>();
         for (ConsumeItemLine item : items) {
             PickTaskEntity task = pickTaskRepository
                     .findById(item.getPickTaskId())
@@ -93,7 +99,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             }
 
             entriesToSave.add(buildConsumptionEntry(request, item));
-            entriesToSave.addAll(closeAllocations(request, item, task));
+            entriesToSave.addAll(closeAllocations(request, item, task, releasedInBatch));
         }
 
         List<InventoryLedgerEntry> savedEntries = inventoryLedgerEntryRepository.saveAll(entriesToSave);
@@ -120,7 +126,10 @@ public class ConsumptionServiceImpl implements ConsumptionService {
      * fully released allocations to {@link AllocationStatus#RELEASED}.
      */
     private List<InventoryLedgerEntry> closeAllocations(
-            ConsumeItemsRequest request, ConsumeItemLine item, PickTaskEntity task) {
+            ConsumeItemsRequest request,
+            ConsumeItemLine item,
+            PickTaskEntity task,
+            Map<UUID, Integer> releasedInBatch) {
         if (task.getWorkorderLineId() == null) {
             return List.of();
         }
@@ -135,7 +144,9 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 .filter(allocation -> allocation.getLocationId() != null)
                 .filter(allocation -> allocation.getStatus() != AllocationStatus.RELEASED)
                 .sorted(Comparator.comparing(
-                        AllocationEntity::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                                AllocationEntity::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(
+                                AllocationEntity::getAllocationId, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
         if (locatedHard.isEmpty()) {
             return List.of();
@@ -147,12 +158,14 @@ public class ConsumptionServiceImpl implements ConsumptionService {
 
         List<InventoryLedgerEntry> releases = new ArrayList<>();
         int remainingToClose = item.getQuantity();
+        int totalReleasedForReservation = 0;
         for (AllocationEntity allocation : locatedHard) {
             if (remainingToClose <= 0) {
                 break;
             }
             int alreadyReleased = inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
-                    allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED);
+                            allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED)
+                    + releasedInBatch.getOrDefault(allocation.getAllocationId(), 0);
             int allocationRemaining = allocation.getAllocatedQuantity() - alreadyReleased;
             if (allocationRemaining <= 0) {
                 continue;
@@ -172,11 +185,21 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                     .timestamp(Instant.now(clock))
                     .build());
 
+            releasedInBatch.merge(allocation.getAllocationId(), release, Integer::sum);
             if (release == allocationRemaining) {
                 allocation.setStatus(AllocationStatus.RELEASED);
                 allocationRepository.save(allocation);
             }
             remainingToClose -= release;
+            totalReleasedForReservation += release;
+        }
+        if (totalReleasedForReservation > 0) {
+            // PR #661 re-review finding 2: AllocationReallocationServiceImpl pools
+            // reservation.allocatedQuantity as reallocatable stock; consumed stock
+            // is physically gone and must leave that pool.
+            ReservationEntity owning = reservation.get();
+            owning.setAllocatedQuantity(Math.max(0, owning.getAllocatedQuantity() - totalReleasedForReservation));
+            reservationRepository.save(owning);
         }
         return releases;
     }
