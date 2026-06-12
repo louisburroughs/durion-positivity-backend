@@ -3,6 +3,7 @@ package com.positivity.location.internal.repository;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,17 @@ public interface StorageLocationRepository extends JpaRepository<StorageLocation
     Optional<StorageLocationEntity> findByIdAndSiteId(UUID id, UUID siteId);
 
     Page<StorageLocationEntity> findBySiteId(UUID siteId, Pageable pageable);
+
+    /**
+     * Unpaginated fetch of every storage location of a site regardless of
+     * status, used by the topology endpoint (FR-3).
+     *
+     * Issue: CAP-214 #655
+     *
+     * @param siteId site identifier
+     * @return all storage locations of the site
+     */
+    List<StorageLocationEntity> findAllBySiteId(UUID siteId);
 
     Page<StorageLocationEntity> findBySiteIdAndType(UUID siteId, StorageLocationType type, Pageable pageable);
 

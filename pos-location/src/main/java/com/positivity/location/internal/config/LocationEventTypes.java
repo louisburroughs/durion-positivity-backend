@@ -88,6 +88,11 @@ public final class LocationEventTypes {
                     "LOCATION_STORAGE_LOCATION_GET", "Get a storage location")
             .build();
 
+    // Issue: CAP-214 #655
+    public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_TOPOLOGY = EventTypeRegistration.fastRead(
+                    "LOCATION_STORAGE_LOCATION_TOPOLOGY", "Get full storage location topology for a site")
+            .build();
+
     public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_VALIDATE = EventTypeRegistration.fastRead(
                     "LOCATION_STORAGE_LOCATION_VALIDATE", "Validate a storage location")
             .build();
@@ -142,6 +147,7 @@ public final class LocationEventTypes {
                 // Storage Location events
                 LOCATION_STORAGE_LOCATION_LIST,
                 LOCATION_STORAGE_LOCATION_GET,
+                LOCATION_STORAGE_LOCATION_TOPOLOGY,
                 LOCATION_STORAGE_LOCATION_VALIDATE,
                 LOCATION_STORAGE_LOCATION_CREATE,
                 LOCATION_STORAGE_LOCATION_UPDATE,

@@ -6,6 +6,7 @@ import com.positivity.location.internal.client.LocationInventoryInquiryClient;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
@@ -16,6 +17,7 @@ import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.StorageLocationInventoryTransferService;
 import com.positivity.location.service.StorageLocationService;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -187,6 +189,31 @@ public class StorageLocationServiceImpl implements StorageLocationService {
             page = storageLocationRepository.findBySiteId(siteId, pageable);
         }
         return page.map(this::toResponse);
+    }
+
+    /**
+     * Returns every storage location of a site in one unpaginated fetch with no
+     * status filtering, projected to the lightweight topology contract relied
+     * on by pos-inventory rollup (FR-3).
+     *
+     * Issue: CAP-214 #655
+     *
+     * @param siteId site identifier from the route
+     * @return flat list of all storage locations of the site
+     */
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public List<StorageLocationTopologyResponse> listStorageLocationTopology(@NonNull UUID siteId) {
+        return storageLocationRepository.findAllBySiteId(siteId).stream()
+                .map(entity -> StorageLocationTopologyResponse.builder()
+                        .id(entity.getId())
+                        .name(entity.getName())
+                        .type(entity.getType())
+                        .status(entity.getStatus() != null ? entity.getStatus().name() : null)
+                        .parentStorageLocationId(entity.getParentStorageLocationId())
+                        .build())
+                .toList();
     }
 
     /**

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -71,6 +73,26 @@ public class StorageLocationController {
             @RequestParam(required = false) StorageLocationStatus status,
             Pageable pageable) {
         return storageLocationService.listStorageLocations(siteId, type, status, pageable);
+    }
+
+    /**
+     * Unpaginated topology listing for rollup consumers (FR-3).
+     *
+     * Issue: CAP-214 #655
+     */
+    @GetMapping("/topology")
+    @PreAuthorize("hasAuthority('location:read')")
+    @EmitEvent(id = "LOCATION_STORAGE_LOCATION_TOPOLOGY", apiVersion = "1")
+    @Operation(
+            summary = "Get storage location topology",
+            description = "Return every storage location of a site, regardless of status, as a flat unpaginated "
+                    + "list with id, name, type, status, and parentStorageLocationId for topology consumers")
+    @ApiResponse(responseCode = "200", description = "Storage location topology returned")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:read"})
+    public List<StorageLocationTopologyResponse> topology(@PathVariable UUID siteId) {
+        return storageLocationService.listStorageLocationTopology(siteId);
     }
 
     @GetMapping("/{storageLocationId}")

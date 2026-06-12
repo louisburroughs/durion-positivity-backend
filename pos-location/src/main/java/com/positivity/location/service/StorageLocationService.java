@@ -3,9 +3,11 @@ package com.positivity.location.service;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -59,6 +61,19 @@ public interface StorageLocationService {
     @NonNull
     Page<StorageLocationResponse> listStorageLocations(
             @NonNull UUID siteId, StorageLocationType type, StorageLocationStatus status, @NonNull Pageable pageable);
+
+    /**
+     * Returns the complete storage-location topology of a site in one
+     * unpaginated fetch, including every status. Intended for topology
+     * consumers such as pos-inventory rollup (FR-3).
+     *
+     * Issue: CAP-214 #655
+     *
+     * @param siteId site identifier from the route
+     * @return flat list of all storage locations of the site
+     */
+    @NonNull
+    List<StorageLocationTopologyResponse> listStorageLocationTopology(@NonNull UUID siteId);
 
     /**
      * Patches storage location fields.
