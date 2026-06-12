@@ -110,6 +110,22 @@ public interface InventoryLedgerEntryRepository
     }
 
     /**
+     * Sum of {@code changeInQuantity} for one event type attributed to a source
+     * transaction (allocation ledger events carry the allocation id as
+     * {@code sourceTransactionId}). Used to derive how much of an allocation
+     * has already been released (CAP-218 #662).
+     */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.sourceTransactionId = :sourceTransactionId
+                          AND e.eventType = :eventType
+                        """)
+    int sumChangeBySourceTransactionIdAndEventType(
+            @Param("sourceTransactionId") String sourceTransactionId,
+            @Param("eventType") InventoryLedgerEventType eventType);
+
+    /**
      * Maximum number of location ids passed to a single {@code IN} clause.
      */
     int LOCATION_ID_CHUNK_SIZE = 1000;

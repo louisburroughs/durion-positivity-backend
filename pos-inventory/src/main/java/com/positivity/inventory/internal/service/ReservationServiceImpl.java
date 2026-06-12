@@ -102,7 +102,12 @@ public class ReservationServiceImpl implements ReservationService {
         allocationRepository.save(allocation);
 
         if (ledgerEventRequired) {
-            writeAllocationLedgerEntry(InventoryLedgerEventType.ALLOCATION_CREATED, allocation, stockItemId, netOnHand);
+            writeAllocationLedgerEntry(
+                    InventoryLedgerEventType.ALLOCATION_CREATED,
+                    allocation,
+                    stockItemId,
+                    netOnHand,
+                    allocation.getAllocatedQuantity());
         }
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
@@ -142,11 +147,20 @@ public class ReservationServiceImpl implements ReservationService {
         if (!ledgerReleasable.isEmpty()) {
             int netOnHand = calculateNetOnHand(reservation.getStockItemId());
             for (AllocationEntity allocation : ledgerReleasable) {
-                writeAllocationLedgerEntry(
-                        InventoryLedgerEventType.ALLOCATION_RELEASED,
-                        allocation,
-                        reservation.getStockItemId(),
-                        netOnHand);
+                // CAP-218 #662: partial consumption may already have released
+                // part of this allocation; release only the remainder so the
+                // per-allocation CREATED - RELEASED invariant holds.
+                int alreadyReleased = inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED);
+                int remaining = allocation.getAllocatedQuantity() - alreadyReleased;
+                if (remaining > 0) {
+                    writeAllocationLedgerEntry(
+                            InventoryLedgerEventType.ALLOCATION_RELEASED,
+                            allocation,
+                            reservation.getStockItemId(),
+                            netOnHand,
+                            remaining);
+                }
             }
         }
 
@@ -179,11 +193,15 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     private void writeAllocationLedgerEntry(
-            InventoryLedgerEventType eventType, AllocationEntity allocation, UUID stockItemId, int netOnHand) {
+            InventoryLedgerEventType eventType,
+            AllocationEntity allocation,
+            UUID stockItemId,
+            int netOnHand,
+            int quantity) {
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(stockItemId.toString())
                 .eventType(eventType)
-                .changeInQuantity(allocation.getAllocatedQuantity())
+                .changeInQuantity(quantity)
                 .quantityAfter(netOnHand)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .locationId(allocation.getLocationId())

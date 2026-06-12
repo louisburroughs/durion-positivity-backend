@@ -914,6 +914,44 @@ class ReservationServiceImplTest {
     }
 
     @Test
+    @DisplayName("cancelReservation after partial consumption releases only the un-released remainder")
+    void cancelReservation_afterPartialRelease_releasesRemainderOnly() {
+        // Issue #662: ledger-derived remainder keeps CREATED - RELEASED within
+        // {0, allocatedQuantity} across promote -> partial consume -> cancel
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(5)
+                .allocatedQuantity(5)
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        AllocationEntity locatedHard = AllocationEntity.builder()
+                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .reservation(reservation)
+                .locationId(STORAGE_LOCATION_ID)
+                .allocatedQuantity(5)
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+
+        when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(locatedHard));
+        when(allocationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        locatedHard.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
+                .thenReturn(3);
+
+        service.cancelReservation(workorderLineId);
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().getChangeInQuantity()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("cancelReservation writes ALLOCATION_RELEASED only for located HARD allocations")
     void cancelReservation_mixedAllocations_writesReleasedOnlyForLocatedHard() {
         // Issue #656: SOFT and unlocated allocations had no CREATED event, so no
