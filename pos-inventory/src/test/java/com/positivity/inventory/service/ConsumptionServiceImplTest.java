@@ -578,6 +578,8 @@ class ConsumptionServiceImplTest {
                 .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
                 .sum();
         assertThat(totalReleased).isEqualTo(5); // capped at allocatedQuantity, not 8
+        // second item exhausts the remainder and closes the allocation
+        assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
     }
 
     @Test
