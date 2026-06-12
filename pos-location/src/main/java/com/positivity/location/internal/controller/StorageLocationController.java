@@ -9,6 +9,7 @@ import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -91,7 +92,8 @@ public class StorageLocationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
-    public List<StorageLocationTopologyResponse> topology(@PathVariable UUID siteId) {
+    public List<StorageLocationTopologyResponse> topology(
+            @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId) {
         return storageLocationService.listStorageLocationTopology(siteId);
     }
 

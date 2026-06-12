@@ -273,6 +273,7 @@ public class LocationController {
     @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('location:read')")
+    @EmitEvent(id = "LOCATION_DESCENDANTS_GET", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})

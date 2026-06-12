@@ -124,7 +124,8 @@ class LocationDescendantsContractBehaviorIT extends BaseContractIntegrationTest 
 
         mockMvc.perform(withGatewayAuth(
                         get("/v1/locations/{locationId}/descendants", ROOT_ID).queryParam("parentType", "PHYSICAL")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     /**
@@ -140,6 +141,7 @@ class LocationDescendantsContractBehaviorIT extends BaseContractIntegrationTest 
 
         mockMvc.perform(withGatewayAuth(
                         get("/v1/locations/{locationId}/descendants", ROOT_ID).queryParam("parentType", "NOT_A_TYPE")))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
     }
 }

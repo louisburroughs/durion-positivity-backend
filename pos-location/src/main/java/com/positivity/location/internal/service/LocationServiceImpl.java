@@ -274,6 +274,12 @@ public class LocationServiceImpl implements LocationService {
             }
             frontier = nextFrontier;
         }
+        if (!frontier.isEmpty()) {
+            log.warn(
+                    "Descendant traversal for location {} truncated at depth cap {}; result may be partial",
+                    locationId,
+                    MAX_DESCENDANT_DEPTH);
+        }
         return descendants;
     }
 

@@ -93,6 +93,11 @@ public final class LocationEventTypes {
                     "LOCATION_STORAGE_LOCATION_TOPOLOGY", "Get full storage location topology for a site")
             .build();
 
+    // Issue: CAP-214 #655
+    public static final EventTypeRegistration LOCATION_DESCENDANTS_GET = EventTypeRegistration.fastRead(
+                    "LOCATION_DESCENDANTS_GET", "Get descendant locations along a typed parent chain")
+            .build();
+
     public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_VALIDATE = EventTypeRegistration.fastRead(
                     "LOCATION_STORAGE_LOCATION_VALIDATE", "Validate a storage location")
             .build();
@@ -132,6 +137,7 @@ public final class LocationEventTypes {
                 LOCATION_PATCH,
                 LOCATION_PARENT_ADD,
                 LOCATION_ROSTER_GET,
+                LOCATION_DESCENDANTS_GET,
                 // Bay events
                 LOCATION_BAY_CREATE,
                 LOCATION_BAY_UPDATE,
