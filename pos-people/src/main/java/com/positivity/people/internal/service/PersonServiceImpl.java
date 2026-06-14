@@ -5,6 +5,7 @@ import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
 import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.PersonSpecifications;
 import com.positivity.people.service.PersonService;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +46,12 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     @NonNull
-    public List<Person> getAllPeople() {
-        return personRepository.findAll().stream().map(this::toDto).toList();
+    public List<Person> getAllPeople(@Nullable String type, @Nullable String q) {
+        return personRepository
+                .findAll(PersonSpecifications.directoryFilter(type, q))
+                .stream()
+                .map(this::toDto)
+                .toList();
     }
 
     @Override
@@ -218,6 +224,7 @@ public class PersonServiceImpl implements PersonService {
         dto.setSecondaryEmail(entity.getSecondaryEmail());
         dto.setPhoneNumbers(entity.getPhoneNumbers());
         dto.setUsername(entity.getUsername());
+        dto.setEmployeeStatus(entity.getStatus());
         return dto;
     }
 

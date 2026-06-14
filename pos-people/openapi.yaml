@@ -331,8 +331,26 @@ paths:
       tags:
       - People API
       summary: Get all people
-      description: Retrieve a list of all people.
+      description: Retrieve people with optional type and text filters.
       operationId: getAllPeople
+      parameters:
+      - name: type
+        in: query
+        description: 'Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).'
+        required: false
+        schema:
+          type: string
+          enum:
+          - ALL
+          - EMPLOYEE
+          - ACTIVE
+          - INACTIVE
+      - name: q
+        in: query
+        description: Case-insensitive text search on firstName, lastName, primaryEmail, username.
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: List of people returned successfully.
@@ -484,6 +502,8 @@ paths:
                 $ref: '#/components/schemas/BreakDto'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/workSessions/{id}/breaks/start:
     post:
       tags:
@@ -515,6 +535,8 @@ paths:
                 $ref: '#/components/schemas/BreakDto'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/workSessions/stop:
     post:
       tags:
@@ -537,6 +559,8 @@ paths:
                 $ref: '#/components/schemas/WorkSessionDto'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/workSessions/start:
     post:
       tags:
@@ -559,6 +583,8 @@ paths:
                 $ref: '#/components/schemas/WorkSessionDto'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/users/link:
     post:
       tags:
@@ -1729,6 +1755,15 @@ components:
             type: string
         username:
           type: string
+        employeeStatus:
+          type: string
+          description: Employee status. Null if the person has no employee record.
+          enum:
+          - ACTIVE
+          - ON_LEAVE
+          - SUSPENDED
+          - TERMINATED
+          - DISABLED
       required:
       - firstName
       - lastName

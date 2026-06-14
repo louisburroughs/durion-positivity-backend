@@ -1,5 +1,6 @@
 package com.positivity.people.internal.dto;
 
+import com.positivity.people.internal.enums.EmployeeStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -25,6 +26,9 @@ public class Person {
     private List<String> phoneNumbers;
 
     private String username;
+
+    @Schema(description = "Employee status. Null if the person has no employee record.")
+    private EmployeeStatus employeeStatus;
 
     public UUID getId() {
         return id;
@@ -80,5 +84,13 @@ public class Person {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public EmployeeStatus getEmployeeStatus() {
+        return employeeStatus;
+    }
+
+    public void setEmployeeStatus(EmployeeStatus employeeStatus) {
+        this.employeeStatus = employeeStatus;
     }
 }
