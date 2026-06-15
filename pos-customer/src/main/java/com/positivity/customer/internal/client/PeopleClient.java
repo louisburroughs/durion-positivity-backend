@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -23,13 +24,19 @@ public class PeopleClient {
     private final RestClient restClient;
     private final boolean allowLocalFallback;
 
+    @Autowired
     public PeopleClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.people.base-url:http://api-gateway}") String peopleBaseUrl,
+            @Value("${pos.people.service-id:people}") String serviceId,
             @Value("${pos.people.allow-local-fallback:false}") boolean allowLocalFallback) {
-        this.restClient = restClientBuilder.baseUrl(peopleBaseUrl).build();
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
         this.allowLocalFallback = allowLocalFallback;
-        log.info("PeopleClient initialized with baseUrl: {}", peopleBaseUrl);
+        log.info("PeopleClient initialized with serviceId: {}", serviceId);
+    }
+
+    /** Package-private constructor for unit tests — accepts a pre-built RestClient.Builder. */
+    PeopleClient(RestClient.Builder restClientBuilder, String serviceId) {
+        this(restClientBuilder, serviceId, false);
     }
 
     @NonNull
@@ -43,7 +50,9 @@ public class PeopleClient {
         try {
             ResolvePersonResponse response = restClient
                     .post()
-                    .uri("/people/v1/people/resolve")
+                    .uri("/v1/people/resolve")
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "people:person:create")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()

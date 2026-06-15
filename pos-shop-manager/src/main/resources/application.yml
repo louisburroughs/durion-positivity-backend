@@ -71,18 +71,13 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   crm:
-    customer-base-url: ${POS_CRM_CUSTOMER_BASE_URL:http://api-gateway}
-    vehicle-base-url: ${POS_CRM_VEHICLE_BASE_URL:http://api-gateway}
     connect-timeout-ms: ${POS_CRM_CONNECT_TIMEOUT_MS:200}
     read-timeout-ms: ${POS_CRM_READ_TIMEOUT_MS:2000}
-  hr:
-    base-url: ${POS_HR_BASE_URL:http://api-gateway}
-location:
-  service:
-    url: ${LOCATION_SERVICE_URL:http://api-gateway}
-people:
-  service:
-    url: ${PEOPLE_SERVICE_URL:http://api-gateway}
-catalog:
-  service:
-    url: ${CATALOG_SERVICE_URL:http://api-gateway}
+  customer:
+    service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
+  people:
+    service-id: ${POS_PEOPLE_SERVICE_ID:people}
+  location:
+    service-id: ${POS_LOCATION_SERVICE_ID:location}
+  catalog:
+    service-id: ${POS_CATALOG_SERVICE_ID:catalog}

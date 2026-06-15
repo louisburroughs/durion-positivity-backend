@@ -7,20 +7,28 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class LocationClient {
+
+    private static final String HEADER_AUTHORITIES = "X-Authorities";
+    private static final String AUTH_BAY_READ = "location:bay:read";
+    private static final String AUTH_BAY_MANAGE = "location:bay:manage";
+    private static final String AUTH_MOBILE_UNIT_READ = "location:mobile-unit:read";
+    private static final String AUTH_MOBILE_UNIT_MANAGE = "location:mobile-unit:manage";
+
     private final RestClient restClient;
-    private final String locationServiceUrl;
 
     public LocationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${location.service.url:http://api-gateway}") String locationServiceUrl) {
-        this.restClient = builder.build();
-        this.locationServiceUrl = locationServiceUrl;
+            @Value("${pos.location.service-id:location}") String serviceId) {
+        this.restClient = builder.baseUrl("http://" + serviceId)
+                .defaultHeader("X-User", "pos-shop-manager")
+                .build();
     }
 
     public Object getBays() {
         return restClient
                 .get()
-                .uri(locationServiceUrl + "/location/v1/locations/bays")
+                .uri("/v1/locations/bays")
+                .header(HEADER_AUTHORITIES, AUTH_BAY_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -28,7 +36,8 @@ public class LocationClient {
     public Object getBayById(Long locationId, Long bayId) {
         return restClient
                 .get()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
+                .uri("/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -36,7 +45,8 @@ public class LocationClient {
     public Object createBay(Long locationId, Object request) {
         return restClient
                 .post()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/bays", locationId)
+                .uri("/v1/locations/{locationId}/bays", locationId)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
                 .body(request)
                 .retrieve()
                 .body(Object.class);
@@ -45,23 +55,28 @@ public class LocationClient {
     public Object updateBays(Object request) {
         restClient
                 .put()
-                .uri(locationServiceUrl + "/location/v1/locations/bays")
+                .uri("/v1/locations/bays")
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
                 .body(request)
-                .retrieve();
+                .retrieve()
+                .toBodilessEntity();
         return request;
     }
 
     public void deleteBay(Long locationId, Long bayId) {
         restClient
                 .delete()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
-                .retrieve();
+                .uri("/v1/locations/{locationId}/bays/{bayId}", locationId, bayId)
+                .header(HEADER_AUTHORITIES, AUTH_BAY_MANAGE)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     public Object getMobileUnits() {
         return restClient
                 .get()
-                .uri(locationServiceUrl + "/location/v1/locations/mobileUnit")
+                .uri("/v1/locations/mobileUnit")
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -69,7 +84,8 @@ public class LocationClient {
     public Object getMobileUnitById(Long locationId, Long bayId) {
         return restClient
                 .get()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
+                .uri("/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_READ)
                 .retrieve()
                 .body(Object.class);
     }
@@ -77,7 +93,8 @@ public class LocationClient {
     public Object createMobileUnit(Long locationId, Object request) {
         return restClient
                 .post()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/mobileUnit", locationId)
+                .uri("/v1/locations/{locationId}/mobileUnit", locationId)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
                 .body(request)
                 .retrieve()
                 .body(Object.class);
@@ -86,16 +103,20 @@ public class LocationClient {
     public Object updateMobileUnits(Object request) {
         restClient
                 .put()
-                .uri(locationServiceUrl + "/location/v1/locations/mobileUnit")
+                .uri("/v1/locations/mobileUnit")
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
                 .body(request)
-                .retrieve();
+                .retrieve()
+                .toBodilessEntity();
         return request;
     }
 
     public void deleteMobileUnit(Long locationId, Long bayId) {
         restClient
                 .delete()
-                .uri(locationServiceUrl + "/location/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
-                .retrieve();
+                .uri("/v1/locations/{locationId}/mobileUnit/{bayId}", locationId, bayId)
+                .header(HEADER_AUTHORITIES, AUTH_MOBILE_UNIT_MANAGE)
+                .retrieve()
+                .toBodilessEntity();
     }
 }

@@ -64,10 +64,16 @@
       "description": "Path for receiving source-document stub endpoint."
     },
     {
-      "name": "gateway.url",
+      "name": "pos.location.service-id",
       "type": "java.lang.String",
-      "description": "Gateway base URL used by inventory service RestClient integrations.",
-      "defaultValue": "http://localhost:8080"
+      "description": "Eureka service-id for the pos-location service.",
+      "defaultValue": "location"
+    },
+    {
+      "name": "pos.workorder.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service-id for the pos-workorder service.",
+      "defaultValue": "workorder"
     },
     {
       "name": "pos.events.base-url",

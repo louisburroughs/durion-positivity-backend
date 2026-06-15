@@ -72,7 +72,21 @@ public class OpenApiConfig {
         collectAuthorities(
                 requiredPermissions,
                 AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), PreAuthorize.class));
+        if (requiredPermissions.isEmpty() && isAuthenticatedOrAbsent(handlerMethod)) {
+            requiredPermissions.add("AUTHENTICATED");
+        }
         return new ArrayList<>(requiredPermissions);
+    }
+
+    private static boolean isAuthenticatedOrAbsent(HandlerMethod handlerMethod) {
+        PreAuthorize methodLevel =
+                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), PreAuthorize.class);
+        if (methodLevel != null) {
+            return "isAuthenticated()".equals(methodLevel.value());
+        }
+        PreAuthorize classLevel =
+                AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(), PreAuthorize.class);
+        return classLevel == null || "isAuthenticated()".equals(classLevel.value());
     }
 
     private static void collectAuthorities(LinkedHashSet<String> requiredPermissions, PreAuthorize preAuthorize) {

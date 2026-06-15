@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
@@ -127,7 +128,7 @@ class SessionAgentManagerTest {
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(List.of());
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anyString()))
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient().when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
@@ -246,7 +247,7 @@ class SessionAgentManagerTest {
 
         assertThat(response).isEqualTo("Hello!");
         // Prompt resolution now happens deferred in systemMessageProvider lambda at runtime
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anyString());
+        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
         verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
     }
 
@@ -337,7 +338,12 @@ class SessionAgentManagerTest {
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
         return new CurrentUserContext(
-                username, userId, primaryRole, Set.of(primaryRole), Set.of(primaryRole, "mcp:chat:execute"));
+                username,
+                userId,
+                primaryRole,
+                Set.of(primaryRole),
+                Set.of(primaryRole, "mcp:chat:execute"),
+                Set.of("AUTHENTICATED", "mcp:chat:execute"));
     }
 
     private SessionAgentManager managerWithToolSelectionEngine(ToolSelectionEngine selectionEngine) {

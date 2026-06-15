@@ -59,16 +59,16 @@
       "defaultValue": 8080
     },
     {
-      "name": "pos.people.base-url",
+      "name": "pos.people.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for people service integration.",
-      "defaultValue": "http://pos-people:8084"
+      "description": "Eureka service-id for the pos-people service.",
+      "defaultValue": "people"
     },
     {
-      "name": "pos.customer.base-url",
+      "name": "pos.customer.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for customer service integration.",
-      "defaultValue": "http://pos-customer:8084"
+      "description": "Eureka service-id for the pos-customer service.",
+      "defaultValue": "customer"
     },
     {
       "name": "pos.restclient.connect.timeout",

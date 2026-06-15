@@ -88,7 +88,8 @@ public class RestrictionRuleController {
 
     @Operation(
             summary = "Deactivate a restriction rule",
-            description = "Deactivates the specified restriction rule so it no longer participates in price restriction evaluation.")
+            description =
+                    "Deactivates the specified restriction rule so it no longer participates in price restriction evaluation.")
     @ApiResponse(responseCode = "200", description = "Restriction rule deactivated.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions.")

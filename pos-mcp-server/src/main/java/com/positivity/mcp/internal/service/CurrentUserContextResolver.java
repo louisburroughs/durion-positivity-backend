@@ -31,6 +31,7 @@ public class CurrentUserContextResolver {
                 SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException(),
                 primaryRole,
                 Set.copyOf(roles),
-                Set.copyOf(authorities));
+                Set.copyOf(authorities),
+                PermissionCodes.extract(authorities));
     }
 }

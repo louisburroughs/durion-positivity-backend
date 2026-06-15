@@ -7,6 +7,7 @@ import com.positivity.people.internal.dto.ResolvePersonResponse;
 import com.positivity.people.service.PersonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -34,15 +36,20 @@ public class PersonController {
 
     private final PersonService personService;
 
-    @Operation(summary = "Get all people", description = "Retrieve a list of all people.")
+    @Operation(summary = "Get all people", description = "Retrieve people with optional type and text filters.")
+    @Parameter(name = "type", description = "Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).",
+            schema = @Schema(allowableValues = {"ALL", "EMPLOYEE", "ACTIVE", "INACTIVE"}))
+    @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail, username.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:person:view"})
     @PreAuthorize("hasAuthority('people:person:view')")
-    public List<Person> getAllPeople() {
-        return personService.getAllPeople();
+    public List<Person> getAllPeople(
+            @RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = "q", required = false) String q) {
+        return personService.getAllPeople(type, q);
     }
 
     @Operation(summary = "Get person by ID", description = "Retrieve a person by their unique ID.")

@@ -58,10 +58,7 @@ public class SecurityConfig {
                     .csrf(csrf -> csrf.ignoringRequestMatchers("/v1/auth/**"))
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                    "/v1/auth/refresh",
-                                    "/v1/auth/validate",
-                                    V1_AUTH_LOGIN,
-                                    V1_AUTH_SELF_REGISTER)
+                                    "/v1/auth/refresh", "/v1/auth/validate", V1_AUTH_LOGIN, V1_AUTH_SELF_REGISTER)
                             .permitAll()
                             .anyRequest()
                             .authenticated())

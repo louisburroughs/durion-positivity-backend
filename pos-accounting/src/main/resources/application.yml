@@ -48,14 +48,11 @@ eureka:
 # Cross-service configuration
 pos:
   invoice:
-    service:
-      url: http://api-gateway
+    service-id: invoice
   customer:
-    service:
-      url: http://api-gateway
+    service-id: customer
   workorder:
-    service:
-      url: http://api-gateway
+    service-id: workorder
   # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
   # See RestClientConfig.java for timeout configuration
   accounting:

@@ -54,7 +54,9 @@ public class Workorder {
     private UUID shopId; // Reference to Shop
     private UUID vehicleId; // Reference to Vehicle
     private UUID customerId; // Reference to Customer
-    private UUID approvalId; // Reference to CustomerApproval (from pos-customer-approval)
+    // Set to the approving customer's ID by approveWorkorder(); combined with status ==
+    // APPROVED and approvedAt, this records that the customer has approved the workorder.
+    private UUID approvalId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "estimate_id")

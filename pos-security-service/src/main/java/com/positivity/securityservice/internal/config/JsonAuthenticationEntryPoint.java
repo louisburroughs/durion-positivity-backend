@@ -65,8 +65,11 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
             correlationId = UUID.randomUUID().toString();
         }
 
-        log.warn("Authentication required (401); uri={} correlationId={} reason={}",
-                request.getRequestURI(), correlationId, code);
+        log.warn(
+                "Authentication required (401); uri={} correlationId={} reason={}",
+                request.getRequestURI(),
+                correlationId,
+                code);
 
         ApiError body = new ApiError(
                 code,

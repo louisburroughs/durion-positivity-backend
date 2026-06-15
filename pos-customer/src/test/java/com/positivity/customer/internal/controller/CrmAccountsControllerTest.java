@@ -1,9 +1,9 @@
 package com.positivity.customer.internal.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,15 +23,15 @@ import com.positivity.customer.service.PartyService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -175,8 +175,7 @@ class CrmAccountsControllerTest {
     @Test
     @DisplayName("browseParties returns 403 when unauthorized")
     void listParties_returns403_whenUnauthorized() throws Exception {
-        mockMvc.perform(get("/v1/crm/accounts/parties"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/crm/accounts/parties")).andExpect(status().isForbidden());
     }
 
     // ─── B-22: PUT /v1/crm/accounts/parties/{partyId}/billing-rules ─────────

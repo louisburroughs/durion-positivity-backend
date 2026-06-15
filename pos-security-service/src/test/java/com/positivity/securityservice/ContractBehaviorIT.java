@@ -639,7 +639,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         // MANAGER role grants: security:role:view, security:role:assign, mcp:chat:execute
         // but NOT security:token:issue_internal
         mockMvc.perform(post("/v1/auth/token-pair")
-                        .header("X-Authorities", "ROLE_MANAGER,security:role:view,security:role:assign,mcp:chat:execute")
+                        .header(
+                                "X-Authorities",
+                                "ROLE_MANAGER,security:role:view,security:role:assign,mcp:chat:execute")
                         .header("X-User", TEST_SUBJECT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

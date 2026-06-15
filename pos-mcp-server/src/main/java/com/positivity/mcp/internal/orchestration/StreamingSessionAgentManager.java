@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
@@ -18,6 +19,7 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -116,7 +118,8 @@ public class StreamingSessionAgentManager
                 tokenCount(message),
                 messagePreview);
 
-        ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, message);
+        ToolSelectionEngine.ToolSelectionResult selection =
+                toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message);
         List<Object> allTools = sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
         String cacheKey = sharedOrchestrationSupport.toolCacheKey(allTools);
         LOGGER.debug(
@@ -240,7 +243,12 @@ public class StreamingSessionAgentManager
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(role, role);
+                // No CurrentUserContext is available during startup warm-up, so prebuild
+                // with the AUTHENTICATED-only permission set; callers whose actual
+                // permissionCodes differ get a cache miss and build on demand (its key
+                // already varies with toolCacheKey).
+                ToolSelectionEngine.ToolSelectionResult selection =
+                        toolSelectionEngine.selectRoleTools(role, Set.of(PermissionCodes.AUTHENTICATED), role);
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);

@@ -14,8 +14,8 @@ import org.springframework.web.client.RestClient;
  * Calls {@code POST /v1/price/quotes} on the pos-price service.
  *
  * <p>
- * pos-price has no class-level &#64;PreAuthorize, so no authority headers
- * are required for service-to-service calls.
+ * The pos-price endpoint requires {@code @PreAuthorize("isAuthenticated()")},
+ * so X-User/X-Authorities headers are required for service-to-service calls.
  *
  * Issue: CAP-247 Story #16
  */
@@ -24,11 +24,14 @@ import org.springframework.web.client.RestClient;
 public class PricingClientImpl implements PricingClient {
 
     private final RestClient restClient;
+    private final String basePath;
 
     public PricingClientImpl(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.price.base-url:http://api-gateway}") String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+            @Value("${pos.price.service-id:price}") String serviceId,
+            @Value("${pos.price.base-path:/v1/price}") String basePath) {
+        this.basePath = basePath;
+        this.restClient = restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 
     @Override
@@ -38,7 +41,9 @@ public class PricingClientImpl implements PricingClient {
 
         PriceQuoteServiceResponse response = restClient
                 .post()
-                .uri("/price/v1/price/quotes")
+                .uri(basePath + "/quotes")
+                .header("X-User", "pos-catalog-service")
+                .header("X-Authorities", "pricing:price_book:view")
                 .body(body)
                 .retrieve()
                 .body(PriceQuoteServiceResponse.class);

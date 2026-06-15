@@ -1,19 +1,13 @@
 package com.positivity.inventory.internal.client;
 
-import com.positivity.security.common.GatewaySecurityConstants;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Client for validating storage locations against pos-location source-of-truth.
@@ -22,16 +16,14 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class StorageLocationValidationClient {
 
     private static final Logger log = LoggerFactory.getLogger(StorageLocationValidationClient.class);
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final RestClient restClient;
 
     public StorageLocationValidationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${gateway.url:http://api-gateway}") String gatewayUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(gatewayUrl + "/location/v1/storage-locations")
-                .build();
+            @Value("${pos.location.service-id:location}") String locationServiceId) {
+        this.restClient =
+                restClientBuilder.baseUrl("http://" + locationServiceId).build();
     }
 
     @NonNull
@@ -43,12 +35,11 @@ public class StorageLocationValidationClient {
             throw new IllegalArgumentException("destinationLocationId must be a valid UUID", ex);
         }
 
-        String authorizationHeader = resolveAuthorizationHeader();
-
         StorageLocationValidation response = restClient
                 .get()
-                .uri("/{storageLocationId}/validation", parsedId)
-                .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                .uri("/v1/storage-locations/{storageLocationId}/validation", parsedId)
+                .header("X-User", "pos-inventory")
+                .header("X-Authorities", "location:read")
                 .retrieve()
                 .body(StorageLocationValidation.class);
 
@@ -58,27 +49,6 @@ public class StorageLocationValidationClient {
         }
 
         return response;
-    }
-
-    private String resolveAuthorizationHeader() {
-        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
-            throw new IllegalStateException("Missing HTTP request context for token forwarding");
-        }
-
-        HttpServletRequest request = requestAttributes.getRequest();
-        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return authorizationHeader;
-        }
-
-        String gatewayTokenHeader = request.getHeader(GatewaySecurityConstants.HEADER_TOKEN);
-        if (StringUtils.hasText(gatewayTokenHeader)) {
-            return gatewayTokenHeader.startsWith(BEARER_PREFIX)
-                    ? gatewayTokenHeader
-                    : BEARER_PREFIX + gatewayTokenHeader;
-        }
-
-        throw new IllegalStateException("Missing bearer token for storage location validation request");
     }
 
     public static class StorageLocationValidation {

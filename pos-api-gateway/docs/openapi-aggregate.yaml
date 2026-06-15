@@ -323,6 +323,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1{id}
   /v1/customer/bulk-ingest:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1customer~1bulk-ingest
+  /v1/customers/{id}/requirements-met:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1customers~1{id}~1requirements-met
   /v1/promotions/redemptions:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1promotions~1redemptions
   /v1/promotions/redemptions/by-customer/{customerId}:
@@ -359,6 +361,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1asns
   /v1/inventory/asns/{asnId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1asns~1{asnId}
+  /v1/inventory/availability:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1availability
   /v1/inventory/availability/by-sku:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1availability~1by-sku
   /v1/inventory/availability/lead-time:
@@ -411,6 +415,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1locations~1{locationId}~1deactivate
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1locations~1{locationId}~1inventory-inquiry
+  /v1/inventory/locations/{locationId}/inventory-rollup:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1locations~1{locationId}~1inventory-rollup
   /v1/inventory/pick-lists:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1pick-lists
   /v1/inventory/pick-lists/{pickListId}:
@@ -475,6 +481,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1shortage~1resolve
   /v1/inventory/sites/{siteId}/defaultLocations:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sites~1{siteId}~1defaultLocations
+  /v1/inventory/sites/{siteId}/inventory-rollup:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sites~1{siteId}~1inventory-rollup
   /v1/inventory/stock-movements:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1stock-movements
   /v1/inventory/storage-locations:
@@ -527,12 +535,16 @@ paths:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{locationId}~1children
   /v1/locations/{locationId}/defaults:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{locationId}~1defaults
+  /v1/locations/{locationId}/descendants:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{locationId}~1descendants
   /v1/locations/{locationId}/responsible-person:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{locationId}~1responsible-person
   /v1/locations/{locationId}/validation:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{locationId}~1validation
   /v1/locations/{siteId}/storage-locations:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{siteId}~1storage-locations
+  /v1/locations/{siteId}/storage-locations/topology:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{siteId}~1storage-locations~1topology
   /v1/locations/{siteId}/storage-locations/{storageLocationId}:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{siteId}~1storage-locations~1{storageLocationId}
   /v1/mobile-units:
@@ -639,6 +651,18 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timeEntries~1reject
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timeEntries~1{timeEntryId}~1adjustments
+  /v1/people/timekeeping/approvals/people:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1approvals~1people
+  /v1/people/timekeeping/time-period-approvals:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-period-approvals
+  /v1/people/timekeeping/time-periods:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods~1{timePeriodId}~1people~1{personId}~1approve
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods~1{timePeriodId}~1people~1{personId}~1reject
+  /v1/people/timekeeping/timekeeping-entries:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1timekeeping-entries
   /v1/people/user-links:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1user-links
   /v1/people/user-links/{personId}:

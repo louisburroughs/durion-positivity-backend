@@ -7,11 +7,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface PersonService {
 
     @NonNull
-    List<Person> getAllPeople();
+    default List<Person> getAllPeople() {
+        return getAllPeople(null, null);
+    }
+
+    @NonNull
+    List<Person> getAllPeople(@Nullable String type, @Nullable String q);
 
     @NonNull
     Optional<Person> getPersonById(@NonNull UUID id);

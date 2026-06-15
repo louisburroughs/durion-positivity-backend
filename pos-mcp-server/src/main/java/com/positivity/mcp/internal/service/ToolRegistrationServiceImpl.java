@@ -59,7 +59,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             .map(specification -> specification.tool().name())
                             .collect(Collectors.joining(", "));
 
-                    log.info("Registering {} MCP tools from gateway aggregate spec: {}", specifications.size(), toolNames);
+                    log.info(
+                            "Registering {} MCP tools from gateway aggregate spec: {}",
+                            specifications.size(),
+                            toolNames);
 
                     return Flux.fromIterable(specifications)
                             .flatMap(this::addToolWithTiming)
@@ -81,10 +84,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         if (!properties.includedServices().isEmpty()
                 && properties.aggregateSpecUrl() != null
                 && !properties.aggregateSpecUrl().isBlank()) {
-            log.warn(
-                    "mcp.server.included-services is configured but has no effect in aggregate-first discovery mode "
-                            + "(aggregate-spec-url is set). included-services is deprecated for aggregate-first "
-                            + "discovery; use mcp.server.included-path-prefixes instead.");
+            log.warn("mcp.server.included-services is configured but has no effect in aggregate-first discovery mode "
+                    + "(aggregate-spec-url is set). included-services is deprecated for aggregate-first "
+                    + "discovery; use mcp.server.included-path-prefixes instead.");
         }
     }
 

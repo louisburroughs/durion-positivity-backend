@@ -15,6 +15,7 @@ import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +28,8 @@ import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class ToolSelectionEngineTest {
+
+    private static final Set<String> PERMISSION_CODES = Set.of("AUTHENTICATED", "inventory:stock:view");
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -88,7 +91,7 @@ class ToolSelectionEngineTest {
                 .thenReturn(List.of(inventoryFacadeTool));
 
         ToolSelectionEngine.ToolSelectionResult result =
-                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", "show stock for sku ABC");
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
 
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
         assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, inventoryFacadeTool);
@@ -96,6 +99,7 @@ class ToolSelectionEngineTest {
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
+        assertThat(contextCaptor.getValue().permissionCodes()).isEqualTo(PERMISSION_CODES);
     }
 
     @Test
@@ -106,7 +110,8 @@ class ToolSelectionEngineTest {
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of());
 
-        toolSelectionEngine.selectRoleTools("ROLE_ADMIN", "create PO for vendor NAPA with two line items");
+        toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", PERMISSION_CODES, "create PO for vendor NAPA with two line items");
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
@@ -122,7 +127,7 @@ class ToolSelectionEngineTest {
                 .thenReturn(List.of());
 
         ToolSelectionEngine.ToolSelectionResult result =
-                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", "latest internet sales report");
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "latest internet sales report");
 
         assertThat(result.roleTools()).containsExactly(orderFacadeTool, inventoryFacadeTool);
         assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, orderFacadeTool);

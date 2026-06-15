@@ -339,6 +339,8 @@ paths:
                 $ref: '#/components/schemas/RestrictionEvaluationResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/price/restrictions/rules:
     get:
       tags:
@@ -365,6 +367,8 @@ paths:
                   $ref: '#/components/schemas/RestrictionRuleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     post:
       tags:
       - Restriction Rules
@@ -441,6 +445,8 @@ paths:
                 $ref: '#/components/schemas/PriceQuoteResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/price/normalize:
     post:
       tags:
@@ -474,6 +480,8 @@ paths:
                 type: object
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/price/bulk-ingest:
     post:
       tags:
@@ -697,6 +705,8 @@ paths:
                 $ref: '#/components/schemas/PricingSnapshotResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/price/restrictions/rules/{ruleId}:
     get:
       tags:
@@ -732,6 +742,8 @@ paths:
                 $ref: '#/components/schemas/RestrictionRuleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Restriction Rules

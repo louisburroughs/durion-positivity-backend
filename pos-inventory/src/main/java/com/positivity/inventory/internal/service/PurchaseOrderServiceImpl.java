@@ -25,8 +25,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -122,8 +122,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (filter.getVendorId() != null && filter.getStatus() != null) {
             page = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus(), pageable);
             if (page == null) {
-                List<PurchaseOrderEntity> legacy = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(),
-                        filter.getStatus());
+                List<PurchaseOrderEntity> legacy =
+                        purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus());
                 page = new PageImpl<>(legacy, pageable, legacy.size());
             }
         } else if (filter.getVendorId() != null) {
@@ -141,9 +141,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         List<PurchaseOrderResponse> content = page.getContent().stream()
-                .filter(po -> filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
-                .filter(po -> filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
-                .filter(po -> filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
+                .filter(po ->
+                        filter.getVendorId() == null || filter.getVendorId().equals(po.getVendorId()))
+                .filter(po ->
+                        filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
+                .filter(po ->
+                        filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
                 .map(this::toResponse)
                 .toList();
 
@@ -360,8 +363,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private void updateOpenQuantity(PurchaseOrderLineEntity line, BigDecimal quantityReceived) {
-        BigDecimal currentOpenQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
-                : line.getOpenQuantityDecimal();
+        BigDecimal currentOpenQty =
+                line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal();
         BigDecimal nextOpenQty = currentOpenQty.subtract(quantityReceived);
         line.setOpenQuantityDecimal(nextOpenQty.signum() < 0 ? BigDecimal.ZERO : nextOpenQty);
     }
@@ -547,10 +550,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (sequence < 1L || sequence > MAX_PO_NUMBER_SEQUENCE) {
             throw new IllegalStateException("Purchase order sequence is out of range for 8-character codes");
         }
-        return String.format(Locale.ROOT, "%8s", Long.toString(sequence, 36)).replace(' ', '0')
+        return String.format(Locale.ROOT, "%8s", Long.toString(sequence, 36))
+                .replace(' ', '0')
                 .toUpperCase(Locale.ROOT);
     }
 
-    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {
-    }
+    private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {}
 }

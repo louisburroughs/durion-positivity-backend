@@ -2,6 +2,7 @@ package com.positivity.location.internal.repository;
 
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.ParentType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,4 +40,16 @@ public interface LocationParentRepository extends JpaRepository<LocationParent, 
     List<LocationParent> findByParent_Id(UUID parentId);
 
     List<LocationParent> findByParent_IdAndParentType(UUID parentId, ParentType parentType);
+
+    /**
+     * Batched downward traversal helper: fetches all parent edges of the given
+     * type for one whole frontier level in a single query.
+     *
+     * Issue: CAP-214 #655
+     *
+     * @param parentIds  ids of the locations forming the current frontier level
+     * @param parentType relationship type to traverse
+     * @return all matching parent edges
+     */
+    List<LocationParent> findByParent_IdInAndParentType(Collection<UUID> parentIds, ParentType parentType);
 }

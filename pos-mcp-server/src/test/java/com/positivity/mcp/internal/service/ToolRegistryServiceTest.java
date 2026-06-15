@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
@@ -15,6 +14,7 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +39,11 @@ class ToolRegistryServiceTest {
     private ToolRegistryService service;
 
     private static final UUID TOOL_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    private static final Set<String> CASHIER_PERMISSIONS = Set.of("AUTHENTICATED", "customer:account:view");
+
+    private static final Set<String> ADMIN_PERMISSIONS =
+            Set.of("AUTHENTICATED", "security:user:view", "security:audit:view");
 
     private static final ToolMetadata SAMPLE_TOOL = new ToolMetadata(
             TOOL_ID,
@@ -72,12 +77,14 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools returns scored and limited list when gated tools exist")
     void resolveCandidateTools_withGatedTools_returnsScoredList() {
-        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
         float[] vector = new float[] {0.1f, 0.2f, 0.3f};
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbeddingForRole(eq(vector), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+        when(repository.findTopKByEmbeddingForPermissions(eq(vector), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
@@ -87,11 +94,13 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    @DisplayName("resolveCandidateTools returns empty list when no gated tools exist for role/workflow")
+    @DisplayName("resolveCandidateTools returns empty list when no gated tools exist for permissions/workflow")
     void resolveCandidateTools_withNoGatedTools_returnsEmpty() {
-        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of());
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of());
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
 
@@ -101,7 +110,8 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools returns empty list when topK is zero")
     void resolveCandidateTools_withZeroTopK_returnsEmpty() {
-        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 0);
 
@@ -111,16 +121,18 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools falls back to priority-ordered gated set when ANN returns empty")
     void resolveCandidateTools_fallsBackToGatedSet_whenAnnReturnsEmpty() {
-        // This test documents the Phase 2 fix: the gated ANN returns only authorized
-        // tools,
-        // so an unauthorized tool can never displace an authorized one.
-        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        // The gated ANN returns only authorized tools, so an unauthorized tool can
+        // never displace an authorized one.
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
         float[] vector = new float[] {0.1f, 0.2f};
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
         // Gated ANN returns empty — simulates no embeddings for authorized tools
-        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of());
 
         // Should fall back to priority-ordered gated tools, not empty
@@ -132,15 +144,18 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools returns authorized tool that would have been excluded by global ANN")
     void resolveCandidateTools_authorizedToolNotInGlobalTopK_isReturnedByGatedAnn() {
-        // Phase 2 correctness proof: authorized tool ranks beyond global top-K but is
-        // correctly returned because gated ANN searches only authorized tools.
-        ToolSelectionContext context = new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE");
+        // Correctness proof: an authorized tool ranks beyond the global top-K but is
+        // correctly returned because the gated ANN searches only authorized tools.
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
         float[] vector = new float[] {0.1f, 0.2f};
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_CASHIER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
         // Gated ANN finds the authorized tool directly — no Java-filter step
-        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_CASHIER"), eq("IDLE")))
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
@@ -151,10 +166,10 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools uses admin fast-path for user and access questions")
     void resolveCandidateTools_adminQuery_usesAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("How many users do I have in the system?", "ROLE_ADMIN", "IDLE");
+        ToolSelectionContext context = new ToolSelectionContext(
+                "How many users do I have in the system?", "ROLE_ADMIN", "IDLE", ADMIN_PERMISSIONS);
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
@@ -165,10 +180,10 @@ class ToolRegistryServiceTest {
     @Test
     @DisplayName("resolveCandidateTools uses admin fast-path for audit and account-governance questions")
     void resolveCandidateTools_adminAuditQuery_usesAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("Search the audit log for failed admin logins", "ROLE_ADMIN", "IDLE");
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Search the audit log for failed admin logins", "ROLE_ADMIN", "IDLE", ADMIN_PERMISSIONS);
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_ADMIN", "IDLE"))
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
@@ -177,15 +192,17 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    @DisplayName("resolveCandidateTools does not use admin fast-path for non-admin roles")
-    void resolveCandidateTools_nonAdminRole_doesNotUseAdminFastPath() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("How many users do I have in the system?", "ROLE_MANAGER", "IDLE");
+    @DisplayName("resolveCandidateTools does not use admin fast-path when caller lacks AdminFacadeTool permission")
+    void resolveCandidateTools_withoutAdminPermission_doesNotUseAdminFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "How many users do I have in the system?", "ROLE_MANAGER", "IDLE", CASHIER_PERMISSIONS);
         float[] vector = new float[] {0.4f, 0.5f};
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_MANAGER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbeddingForRole(any(float[].class), anyInt(), eq("ROLE_MANAGER"), eq("IDLE")))
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
         List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
@@ -194,21 +211,32 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    @DisplayName("resolveCandidateTools normalizes security roles to seeded registry roles before querying")
-    void resolveCandidateTools_normalizesSecurityRolesBeforeQuerying() {
-        ToolSelectionContext context =
-                new ToolSelectionContext("show active workorders", "ROLE_SERVICE_ADVISOR", "IDLE");
-        float[] vector = new float[] {0.2f, 0.4f};
+    @DisplayName("resolveCandidateTools gates on permissionCodes rather than role — same role, "
+            + "different permissions yield different candidates")
+    void resolveCandidateTools_sameRoleDifferentPermissions_yieldsDifferentCandidates() {
+        String role = "ROLE_CASHIER";
+        Set<String> narrowPermissions = Set.of("AUTHENTICATED");
+        Set<String> broadPermissions = CASHIER_PERMISSIONS;
+        float[] vector = new float[] {0.1f, 0.2f};
 
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_SERVICE_WRITER", "IDLE")).thenReturn(List.of(SAMPLE_TOOL));
+        ToolSelectionContext narrowContext =
+                new ToolSelectionContext("look up customer", role, "IDLE", narrowPermissions);
+        ToolSelectionContext broadContext =
+                new ToolSelectionContext("look up customer", role, "IDLE", broadPermissions);
+
+        when(repository.findEnabledByPermissionsAndWorkflow(narrowPermissions, "IDLE"))
+                .thenReturn(List.of());
+        when(repository.findEnabledByPermissionsAndWorkflow(broadPermissions, "IDLE"))
+                .thenReturn(List.of(SAMPLE_TOOL));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
-        when(repository.findTopKByEmbeddingForRole(eq(vector), anyInt(), eq("ROLE_SERVICE_WRITER"), eq("IDLE")))
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(broadPermissions), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
-        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+        List<ToolMetadata> narrowResult = service.resolveCandidateTools(narrowContext, 5);
+        List<ToolMetadata> broadResult = service.resolveCandidateTools(broadContext, 5);
 
-        assertThat(result).containsExactly(SAMPLE_TOOL);
-        verify(repository).findEnabledByRoleAndWorkflow("ROLE_SERVICE_WRITER", "IDLE");
-        verify(repository).findTopKByEmbeddingForRole(vector, 10, "ROLE_SERVICE_WRITER", "IDLE");
+        assertThat(narrowResult).isEmpty();
+        assertThat(broadResult).containsExactly(SAMPLE_TOOL);
     }
 }

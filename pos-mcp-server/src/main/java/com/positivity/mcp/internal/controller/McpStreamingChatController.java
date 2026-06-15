@@ -60,10 +60,7 @@ public class McpStreamingChatController {
                                         array =
                                                 @ArraySchema(
                                                         schema =
-                                                                @Schema(
-                                                                        implementation =
-                                                                                ServerSentEventString
-                                                                                        .class))))
+                                                                @Schema(implementation = ServerSentEventString.class))))
             })
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
@@ -94,9 +91,7 @@ public class McpStreamingChatController {
             example = "{\"message\":\"Hello\"}")
     public record StreamChatRequest(@NotBlank @NonNull String message) {}
 
-    @Schema(
-            name = "ServerSentEventString",
-            description = "A Server-Sent Event carrying a string data payload")
+    @Schema(name = "ServerSentEventString", description = "A Server-Sent Event carrying a string data payload")
     public record ServerSentEventString(
             @Nullable String id,
             @Nullable String event,

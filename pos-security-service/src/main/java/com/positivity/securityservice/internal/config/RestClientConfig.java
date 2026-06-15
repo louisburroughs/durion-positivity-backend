@@ -33,14 +33,14 @@ public class RestClientConfig {
     @Bean
     public RestClient peopleRegistrationRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.people.base-url:http://api-gateway}") String peopleBaseUrl,
+            @Value("${pos.people.service-id:people}") String serviceId,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return builder.requestFactory(factory)
-                .baseUrl(peopleBaseUrl)
+                .baseUrl("http://" + serviceId)
                 .defaultHeader("X-User", INTERNAL_USER)
                 .defaultHeader("X-Authorities", PEOPLE_AUTHORITIES)
                 .build();
@@ -49,14 +49,14 @@ public class RestClientConfig {
     @Bean
     public RestClient customerRegistrationRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.customer.base-url:http://api-gateway}") String customerBaseUrl,
+            @Value("${pos.customer.service-id:customer}") String serviceId,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return builder.requestFactory(factory)
-                .baseUrl(customerBaseUrl)
+                .baseUrl("http://" + serviceId)
                 .defaultHeader("X-User", INTERNAL_USER)
                 .defaultHeader("X-Authorities", CUSTOMER_AUTHORITIES)
                 .build();

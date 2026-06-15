@@ -25,22 +25,22 @@
       "defaultValue": 30
     },
     {
-      "name": "pos.location-service.base-url",
+      "name": "pos.location-service.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for pos-location service integration.",
-      "defaultValue": "http://pos-location:8084"
+      "description": "Eureka service-id for the pos-location service.",
+      "defaultValue": "location"
     },
     {
-      "name": "pos.security-service.base-url",
+      "name": "pos.security-service.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for pos-security-service integration.",
-      "defaultValue": "http://pos-security-service:8086"
+      "description": "Eureka service-id for the pos-security-service service.",
+      "defaultValue": "security-service"
     },
     {
-      "name": "pos.workexec.base-url",
+      "name": "pos.workexec.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for work execution integration.",
-      "defaultValue": "http://workorder:8087"
+      "description": "Eureka service-id for the pos-workorder service (work execution endpoints).",
+      "defaultValue": "workorder"
     },
     {
       "name": "pos.restclient.connect.timeout",

@@ -131,8 +131,7 @@ public class SemanticChatMemoryStore implements ChatMemory {
         }
         try {
             if (sessionSummary == null) {
-                LOGGER.debug(
-                        "SessionSummary not available; skipping summary generation sessionId={}", sessionId);
+                LOGGER.debug("SessionSummary not available; skipping summary generation sessionId={}", sessionId);
                 return "";
             }
             String summary = sessionSummary.summarize(messages);

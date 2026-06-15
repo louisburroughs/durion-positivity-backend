@@ -26,6 +26,8 @@ tags:
   description: Reserve, promote, and cancel inventory allocations for workorder lines
 - name: Shortage Resolution
   description: Shortage resolution recommendation endpoints
+- name: Inventory Rollup
+  description: Inventory quantities rolled up along the storage-location hierarchy
 - name: Inventory Bulk Ingest API
   description: Bulk import inventory adjustment requests
 - name: Returns
@@ -294,7 +296,7 @@ paths:
       tags:
       - Inventory Reservations
       summary: Promote allocation to hard
-      description: Promotes an existing allocation to HARD state when ATP is sufficient
+      description: Promotes an existing allocation to HARD state when ATP is sufficient. Requires a storageLocationId; the hardened allocation is pinned to that storage location and an ALLOCATION_CREATED ledger event is recorded against it. A repeat promote of an already-HARD allocation keeps its original location and writes no duplicate event.
       operationId: promoteToHard
       parameters:
       - name: allocationId
@@ -331,7 +333,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '404':
-          description: Allocation or reservation not found
+          description: Allocation, reservation, or storage location not found
           content:
             application/json:
               schema:
@@ -1984,6 +1986,78 @@ paths:
         - inventory:location:view
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/sites/{siteId}/inventory-rollup:
+    get:
+      tags:
+      - Inventory Rollup
+      summary: Get site inventory rollup
+      description: Returns on-hand, allocated, and available quantities grouped and subtotaled along the storage-location hierarchy of a site. Each node carries its own quantities and the rolled-up sum of itself plus all descendants. Topology comes from pos-location at request time (ADR-0016). Ledger rows at location ids unknown to the site are excluded in v1 (no 'unassigned' bucket).
+      operationId: getSiteInventoryRollup
+      parameters:
+      - name: siteId
+        in: path
+        description: Site (Location) identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: Optional product SKU filter
+        required: false
+        schema:
+          type: string
+      - name: depth
+        in: query
+        description: Maximum tree depth to return (1 = root storage locations only)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+      - name: includeEmpty
+        in: query
+        description: Include storage locations with zero on-hand and zero allocations
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Rollup returned (empty nodes list when the site has no storage locations)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteInventoryRollupResponse'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteInventoryRollupResponse'
+        '403':
+          description: User lacks required on-hand view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Location service unavailable; retry later
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/shortage/options:
     get:
       tags:
@@ -2378,6 +2452,96 @@ paths:
         - inventory:location:view
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/locations/{locationId}/inventory-rollup:
+    get:
+      tags:
+      - Inventory Rollup
+      summary: Get parent-location inventory rollup
+      description: Aggregates inventory totals across all descendant sites of a parent location (building/place/region) along a typed parent chain (default PHYSICAL, ADR-0016). Returns per-site summaries plus a grand total. With expand=tree, each site entry inlines its full storage-location rollup tree; expansion is rejected with 422 when the descendant site count exceeds the configured cap (pos.inventory.rollup.expand-site-cap, default 25). Without expand, summaries are computed sequentially for every descendant regardless of count; prefer narrow parent locations for large hierarchies.
+      operationId: getLocationInventoryRollup
+      parameters:
+      - name: locationId
+        in: path
+        description: Parent location identifier (building/place/region)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: parentType
+        in: query
+        description: Typed parent chain to walk (default PHYSICAL)
+        required: false
+        schema:
+          type: string
+      - name: sku
+        in: query
+        description: Optional product SKU filter
+        required: false
+        schema:
+          type: string
+      - name: expand
+        in: query
+        description: Set to 'tree' to inline each site's full rollup tree
+        required: false
+        schema:
+          type: string
+      - name: depth
+        in: query
+        description: Maximum per-site tree depth (only with expand=tree)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+      - name: includeEmpty
+        in: query
+        description: Include all-zero tree nodes (only with expand=tree)
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Rollup returned (empty sites list when the location has no descendants)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationInventoryRollupResponse'
+        '400':
+          description: Invalid parameters (unknown parentType, bad expand value)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationInventoryRollupResponse'
+        '403':
+          description: User lacks required on-hand view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'expand=tree rejected: descendant site count exceeds the configured cap'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Location service unavailable; retry later
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -2838,6 +3002,78 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/availability:
+    get:
+      tags:
+      - Inventory Availability
+      summary: Query inventory availability by SKU (list form)
+      description: Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.
+      operationId: queryAvailabilityBySku
+      parameters:
+      - name: sku
+        in: query
+        description: Product SKU
+        required: true
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: query
+        description: Storage location identifier (optional; narrows to sub-location)
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sourceType
+        in: query
+        description: Inventory lookup strategy
+        required: false
+        schema:
+          type: string
+          enum:
+          - WAREHOUSE
+          - SUPPLIER
+          - TRANSIT
+      responses:
+        '200':
+          description: Availability list returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AvailabilityView'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Product SKU or location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+        - inventory:on_hand:search
+      x-required-permissions:
+      - inventory:on_hand:view
+      - inventory:on_hand:search
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -3275,8 +3511,15 @@ components:
     PromoteAllocationRequest:
       type: object
       properties:
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Storage location identifier where the hardened allocation pins stock
         hardenedReason:
           type: string
+          description: Reason the allocation is being hardened
+      required:
+      - storageLocationId
     CreateReplenishmentPolicyRequest:
       type: object
       properties:
@@ -4663,6 +4906,74 @@ components:
           type: array
           items:
             type: string
+    RollupQuantities:
+      type: object
+      properties:
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity
+        allocated:
+          type: integer
+          format: int64
+          description: Outstanding allocated quantity
+        available:
+          type: integer
+          format: int64
+          description: 'Available to promise: onHand - allocated (may be negative)'
+        empty:
+          type: boolean
+      required:
+      - allocated
+      - available
+      - onHand
+    SiteInventoryRollupResponse:
+      type: object
+      properties:
+        siteId:
+          type: string
+          format: uuid
+          description: Site (Location) identifier
+        totals:
+          $ref: '#/components/schemas/RollupQuantities'
+        nodes:
+          type: array
+          description: Root storage locations of the site topology
+          items:
+            $ref: '#/components/schemas/StorageLocationRollupNode'
+      required:
+      - nodes
+      - siteId
+      - totals
+    StorageLocationRollupNode:
+      type: object
+      properties:
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Storage location identifier
+        name:
+          type: string
+          description: Storage location name
+        type:
+          type: string
+          description: Storage location type (e.g. FLOOR, SHELF, BIN)
+        status:
+          type: string
+          description: Storage location status
+        own:
+          $ref: '#/components/schemas/RollupQuantities'
+        rolledUp:
+          $ref: '#/components/schemas/RollupQuantities'
+        children:
+          type: array
+          description: Child storage locations
+          items:
+            $ref: '#/components/schemas/StorageLocationRollupNode'
+      required:
+      - own
+      - rolledUp
+      - storageLocationId
     ShortageOptionDto:
       type: object
       properties:
@@ -4813,6 +5124,48 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    LocationInventoryRollupResponse:
+      type: object
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Parent location identifier (building/place/region)
+        parentType:
+          type: string
+          description: Parent chain type used for descendant resolution
+        totals:
+          $ref: '#/components/schemas/RollupQuantities'
+        sites:
+          type: array
+          description: Per-site summaries (trees inlined with expand=tree)
+          items:
+            $ref: '#/components/schemas/SiteRollupSummary'
+      required:
+      - locationId
+      - parentType
+      - sites
+      - totals
+    SiteRollupSummary:
+      type: object
+      properties:
+        siteId:
+          type: string
+          format: uuid
+          description: Site (Location) identifier
+        siteName:
+          type: string
+          description: Site name from the location hierarchy
+        totals:
+          $ref: '#/components/schemas/RollupQuantities'
+        nodes:
+          type: array
+          description: Full storage-location rollup tree; present only with expand=tree
+          items:
+            $ref: '#/components/schemas/StorageLocationRollupNode'
+      required:
+      - siteId
+      - totals
     LocationInventoryInquiryResponse:
       type: object
       description: Inventory summary for a storage location
@@ -4981,6 +5334,28 @@ components:
           format: date-time
         recount:
           type: boolean
+    AvailabilityView:
+      type: object
+      properties:
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        storageLocationId:
+          type: string
+          format: uuid
+        onHandQuantity:
+          type: integer
+          format: int32
+        allocatedQuantity:
+          type: integer
+          format: int32
+        availableToPromiseQuantity:
+          type: integer
+          format: int32
+        unitOfMeasure:
+          type: string
     LocationAvailabilityDto:
       type: object
       properties:
@@ -5034,28 +5409,6 @@ components:
           type: string
           format: date-time
           description: Timestamp when lead-time data was last refreshed
-    AvailabilityView:
-      type: object
-      properties:
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        storageLocationId:
-          type: string
-          format: uuid
-        onHandQuantity:
-          type: integer
-          format: int32
-        allocatedQuantity:
-          type: integer
-          format: int32
-        availableToPromiseQuantity:
-          type: integer
-          format: int32
-        unitOfMeasure:
-          type: string
   securitySchemes:
     bearerAuth:
       type: http

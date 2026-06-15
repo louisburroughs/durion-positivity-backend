@@ -104,6 +104,7 @@ class McpStreamingChatControllerTest {
                 UUID.fromString("00000000-0000-7000-8000-000000000124"),
                 "ROLE_USER",
                 Set.of("ROLE_USER"),
-                Set.of("ROLE_USER", "mcp:chat:stream"));
+                Set.of("ROLE_USER", "mcp:chat:stream"),
+                Set.of("mcp:chat:stream", "AUTHENTICATED"));
     }
 }

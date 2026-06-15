@@ -442,6 +442,8 @@ paths:
                 $ref: '#/components/schemas/WorkorderResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/suggestSubstitutes:
     post:
       tags:
@@ -467,6 +469,8 @@ paths:
                   $ref: '#/components/schemas/SubstituteLinkResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/start:
     post:
       tags:
@@ -2430,6 +2434,8 @@ paths:
                 $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/changeRequests/{changeId}/emergency-override:
     post:
       tags:
@@ -2615,6 +2621,8 @@ paths:
           description: Change request not found
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workexec/time-entries/timer/stop:
     post:
       tags:
@@ -3051,6 +3059,8 @@ paths:
           description: Work order not found.
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/transitions:
     get:
       tags:
@@ -3077,6 +3087,8 @@ paths:
                   $ref: '#/components/schemas/WorkorderStateTransitionResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/snapshots:
     get:
       tags:
@@ -3103,6 +3115,8 @@ paths:
                   $ref: '#/components/schemas/WorkorderSnapshotResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/picked-items:
     get:
       tags:
@@ -3329,6 +3343,8 @@ paths:
                 $ref: '#/components/schemas/OperationalContextResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/labor:
     get:
       tags:
@@ -3381,13 +3397,6 @@ paths:
         schema:
           type: string
         example: 550e8400-e29b-41d4-a716-446655440000
-      - name: X-Authorities
-        in: header
-        description: User authorities (comma-separated)
-        required: false
-        schema:
-          type: string
-        example: workorder:workorder:view,workorder:financials:view
       responses:
         '200':
           description: Workorder detail retrieved successfully
@@ -3403,6 +3412,8 @@ paths:
                 $ref: '#/components/schemas/WorkorderDetailResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/{workorderId}/completion-preconditions:
     get:
       tags:
@@ -3460,6 +3471,8 @@ paths:
                 type: boolean
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/workorders/estimates/{estimateId}/summary:
     get:
       tags:
@@ -3522,14 +3535,14 @@ paths:
             application/pdf:
               schema:
                 type: string
-                format: binary
+                format: byte
         '502':
           description: Document service unavailable
           content:
             application/pdf:
               schema:
                 type: string
-                format: binary
+                format: byte
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -6796,14 +6809,14 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
-        sort:
-          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
           type: boolean
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         numberOfElements:
           type: integer
           format: int32
@@ -6986,14 +6999,14 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
-        sort:
-          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
           type: boolean
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         numberOfElements:
           type: integer
           format: int32

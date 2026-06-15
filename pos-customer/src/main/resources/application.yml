@@ -77,6 +77,7 @@ pos:
       workorder-events-topic: workorder-events
       enabled: false
   people:
-    base-url: ${POS_PEOPLE_BASE_URL:http://api-gateway}
+    service-id: ${POS_PEOPLE_SERVICE_ID:people}
+    allow-local-fallback: false
   vehicle-inventory:
-    base-url: ${POS_VEHICLE_INVENTORY_BASE_URL:http://api-gateway}
+    service-id: ${POS_VEHICLE_INVENTORY_SERVICE_ID:vehicle-inventory}

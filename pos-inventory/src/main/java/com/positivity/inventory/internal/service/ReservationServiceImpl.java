@@ -1,14 +1,19 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.client.StorageLocationValidationClient;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.internal.entity.AllocationEntity;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
 import com.positivity.inventory.internal.enums.AllocationStatus;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
+import com.positivity.inventory.internal.exception.LocationNotFoundException;
+import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -33,6 +38,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final StorageLocationValidationClient storageLocationValidationClient;
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
@@ -50,6 +56,8 @@ public class ReservationServiceImpl implements ReservationService {
         AllocationEntity allocation = allocationRepository
                 .findById(allocationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
+
+        UUID storageLocationId = requireValidStorageLocation(request);
 
         ReservationEntity reservation = allocation.getReservation();
         UUID stockItemId = reservation.getStockItemId();
@@ -71,11 +79,36 @@ public class ReservationServiceImpl implements ReservationService {
             throw new InsufficientAtpException(allocationId, allocation.getAllocatedQuantity(), availableAtp);
         }
 
+        // A repeat promote of an already-HARD allocation with a recorded location
+        // must not write a duplicate ALLOCATION_CREATED ledger event, and must keep
+        // the location the existing CREATED event was recorded against (CAP-218 #656).
+        boolean ledgerEventRequired =
+                allocation.getAllocationState() != AllocationState.HARD || allocation.getLocationId() == null;
+
+        // PR #661 review finding 6: surface a conflict instead of silently
+        // discarding a relocation request on an already-located HARD allocation.
+        if (!ledgerEventRequired && !allocation.getLocationId().equals(storageLocationId)) {
+            throw new IllegalStateException("Allocation " + allocationId + " is already hardened at location "
+                    + allocation.getLocationId() + "; relocation via promote is not supported");
+        }
+
         allocation.setAllocationState(AllocationState.HARD);
+        if (ledgerEventRequired) {
+            allocation.setLocationId(storageLocationId);
+        }
         allocation.setHardenedAt(Instant.now(clock));
         allocation.setHardenedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         allocation.setHardenedReason(request.getHardenedReason());
         allocationRepository.save(allocation);
+
+        if (ledgerEventRequired) {
+            writeAllocationLedgerEntry(
+                    InventoryLedgerEventType.ALLOCATION_CREATED,
+                    allocation,
+                    stockItemId,
+                    netOnHand,
+                    allocation.getAllocatedQuantity());
+        }
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
         int totalAllocated = allocations.stream()
@@ -98,15 +131,103 @@ public class ReservationServiceImpl implements ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation", workorderLineId.toString()));
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
+
+        // Only located HARD allocations had a matching ALLOCATION_CREATED ledger
+        // event; releasing anything else would break the CREATED − RELEASED
+        // invariant (CAP-218 #656).
+        List<AllocationEntity> ledgerReleasable = allocations.stream()
+                .filter(allocation -> allocation.getStatus() != AllocationStatus.RELEASED)
+                .filter(allocation -> allocation.getAllocationState() == AllocationState.HARD)
+                .filter(allocation -> allocation.getLocationId() != null)
+                .toList();
+
         allocations.forEach(allocation -> allocation.setStatus(AllocationStatus.RELEASED));
         allocationRepository.saveAll(allocations);
+
+        if (!ledgerReleasable.isEmpty()) {
+            int netOnHand = calculateNetOnHand(reservation.getStockItemId());
+            for (AllocationEntity allocation : ledgerReleasable) {
+                // CAP-218 #662: partial consumption may already have released
+                // part of this allocation; release only the remainder so the
+                // per-allocation CREATED - RELEASED invariant holds.
+                int alreadyReleased = inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED);
+                int remaining = allocation.getAllocatedQuantity() - alreadyReleased;
+                if (remaining > 0) {
+                    writeAllocationLedgerEntry(
+                            InventoryLedgerEventType.ALLOCATION_RELEASED,
+                            allocation,
+                            reservation.getStockItemId(),
+                            netOnHand,
+                            remaining);
+                }
+            }
+        }
 
         reservation.setAllocatedQuantity(0);
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservationRepository.save(reservation);
     }
 
+    private UUID requireValidStorageLocation(PromoteAllocationRequest request) {
+        UUID storageLocationId = request.getStorageLocationId();
+        if (storageLocationId == null) {
+            throw new IllegalArgumentException("storageLocationId is required to promote an allocation to HARD");
+        }
+
+        StorageLocationValidationClient.StorageLocationValidation validation;
+        try {
+            validation = storageLocationValidationClient.getStorageLocationValidation(storageLocationId.toString());
+        } catch (org.springframework.web.client.HttpServerErrorException
+                | org.springframework.web.client.ResourceAccessException ex) {
+            throw new LocationServiceUnavailableException(
+                    "Location service unavailable while validating storage location", ex);
+        }
+        if (!validation.isExists()) {
+            throw new LocationNotFoundException(storageLocationId);
+        }
+        if (!validation.isActive()) {
+            throw new IllegalArgumentException("Storage location is not active: " + storageLocationId);
+        }
+        return storageLocationId;
+    }
+
+    private void writeAllocationLedgerEntry(
+            InventoryLedgerEventType eventType,
+            AllocationEntity allocation,
+            UUID stockItemId,
+            int netOnHand,
+            int quantity) {
+        InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
+                .stockItemId(stockItemId.toString())
+                .eventType(eventType)
+                .changeInQuantity(quantity)
+                .quantityAfter(netOnHand)
+                .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                .locationId(allocation.getLocationId())
+                .sourceTransactionId(
+                        allocation.getAllocationId() == null
+                                ? null
+                                : allocation.getAllocationId().toString())
+                .timestamp(Instant.now(clock))
+                .build();
+        inventoryLedgerEntryRepository.save(entry);
+    }
+
     private ReservationEntity updateExistingReservation(ReservationEntity existing, CreateReservationRequest request) {
+        // PR #661 review finding 4: a located HARD allocation has an
+        // ALLOCATION_CREATED ledger event recorded under the current SKU;
+        // changing the SKU afterwards would skew per-SKU CREATED-RELEASED math.
+        if (!existing.getStockItemId().equals(request.getStockItemId())) {
+            boolean hasLocatedHard = allocationRepository.findByReservation(existing).stream()
+                    .anyMatch(allocation -> allocation.getAllocationState() == AllocationState.HARD
+                            && allocation.getLocationId() != null
+                            && allocation.getStatus() != AllocationStatus.RELEASED);
+            if (hasLocatedHard) {
+                throw new IllegalStateException(
+                        "Cannot change stock item on a reservation with located HARD allocations; cancel first");
+            }
+        }
         existing.setStockItemId(request.getStockItemId());
         existing.setRequiredQuantity(request.getRequiredQuantity());
         return reservationRepository.save(existing);

@@ -2,6 +2,10 @@ package com.positivity.workorder.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.sun.net.httpserver.HttpServer;
@@ -12,8 +16,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -81,11 +89,29 @@ class ShopmgrOperationalContextClientTest {
     void getOperationalContext_throwsIllegalStateException_onConnectionRefused() {
         // Port 1 is reserved/not listening — triggers ResourceAccessException
         ShopmgrOperationalContextClient client =
-                new ShopmgrOperationalContextClient(RestClient.builder(), "http://localhost:1");
+                new ShopmgrOperationalContextClient(RestClient.builder(), "localhost:1");
 
         assertThatThrownBy(() -> client.getOperationalContext(WORKORDER_ID))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Shopmgr unavailable");
+    }
+
+    @Test
+    @DisplayName("getOperationalContext calls native shop-manager path (no gateway prefix)")
+    void getOperationalContext_callsNativePath() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(Matchers.containsString("/v1/shopmgr/workorders/")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-workorder"))
+                .andExpect(header("X-Authorities", "shop:schedule:view"))
+                .andRespond(withSuccess(
+                        "{\"version\":\"1\",\"locationId\":\"" + LOCATION_ID + "\",\"bayId\":\"B1\",\"locked\":false}",
+                        MediaType.APPLICATION_JSON));
+
+        ShopmgrOperationalContextClient client = new ShopmgrOperationalContextClient(builder, "shop-manager");
+        client.getOperationalContext(WORKORDER_ID);
+        server.verify();
     }
 
     // -----------------------------------------------------------------------
@@ -155,7 +181,7 @@ class ShopmgrOperationalContextClientTest {
     void getBayStatusForLocation_returnsEmptyList_onConnectionFailure() {
         // Port 1 is reserved/not listening — triggers ResourceAccessException
         ShopmgrOperationalContextClient client =
-                new ShopmgrOperationalContextClient(RestClient.builder(), "http://localhost:1");
+                new ShopmgrOperationalContextClient(RestClient.builder(), "localhost:1");
 
         List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays = client.getBayStatusForLocation(LOCATION_ID);
 
@@ -167,8 +193,8 @@ class ShopmgrOperationalContextClientTest {
     // -----------------------------------------------------------------------
 
     private ShopmgrOperationalContextClient buildClient(HttpServer server) {
-        String baseUrl = "http://localhost:" + server.getAddress().getPort();
-        return new ShopmgrOperationalContextClient(RestClient.builder(), baseUrl);
+        String serviceId = "localhost:" + server.getAddress().getPort();
+        return new ShopmgrOperationalContextClient(RestClient.builder(), serviceId);
     }
 
     private HttpServer startServer(int statusCode, String body, AtomicInteger callCount) throws IOException {

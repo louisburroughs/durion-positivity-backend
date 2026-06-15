@@ -270,6 +270,26 @@
               <outputDir>${project.basedir}</outputDir>
             </configuration>
           </plugin>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sanitize-openapi</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <exec failonerror="false" executable="python3">
+                      <arg value="${maven.multiModuleProjectDirectory}/scripts/sanitize-openapi.py" />
+                      <arg value="${project.basedir}/openapi.yaml" />
+                    </exec>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
         </plugins>
       </build>
     </profile>

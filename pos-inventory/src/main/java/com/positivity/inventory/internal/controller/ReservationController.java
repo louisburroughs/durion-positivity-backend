@@ -83,7 +83,10 @@ public class ReservationController {
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Promote allocation to hard",
-            description = "Promotes an existing allocation to HARD state when ATP is sufficient",
+            description = "Promotes an existing allocation to HARD state when ATP is sufficient. Requires a"
+                    + " storageLocationId; the hardened allocation is pinned to that storage location and an"
+                    + " ALLOCATION_CREATED ledger event is recorded against it. A repeat promote of an"
+                    + " already-HARD allocation keeps its original location and writes no duplicate event.",
             tags = {"Inventory Reservations"})
     @ApiResponse(
             responseCode = "200",
@@ -102,7 +105,7 @@ public class ReservationController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Allocation or reservation not found",
+            description = "Allocation, reservation, or storage location not found",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

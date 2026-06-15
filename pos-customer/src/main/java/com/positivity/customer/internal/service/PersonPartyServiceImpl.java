@@ -77,6 +77,11 @@ public class PersonPartyServiceImpl implements CustomerService {
         return Optional.empty();
     }
 
+    @Transactional(readOnly = true)
+    public Optional<PersonParty> findPartyById(@NonNull UUID id) {
+        return customerRepository.findById(id);
+    }
+
     /**
      * Creates a new customer from DTO.
      *

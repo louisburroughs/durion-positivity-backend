@@ -1,8 +1,8 @@
 ---
 title: Tool Usage Enhancement Spec
 description: Implementation-ready spec for improving MCP tool selection, caching, and transport parity in pos-mcp-server.
-status: proposed
-updated: 2026-05-03
+status: deprecated
+updated: 2026-06-11
 ---
 
 This specification consolidates the findings from the existing NLQ-to-API

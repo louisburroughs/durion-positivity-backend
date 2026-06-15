@@ -853,32 +853,30 @@ ADR-0021 (Tax API Consumption Policy) should also be consulted before making thi
 
 ---
 
-### A5. ADR-0011 / ADR-0040 Conflict: X-Authorities Is Not Present in Direct Service-to-Service Calls
+### A5. Direct Discovery as the Default — Gateway Routing for Internal Calls Is the Exception
 
-This is the most significant architectural gap in the migration plan.
+**Updated position (supersedes earlier gateway-routing recommendation):**
 
-Per ADR-0011, the API gateway is the authentication enforcement boundary. It validates the JWT, decodes `perm_bits`/`perm_ver` claims, and injects a trusted `X-Authorities` header downstream. Backend services rely on this header — via `GatewayAuthoritiesFilter` in `pos-security-common` — to populate the Spring Security context for `@PreAuthorize` checks.
+Internal runtime service-to-service calls default to direct Eureka discovery via `@LoadBalanced RestClient.Builder` targeting `http://{serviceId}`. The API gateway remains the public edge for browser and external clients only. Gateway routing for internal calls is a documented exception (currently: pos-mcp-server, which relays end-user bearer tokens requiring JWT validation).
 
-When services call each other directly (bypassing the gateway), only the original `Authorization: Bearer <token>` is forwarded. The gateway never touches the call, so `X-Authorities` is never injected. The receiving service's security filter receives a raw JWT with no pre-resolved authority header, and `@PreAuthorize` checks will fail silently or deny access.
+#### Rationale
 
-#### Recommendation
+The `X-Authorities` header problem identified in the earlier analysis is resolved by the perm-bits gateway header feature: the gateway now encodes resolved authority bits into the `X-Perm-Bits` / `X-Perm-Ver` headers, and `GatewayAuthoritiesFilter` in `pos-security-common` reconstructs the `X-Authorities` context from those bits on the receiving service. For direct service-to-service calls, the caller injects `X-Authorities: <required-permission>` and `X-User: <caller-service-name>` directly — no gateway transit required.
 
-**All service-to-service calls must route through the API gateway.** This is the only approach that preserves the established auth chain without duplicating gateway logic in `pos-security-common` or introducing a second trust model. It is consistent with ADR-0011 and ADR-0014, which position the gateway as the single enforcement boundary and explicitly prohibit internal services from being reached except via explicit gateway routes.
-
-The service discovery migration therefore applies to how service instances are _resolved_, not to whether calls traverse the gateway. The `@LoadBalanced` client resolves the gateway's own Eureka-registered address rather than a downstream service address directly.
-
-In practice, internal callers that currently use `http://pos-people:8084/v1/...` adopt the pattern:
+#### Default pattern for internal callers
 
 ```java
-// Base URL resolves to the gateway via Eureka; path is the gateway-routed path
-restClient.get().uri("/people/v1/people/{id}", id)
+// Base URL resolves directly to the downstream service via Eureka
+restClient.get().uri("/v1/people/{id}", id)
 ```
 
-where the base URL is `http://api-gateway` (the gateway's Eureka service ID) and the path prefix matches the gateway route for that service.
+where the base URL is `http://people` (or the relevant Eureka service ID) and headers `X-Authorities` and `X-User` are injected by the calling service.
 
-#### Explicit exceptions
+#### Documented gateway-routing exception
 
-The following categories of call are explicitly exempt from the gateway-routing requirement and may call downstream services directly via Eureka:
+`pos-mcp-server` (AccountingFacadeTool, WorkorderFacadeTool, InventoryFacadeTool, VehicleFacadeTool) remains routed through `http://api-gateway` because it relays end-user bearer tokens that require full JWT validation at the gateway. This is an approved exception and must be documented as such in `McpServerConfiguration`.
+
+#### Circular-call and startup-infra cases remain direct by necessity
 
 1. **Circular call risk.** Any call where routing through the gateway would create a cycle must be direct. The primary cases are:
    - `pos-security-service` calling `pos-people` or `pos-customer` during token issuance or user registration. Routing these through the gateway would require a valid JWT to already exist, which it does not at that point.
@@ -888,11 +886,11 @@ The following categories of call are explicitly exempt from the gateway-routing 
 
 3. **Internal-only services with no `@PreAuthorize` enforcement.** Services that are not gateway-routed (per ADR-0014) and whose endpoints carry no Spring Security authorization checks. These are already in the `register-with-eureka: false` category and are called directly by design (e.g., `pos-tax` as a library-mode service).
 
-Each exception must be explicitly documented in the calling module's `RestClientConfig` with the reason it bypasses the gateway. No undocumented direct calls.
+Each exception to the direct-discovery default must be explicitly documented in the calling module's `RestClientConfig` with the reason.
 
 #### Impact on migration scope
 
-This decision narrows the Eureka-direct call surface significantly. The `@LoadBalanced` pattern is used in most modules to resolve `http://api-gateway`, not individual service IDs. Individual service IDs are used only for the explicit exceptions listed above. This simplifies the migration — most modules need one load-balanced client bean pointing at the gateway, not one per downstream service.
+The `@LoadBalanced` pattern is used in most modules to resolve `http://{serviceId}` directly. Gateway routing applies only to `pos-mcp-server` as a documented exception. This means most modules need one load-balanced client bean per downstream service (or a shared builder), not a single gateway-pointing client.
 
 ---
 
@@ -1012,16 +1010,18 @@ These two patterns coexisting in the same module is not a problem, but the codeb
 
 ---
 
-### A10. pos-shop-manager Gateway URLs Are Understated as a Risk
+### A10. pos-shop-manager localhost:8080 URLs Are Direct-Discovery Migration Targets
 
-The module assessment marks `pos-shop-manager` as a "strong candidate" but the codebase contains:
+The module assessment marks `pos-shop-manager` as a "strong candidate" and the codebase contains:
 
 ```
 pos.crm.customer-base-url:  http://localhost:8080/v1/customers
 pos.crm.vehicle-base-url:   http://localhost:8080/v1/vehicles
 ```
 
-`localhost:8080` is the API gateway address in local development. These are gateway-routed calls. The analysis correctly identifies that gateway calls need individual review (Phase 5), but the per-module assessment does not flag this conflict. `pos-shop-manager` should be marked "mixed/needs gateway review" not "strong candidate," because at least two of its clients cannot be mechanically migrated to direct service discovery.
+`localhost:8080` is the API gateway address in local development. Under the earlier analysis these were treated as gateway-routed calls that "cannot be mechanically migrated." That position is superseded by A5: direct Eureka discovery is now the default for all internal runtime calls, and gateway routing is the documented exception. The `localhost:8080` and `http://api-gateway` patterns are exactly what the direct-discovery migration replaces.
+
+`pos-shop-manager` is a confirmed migration candidate (Task 9 of the implementation plan). `CrmCustomerClient` and `CrmVehicleClient` should be migrated to `@LoadBalanced RestClient.Builder` targeting `http://customer` and `http://customer` (or the relevant Eureka service IDs) with `X-Authorities` and `X-User` injected directly, consistent with the standard direct-discovery pattern.
 
 ---
 
@@ -1127,12 +1127,12 @@ The original plan specifies phases but does not define per-wave exit criteria. B
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------- | ---------------- |
 | A2  | MCP facade tools use `pos-{service}` Docker names, not Eureka IDs                                                                                                                        | High     | Open                      | Phase 3          |
 | A4  | `pos-tax` must not use Eureka — TaxServiceClient migration plan needs rework                                                                                                             | High     | Open                      | Phase 4          |
-| A5  | **Resolved**: all calls route through the gateway; `@LoadBalanced` resolves `api-gateway` not individual services; direct calls only for documented circular-call and startup exceptions | Critical | Recommendation documented | Before Phase 2   |
+| A5  | **Resolved**: direct Eureka discovery is the default for all internal runtime calls; gateway routing is a documented exception for pos-mcp-server only; callers inject `X-Authorities` + `X-User` directly | Critical | Position updated | Before Phase 2   |
 | A6  | **Resolved**: exempt infra registration clients from discovery; Docker health checks; Resilience4j retry                                                                                 | Medium   | Recommendation documented | Phase 2          |
 | A7  | `workexecRestClient` has correct ID but wrong port — low-risk fix                                                                                                                        | Low      | Open                      | Phase 4          |
 | A8  | `BearerTokenRelayInterceptor` must be preserved on `@LoadBalanced` builder                                                                                                               | High     | Open                      | Phase 3          |
 | A9  | `LoadBalancerClient` vs `@LoadBalanced` — inconsistency needs a style decision                                                                                                           | Low      | Open                      | Phase 3          |
-| A10 | `pos-shop-manager` module assessment understates gateway dependency                                                                                                                      | Medium   | Open                      | Phase 4          |
+| A10 | **Resolved**: `pos-shop-manager` `localhost:8080` URLs are direct-discovery migration targets under the A5 default; confirmed migration candidate (Task 9)                               | Medium   | Position updated          | Phase 4          |
 | A11 | **Resolved**: Java SDK is external-consumer only; fix `servers.url` in OpenAPI specs to gateway path; internal callers use `@LoadBalanced RestClient`                                    | Medium   | Recommendation documented | Pre-Phase 1      |
 | A12 | **Resolved**: Eureka is the platform standard; AWS must run Eureka within each tenant cell; HA and operational requirements documented                                                   | N/A      | Position confirmed        | AWS provisioning |
 | A13 | Per-wave exit criteria missing — defined above                                                                                                                                           | Medium   | Pre-Phase 1               |

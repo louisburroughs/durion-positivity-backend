@@ -13,10 +13,10 @@
       "defaultValue": false
     },
     {
-      "name": "pos.people.base-url",
+      "name": "pos.people.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-people service.",
-      "defaultValue": "http://localhost:8084"
+      "description": "Eureka service-id for the pos-people service.",
+      "defaultValue": "people"
     },
     {
       "name": "pos.people.allow-local-fallback",
@@ -48,10 +48,10 @@
       "defaultValue": true
     },
     {
-      "name": "pos.vehicle-inventory.base-url",
+      "name": "pos.vehicle-inventory.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for the pos-vehicle-inventory service.",
-      "defaultValue": "http://localhost:8086"
+      "description": "Eureka service-id for the pos-vehicle-inventory service.",
+      "defaultValue": "vehicle-inventory"
     }
   ]
 }

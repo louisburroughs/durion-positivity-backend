@@ -19,11 +19,11 @@ class WorkorderOpenApiContractTest extends BaseContractIntegrationTest {
     @DisplayName("openApiSpec_workorderEndpoints_haveRequiredSummaryAndDescription")
     @SuppressWarnings("unchecked")
     void openApiSpec_workorderEndpoints_haveRequiredSummaryAndDescription() throws Exception {
-        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
-                .andExpect(status().isOk())
-                .andReturn();
+        MvcResult result =
+                mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
 
-        Map<String, Object> openApiSpec = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        Map<String, Object> openApiSpec =
+                objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
         Map<String, Object> paths = (Map<String, Object>) openApiSpec.get("paths");
 
         assertOperationSummaryAndDescription(paths, "/v1/workorders/{workorderId}/suggestSubstitutes", "post");
@@ -50,7 +50,9 @@ class WorkorderOpenApiContractTest extends BaseContractIntegrationTest {
         assertThat(pathItem).as("path %s should exist", path).isNotNull();
 
         Map<String, Object> operation = (Map<String, Object>) pathItem.get(method);
-        assertThat(operation).as("%s %s operation should exist", method.toUpperCase(), path).isNotNull();
+        assertThat(operation)
+                .as("%s %s operation should exist", method.toUpperCase(), path)
+                .isNotNull();
         assertThat(operation.get("summary"))
                 .as("%s %s should have a non-empty summary", method.toUpperCase(), path)
                 .isInstanceOf(String.class)
@@ -69,7 +71,9 @@ class WorkorderOpenApiContractTest extends BaseContractIntegrationTest {
         assertThat(pathItem).as("path %s should exist", path).isNotNull();
 
         Map<String, Object> operation = (Map<String, Object>) pathItem.get(method);
-        assertThat(operation).as("%s %s operation should exist", method.toUpperCase(), path).isNotNull();
+        assertThat(operation)
+                .as("%s %s operation should exist", method.toUpperCase(), path)
+                .isNotNull();
         assertThat(operation.get("description"))
                 .as("%s %s should have a non-empty description", method.toUpperCase(), path)
                 .isInstanceOf(String.class)

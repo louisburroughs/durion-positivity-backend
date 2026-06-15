@@ -69,6 +69,8 @@ pos:
         preload-location-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_LOCATION:true}
         preload-global-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_GLOBAL:true}
   location-service:
-    base-url: ${POS_LOCATION_SERVICE_BASE_URL:http://pos-location:8080}
+    service-id: ${POS_LOCATION_SERVICE_SERVICE_ID:location}
   security-service:
-    base-url: ${POS_SECURITY_SERVICE_BASE_URL:http://api-gateway}
+    service-id: ${POS_SECURITY_SERVICE_SERVICE_ID:security-service}
+  workexec:
+    service-id: ${POS_WORKEXEC_SERVICE_ID:workorder}

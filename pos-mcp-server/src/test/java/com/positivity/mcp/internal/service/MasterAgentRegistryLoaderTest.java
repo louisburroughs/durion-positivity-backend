@@ -81,7 +81,8 @@ class MasterAgentRegistryLoaderTest {
         Object inventoryBean = new Object();
         when(repository.findEnabledByWorkflow("IDLE")).thenReturn(List.of(inventoryTool));
         when(repository.findAllRoleNames()).thenReturn(List.of("ROLE_SERVICE_ADVISOR"));
-        when(repository.findEnabledByRoleAndWorkflow("ROLE_SERVICE_ADVISOR", "IDLE")).thenReturn(List.of(inventoryTool));
+        when(repository.findEnabledByRoleAndWorkflow("ROLE_SERVICE_ADVISOR", "IDLE"))
+                .thenReturn(List.of(inventoryTool));
         when(applicationContext.getBean("inventoryFacadeTool")).thenReturn(inventoryBean);
 
         MasterAgentRegistryLoader loader = new MasterAgentRegistryLoader(repository, applicationContext, "idle");

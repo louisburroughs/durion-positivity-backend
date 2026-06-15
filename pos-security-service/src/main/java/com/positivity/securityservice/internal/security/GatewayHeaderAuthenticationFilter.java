@@ -60,8 +60,11 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(username, null, authorities);
             authentication.setDetails(Map.of("username", username));
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            log.debug("Gateway auth established; user={} authorities={} uri={}",
-                    username, authorities.size(), request.getRequestURI());
+            log.debug(
+                    "Gateway auth established; user={} authorities={} uri={}",
+                    username,
+                    authorities.size(),
+                    request.getRequestURI());
         } else {
             log.debug("No gateway auth headers; uri={}", request.getRequestURI());
         }
@@ -81,14 +84,19 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
         try {
             permVer = Integer.parseInt(permVerHeader);
         } catch (NumberFormatException | NullPointerException e) {
-            log.warn("X-Perm-Bits present but X-Perm-Ver is missing or invalid (value={}); clearing auth context uri={}",
-                    permVerHeader, request.getRequestURI());
+            log.warn(
+                    "X-Perm-Bits present but X-Perm-Ver is missing or invalid (value={}); clearing auth context uri={}",
+                    permVerHeader,
+                    request.getRequestURI());
             return null;
         }
 
         if (permVer != PermissionCode.CATALOG_VERSION) {
-            log.warn("X-Perm-Ver {} does not match local catalog version {}; clearing auth context uri={}",
-                    permVer, PermissionCode.CATALOG_VERSION, request.getRequestURI());
+            log.warn(
+                    "X-Perm-Ver {} does not match local catalog version {}; clearing auth context uri={}",
+                    permVer,
+                    PermissionCode.CATALOG_VERSION,
+                    request.getRequestURI());
             return null;
         }
 
@@ -98,8 +106,10 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                     .map(p -> new SimpleGrantedAuthority(p.code()))
                     .toList();
         } catch (Exception e) {
-            log.warn("Failed to decode X-Perm-Bits; clearing auth context uri={} error={}",
-                    request.getRequestURI(), e.getMessage());
+            log.warn(
+                    "Failed to decode X-Perm-Bits; clearing auth context uri={} error={}",
+                    request.getRequestURI(),
+                    e.getMessage());
             return null;
         }
     }

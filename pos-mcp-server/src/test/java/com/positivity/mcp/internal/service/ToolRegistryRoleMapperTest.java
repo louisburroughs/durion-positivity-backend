@@ -22,7 +22,8 @@ class ToolRegistryRoleMapperTest {
     @Test
     @DisplayName("normalize maps system administrator role to seeded admin registry role")
     void normalize_mapsSystemAdministratorToAdmin() {
-        assertThat(ToolRegistryRoleMapper.normalize("ROLE_SYSTEM_ADMINISTRATOR")).isEqualTo("ROLE_ADMIN");
+        assertThat(ToolRegistryRoleMapper.normalize("ROLE_SYSTEM_ADMINISTRATOR"))
+                .isEqualTo("ROLE_ADMIN");
     }
 
     @Test

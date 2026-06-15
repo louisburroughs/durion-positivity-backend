@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.service;
 
-import java.util.List;
 import com.positivity.mcp.internal.domain.RagScope;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -78,6 +78,5 @@ public final class SystemPromptDefaults {
         return normalizedScope;
     }
 
-    private SystemPromptDefaults() {
-    }
+    private SystemPromptDefaults() {}
 }

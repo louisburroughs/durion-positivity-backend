@@ -1,5 +1,6 @@
 package com.positivity.location.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +9,7 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,12 @@ class LocationServiceCycleGuardIT {
         locationRepository.deleteAll();
     }
 
+    @AfterEach
+    void cleanUp() {
+        locationParentRepository.deleteAll();
+        locationRepository.deleteAll();
+    }
+
     @Test
     void addParent_WhenReverseRelationshipExists_ThrowsException() {
         Location child = createLocation("Child-A");
@@ -74,6 +82,16 @@ class LocationServiceCycleGuardIT {
 
         assertTrue(ex.getMessage().contains("parent is a descendant of child"));
         assertEquals(2L, locationParentRepository.count());
+    }
+
+    @Test
+    void deleteAll_whenLocationHasParentRelationship_doesNotThrow() {
+        Location child = createLocation("Child-Del");
+        Location parent = createLocation("Parent-Del");
+
+        locationService.addParent(child.getId(), parent.getId(), ParentType.PHYSICAL);
+
+        assertDoesNotThrow(() -> locationRepository.deleteAll());
     }
 
     private Location createLocation(String name) {

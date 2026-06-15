@@ -16,7 +16,7 @@ public class PeopleClientConfig {
     @Bean
     public RestClient peopleServiceRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("${pos.people.base-url:http://api-gateway}") String peopleServiceBaseUrl) {
-        return restClientBuilder.baseUrl(peopleServiceBaseUrl).build();
+            @Value("${pos.people.service-id:people}") String serviceId) {
+        return restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 }

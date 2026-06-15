@@ -51,6 +51,8 @@ paths:
                 $ref: '#/components/schemas/VehicleCarePreferenceResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     put:
       tags:
       - Vehicle Preferences
@@ -98,6 +100,8 @@ paths:
                 $ref: '#/components/schemas/VehicleCarePreferenceResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Vehicle Preferences
@@ -119,6 +123,8 @@ paths:
           description: No preferences found to delete
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     patch:
       tags:
       - Vehicle Preferences
@@ -154,6 +160,8 @@ paths:
                 $ref: '#/components/schemas/VehicleCarePreferenceResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicles-legacy/{id}:
     get:
       tags:
@@ -185,6 +193,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     put:
       tags:
       - Vehicle API
@@ -221,6 +231,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Vehicle API
@@ -243,6 +255,8 @@ paths:
           description: Vehicle not found.
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicles-legacy/vin/{vin}:
     get:
       tags:
@@ -273,6 +287,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     put:
       tags:
       - Vehicle API
@@ -308,6 +324,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Vehicle API
@@ -329,6 +347,8 @@ paths:
           description: Vehicle not found.
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-registry/{vehicleId}:
     get:
       tags:
@@ -359,6 +379,8 @@ paths:
                 $ref: '#/components/schemas/VehicleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     put:
       tags:
       - Vehicle Registry API
@@ -400,6 +422,8 @@ paths:
                 $ref: '#/components/schemas/VehicleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Vehicle Registry API
@@ -421,6 +445,8 @@ paths:
           description: Vehicle not found.
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicles/search:
     get:
       tags:
@@ -465,6 +491,8 @@ paths:
                 $ref: '#/components/schemas/SearchVehiclesResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     post:
       tags:
       - Vehicle Search
@@ -492,6 +520,8 @@ paths:
                 $ref: '#/components/schemas/SearchVehiclesResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicles/bulk-ingest:
     post:
       tags:
@@ -541,6 +571,8 @@ paths:
                   $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     post:
       tags:
       - Vehicle API
@@ -562,6 +594,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicles-legacy/vin:
     post:
       tags:
@@ -584,6 +618,8 @@ paths:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-registry:
     post:
       tags:
@@ -612,6 +648,8 @@ paths:
                 $ref: '#/components/schemas/VehicleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-registry/vin/{vin}:
     get:
       tags:
@@ -643,6 +681,8 @@ paths:
                 $ref: '#/components/schemas/VehicleResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
 components:
   schemas:
     PreferencesUpsertDto:

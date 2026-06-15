@@ -52,8 +52,12 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
 
         Authentication requestAuth = SecurityContextHolder.getContext().getAuthentication();
         String actor = requestAuth != null ? requestAuth.getName() : "anonymous";
-        log.warn("Access denied (403); uri={} actor={} correlationId={} reason={}",
-                request.getRequestURI(), actor, correlationId, accessDeniedException.getMessage());
+        log.warn(
+                "Access denied (403); uri={} actor={} correlationId={} reason={}",
+                request.getRequestURI(),
+                actor,
+                correlationId,
+                accessDeniedException.getMessage());
 
         if (accessDeniedException instanceof AuthorizationDeniedException) {
             persistPermissionDeniedAuditEvent(correlationId, request, accessDeniedException.getMessage());

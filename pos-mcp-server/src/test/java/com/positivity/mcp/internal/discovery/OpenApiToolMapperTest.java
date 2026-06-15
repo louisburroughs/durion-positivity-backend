@@ -24,7 +24,8 @@ class OpenApiToolMapperTest {
     private static final URI GATEWAY_URI = URI.create("http://gateway.test");
 
     @Test
-    @DisplayName("toAggregateToolSpecifications derives domain from first non-version path segment and names tool {domain}_{operationId}")
+    @DisplayName(
+            "toAggregateToolSpecifications derives domain from first non-version path segment and names tool {domain}_{operationId}")
     void toAggregateToolSpecifications_generatesDomainPrefixedToolName_forVersionedPath() {
         OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
         when(mockFactory.handlerForBaseUri(any(), any(), any())).thenReturn((ex, req) -> Mono.empty());
@@ -40,7 +41,8 @@ class OpenApiToolMapperTest {
     }
 
     @Test
-    @DisplayName("toAggregateToolSpecifications uses first non-version segment when path starts with domain prefix before version")
+    @DisplayName(
+            "toAggregateToolSpecifications uses first non-version segment when path starts with domain prefix before version")
     void toAggregateToolSpecifications_usesFirstSegment_whenDomainPrecedesVersion() {
         OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
         when(mockFactory.handlerForBaseUri(any(), any(), any())).thenReturn((ex, req) -> Mono.empty());
@@ -91,7 +93,8 @@ class OpenApiToolMapperTest {
     }
 
     @Test
-    @DisplayName("toAggregateToolSpecifications excludes paths not matching configured included-path-prefixes allowlist")
+    @DisplayName(
+            "toAggregateToolSpecifications excludes paths not matching configured included-path-prefixes allowlist")
     void toAggregateToolSpecifications_excludesPaths_whenNotInAllowlist() {
         OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
         when(mockFactory.handlerForBaseUri(any(), any(), any())).thenReturn((ex, req) -> Mono.empty());

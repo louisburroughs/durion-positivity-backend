@@ -52,6 +52,8 @@ paths:
                 $ref: '#/components/schemas/SalesOrderLineResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Sales Orders
@@ -76,6 +78,8 @@ paths:
           description: OK
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/orders/price-overrides:
     get:
       tags:
@@ -290,6 +294,8 @@ paths:
                 $ref: '#/components/schemas/SalesOrderResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/orders/carts/{orderId}/items:
     post:
       tags:
@@ -319,6 +325,8 @@ paths:
                 $ref: '#/components/schemas/SalesOrderLineResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/orders/carts/{orderId}/cancel:
     post:
       tags:
@@ -453,6 +461,8 @@ paths:
                 $ref: '#/components/schemas/SalesOrderResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/orders/price-overrides/{overrideId}:
     get:
       tags:
@@ -530,6 +540,8 @@ paths:
                 $ref: '#/components/schemas/SalesOrderResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
 components:
   schemas:
     UpdateItemRequest:

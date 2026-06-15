@@ -4,9 +4,7 @@ import com.positivity.people.internal.entity.WorkSession;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> {
 
     Optional<WorkSession> findByPerson_IdAndEndedAtIsNull(UUID personId);

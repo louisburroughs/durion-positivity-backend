@@ -27,7 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
-@Tag(name = "Substitute Link API", description = "Operations for product substitute links and workorder substitute suggestions")
+@Tag(
+        name = "Substitute Link API",
+        description = "Operations for product substitute links and workorder substitute suggestions")
 public class SubstituteLinkController {
 
     private final SubstituteLinkService substituteLinkService;

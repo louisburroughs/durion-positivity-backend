@@ -68,6 +68,7 @@ BACKEND_SERVICES=(
   eureka-server
   pos-accounting
   pos-api-gateway
+  pos-bulk-loader
   pos-catalog
   pos-customer
   pos-event-receiver

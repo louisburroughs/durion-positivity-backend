@@ -22,12 +22,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     @Query("""
       SELECT p FROM ProductEntity p
-      WHERE (:sku IS NULL OR LOWER(p.sku) = LOWER(:sku))
-        AND (:mpn IS NULL OR LOWER(p.manufacturerPartNumber) = LOWER(:mpn))
+      WHERE (:sku IS NULL OR LOWER(p.sku) = LOWER(CAST(:sku AS string)))
+        AND (:mpn IS NULL OR LOWER(p.manufacturerPartNumber) = LOWER(CAST(:mpn AS string)))
         AND (
           :q IS NULL
-          OR LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
-          OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+          OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+          OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
         )
       """)
     Page<ProductEntity> searchProducts(
@@ -42,11 +42,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("""
       SELECT p FROM ProductEntity p
       LEFT JOIN p.category c
-      WHERE (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
-                       OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', :q, '%')))
-        AND (:sku IS NULL OR LOWER(p.sku) = LOWER(:sku))
-        AND (:brand IS NULL OR LOWER(p.manufacturerBrand) = LOWER(:brand))
-        AND (:category IS NULL OR LOWER(c.name) = LOWER(:category))
+      WHERE (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+                       OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
+        AND (:sku IS NULL OR LOWER(p.sku) = LOWER(CAST(:sku AS string)))
+        AND (:brand IS NULL OR LOWER(p.manufacturerBrand) = LOWER(CAST(:brand AS string)))
+        AND (:category IS NULL OR LOWER(c.name) = LOWER(CAST(:category AS string)))
       """)
     Page<ProductEntity> searchProductsFiltered(
             @Param("q") String q,

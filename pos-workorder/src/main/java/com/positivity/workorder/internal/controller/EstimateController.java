@@ -833,7 +833,11 @@ public class EstimateController {
                         content =
                                 @Content(
                                         mediaType = "application/pdf",
-                                        schema = @Schema(type = "string", format = "binary", implementation = String.class))),
+                                        schema =
+                                                @Schema(
+                                                        type = "string",
+                                                        format = "binary",
+                                                        implementation = String.class))),
                 @ApiResponse(responseCode = "404", description = "Estimate not found"),
                 @ApiResponse(responseCode = "502", description = "Document service unavailable")
             })

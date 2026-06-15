@@ -31,7 +31,6 @@ public class LocationReferenceClient {
             LocationValidationResponse response = restClient
                     .get()
                     .uri("/v1/locations/{locationId}/validation", locationId)
-                    .headers(headers -> propagateAuthHeaders(headers))
                     .retrieve()
                     .body(LocationValidationResponse.class);
             if (response == null) {
@@ -62,7 +61,6 @@ public class LocationReferenceClient {
             LocationSummaryResponse response = restClient
                     .get()
                     .uri("/v1/locations/{locationId}", locationId)
-                    .headers(headers -> propagateAuthHeaders(headers))
                     .retrieve()
                     .body(LocationSummaryResponse.class);
 

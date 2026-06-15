@@ -95,7 +95,8 @@ class McpChatControllerTest {
                 UUID.fromString("00000000-0000-7000-8000-000000000123"),
                 "ROLE_ADMIN",
                 Set.of("ROLE_ADMIN"),
-                Set.of("ROLE_ADMIN", McpPermissions.MCP_CHAT_EXECUTE));
+                Set.of("ROLE_ADMIN", McpPermissions.MCP_CHAT_EXECUTE),
+                Set.of(McpPermissions.MCP_CHAT_EXECUTE, "AUTHENTICATED"));
         when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(adminContext);
         when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenReturn("assistant reply");
@@ -221,6 +222,7 @@ class McpChatControllerTest {
                 UUID.fromString("00000000-0000-7000-8000-000000000122"),
                 "ROLE_USER",
                 Set.of("ROLE_USER"),
-                Set.of("ROLE_USER", McpPermissions.MCP_CHAT_EXECUTE));
+                Set.of("ROLE_USER", McpPermissions.MCP_CHAT_EXECUTE),
+                Set.of(McpPermissions.MCP_CHAT_EXECUTE, "AUTHENTICATED"));
     }
 }

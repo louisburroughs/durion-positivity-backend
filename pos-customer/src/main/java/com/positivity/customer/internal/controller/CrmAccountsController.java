@@ -220,7 +220,9 @@ public class CrmAccountsController {
                                     + "by default and appends partyId,asc as a stable tie-breaker whenever the "
                                     + "requested sort list does not explicitly include partyId; legalName sorting "
                                     + "is case-insensitive.")
-                    @PageableDefault(size = 20, sort = {"legalName", "partyId"})
+                    @PageableDefault(
+                            size = 20,
+                            sort = {"legalName", "partyId"})
                     Pageable pageable) {
         log.info("browseParties pageable={}", pageable);
         return ResponseEntity.ok(partyService.browseParties(pageable));

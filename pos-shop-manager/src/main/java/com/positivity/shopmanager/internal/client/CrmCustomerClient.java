@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -17,9 +16,6 @@ public class CrmCustomerClient {
 
     private final RestClient crmRestClient;
 
-    @Value("${pos.crm.customer-base-url:http://api-gateway}")
-    private String customerBaseUrl;
-
     public CrmCustomerClient(@Qualifier("crmRestClient") RestClient crmRestClient) {
         this.crmRestClient = crmRestClient;
     }
@@ -28,7 +24,9 @@ public class CrmCustomerClient {
         try {
             Map<?, ?> payload = crmRestClient
                     .get()
-                    .uri(customerBaseUrl + "/customer/v1/customers/{customerId}", customerId)
+                    .uri("/v1/crm/{customerId}", customerId)
+                    .header("X-User", "pos-shop-manager")
+                    .header("X-Authorities", "crm:party:view")
                     .retrieve()
                     .body(Map.class);
             if (payload == null) {
