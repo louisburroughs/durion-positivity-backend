@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
@@ -42,14 +41,6 @@ class CustomerRequirementsContractBehaviorIT extends BaseContractIntegrationTest
             billingRules.setCreditHold(creditHold);
             party.setBillingRules(billingRules);
         }
-
-        Contact contact = new Contact();
-        contact.setPersonId(UUID.randomUUID());
-        contact.setFirstName("Test");
-        contact.setLastName("Contact");
-        contact.setActive(true);
-        contact.setCommercialParty(party);
-        party.getContacts().add(contact);
 
         return commercialPartyRepository.saveAndFlush(party);
     }

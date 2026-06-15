@@ -86,6 +86,18 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      *                          new primary)
      * @return number of updated records
      */
+    /**
+     * Reassign all relationships from one party to another (used during merge).
+     *
+     * @param fromPartyId the losing party whose relationships will be transferred
+     * @param toPartyId   the surviving party that will own the relationships
+     * @return number of updated records
+     */
+    @Modifying
+    @Query("UPDATE PartyRelationship pr SET pr.fromParty.partyId = :toPartyId "
+            + "WHERE pr.fromParty.partyId = :fromPartyId")
+    int reassignFromParty(@Param("fromPartyId") @NonNull UUID fromPartyId, @Param("toPartyId") @NonNull UUID toPartyId);
+
     @Modifying
     @Query("UPDATE PartyRelationship pr SET pr.isPrimaryBillingContact = false "
             + "WHERE pr.fromParty.partyId = :partyId AND pr.isPrimaryBillingContact = true "

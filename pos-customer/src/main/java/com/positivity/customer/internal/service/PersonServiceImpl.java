@@ -4,12 +4,12 @@ import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -44,7 +44,7 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
-    private final ContactRepository contactRepository;
+    private final PartyRelationshipRepository partyRelationshipRepository;
     private final PeopleClient peopleClient;
 
     /**
@@ -306,9 +306,10 @@ public class PersonServiceImpl implements PersonService {
                         .isPrimary(cp.isPrimary())
                         .build())
                 .toList();
-        List<Contact> activeCommercialContacts = contactRepository.findByPersonIdAndActiveTrue(person.getPersonId());
-        int commercialAccountCount = (int) activeCommercialContacts.stream()
-                .map(contact -> contact.getCommercialParty().getPartyId())
+        List<PartyRelationship> commercialRelationships =
+                partyRelationshipRepository.findByToPersonPartyId(person.getPersonPartyId());
+        int commercialAccountCount = (int) commercialRelationships.stream()
+                .map(rel -> rel.getFromParty().getPartyId())
                 .distinct()
                 .count();
 
@@ -320,7 +321,7 @@ public class PersonServiceImpl implements PersonService {
                 .preferredContactMethod(person.getPreferredContactMethod())
                 .contactPoints(contactPointDtos)
                 .individualCustomer(true)
-                .commercialContact(!activeCommercialContacts.isEmpty())
+                .commercialContact(!commercialRelationships.isEmpty())
                 .commercialAccountCount(commercialAccountCount)
                 .createdAt(person.getCreatedAt())
                 .updatedAt(person.getUpdatedAt())
