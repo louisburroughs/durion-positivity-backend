@@ -28,6 +28,8 @@ tags:
   description: APIs for managing person-to-role assignments for access control and permissions (CAP-120)
 - name: Employee API
   description: Employee profile and offboarding operations
+- name: Timekeeping Approval API
+  description: Pay-period-based timekeeping approval operations
 - name: People API
   description: Operations related to people records
 - name: People TimeEntries
@@ -683,6 +685,94 @@ paths:
         - people:userLink:write
       x-required-permissions:
       - people:userLink:write
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject:
+    post:
+      tags:
+      - Timekeeping Approval API
+      summary: Reject all pending timekeeping entries for a person in a period
+      description: Bulk-rejects all PENDING_APPROVAL timekeeping entries for the given employee in the given period.
+      operationId: rejectPeriod
+      parameters:
+      - name: timePeriodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectTimePeriodRequest'
+        required: true
+      responses:
+        '200':
+          description: Entries rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+        '400':
+          description: Reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+        '404':
+          description: Time period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+      security:
+      - bearerAuth:
+        - people:timekeeping:reject
+      x-required-permissions:
+      - people:timekeeping:reject
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve:
+    post:
+      tags:
+      - Timekeeping Approval API
+      summary: Approve all pending timekeeping entries for a person in a period
+      description: Bulk-approves all PENDING_APPROVAL timekeeping entries for the given employee in the given period.
+      operationId: approvePeriod
+      parameters:
+      - name: timePeriodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Entries approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+        '404':
+          description: Time period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+      security:
+      - bearerAuth:
+        - people:timekeeping:approve
+      x-required-permissions:
+      - people:timekeeping:approve
   /v1/people/timeEntries/reject:
     post:
       tags:
@@ -1375,6 +1465,135 @@ paths:
         - people:userLink:view
       x-required-permissions:
       - people:userLink:view
+  /v1/people/timekeeping/timekeeping-entries:
+    get:
+      tags:
+      - Timekeeping Approval API
+      summary: List timekeeping entries for a person in a period
+      description: Returns all timekeeping entries for the given person within the given time period's date range.
+      operationId: listTimekeepingEntries
+      parameters:
+      - name: personId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: timePeriodId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: List of timekeeping entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimekeepingEntryDto'
+        '404':
+          description: Time period not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimekeepingEntryDto'
+      security:
+      - bearerAuth:
+        - people:timekeeping:view
+      x-required-permissions:
+      - people:timekeeping:view
+  /v1/people/timekeeping/time-periods:
+    get:
+      tags:
+      - Timekeeping Approval API
+      summary: List time periods
+      description: Returns all pay periods, optionally scoped to a tenant.
+      operationId: listTimePeriods
+      parameters:
+      - name: tenantId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: List of time periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimePeriodDto'
+      security:
+      - bearerAuth:
+        - people:timekeeping:view
+      x-required-permissions:
+      - people:timekeeping:view
+  /v1/people/timekeeping/time-period-approvals:
+    get:
+      tags:
+      - Timekeeping Approval API
+      summary: Get approval summary for a person in a period
+      description: Returns the approval status counts and overall status for the given person in the given period.
+      operationId: getTimePeriodApproval
+      parameters:
+      - name: personId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: timePeriodId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Approval summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodApprovalDto'
+        '404':
+          description: Time period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodApprovalDto'
+      security:
+      - bearerAuth:
+        - people:timekeeping:view
+      x-required-permissions:
+      - people:timekeeping:view
+  /v1/people/timekeeping/approvals/people:
+    get:
+      tags:
+      - Timekeeping Approval API
+      summary: List employees with timekeeping entries
+      description: Returns distinct employees who have at least one timekeeping entry.
+      operationId: listApprovalPeople
+      responses:
+        '200':
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalPersonDto'
+      security:
+      - bearerAuth:
+        - people:timekeeping:view
+      x-required-permissions:
+      - people:timekeeping:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
       tags:
@@ -2130,6 +2349,28 @@ components:
       required:
       - personId
       - userId
+    RejectTimePeriodRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+      required:
+      - reason
+    TimePeriodDecisionResponse:
+      type: object
+      properties:
+        personId:
+          type: string
+          format: uuid
+        timePeriodId:
+          type: string
+          format: uuid
+        processedCount:
+          type: integer
+          format: int32
+        status:
+          type: string
     Decision:
       type: object
       description: An individual decision for a specific time entry
@@ -2550,6 +2791,88 @@ components:
           items:
             type: string
         username:
+          type: string
+    TimekeepingEntryDto:
+      type: object
+      properties:
+        timekeepingEntryId:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        sessionStartTime:
+          type: string
+          format: date-time
+        sessionEndTime:
+          type: string
+          format: date-time
+        approvalStatus:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+        associatedWorkOrderId:
+          type: string
+          format: uuid
+    TimePeriodDto:
+      type: object
+      properties:
+        timePeriodId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - OPEN
+          - SUBMISSION_CLOSED
+          - PAYROLL_CLOSED
+    TimePeriodApprovalDto:
+      type: object
+      properties:
+        personId:
+          type: string
+          format: uuid
+        timePeriodId:
+          type: string
+          format: uuid
+        totalCount:
+          type: integer
+          format: int32
+        pendingCount:
+          type: integer
+          format: int32
+        approvedCount:
+          type: integer
+          format: int32
+        rejectedCount:
+          type: integer
+          format: int32
+        overallStatus:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+    ApprovalPersonDto:
+      type: object
+      properties:
+        personId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        employeeNumber:
           type: string
     TimeEntryAdjustment:
       type: object

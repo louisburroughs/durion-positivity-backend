@@ -47,6 +47,18 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timeEntries~1reject
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timeEntries~1{timeEntryId}~1adjustments
+  /v1/people/timekeeping/approvals/people:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1approvals~1people
+  /v1/people/timekeeping/time-period-approvals:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-period-approvals
+  /v1/people/timekeeping/time-periods:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods~1{timePeriodId}~1people~1{personId}~1approve
+  /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods~1{timePeriodId}~1people~1{personId}~1reject
+  /v1/people/timekeeping/timekeeping-entries:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1timekeeping-entries
   /v1/people/user-links:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1user-links
   /v1/people/user-links/{personId}:
