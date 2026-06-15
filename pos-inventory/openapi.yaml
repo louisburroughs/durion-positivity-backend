@@ -3002,6 +3002,78 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/availability:
+    get:
+      tags:
+      - Inventory Availability
+      summary: Query inventory availability by SKU (list form)
+      description: Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.
+      operationId: queryAvailabilityBySku
+      parameters:
+      - name: sku
+        in: query
+        description: Product SKU
+        required: true
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: query
+        description: Storage location identifier (optional; narrows to sub-location)
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sourceType
+        in: query
+        description: Inventory lookup strategy
+        required: false
+        schema:
+          type: string
+          enum:
+          - WAREHOUSE
+          - SUPPLIER
+          - TRANSIT
+      responses:
+        '200':
+          description: Availability list returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AvailabilityView'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Product SKU or location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+        - inventory:on_hand:search
+      x-required-permissions:
+      - inventory:on_hand:view
+      - inventory:on_hand:search
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -5262,6 +5334,28 @@ components:
           format: date-time
         recount:
           type: boolean
+    AvailabilityView:
+      type: object
+      properties:
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        storageLocationId:
+          type: string
+          format: uuid
+        onHandQuantity:
+          type: integer
+          format: int32
+        allocatedQuantity:
+          type: integer
+          format: int32
+        availableToPromiseQuantity:
+          type: integer
+          format: int32
+        unitOfMeasure:
+          type: string
     LocationAvailabilityDto:
       type: object
       properties:
@@ -5315,28 +5409,6 @@ components:
           type: string
           format: date-time
           description: Timestamp when lead-time data was last refreshed
-    AvailabilityView:
-      type: object
-      properties:
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        storageLocationId:
-          type: string
-          format: uuid
-        onHandQuantity:
-          type: integer
-          format: int32
-        allocatedQuantity:
-          type: integer
-          format: int32
-        availableToPromiseQuantity:
-          type: integer
-          format: int32
-        unitOfMeasure:
-          type: string
   securitySchemes:
     bearerAuth:
       type: http
