@@ -184,8 +184,6 @@ public class CommercialPartyServiceImpl implements CustomerService {
                 .customerNumber(entity.getCustomerNumber())
                 .lastName(entity.getLegalName())
                 .firstName(entity.getDisplayName())
-                .phoneNumber(entity.getPhoneNumber())
-                .email(entity.getEmail())
                 .primaryAddress(entity.getPrimaryAddress())
                 .vehicleVins(new ArrayList<>(entity.getVehicleVins()))
                 .customerType(customerType.toString())
@@ -203,8 +201,6 @@ public class CommercialPartyServiceImpl implements CustomerService {
         entity.setCustomerNumber(dto.getCustomerNumber());
         entity.setLegalName(dto.getFirstName());
         entity.setDisplayName(dto.getLastName());
-        entity.setPhoneNumber(dto.getPhoneNumber());
-        entity.setEmail(dto.getEmail());
         entity.setPrimaryAddress(dto.getPrimaryAddress());
         if (dto.getVehicleVins() != null) {
             entity.getVehicleVins().addAll(dto.getVehicleVins());
@@ -227,12 +223,6 @@ public class CommercialPartyServiceImpl implements CustomerService {
         }
         if (dto.getLastName() != null) {
             entity.setDisplayName(dto.getLastName());
-        }
-        if (dto.getPhoneNumber() != null) {
-            entity.setPhoneNumber(dto.getPhoneNumber());
-        }
-        if (dto.getEmail() != null) {
-            entity.setEmail(dto.getEmail());
         }
         if (dto.getPrimaryAddress() != null) {
             entity.setPrimaryAddress(dto.getPrimaryAddress());

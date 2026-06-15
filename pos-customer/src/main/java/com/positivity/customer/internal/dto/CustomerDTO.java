@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,13 +34,6 @@ public class CustomerDTO {
     @NotBlank
     @Schema(description = "First name of the customer", example = "John")
     private String firstName;
-
-    @Schema(description = "Phone number of the customer", example = "+1-555-1234")
-    private String phoneNumber;
-
-    @Email
-    @Schema(description = "Email address of the customer", example = "john.doe@example.com")
-    private String email;
 
     @Schema(description = "Primary address label or identifier for the customer", example = "123 Main St, Springfield")
     private String primaryAddress;
