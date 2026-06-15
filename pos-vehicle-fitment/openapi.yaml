@@ -47,6 +47,8 @@ paths:
                 $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     put:
       tags:
       - Vehicle Applicability Hints
@@ -88,6 +90,8 @@ paths:
                 $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
     delete:
       tags:
       - Vehicle Applicability Hints
@@ -109,6 +113,8 @@ paths:
           description: Hint not found
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/hints:
     post:
       tags:
@@ -143,6 +149,8 @@ paths:
                 $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/hints/filter-products:
     post:
       tags:
@@ -171,6 +179,8 @@ paths:
                 $ref: '#/components/schemas/FilterProductsResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/fitments/bulk-ingest:
     post:
       tags:
@@ -229,6 +239,8 @@ paths:
                   $ref: '#/components/schemas/VehicleTypeResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/models/{makeId}:
     get:
       tags:
@@ -256,6 +268,8 @@ paths:
                   $ref: '#/components/schemas/ModelResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/manufacturers:
     get:
       tags:
@@ -274,6 +288,8 @@ paths:
                   $ref: '#/components/schemas/ManufacturerResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/makes/{manufacturerId}:
     get:
       tags:
@@ -301,6 +317,8 @@ paths:
                   $ref: '#/components/schemas/MakeResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/vehicle-fitment/hints/product/{productId}:
     get:
       tags:
@@ -327,6 +345,8 @@ paths:
                   $ref: '#/components/schemas/HintResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
 components:
   schemas:
     FitmentTagDto:

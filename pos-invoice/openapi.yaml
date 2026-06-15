@@ -185,6 +185,8 @@ paths:
                 $ref: '#/components/schemas/ReceiptResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     post:
       tags:
@@ -232,6 +234,8 @@ paths:
                 $ref: '#/components/schemas/ReceiptResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/print:
     post:
       tags:
@@ -265,6 +269,8 @@ paths:
           description: Receipt not found
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
     post:
       tags:
@@ -298,6 +304,8 @@ paths:
           description: Receipt not found
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments:
     post:
       tags:
@@ -351,6 +359,8 @@ paths:
                 $ref: '#/components/schemas/InitiatePaymentResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/void:
     post:
       tags:
@@ -388,6 +398,8 @@ paths:
           description: Void window expired
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
     post:
       tags:
@@ -441,6 +453,8 @@ paths:
                 $ref: '#/components/schemas/RefundPaymentResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
     post:
       tags:
@@ -488,6 +502,8 @@ paths:
                 $ref: '#/components/schemas/InitiatePaymentResponse'
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/finalize:
     post:
       tags:

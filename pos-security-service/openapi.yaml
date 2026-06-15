@@ -4871,6 +4871,8 @@ paths:
                 type: string
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/subject:
     get:
       tags:
@@ -4929,6 +4931,8 @@ paths:
                 type: string
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/roles:
     get:
       tags:
@@ -4990,6 +4994,8 @@ paths:
                 uniqueItems: true
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/audit/pricing-snapshots/{snapshotId}:
     get:
       tags:
@@ -5365,6 +5371,8 @@ paths:
           description: Token revoked successfully
       security:
       - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
 components:
   schemas:
     ApiError:

@@ -1134,6 +1134,43 @@ paths:
         - location:mobile-unit:read
       x-required-permissions:
       - location:mobile-unit:read
+  /v1/locations/{siteId}/storage-locations/topology:
+    get:
+      tags:
+      - Storage Location API
+      summary: Get storage location topology
+      description: Return every storage location of a site, regardless of status, as a flat unpaginated list with id, name, type, status, and parentStorageLocationId for topology consumers
+      operationId: topology
+      parameters:
+      - name: siteId
+        in: path
+        description: Site identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Storage location topology returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageLocationTopologyResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageLocationTopologyResponse'
+      security:
+      - bearerAuth:
+        - location:read
+      x-required-permissions:
+      - location:read
   /v1/locations/{locationId}/validation:
     get:
       tags:
@@ -1191,6 +1228,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PersonDTO'
+      security:
+      - bearerAuth:
+        - location:read
+      x-required-permissions:
+      - location:read
+  /v1/locations/{locationId}/descendants:
+    get:
+      tags:
+      - Location API
+      summary: Get all descendants for a location
+      description: Walk typed parent-child edges downward from a location and return every descendant as a flat list with its immediate parent id and depth (1 = direct child). Traversal is cycle-safe and depth-capped at 20.
+      operationId: getDescendants
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the root location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      - name: parentType
+        in: query
+        description: Parent relationship type to traverse (defaults to PHYSICAL)
+        required: false
+        schema:
+          type: string
+          default: PHYSICAL
+      responses:
+        '200':
+          description: List of descendant locations returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationDescendantResponseDTO'
+        '400':
+          description: Invalid parentType value.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationDescendantResponseDTO'
+        '404':
+          description: Location not found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationDescendantResponseDTO'
       security:
       - bearerAuth:
         - location:read
@@ -2028,6 +2118,27 @@ components:
           format: int32
         empty:
           type: boolean
+    StorageLocationTopologyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - FLOOR
+          - SHELF
+          - BIN
+          - CAGE
+          - TRUCK
+        status:
+          type: string
+        parentStorageLocationId:
+          type: string
+          format: uuid
     LocationValidationResponseDTO:
       type: object
       properties:
@@ -2058,6 +2169,24 @@ components:
             type: string
         username:
           type: string
+    LocationDescendantResponseDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+        depth:
+          type: integer
+          format: int32
     PageBayResponse:
       type: object
       properties:
