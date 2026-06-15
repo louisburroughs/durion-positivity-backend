@@ -96,7 +96,12 @@ WHERE c.active = true
 INSERT INTO party_relationship_role (party_relationship_id, role_type)
 SELECT pr.party_relationship_id, 'PRIMARY_CONTACT'
 FROM party_relationship pr
-WHERE pr.from_party_id IN (SELECT DISTINCT party_id FROM contact)
+WHERE EXISTS (
+    SELECT 1 FROM contact c
+    WHERE c.party_id = pr.from_party_id
+      AND c.person_id = pr.to_person_id
+      AND c.active = true
+)
   AND NOT EXISTS (
     SELECT 1 FROM party_relationship_role prr
     WHERE prr.party_relationship_id = pr.party_relationship_id

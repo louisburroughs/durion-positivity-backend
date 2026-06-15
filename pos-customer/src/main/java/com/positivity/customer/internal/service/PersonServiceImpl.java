@@ -13,6 +13,8 @@ import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +48,7 @@ public class PersonServiceImpl implements PersonService {
     private final ContactPointRepository contactPointRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final PeopleClient peopleClient;
+    private final Clock clock;
 
     /**
      * Creates a new individual person record with optional contact points.
@@ -307,7 +310,8 @@ public class PersonServiceImpl implements PersonService {
                         .build())
                 .toList();
         List<PartyRelationship> commercialRelationships =
-                partyRelationshipRepository.findByToPersonPartyId(person.getPersonPartyId());
+                partyRelationshipRepository.findActiveByToPersonPartyId(
+                        person.getPersonPartyId(), LocalDate.now(clock));
         int commercialAccountCount = (int) commercialRelationships.stream()
                 .map(rel -> rel.getFromParty().getPartyId())
                 .distinct()

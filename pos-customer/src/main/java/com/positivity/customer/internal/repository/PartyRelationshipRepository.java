@@ -35,7 +35,10 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      * @param today   the current date
      * @return list of active relationships
      */
-    @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.partyId = :partyId "
+    @Query("SELECT pr FROM PartyRelationship pr "
+            + "JOIN FETCH pr.toPerson p "
+            + "JOIN FETCH p.contactPoints "
+            + "WHERE pr.fromParty.partyId = :partyId "
             + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
     List<PartyRelationship> findActiveByFromPartyId(
             @Param("partyId") @NonNull UUID partyId, @Param("today") @NonNull LocalDate today);
@@ -47,6 +50,21 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      * @return list of relationships
      */
     List<PartyRelationship> findByToPersonPartyId(@NonNull UUID personId);
+
+    /**
+     * Find all active relationships where this person is the contact.
+     * Active means effective_end_date is null or in the future.
+     *
+     * @param personPartyId the person party ID
+     * @param today         the current date
+     * @return list of active relationships
+     */
+    @Query("SELECT pr FROM PartyRelationship pr "
+            + "WHERE pr.toPerson.partyId = :personPartyId "
+            + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
+    List<PartyRelationship> findActiveByToPersonPartyId(
+            @Param("personPartyId") @NonNull UUID personPartyId,
+            @Param("today") @NonNull LocalDate today);
 
     /**
      * Find the primary billing contact relationship for a party.
