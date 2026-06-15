@@ -65,6 +65,64 @@ public class InventoryAvailabilityController {
         return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId));
     }
 
+    @GetMapping
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
+    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
+    @Operation(
+            operationId = "queryAvailabilityBySku",
+            summary = "Query inventory availability by SKU (list form)",
+            description =
+                    "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.",
+            tags = {"Inventory Availability"})
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Availability list returned",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = AvailabilityView.class)))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request parameters",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "User lacks required read permission",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Product SKU or location not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
+            })
+    // Issue: #665
+    public ResponseEntity<List<AvailabilityView>> queryAvailabilityBySkuList(
+            @Parameter(description = "Product SKU", required = true) @RequestParam String sku,
+            @Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
+            @Parameter(description = "Storage location identifier (optional; narrows to sub-location)")
+                    @RequestParam(required = false)
+                    UUID storageLocationId,
+            @Parameter(description = "Inventory lookup strategy")
+                    @RequestParam(required = false)
+                    InventorySourceType sourceType) {
+        validateLocationAndSourceType(locationId, sourceType);
+        log.info("GET /v1/inventory/availability sku={} locationId={} sourceType={}", sku, locationId, sourceType);
+        return ResponseEntity.ok(
+                List.of(availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType)));
+    }
+
     @GetMapping("/by-sku")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

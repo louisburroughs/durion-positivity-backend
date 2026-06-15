@@ -151,6 +151,37 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .andExpect(jsonPath("$.availableToPromiseQuantity").value(160));
     }
 
+    // Issue #665: root path with `sku` param returns list
+    @Test
+    @DisplayName("CP-665-001: GET /v1/inventory/availability?sku=... returns list with one element")
+    void queryAvailabilityBySkuList_returns200_withListWrappingResult() throws Exception {
+        seedGoodsReceipt("SKU-LIST-1", LOC_ALPHA, 50);
+        seedAllocationCreated("SKU-LIST-1", LOC_ALPHA, 10);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability")
+                        .param("sku", "SKU-LIST-1")
+                        .param("locationId", LOC_ALPHA.toString())))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].productSku").value("SKU-LIST-1"))
+                .andExpect(jsonPath("$[0].locationId").value(LOC_ALPHA.toString()))
+                .andExpect(jsonPath("$[0].onHandQuantity").value(50))
+                .andExpect(jsonPath("$[0].allocatedQuantity").value(10))
+                .andExpect(jsonPath("$[0].availableToPromiseQuantity").value(40));
+    }
+
+    // Issue #665: root path with unknown sku returns 404
+    @Test
+    @DisplayName("CP-665-002: GET /v1/inventory/availability?sku=UNKNOWN returns 404")
+    void queryAvailabilityBySkuList_returns404_whenSkuNotFound() throws Exception {
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability")
+                        .param("sku", "NONEXISTENT-SKU-LIST")
+                        .param("locationId", LOC_ANY.toString())))
+                .andExpect(status().isNotFound());
+    }
+
     // -------------------------------------------------------------------------
     // Seed helpers
     // -------------------------------------------------------------------------
