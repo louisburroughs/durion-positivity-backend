@@ -71,7 +71,7 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
     @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(
-            operationId = "queryAvailabilityBySku",
+            operationId = "queryAvailabilityBySkuList",
             summary = "Query inventory availability by SKU (list form)",
             description =
                     "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.",
@@ -105,6 +105,13 @@ public class InventoryAvailabilityController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Unexpected server error",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
                                         schema = @Schema(implementation = ApiError.class)))
             })
     // Issue: #665
@@ -117,10 +124,8 @@ public class InventoryAvailabilityController {
             @Parameter(description = "Inventory lookup strategy")
                     @RequestParam(required = false)
                     InventorySourceType sourceType) {
-        validateLocationAndSourceType(locationId, sourceType);
         log.info("GET /v1/inventory/availability sku={} locationId={} sourceType={}", sku, locationId, sourceType);
-        return ResponseEntity.ok(
-                List.of(availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType)));
+        return ResponseEntity.ok(List.of(resolveAvailability(sku, locationId, storageLocationId, sourceType)));
     }
 
     @GetMapping("/by-sku")
@@ -184,14 +189,18 @@ public class InventoryAvailabilityController {
                                     "Inventory lookup strategy. WAREHOUSE = from physical location stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply. When sourceType is WAREHOUSE, locationId narrows to a specific location.")
                     @RequestParam(required = false)
                     InventorySourceType sourceType) {
-        validateLocationAndSourceType(locationId, sourceType);
         log.info(
                 "GET /v1/inventory/availability/by-sku productSku={} locationId={} sourceType={}",
                 productSku,
                 locationId,
                 sourceType);
-        return ResponseEntity.ok(
-                availabilityService.queryAvailability(productSku, locationId, storageLocationId, sourceType));
+        return ResponseEntity.ok(resolveAvailability(productSku, locationId, storageLocationId, sourceType));
+    }
+
+    private AvailabilityView resolveAvailability(
+            String sku, UUID locationId, UUID storageLocationId, InventorySourceType sourceType) {
+        validateLocationAndSourceType(locationId, sourceType);
+        return availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType);
     }
 
     @GetMapping("/lead-time")
