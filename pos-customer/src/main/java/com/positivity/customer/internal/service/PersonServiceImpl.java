@@ -152,6 +152,16 @@ public class PersonServiceImpl implements PersonService {
                     savedPerson.getPersonPartyId());
         }
 
+        // Mirror contact points to pos-people (source of truth, ADR-0015 I2). Dual-write:
+        // the local contact_point rows remain as a read fallback. Non-fatal if pos-people
+        // is unreachable — local data still serves reads.
+        peopleClient.setContactPoints(
+                peoplePersonId,
+                contactPoints.stream()
+                        .map(cp -> new PeopleClient.ContactPointUpsert(
+                                cp.getContactType().name(), cp.getValue(), cp.isPrimary()))
+                        .toList());
+
         log.info(
                 "Successfully created person personId={} personPartyId={} with {} contact points",
                 savedPerson.getPersonId(),
