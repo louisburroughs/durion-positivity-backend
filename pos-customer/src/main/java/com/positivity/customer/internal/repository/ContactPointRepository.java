@@ -32,13 +32,18 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
     List<ContactPoint> findByPersonPartyIdAndContactType(@NonNull UUID personId, @NonNull ContactPointType contactType);
 
     /**
-     * Find primary contact point of a specific type for a person.
+     * Find the primary contact point of a specific type for a person.
+     *
+     * <p>Returns the earliest-created primary if more than one exists, tolerating
+     * legacy data where a person may carry multiple primaries of the same type
+     * (e.g. one from migration and one from seed). Avoids
+     * {@code NonUniqueResultException}.
      *
      * @param personId    the person ID
      * @param contactType the contact type
-     * @return the primary contact point, if exists
+     * @return the primary contact point, or {@code null} if none exists
      */
-    ContactPoint findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
+    ContactPoint findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
             @NonNull UUID personId, @NonNull ContactPointType contactType);
 
     /**

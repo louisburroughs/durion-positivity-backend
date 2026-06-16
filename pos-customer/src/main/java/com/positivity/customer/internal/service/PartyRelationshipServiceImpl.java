@@ -305,7 +305,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     }
 
     private String getPrimaryContactValue(UUID personId, ContactPointType type) {
-        ContactPoint primary = contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(personId, type);
+        ContactPoint primary =
+                contactPointRepository.findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                        personId, type);
         if (primary != null) {
             return primary.getValue();
         }
