@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.client;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.util.Collection;
 import java.util.HashMap;
@@ -215,6 +216,10 @@ public class PeopleClient {
     private static class ContactPointView {
         private String contactType;
         private String value;
+
+        // pos-people serializes this flag as JSON "primary" (its isPrimary() getter);
+        // map it explicitly so deserialization does not bind null to a primitive boolean.
+        @JsonProperty("primary")
         private boolean isPrimary;
     }
 }
