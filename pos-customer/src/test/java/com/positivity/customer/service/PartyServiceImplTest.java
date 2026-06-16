@@ -477,6 +477,29 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void browseParties_individualName_sourcedFromPosPeople_overridesLocalCopy() {
+        UUID canonicalPersonId = UUID.fromString("00000000-0000-0000-0000-0000000000d4");
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a2"));
+        individual.setPersonId(canonicalPersonId);
+        individual.setFirstName("Stale");
+        individual.setLastName("Local");
+        individual.setStatus(AccountStatus.ACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of());
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        when(peopleClient.fetchPersonIdentities(java.util.Set.of(canonicalPersonId)))
+                .thenReturn(java.util.Map.of(
+                        canonicalPersonId,
+                        new PeopleClient.PersonIdentity(canonicalPersonId, "Fresh", "Canonical", "f@x.com")));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        // Name comes from pos-people (source of truth), not the local person_party copy.
+        assertThat(response.getResults().get(0).getDisplayName()).isEqualTo("Fresh Canonical");
+    }
+
+    @Test
     void searchParties_filtersByPartyTypeAndStatus_caseInsensitive() {
         CommercialParty match = party(UUID.fromString("00000000-0000-0000-0000-000000000003"));
         match.setPartyType(PartyType.COMMERCIAL);

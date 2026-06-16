@@ -40,12 +40,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -161,8 +165,11 @@ public class PartyServiceImpl implements PartyService {
         // window at this tier (see ADR-0026 / OQ3 in PLAN-person-unification).
         List<SearchPartiesResponse.PartySummary> all = new ArrayList<>();
         partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
-        personPartyRepository.findIndividualCustomers().stream()
-                .map(this::mapPersonToPartySummary)
+
+        List<PersonParty> individuals = personPartyRepository.findIndividualCustomers();
+        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(individuals);
+        individuals.stream()
+                .map(person -> mapPersonToPartySummary(person, identities))
                 .forEach(all::add);
 
         all.sort(Comparator.comparing(
@@ -184,15 +191,43 @@ public class PartyServiceImpl implements PartyService {
                 .build();
     }
 
-    private SearchPartiesResponse.PartySummary mapPersonToPartySummary(PersonParty person) {
+    private SearchPartiesResponse.PartySummary mapPersonToPartySummary(
+            PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        String displayName = resolveDisplayName(person, identities);
         return SearchPartiesResponse.PartySummary.builder()
                 .partyId(String.valueOf(person.getPartyId()))
-                .legalName(person.getDisplayName())
-                .displayName(person.getDisplayName())
+                .legalName(displayName)
+                .displayName(displayName)
                 .partyType(person.getPartyType().toString())
                 .status(person.getStatus() != null ? person.getStatus().toString() : null)
                 .createdAt(person.getCreatedAt() != null ? ISO_FORMATTER.format(person.getCreatedAt()) : null)
                 .build();
+    }
+
+    /**
+     * Batch-load canonical identities from pos-people (source of truth, ADR-0015 I2)
+     * for the given person parties, keyed by the canonical person id.
+     */
+    private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
+        Set<UUID> personIds = persons.stream()
+                .map(PersonParty::getPersonId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return peopleClient.fetchPersonIdentities(personIds);
+    }
+
+    /**
+     * Resolve a person's display name from pos-people (source of truth), falling
+     * back to the local person_party copy while the thin-link migration is in
+     * progress (e.g. an orphan link not yet reconciled).
+     */
+    private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        PeopleClient.PersonIdentity identity =
+                (identities != null && person.getPersonId() != null) ? identities.get(person.getPersonId()) : null;
+        if (identity != null && !identity.displayName().isBlank()) {
+            return identity.displayName();
+        }
+        return person.getDisplayName();
     }
 
     private int safeTotalCount(long totalElements) {
@@ -638,15 +673,20 @@ public class PartyServiceImpl implements PartyService {
         LocalDate today = LocalDate.now(clock);
         List<PartyRelationship> relationships =
                 partyRelationshipRepository.findActiveByFromPartyId(party.getPartyId(), today);
-        return relationships.stream().map(this::convertRelationshipToSummary).toList();
+        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(
+                relationships.stream().map(PartyRelationship::getToPerson).toList());
+        return relationships.stream()
+                .map(rel -> convertRelationshipToSummary(rel, identities))
+                .toList();
     }
 
-    private ContactSummary convertRelationshipToSummary(PartyRelationship rel) {
+    private ContactSummary convertRelationshipToSummary(
+            PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
         summary.setContactId(rel.getPartyRelationshipId().toString());
         summary.setPrimary(rel.isPrimaryBillingContact());
-        summary.setName(person.getDisplayName());
+        summary.setName(resolveDisplayName(person, identities));
         summary.setRoles(Collections.emptyList());
         summary.setPhoneNumbers(person.getContactPoints().stream()
                 .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
