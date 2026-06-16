@@ -34,6 +34,7 @@ import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
 import com.positivity.shared.dto.VehicleResponse;
 import java.time.Clock;
@@ -55,10 +56,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,6 +65,9 @@ class PartyServiceImplTest {
 
     @Mock
     private CommercialPartyRepository partyRepository;
+
+    @Mock
+    private PersonPartyRepository personPartyRepository;
 
     @Mock
     private PartyRelationshipRepository partyRelationshipRepository;
@@ -90,6 +91,7 @@ class PartyServiceImplTest {
         service = new PartyServiceImpl(
                 TEST_CLOCK,
                 partyRepository,
+                personPartyRepository,
                 partyRelationshipRepository,
                 cacheManager,
                 peopleClient,
@@ -421,11 +423,10 @@ class PartyServiceImplTest {
     void browseParties_usesDefaultPageAndSort_whenPageableIsUnpaged() {
         CommercialParty first = party(UUID.fromString("00000000-0000-0000-0000-000000000101"));
         first.setLegalName("Acme Corp");
+        first.setDisplayName("Acme Corp");
 
-        PageRequest expectedPageable =
-                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
-
-        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(first), expectedPageable, 1));
+        when(partyRepository.findAll()).thenReturn(List.of(first));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 
@@ -439,10 +440,8 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_returnsEmptyResultsWithPagingMetadata() {
-        PageRequest expectedPageable =
-                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
-
-        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
+        when(partyRepository.findAll()).thenReturn(List.of());
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 
@@ -453,18 +452,28 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void browseParties_normalizesControllerDefaultSortToIgnoreCaseAndStableTieBreaker() {
-        PageRequest requestedPageable = PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName")));
-        PageRequest expectedPageable =
-                PageRequest.of(0, 20, Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId")));
+    void browseParties_mergesCommercialAndIndividualCustomers_sortedByDisplayName() {
+        CommercialParty commercial = party(UUID.fromString("00000000-0000-0000-0000-0000000000c1"));
+        commercial.setLegalName("Zenith Freight LLC");
+        commercial.setDisplayName("Zenith Freight LLC");
 
-        when(partyRepository.findAll(expectedPageable)).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a1"));
+        individual.setFirstName("Alice");
+        individual.setLastName("Anders");
+        individual.setStatus(AccountStatus.ACTIVE);
 
-        SearchPartiesResponse response = service.browseParties(requestedPageable);
+        when(partyRepository.findAll()).thenReturn(List.of(commercial));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
 
-        assertThat(response.getResults()).isEmpty();
-        assertThat(response.getPageNumber()).isEqualTo(0);
-        assertThat(response.getPageSize()).isEqualTo(20);
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        assertThat(response.getTotalCount()).isEqualTo(2);
+        // Sorted case-insensitively by display name: "Alice Anders" before "Zenith Freight LLC"
+        assertThat(response.getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getPartyType)
+                .containsExactly(PartyType.PERSON.toString(), PartyType.COMMERCIAL.toString());
+        assertThat(response.getResults().get(0).getDisplayName()).isEqualTo("Alice Anders");
     }
 
     @Test

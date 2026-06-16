@@ -120,28 +120,31 @@ ON CONFLICT (id) DO NOTHING;
 --          Represents the org-level billing/admin inbox preserved from commercial_party.email.
 -- =========================================================================
 
+-- Commercial-account contact persons. These are real individuals, not employees,
+-- so status is NULL per the People Directory contract (null = non-employee person).
+-- Names mirror the matching CUST-CPC contacts in pos-customer person_party.
 INSERT INTO person (id, first_name, last_name, primary_email, status, created_at, updated_at)
 VALUES
-    ('01960026-0000-7000-8000-000000000001'::uuid, 'General',    'Piedmont Freight',      'info@piedmontfreight.example.com',           'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000002'::uuid, 'Accounts',   'Carolina Concrete',     'accounts@carolinaconcrete.example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000003'::uuid, 'Billing',    'QC Waste',              'billing@qcwaste.example.com',                'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000004'::uuid, 'Fleet',      'Blue Ridge Landscaping','fleet@blueridgelandscaping.example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000005'::uuid, 'Operations', 'Tarheel Logistics',     'ops@tarheellogistics.example.com',           'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000006'::uuid, 'Dispatch',   'Meck Plumbing',         'dispatch@meckplumbing.example.com',          'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000007'::uuid, 'Fleet',      'Piedmont Ready Mix',    'fleet@piedmontreadymix.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000008'::uuid, 'Service',    'Carolina Power',        'service@carolinapower.example.com',          'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000009'::uuid, 'Accounts',   'Blue Stone Aggregate',  'accounts@bluestoneaggregate.example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000a'::uuid, 'Billing',    'Cabarrus Cleaning',     'billing@cabarruscleaning.example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000b'::uuid, 'Operations', 'SE Delivery',           'ops@sedelivery.example.com',                 'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000c'::uuid, 'Fleet',      'Carolinas Crane',       'fleet@carolinascrane.example.com',           'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000d'::uuid, 'Service',    'LKN Propane',           'service@lknpropane.example.com',             'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000e'::uuid, 'Accounts',   'Rowan Road Services',   'accounts@rowanroad.example.com',             'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000f'::uuid, 'Dispatch',   'Carolina Fresh',        'dispatch@carolinafresh.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000010'::uuid, 'Billing',    'Piedmont Metals',       'billing@piedmontmetals.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000011'::uuid, 'Operations', 'Union Grading',         'ops@uniongrading.example.com',               'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000012'::uuid, 'Service',    'Carolina Septic',       'service@carolinaseptic.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000013'::uuid, 'Fleet',      'Meck Tree',             'fleet@mecktree.example.com',                 'ACTIVE', NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000014'::uuid, 'Billing',    'Highland Moving',       'billing@highlandmoving.example.com',         'ACTIVE', NOW(), NOW())
+    ('01960026-0000-7000-8000-000000000001'::uuid, 'Greg',      'Whitfield',   'info@piedmontfreight.example.com',           NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000002'::uuid, 'Teresa',    'Mullen',      'accounts@carolinaconcrete.example.com',      NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000003'::uuid, 'Darnell',   'Okafor',      'billing@qcwaste.example.com',                NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000004'::uuid, 'Brittany',  'Norris',      'fleet@blueridgelandscaping.example.com',     NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000005'::uuid, 'Marcus',    'Tillman',     'ops@tarheellogistics.example.com',           NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000006'::uuid, 'Christine', 'Walters',     'dispatch@meckplumbing.example.com',          NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000007'::uuid, 'Donald',    'Frazier',     'fleet@piedmontreadymix.example.com',         NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000008'::uuid, 'Alicia',    'Stephens',    'service@carolinapower.example.com',          NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000009'::uuid, 'Keith',     'Burnham',     'accounts@bluestoneaggregate.example.com',    NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000a'::uuid, 'Tamara',    'McPherson',   'billing@cabarruscleaning.example.com',       NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000b'::uuid, 'Wesley',    'Parrish',     'ops@sedelivery.example.com',                 NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000c'::uuid, 'Renee',     'Holt',        'fleet@carolinascrane.example.com',           NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000d'::uuid, 'Calvin',    'Dunmore',     'service@lknpropane.example.com',             NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000e'::uuid, 'Latasha',   'Gooden',      'accounts@rowanroad.example.com',             NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-00000000000f'::uuid, 'Bryan',     'Cantrell',    'dispatch@carolinafresh.example.com',         NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000010'::uuid, 'Monica',    'Byrd',        'billing@piedmontmetals.example.com',         NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000011'::uuid, 'Cedric',    'Blackwell',   'ops@uniongrading.example.com',               NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000012'::uuid, 'Veronica',  'Pratt',       'service@carolinaseptic.example.com',         NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000013'::uuid, 'Jonathon',  'Culpepper',   'fleet@mecktree.example.com',                 NULL, NOW(), NOW()),
+    ('01960026-0000-7000-8000-000000000014'::uuid, 'Sheryl',    'Davenport',   'billing@highlandmoving.example.com',         NULL, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- user_person_links (guarded by person table existence; person rows inserted above)
