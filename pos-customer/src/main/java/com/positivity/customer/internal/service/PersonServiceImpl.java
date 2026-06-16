@@ -302,14 +302,6 @@ public class PersonServiceImpl implements PersonService {
      * @return the response DTO
      */
     private GetPersonResponse toGetPersonResponse(PersonParty person) {
-        List<GetPersonResponse.ContactPointDto> contactPointDtos = person.getContactPoints().stream()
-                .map(cp -> GetPersonResponse.ContactPointDto.builder()
-                        .contactPointId(cp.getContactPointId())
-                        .contactType(cp.getContactType())
-                        .value(cp.getValue())
-                        .isPrimary(cp.isPrimary())
-                        .build())
-                .toList();
         List<PartyRelationship> commercialRelationships = partyRelationshipRepository.findActiveByToPersonPartyId(
                 person.getPersonPartyId(), LocalDate.now(clock));
         int commercialAccountCount = (int) commercialRelationships.stream()
@@ -331,6 +323,28 @@ public class PersonServiceImpl implements PersonService {
                 ? identity.displayName()
                 : person.getDisplayName();
 
+        // Contact points from pos-people (source of truth, ADR-0015 I2); fall back to
+        // the local contact_point copy when pos-people has none for this person.
+        List<GetPersonResponse.ContactPointDto> contactPointDtos;
+        if (identity != null && !identity.contactPoints().isEmpty()) {
+            contactPointDtos = identity.contactPoints().stream()
+                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                            .contactType(parseContactType(cp.contactType()))
+                            .value(cp.value())
+                            .isPrimary(cp.isPrimary())
+                            .build())
+                    .toList();
+        } else {
+            contactPointDtos = person.getContactPoints().stream()
+                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                            .contactPointId(cp.getContactPointId())
+                            .contactType(cp.getContactType())
+                            .value(cp.getValue())
+                            .isPrimary(cp.isPrimary())
+                            .build())
+                    .toList();
+        }
+
         return GetPersonResponse.builder()
                 .personId(person.getPersonId())
                 .firstName(firstName)
@@ -344,5 +358,17 @@ public class PersonServiceImpl implements PersonService {
                 .createdAt(person.getCreatedAt())
                 .updatedAt(person.getUpdatedAt())
                 .build();
+    }
+
+    /** Maps a pos-people contact-type string to the local enum; null if unrecognized. */
+    private static ContactPointType parseContactType(String type) {
+        if (type == null) {
+            return null;
+        }
+        try {
+            return ContactPointType.valueOf(type);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }

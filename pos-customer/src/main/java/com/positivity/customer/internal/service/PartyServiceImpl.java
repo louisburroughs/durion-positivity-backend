@@ -230,6 +230,37 @@ public class PartyServiceImpl implements PartyService {
         return person.getDisplayName();
     }
 
+    /**
+     * Phone values from pos-people (source of truth, ADR-0015 I2); falls back to
+     * the local contact_point copy when pos-people has none for this person.
+     */
+    private List<String> resolvePhones(PersonParty person, PeopleClient.PersonIdentity identity) {
+        if (identity != null && !identity.phones().isEmpty()) {
+            return identity.phones();
+        }
+        return person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
+                        || cp.getContactType() == ContactPointType.PHONE_WORK)
+                .map(cp -> cp.getValue())
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * Email values from pos-people (source of truth, ADR-0015 I2); falls back to
+     * the local contact_point copy when pos-people has none for this person.
+     */
+    private List<String> resolveEmails(PersonParty person, PeopleClient.PersonIdentity identity) {
+        if (identity != null && !identity.emails().isEmpty()) {
+            return identity.emails();
+        }
+        return person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
+                .map(cp -> cp.getValue())
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private int safeTotalCount(long totalElements) {
         // Response schema exposes int32; cap large totals to avoid overflow exceptions.
         return totalElements > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) totalElements;
@@ -688,16 +719,14 @@ public class PartyServiceImpl implements PartyService {
         summary.setPrimary(rel.isPrimaryBillingContact());
         summary.setName(resolveDisplayName(person, identities));
         summary.setRoles(Collections.emptyList());
-        summary.setPhoneNumbers(person.getContactPoints().stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
-                        || cp.getContactType() == ContactPointType.PHONE_WORK)
-                .filter(cp -> cp.getValue() != null)
-                .map(cp -> new ContactSummary.PhoneNumberDTO("PRIMARY", cp.getValue()))
+
+        PeopleClient.PersonIdentity identity =
+                person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+        summary.setPhoneNumbers(resolvePhones(person, identity).stream()
+                .map(v -> new ContactSummary.PhoneNumberDTO("PRIMARY", v))
                 .toList());
-        summary.setEmailAddresses(person.getContactPoints().stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
-                .filter(cp -> cp.getValue() != null)
-                .map(cp -> new ContactSummary.EmailAddressDTO("PRIMARY", cp.getValue()))
+        summary.setEmailAddresses(resolveEmails(person, identity).stream()
+                .map(v -> new ContactSummary.EmailAddressDTO("PRIMARY", v))
                 .toList());
         summary.setPreferences(null);
         return summary;

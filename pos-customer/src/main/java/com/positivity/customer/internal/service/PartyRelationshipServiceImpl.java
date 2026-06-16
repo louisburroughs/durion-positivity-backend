@@ -215,15 +215,24 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
                 .map(rel -> {
                     PersonParty person = rel.getToPerson();
-                    // Get primary contact points for the person
-                    String email = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.EMAIL);
-                    String phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_MOBILE);
-                    if (phone == null) {
-                        phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_WORK);
-                    }
-
                     PeopleClient.PersonIdentity identity =
                             person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+
+                    // Email/phone from pos-people (source of truth, ADR-0015 I2);
+                    // fall back to the local contact_point copy when absent.
+                    String email = identity != null && !identity.emails().isEmpty()
+                            ? identity.emails().get(0)
+                            : getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.EMAIL);
+                    String phone;
+                    if (identity != null && !identity.phones().isEmpty()) {
+                        phone = identity.phones().get(0);
+                    } else {
+                        phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_MOBILE);
+                        if (phone == null) {
+                            phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_WORK);
+                        }
+                    }
+
                     String displayName =
                             identity != null && !identity.displayName().isBlank()
                                     ? identity.displayName()
