@@ -116,36 +116,11 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- =========================================================================
--- Group C: 20 commercial billing contact persons (01960026-*) — contact.person_id in pos-customer
---          Represents the org-level billing/admin inbox preserved from commercial_party.email.
+-- Group C (REMOVED): the 20 commercial billing contacts (01960026-*) were
+-- duplicate persons of the 01960025-* primary contacts. They are deleted by
+-- migration V5__remove_billing_contact_duplicates.sql and no longer seeded; the
+-- matching pos-customer person_party rows are removed by pos-customer V9.
 -- =========================================================================
-
--- Commercial-account contact persons. These are real individuals, not employees,
--- so status is NULL per the People Directory contract (null = non-employee person).
--- Names mirror the matching CUST-CPC contacts in pos-customer person_party.
-INSERT INTO person (id, first_name, last_name, primary_email, status, created_at, updated_at)
-VALUES
-    ('01960026-0000-7000-8000-000000000001'::uuid, 'Greg',      'Whitfield',   'info@piedmontfreight.example.com',           NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000002'::uuid, 'Teresa',    'Mullen',      'accounts@carolinaconcrete.example.com',      NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000003'::uuid, 'Darnell',   'Okafor',      'billing@qcwaste.example.com',                NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000004'::uuid, 'Brittany',  'Norris',      'fleet@blueridgelandscaping.example.com',     NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000005'::uuid, 'Marcus',    'Tillman',     'ops@tarheellogistics.example.com',           NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000006'::uuid, 'Christine', 'Walters',     'dispatch@meckplumbing.example.com',          NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000007'::uuid, 'Donald',    'Frazier',     'fleet@piedmontreadymix.example.com',         NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000008'::uuid, 'Alicia',    'Stephens',    'service@carolinapower.example.com',          NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000009'::uuid, 'Keith',     'Burnham',     'accounts@bluestoneaggregate.example.com',    NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000a'::uuid, 'Tamara',    'McPherson',   'billing@cabarruscleaning.example.com',       NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000b'::uuid, 'Wesley',    'Parrish',     'ops@sedelivery.example.com',                 NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000c'::uuid, 'Renee',     'Holt',        'fleet@carolinascrane.example.com',           NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000d'::uuid, 'Calvin',    'Dunmore',     'service@lknpropane.example.com',             NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000e'::uuid, 'Latasha',   'Gooden',      'accounts@rowanroad.example.com',             NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-00000000000f'::uuid, 'Bryan',     'Cantrell',    'dispatch@carolinafresh.example.com',         NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000010'::uuid, 'Monica',    'Byrd',        'billing@piedmontmetals.example.com',         NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000011'::uuid, 'Cedric',    'Blackwell',   'ops@uniongrading.example.com',               NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000012'::uuid, 'Veronica',  'Pratt',       'service@carolinaseptic.example.com',         NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000013'::uuid, 'Jonathon',  'Culpepper',   'fleet@mecktree.example.com',                 NULL, NOW(), NOW()),
-    ('01960026-0000-7000-8000-000000000014'::uuid, 'Sheryl',    'Davenport',   'billing@highlandmoving.example.com',         NULL, NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
 
 -- user_person_links (guarded by person table existence; person rows inserted above)
 DO $$
