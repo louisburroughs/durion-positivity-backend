@@ -107,9 +107,14 @@ public class PeopleClient {
         Map<UUID, PersonIdentity> result = new HashMap<>();
         for (PersonView p : people) {
             if (p.getId() != null) {
+                List<ContactPoint> points = p.getContactPoints() == null
+                        ? List.of()
+                        : p.getContactPoints().stream()
+                                .map(cp -> new ContactPoint(cp.getContactType(), cp.getValue(), cp.isPrimary()))
+                                .toList();
                 result.put(
                         p.getId(),
-                        new PersonIdentity(p.getId(), p.getFirstName(), p.getLastName(), p.getPrimaryEmail()));
+                        new PersonIdentity(p.getId(), p.getFirstName(), p.getLastName(), p.getPrimaryEmail(), points));
             }
         }
         return result;
@@ -136,11 +141,44 @@ public class PeopleClient {
     }
 
     /** Canonical person identity sourced from pos-people. */
-    public record PersonIdentity(UUID id, String firstName, String lastName, String primaryEmail) {
+    public record PersonIdentity(
+            UUID id, String firstName, String lastName, String primaryEmail, List<ContactPoint> contactPoints) {
         public String displayName() {
             return ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
         }
+
+        @NonNull
+        public List<ContactPoint> contactPoints() {
+            return contactPoints != null ? contactPoints : List.of();
+        }
+
+        /** Email values from typed contact points (falls back to primaryEmail). */
+        @NonNull
+        public List<String> emails() {
+            List<String> fromPoints = contactPoints().stream()
+                    .filter(cp -> "EMAIL".equals(cp.contactType()))
+                    .map(ContactPoint::value)
+                    .filter(v -> v != null && !v.isBlank())
+                    .toList();
+            if (!fromPoints.isEmpty()) {
+                return fromPoints;
+            }
+            return primaryEmail != null && !primaryEmail.isBlank() ? List.of(primaryEmail) : List.of();
+        }
+
+        /** Phone values from typed contact points (any PHONE_* type). */
+        @NonNull
+        public List<String> phones() {
+            return contactPoints().stream()
+                    .filter(cp -> cp.contactType() != null && cp.contactType().startsWith("PHONE"))
+                    .map(ContactPoint::value)
+                    .filter(v -> v != null && !v.isBlank())
+                    .toList();
+        }
     }
+
+    /** Typed contact point sourced from pos-people. */
+    public record ContactPoint(String contactType, String value, boolean isPrimary) {}
 
     @Data
     @NoArgsConstructor
@@ -168,5 +206,15 @@ public class PeopleClient {
         private String firstName;
         private String lastName;
         private String primaryEmail;
+        private List<ContactPointView> contactPoints;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    private static class ContactPointView {
+        private String contactType;
+        private String value;
+        private boolean isPrimary;
     }
 }

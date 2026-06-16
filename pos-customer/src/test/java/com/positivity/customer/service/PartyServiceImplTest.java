@@ -491,7 +491,8 @@ class PartyServiceImplTest {
         when(peopleClient.fetchPersonIdentities(java.util.Set.of(canonicalPersonId)))
                 .thenReturn(java.util.Map.of(
                         canonicalPersonId,
-                        new PeopleClient.PersonIdentity(canonicalPersonId, "Fresh", "Canonical", "f@x.com")));
+                        new PeopleClient.PersonIdentity(
+                                canonicalPersonId, "Fresh", "Canonical", "f@x.com", java.util.List.of())));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 

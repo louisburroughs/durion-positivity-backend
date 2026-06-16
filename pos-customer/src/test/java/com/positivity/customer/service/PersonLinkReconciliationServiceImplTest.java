@@ -39,8 +39,8 @@ class PersonLinkReconciliationServiceImplTest {
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(a, b));
         when(peopleClient.fetchPersonIdentities(List.of(a, b)))
                 .thenReturn(Map.of(
-                        a, new PeopleClient.PersonIdentity(a, "Greg", "Whitfield", "g@x.com"),
-                        b, new PeopleClient.PersonIdentity(b, "Teresa", "Mullen", "t@x.com")));
+                        a, new PeopleClient.PersonIdentity(a, "Greg", "Whitfield", "g@x.com", java.util.List.of()),
+                        b, new PeopleClient.PersonIdentity(b, "Teresa", "Mullen", "t@x.com", java.util.List.of())));
 
         PersonLinkReport report = service.reconcile();
 
@@ -56,7 +56,9 @@ class PersonLinkReconciliationServiceImplTest {
         UUID orphan = id("c3");
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(linked, orphan));
         when(peopleClient.fetchPersonIdentities(List.of(linked, orphan)))
-                .thenReturn(Map.of(linked, new PeopleClient.PersonIdentity(linked, "Greg", "Whitfield", "g@x.com")));
+                .thenReturn(Map.of(
+                        linked,
+                        new PeopleClient.PersonIdentity(linked, "Greg", "Whitfield", "g@x.com", java.util.List.of())));
 
         PersonLinkReport report = service.reconcile();
 

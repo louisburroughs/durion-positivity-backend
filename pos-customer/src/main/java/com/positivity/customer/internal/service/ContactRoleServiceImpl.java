@@ -109,21 +109,35 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                         .contactName(contactName)
                         .build();
 
-                // Get email and phone from contact points
-                var emailOpt = Optional.ofNullable(
-                        contactPointRepository
-                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
-                                        person.getPersonPartyId(),
-                                        com.positivity.customer.internal.enums.ContactPointType.EMAIL));
-                emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
-                contactDto.setHasPrimaryEmail(emailOpt.isPresent());
+                // Email/phone from pos-people (source of truth, ADR-0015 I2);
+                // fall back to the local contact_point copy when absent.
+                String email = identity != null && !identity.emails().isEmpty()
+                        ? identity.emails().get(0)
+                        : Optional.ofNullable(
+                                        contactPointRepository
+                                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                                        person.getPersonPartyId(),
+                                                        com.positivity.customer.internal.enums.ContactPointType.EMAIL))
+                                .map(cp -> cp.getValue())
+                                .orElse(null);
+                if (email != null) {
+                    contactDto.setEmail(email);
+                }
+                contactDto.setHasPrimaryEmail(email != null);
 
-                var phoneOpt = Optional.ofNullable(
-                        contactPointRepository
-                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
-                                        person.getPersonPartyId(),
-                                        com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
-                phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
+                String phone = identity != null && !identity.phones().isEmpty()
+                        ? identity.phones().get(0)
+                        : Optional.ofNullable(
+                                        contactPointRepository
+                                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                                        person.getPersonPartyId(),
+                                                        com.positivity.customer.internal.enums.ContactPointType
+                                                                .PHONE_MOBILE))
+                                .map(cp -> cp.getValue())
+                                .orElse(null);
+                if (phone != null) {
+                    contactDto.setPhone(phone);
+                }
 
                 // Map role assignments
                 List<GetContactsWithRolesResponse.AssignedRole> roles = contactAssignments.stream()
