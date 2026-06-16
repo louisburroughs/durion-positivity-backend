@@ -97,17 +97,19 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                         .build();
 
                 // Get email and phone from contact points
-                var emailOpt =
-                        Optional.ofNullable(contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                person.getPersonPartyId(),
-                                com.positivity.customer.internal.enums.ContactPointType.EMAIL));
+                var emailOpt = Optional.ofNullable(
+                        contactPointRepository
+                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                        person.getPersonPartyId(),
+                                        com.positivity.customer.internal.enums.ContactPointType.EMAIL));
                 emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
                 contactDto.setHasPrimaryEmail(emailOpt.isPresent());
 
-                var phoneOpt =
-                        Optional.ofNullable(contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                person.getPersonPartyId(),
-                                com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
+                var phoneOpt = Optional.ofNullable(
+                        contactPointRepository
+                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                        person.getPersonPartyId(),
+                                        com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
                 phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
 
                 // Map role assignments
