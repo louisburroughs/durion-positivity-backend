@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -316,11 +317,25 @@ public class PersonServiceImpl implements PersonService {
                 .distinct()
                 .count();
 
+        // Name from pos-people (source of truth, ADR-0015 I2); fall back to the local
+        // person_party copy while the thin-link migration is in progress.
+        PeopleClient.PersonIdentity identity = person.getPersonId() != null
+                ? peopleClient
+                        .fetchPersonIdentitiesQuietly(Set.of(person.getPersonId()))
+                        .get(person.getPersonId())
+                : null;
+        String firstName =
+                identity != null && identity.firstName() != null ? identity.firstName() : person.getFirstName();
+        String lastName = identity != null && identity.lastName() != null ? identity.lastName() : person.getLastName();
+        String displayName = identity != null && !identity.displayName().isBlank()
+                ? identity.displayName()
+                : person.getDisplayName();
+
         return GetPersonResponse.builder()
                 .personId(person.getPersonId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
-                .displayName(person.getDisplayName())
+                .firstName(firstName)
+                .lastName(lastName)
+                .displayName(displayName)
                 .preferredContactMethod(person.getPreferredContactMethod())
                 .contactPoints(contactPointDtos)
                 .individualCustomer(true)
