@@ -62,8 +62,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
             + "WHERE pr.toPerson.partyId = :personPartyId "
             + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
     List<PartyRelationship> findActiveByToPersonPartyId(
-            @Param("personPartyId") @NonNull UUID personPartyId,
-            @Param("today") @NonNull LocalDate today);
+            @Param("personPartyId") @NonNull UUID personPartyId, @Param("today") @NonNull LocalDate today);
 
     /**
      * Find the primary billing contact relationship for a party.

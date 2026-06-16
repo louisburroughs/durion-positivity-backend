@@ -88,7 +88,12 @@ class PartyServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PartyServiceImpl(
-                TEST_CLOCK, partyRepository, partyRelationshipRepository, cacheManager, peopleClient, vehicleInventoryClient);
+                TEST_CLOCK,
+                partyRepository,
+                partyRelationshipRepository,
+                cacheManager,
+                peopleClient,
+                vehicleInventoryClient);
     }
 
     private CommercialParty party(UUID id) {
