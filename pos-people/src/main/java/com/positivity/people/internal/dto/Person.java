@@ -1,5 +1,6 @@
 package com.positivity.people.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.people.internal.enums.ContactPointType;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -110,6 +111,11 @@ public class Person {
     public static class ContactPointDto {
         private ContactPointType contactType;
         private String value;
+
+        // Pin the JSON name to "primary" for BOTH directions. The isPrimary() getter
+        // serializes as "primary", but without this the field deserializes from
+        // "isPrimary" — an asymmetry that 400'd the contact-point write endpoint.
+        @JsonProperty("primary")
         private boolean isPrimary;
 
         public ContactPointDto() {}
