@@ -49,6 +49,38 @@ class CustomerClientUriTest {
         mockServer.verify();
     }
 
+    @Test
+    void peopleClient_fetchPersonIdentities_deserializesPosPeopleContactPoints() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
+
+        PeopleClient client = new PeopleClient(builder, "people");
+
+        // pos-people serializes the contact-point flag as JSON "primary" (not "isPrimary").
+        // Regression: a primitive-boolean field mapped from the wrong name bound null and
+        // threw MismatchedInputException, collapsing all contact reads to local fallback.
+        UUID personId = UUID.fromString("01960025-0000-7000-8000-000000000001");
+        String json = "[{\"id\":\"" + personId + "\",\"firstName\":\"Greg\",\"lastName\":\"Whitfield\","
+                + "\"primaryEmail\":\"g.whitfield@example.com\",\"contactPoints\":["
+                + "{\"contactType\":\"EMAIL\",\"value\":\"g.whitfield@example.com\",\"primary\":true},"
+                + "{\"contactType\":\"PHONE_WORK\",\"value\":\"704-555-3001\",\"primary\":false}]}]";
+
+        mockServer
+                .expect(requestTo("http://people/v1/people/by-ids"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Authorities", "people:person:view"))
+                .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+        var identities = client.fetchPersonIdentities(java.util.List.of(personId));
+
+        assertThat(identities).containsKey(personId);
+        var identity = identities.get(personId);
+        assertThat(identity.displayName()).isEqualTo("Greg Whitfield");
+        assertThat(identity.emails()).containsExactly("g.whitfield@example.com");
+        assertThat(identity.phones()).containsExactly("704-555-3001");
+        mockServer.verify();
+    }
+
     // -----------------------------------------------------------------------
     // VehicleInventoryClient
     // -----------------------------------------------------------------------
