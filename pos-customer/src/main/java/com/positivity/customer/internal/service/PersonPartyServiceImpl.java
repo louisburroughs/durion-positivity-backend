@@ -183,8 +183,8 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private PersonParty toEntity(CustomerDTO dto) {
         PersonParty entity = createEntityByType(dto.getCustomerType());
-        UUID canonicalPersonId = peopleClient.resolveOrCreatePersonId(
-                null, null, dto.getLastName(), dto.getFirstName());
+        UUID canonicalPersonId =
+                peopleClient.resolveOrCreatePersonId(null, null, dto.getLastName(), dto.getFirstName());
         entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
         entity.setLastName(dto.getLastName());

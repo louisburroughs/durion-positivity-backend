@@ -16,8 +16,8 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import java.time.LocalDate;
 import com.positivity.customer.service.PersonService;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -354,7 +354,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         party.setDisplayName("Acme Logistics");
         commercialPartyRepository.save(party);
 
-        PersonParty personParty = personRepository.findByPersonId(created.getPersonId()).orElseThrow();
+        PersonParty personParty =
+                personRepository.findByPersonId(created.getPersonId()).orElseThrow();
         PartyRelationship relationship = new PartyRelationship();
         relationship.setFromParty(party);
         relationship.setToPerson(personParty);

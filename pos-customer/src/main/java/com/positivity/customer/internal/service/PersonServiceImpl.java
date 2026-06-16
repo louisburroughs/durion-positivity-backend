@@ -309,9 +309,8 @@ public class PersonServiceImpl implements PersonService {
                         .isPrimary(cp.isPrimary())
                         .build())
                 .toList();
-        List<PartyRelationship> commercialRelationships =
-                partyRelationshipRepository.findActiveByToPersonPartyId(
-                        person.getPersonPartyId(), LocalDate.now(clock));
+        List<PartyRelationship> commercialRelationships = partyRelationshipRepository.findActiveByToPersonPartyId(
+                person.getPersonPartyId(), LocalDate.now(clock));
         int commercialAccountCount = (int) commercialRelationships.stream()
                 .map(rel -> rel.getFromParty().getPartyId())
                 .distinct()
