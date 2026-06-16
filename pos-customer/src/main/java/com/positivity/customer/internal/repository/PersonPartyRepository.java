@@ -28,6 +28,15 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> 
             + "(SELECT pr.toPerson.partyId FROM PartyRelationship pr)")
     List<PersonParty> findIndividualCustomers();
 
+    /**
+     * Distinct canonical person ids linked from person parties. Used by person-link
+     * reconciliation to verify every link resolves in pos-people (ADR-0015 I1).
+     *
+     * @return distinct non-null person ids
+     */
+    @Query("SELECT DISTINCT p.personId FROM PersonParty p WHERE p.personId IS NOT NULL")
+    List<UUID> findDistinctPersonIds();
+
     List<PersonParty> findByLastNameIgnoreCase(@NonNull String lastName);
 
     List<PersonParty> findByFirstNameIgnoreCaseAndLastNameIgnoreCase(
