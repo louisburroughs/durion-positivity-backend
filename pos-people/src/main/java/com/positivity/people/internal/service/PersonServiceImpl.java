@@ -4,6 +4,8 @@ import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
+import com.positivity.people.internal.entity.PersonContactPoint;
+import com.positivity.people.internal.repository.PersonContactPointRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.PersonSpecifications;
 import com.positivity.people.service.PersonService;
@@ -17,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -39,6 +42,8 @@ public class PersonServiceImpl implements PersonService {
     private static final int FIRST_NAME_WEIGHT = 5;
 
     private final PersonRepository personRepository;
+
+    private final PersonContactPointRepository personContactPointRepository;
 
     private final SecurityServiceClient securityServiceClient;
 
@@ -65,7 +70,20 @@ public class PersonServiceImpl implements PersonService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return personRepository.findAllById(ids).stream().map(this::toDto).toList();
+        List<Person> people =
+                personRepository.findAllById(ids).stream().map(this::toDto).toList();
+
+        // Attach typed contact points (pos-people is SoT for contacts, ADR-0015 I2), batched.
+        Map<UUID, List<Person.ContactPointDto>> contactsByPerson =
+                personContactPointRepository.findByPersonIdIn(ids).stream()
+                        .collect(Collectors.groupingBy(
+                                PersonContactPoint::getPersonId,
+                                Collectors.mapping(
+                                        cp -> new Person.ContactPointDto(
+                                                cp.getContactType(), cp.getValue(), cp.isPrimary()),
+                                        Collectors.toList())));
+        people.forEach(p -> p.setContactPoints(contactsByPerson.getOrDefault(p.getId(), List.of())));
+        return people;
     }
 
     @Override
