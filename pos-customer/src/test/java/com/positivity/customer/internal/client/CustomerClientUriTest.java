@@ -153,6 +153,45 @@ class CustomerClientUriTest {
         mockServer.verify();
     }
 
+    @Test
+    void peopleClient_setContactPoints_putsToContactPointsUrl_withPrimaryField() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
+        PeopleClient client = new PeopleClient(builder, "people");
+
+        UUID personId = UUID.fromString("01960025-0000-7000-8000-000000000001");
+        mockServer
+                .expect(requestTo("http://people/v1/people/" + personId + "/contact-points"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header("X-Authorities", "people:person:edit"))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath(
+                        "$[0].primary", org.hamcrest.Matchers.is(true)))
+                .andRespond(withSuccess());
+
+        client.setContactPoints(
+                personId, java.util.List.of(new PeopleClient.ContactPointUpsert("EMAIL", "g@example.com", true)));
+
+        mockServer.verify();
+    }
+
+    @Test
+    void peopleClient_setContactPoints_swallowsErrors() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
+        PeopleClient client = new PeopleClient(builder, "people");
+
+        UUID personId = UUID.fromString("01960025-0000-7000-8000-000000000002");
+        mockServer
+                .expect(requestTo("http://people/v1/people/" + personId + "/contact-points"))
+                .andRespond(withServerError());
+
+        // Best-effort dual-write: must not throw even if pos-people errors.
+        client.setContactPoints(
+                personId, java.util.List.of(new PeopleClient.ContactPointUpsert("EMAIL", "g@example.com", true)));
+
+        mockServer.verify();
+    }
+
     // -----------------------------------------------------------------------
     // VehicleInventoryClient
     // -----------------------------------------------------------------------

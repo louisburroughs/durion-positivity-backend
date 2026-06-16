@@ -122,6 +122,36 @@ public class PeopleClient {
     }
 
     /**
+     * Mirror a person's contact points to pos-people (source of truth, ADR-0015 I2).
+     * Best-effort: failures are logged and swallowed so the local contact_point copy
+     * still serves reads (we are dual-writing during the transition).
+     *
+     * @param personId the canonical person id
+     * @param contactPoints the contact points to persist (replaces existing)
+     */
+    public void setContactPoints(@NonNull UUID personId, @NonNull List<ContactPointUpsert> contactPoints) {
+        try {
+            restClient
+                    .put()
+                    .uri("/v1/people/{personId}/contact-points", personId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "people:person:edit")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(contactPoints)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception exception) {
+            log.warn(
+                    "Failed to mirror contact points to pos-people for personId={}: {}",
+                    personId,
+                    exception.getMessage());
+        }
+    }
+
+    /** Contact point to upsert into pos-people. Serializes the flag as "primary". */
+    public record ContactPointUpsert(String contactType, String value, boolean primary) {}
+
+    /**
      * Resilient variant of {@link #fetchPersonIdentities} for display read paths:
      * if pos-people is unreachable, returns an empty map instead of throwing, so
      * callers transparently fall back to the local person_party name copy rather
