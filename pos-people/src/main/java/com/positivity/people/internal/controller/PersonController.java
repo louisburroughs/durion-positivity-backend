@@ -86,6 +86,23 @@ public class PersonController {
         return personService.getPeopleByIds(ids);
     }
 
+    @Operation(
+            summary = "Replace a person's contact points",
+            description = "Replaces all typed contact points (email/phone) for a person. pos-people is the source of"
+                    + " truth for contacts (ADR-0015).")
+    @ApiResponse(responseCode = "204", description = "Contact points replaced.")
+    @PutMapping("/{personId}/contact-points")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:person:edit"})
+    @PreAuthorize("hasAuthority('people:person:edit')")
+    public ResponseEntity<Void> replaceContactPoints(
+            @Parameter(description = "Person id") @PathVariable UUID personId,
+            @RequestBody List<Person.ContactPointDto> contactPoints) {
+        personService.replaceContactPoints(personId, contactPoints);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Create a new person", description = "Add a new person to the system.")
     @ApiResponse(responseCode = "201", description = "Person created successfully.")
     @EmitEvent(id = "PEOPLE_PERSON_CREATE", apiVersion = "1")

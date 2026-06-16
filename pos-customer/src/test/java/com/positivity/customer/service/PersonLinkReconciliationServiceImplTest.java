@@ -77,5 +77,21 @@ class PersonLinkReconciliationServiceImplTest {
 
         assertThat(report.totalLinks()).isZero();
         assertThat(report.isHealthy()).isTrue();
+        assertThat(report.posPeopleReachable()).isTrue();
+    }
+
+    @Test
+    void reconcile_posPeopleUnreachable_reportsDegradedWithoutThrowing() {
+        UUID a = id("a1");
+        when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(a));
+        when(peopleClient.fetchPersonIdentities(List.of(a)))
+                .thenThrow(new IllegalStateException("No instances available for people"));
+
+        PersonLinkReport report = service.reconcile();
+
+        assertThat(report.posPeopleReachable()).isFalse();
+        assertThat(report.isHealthy()).isFalse();
+        assertThat(report.totalLinks()).isEqualTo(1);
+        assertThat(report.unresolvedPersonIds()).isEmpty();
     }
 }

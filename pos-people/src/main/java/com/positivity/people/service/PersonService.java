@@ -34,6 +34,16 @@ public interface PersonService {
     @NonNull
     List<Person> getPeopleByIds(@NonNull Collection<UUID> ids);
 
+    /**
+     * Replace all typed contact points for a person (pos-people is the source of
+     * truth for contacts, ADR-0015 I2). Existing points are removed and replaced
+     * with the supplied set.
+     *
+     * @param personId the canonical person id
+     * @param contactPoints the contact points to persist (may be empty)
+     */
+    void replaceContactPoints(@NonNull UUID personId, @NonNull List<Person.ContactPointDto> contactPoints);
+
     @NonNull
     Person savePerson(@NonNull Person person);
 

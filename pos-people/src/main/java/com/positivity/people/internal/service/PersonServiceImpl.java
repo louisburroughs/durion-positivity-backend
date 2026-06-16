@@ -88,6 +88,25 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     @Transactional
+    public void replaceContactPoints(@NonNull UUID personId, @NonNull List<Person.ContactPointDto> contactPoints) {
+        personContactPointRepository.deleteByPersonId(personId);
+        if (contactPoints.isEmpty()) {
+            return;
+        }
+        List<PersonContactPoint> entities = contactPoints.stream()
+                .filter(cp -> cp.getContactType() != null && cp.getValue() != null)
+                .map(cp -> PersonContactPoint.builder()
+                        .personId(personId)
+                        .contactType(cp.getContactType())
+                        .value(cp.getValue())
+                        .isPrimary(cp.isPrimary())
+                        .build())
+                .toList();
+        personContactPointRepository.saveAll(entities);
+    }
+
+    @Override
+    @Transactional
     @NonNull
     public Person savePerson(@NonNull Person person) {
         if (person.getUsername() != null
