@@ -115,6 +115,26 @@ public class PeopleClient {
         return result;
     }
 
+    /**
+     * Resilient variant of {@link #fetchPersonIdentities} for display read paths:
+     * if pos-people is unreachable, returns an empty map instead of throwing, so
+     * callers transparently fall back to the local person_party name copy rather
+     * than failing the request. Do not use for reconciliation, which must
+     * distinguish "unreachable" from "not found".
+     *
+     * @param personIds the canonical person ids to fetch
+     * @return identities by id, or an empty map if pos-people could not be reached
+     */
+    @NonNull
+    public Map<UUID, PersonIdentity> fetchPersonIdentitiesQuietly(@NonNull Collection<UUID> personIds) {
+        try {
+            return fetchPersonIdentities(personIds);
+        } catch (Exception exception) {
+            log.warn("pos-people identity fetch failed; falling back to local names: {}", exception.getMessage());
+            return Map.of();
+        }
+    }
+
     /** Canonical person identity sourced from pos-people. */
     public record PersonIdentity(UUID id, String firstName, String lastName, String primaryEmail) {
         public String displayName() {
